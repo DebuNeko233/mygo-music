@@ -69,6 +69,13 @@ gh release create sherpa-onnx-2.0.1 --repo zhangnjsd/mygo-music \
   --prerelease --latest=false build/sherpa/*
 ```
 
+Off a Mac, pack the platforms the release ships: `-platforms` leaves the macOS
+libraries out, and an app there has no captions until they are packed on a Mac.
+
+```bash
+go run ./scripts/sherpa -platforms windows-amd64,windows-arm64,linux-amd64,linux-arm64
+```
+
 The macOS libraries are signed with a Developer ID before they are packed, which
 `scripts/sherpa -sign` does on a Mac: the app's hardened runtime loads no other.
 Packed anywhere else they are unsigned, and macOS refuses them.

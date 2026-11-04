@@ -7,7 +7,11 @@
 // and internal/speech/natives.go, which names them with their digests:
 //
 //	go run ./scripts/sherpa -sign "Developer ID Application: …" -out build/sherpa
+//	go run ./scripts/sherpa -platforms windows-amd64,linux-amd64 -out build/sherpa
 //	gh release create sherpa-onnx-2.0.1 --prerelease --latest=false build/sherpa/*
+//
+// Packing macOS needs a Mac, which signs with the app's Developer ID: without
+// one, pack the platforms the release ships.
 //
 // The upstream archives are checked against their digests, and kept in the
 // user's cache between runs.
@@ -75,15 +79,44 @@ const (
 func main() {
 	sign := flag.String("sign", "", "the Developer ID that signs the macOS libraries")
 	out := flag.String("out", "build/sherpa", "where to write the files to upload")
+	names := flag.String("platforms", all(), "the platforms to pack, of "+all())
 	flag.Parse()
-	if *sign == "" {
-		fmt.Fprintln(os.Stderr, "sherpa: -sign is required: the app's hardened runtime loads no library signed by another team")
+	platforms, err := pick(*names)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sherpa:", err)
 		os.Exit(2)
 	}
-	if err := run(*sign, *out); err != nil {
+	if *sign == "" && slices.ContainsFunc(platforms, func(p string) bool { return strings.HasPrefix(p, "darwin-") }) {
+		fmt.Fprintln(os.Stderr, "sherpa: -sign is required for the macOS libraries: the app's hardened runtime loads no library signed by another team")
+		os.Exit(2)
+	}
+	if err := run(*sign, *out, platforms); err != nil {
 		fmt.Fprintln(os.Stderr, "sherpa:", err)
 		os.Exit(1)
 	}
+}
+
+// all returns every platform the archives have, comma separated.
+func all() string {
+	names := make([]string, 0, len(archives))
+	for p := range archives {
+		names = append(names, p)
+	}
+	slices.Sort(names)
+	return strings.Join(names, ",")
+}
+
+// pick returns the platforms of names, comma separated, sorted, where each
+// one is one of the archives'.
+func pick(names string) ([]string, error) {
+	platforms := strings.Split(names, ",")
+	for _, p := range platforms {
+		if _, ok := archives[p]; !ok {
+			return nil, fmt.Errorf("no platform %q, of %s", p, all())
+		}
+	}
+	slices.Sort(platforms)
+	return platforms, nil
 }
 
 // A packed file: its asset, and the file it unpacks to.
@@ -93,7 +126,7 @@ type packed struct {
 	sha256, gzSHA256 string
 }
 
-func run(identity, out string) error {
+func run(identity, out string, platforms []string) error {
 	if err := os.RemoveAll(out); err != nil {
 		return err
 	}
@@ -113,11 +146,6 @@ func run(identity, out string) error {
 		return err
 	}
 	libs := map[string][]packed{}
-	platforms := make([]string, 0, len(archives))
-	for p := range archives {
-		platforms = append(platforms, p)
-	}
-	slices.Sort(platforms)
 	for _, p := range platforms {
 		a := archives[p]
 		url := fmt.Sprintf("https://github.com/k2-fsa/sherpa-onnx/releases/download/v%s/sherpa-onnx-v%s-%s.tar.bz2", version, version, a.name)

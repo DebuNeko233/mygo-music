@@ -10,14 +10,6 @@ const libBase = "https://github.com/zhangnjsd/mygo-music/releases/download/sherp
 
 // libFiles are the libraries of each platform, the C API's first.
 var libFiles = map[string][]nativeFile{
-	"darwin-amd64": {
-		{name: "libsherpa-onnx-c-api.dylib", asset: "darwin-amd64-libsherpa-onnx-c-api.dylib.gz", size: 3689696, gzSize: 1505426, sha256: "f34ff003e360a603ce2b9c0b7003a628e32eb940caba9f1c7026736e2d688915", gzSHA256: "6df6ae284bc309cac5c738ebedd0153a53e78bcd1c4f1781c35993e868465de4"},
-		{name: "libonnxruntime.dylib", asset: "darwin-amd64-libonnxruntime.dylib.gz", size: 32315984, gzSize: 9053397, sha256: "3100de3a327cdfe500858712061b3712aaa2765311c3949aec5b4837a7bb87a5", gzSHA256: "49e3559592c914fe0058e2a2b2f524fd0a5492d994c6dd6dabcbd0948c2c671a"},
-	},
-	"darwin-arm64": {
-		{name: "libsherpa-onnx-c-api.dylib", asset: "darwin-arm64-libsherpa-onnx-c-api.dylib.gz", size: 3437168, gzSize: 1358040, sha256: "ae95f14334702680785cf9f040107dcc6c86e5b1be1a668206305141ebcd3426", gzSHA256: "b42d15fae6e8a1e27f4fb6d0a923df2df7ab5ede5e0e8cf2e8066145ff603d4c"},
-		{name: "libonnxruntime.dylib", asset: "darwin-arm64-libonnxruntime.dylib.gz", size: 28775248, gzSize: 7877347, sha256: "015781793b8ce25b0f1404e16a592fb3801c45aa68ee7cb4c32aa53a2d848d81", gzSHA256: "0a3c90a9d50038644d521a6ecc175d7f0d7a488e6c937618768ff5d6c66d917c"},
-	},
 	"linux-amd64": {
 		{name: "libsherpa-onnx-c-api.so", asset: "linux-amd64-libsherpa-onnx-c-api.so.gz", size: 4057064, gzSize: 1566580, sha256: "e8ea0e45a1677c489d22eecb3a9420dbd7cee1b00e611ef623d0a558abb29226", gzSHA256: "9272b64f72b9223b028b23337370b0f76e0534b67829c000c75e635848a502cc"},
 		{name: "libonnxruntime.so", asset: "linux-amd64-libonnxruntime.so.gz", size: 27026609, gzSize: 8695492, sha256: "4b3607aebd1784b26b6f9b20e4bd974c7ab8287043e4d095cb7d2cb40b5e566e", gzSHA256: "36be29a777adaf2d6f8a994742f1df07e48de0f62ace4b856c3f597387e1d228"},
