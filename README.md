@@ -12,6 +12,12 @@ Windows 上为当前用户安装，再次运行即升级，会先退出正在运
 irm https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/install.ps1 | iex
 ```
 
+Linux 上装在 ~/.local，不需要 root：
+
+```bash
+curl -fsSL https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/install.sh | sh
+```
+
 ## 功能
 
 - 扫码登录，登录态保存在系统凭据存储中
