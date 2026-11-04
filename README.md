@@ -9,13 +9,13 @@
 Windows 上为当前用户安装，再次运行即升级，会先退出正在运行的版本：
 
 ```powershell
-irm https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/install.ps1 | iex
+irm https://github.com/zhangnjsd/mygo-music/releases/latest/download/install.ps1 | iex
 ```
 
 Linux 上装在 ~/.local，不需要 root：
 
 ```bash
-curl -fsSL https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/zhangnjsd/mygo-music/releases/latest/download/install.sh | sh
 ```
 
 ## 功能

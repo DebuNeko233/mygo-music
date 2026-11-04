@@ -1,6 +1,6 @@
 # Releasing
 
-This repository, `zhangnjsd/mygo-cloudmusic`, is where the app is released and
+This repository, `zhangnjsd/mygo-music`, is where the app is released and
 where installed apps look for updates: the repository the app came from was
 deleted, and `mygo.json`'s `updates.github` points here. There is no other
 remote to sync with.
@@ -45,13 +45,13 @@ remote to sync with.
    the install scripts points at it:
 
    ```bash
-   gh release edit v0.2.0 --repo zhangnjsd/mygo-cloudmusic --draft=false --latest
+   gh release edit v0.2.0 --repo zhangnjsd/mygo-music --draft=false --latest
    ```
 
 6. Check what the install script downloads:
 
    ```bash
-   curl -sL https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/SHA256SUMS
+   curl -sL https://github.com/zhangnjsd/mygo-music/releases/latest/download/SHA256SUMS
    ```
 
 ## The speech recognition libraries
@@ -65,7 +65,7 @@ which never becomes the latest that updates look for:
 
 ```bash
 go run ./scripts/sherpa
-gh release create sherpa-onnx-2.0.1 --repo zhangnjsd/mygo-cloudmusic \
+gh release create sherpa-onnx-2.0.1 --repo zhangnjsd/mygo-music \
   --prerelease --latest=false build/sherpa/*
 ```
 

@@ -6,7 +6,7 @@
   "out": "build",
   "updates": {
     "publicKey": "6o93JWWtkqPDgjiXf2cOI+hhNayRtuecWHzo1f8YN0I=",
-    "github": "zhangnjsd/mygo-cloudmusic"
+    "github": "zhangnjsd/mygo-music"
   },
   "macos": {
     "icon": "icon/AppIcon.icon",
