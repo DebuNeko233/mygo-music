@@ -6,13 +6,11 @@
   "out": "build",
   "updates": {
     "publicKey": "WzJsOGNIuf6mcEqo5ff8jub+NoQQOEk4JXreLPYjgyQ=",
-    "github": "egoist/mygo-cloudmusic"
+    "github": "zhangnjsd/mygo-cloudmusic"
   },
   "macos": {
     "icon": "icon/AppIcon.icon",
-    "minimumSystemVersion": "13.0",
-    "signingIdentity": "Developer ID Application: xinyu zeng (GJE9R5VE87)",
-    "notarize": { "keychainProfile": "notary" }
+    "minimumSystemVersion": "13.0"
   },
   "linux": {
     "comment": "第三方网易云音乐桌面客户端",

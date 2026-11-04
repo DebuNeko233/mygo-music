@@ -1,60 +1,74 @@
 # Releasing
 
-1. Commit pending work, bring main up to date with origin, and run `go test ./internal/...`. Others push to main too, so a release cut from a stale main leaves out their work:
+This repository, `zhangnjsd/mygo-cloudmusic`, is where the app is released and
+where installed apps look for updates: the repository the app came from was
+deleted, and `mygo.json`'s `updates.github` points here. There is no other
+remote to sync with.
+
+1. Commit pending work, and run the tests:
 
    ```bash
-   git pull --rebase origin main
+   go test ./internal/...
    ```
 
-2. Bump `version` in `mygo.json`, and add a `## 0.1.8` section at the top of `CHANGELOG.md` saying, in Chinese, what changed for people using the app since the last release (`git log v0.1.7..HEAD`, after the pull). Commit both in a commit titled just the version, e.g. `0.1.8`. MyGo's updater shows that section in the app's update window, and the release page takes it as its notes; `mygo build` fails without one.
-3. Push main first, and tag only once that push has gone through. Pushing both at once still pushes the tag when main is rejected, and the tag starts a release build of a commit that isn't on main:
+2. Bump `version` in `mygo.json`, and add a `## <version>` section at the top of
+   `CHANGELOG.md` saying, in Chinese, what changed for people using the app
+   since the last release (`git log v0.1.24..HEAD`). Commit both in a commit
+   titled just the version, e.g. `0.2.0`. MyGo's updater shows that section in
+   the app's update window, and the release page takes it as its notes;
+   `mygo build` fails without one.
+
+3. Push main:
 
    ```bash
    git push origin main
-   git tag v0.1.8
-   git push origin v0.1.8
    ```
 
-   If main is rejected, pull again, add what came in to the changelog, amend the version commit, test, and push main again before tagging. If a tag went up on the wrong commit anyway, cancel its run, then delete the tag and the draft it made before tagging again:
+4. Build and upload. `mygo build` makes the installers, `SHA256SUMS` and the
+   install scripts, and `-upload` puts them in a draft release of the version's
+   tag, with the changelog's section as its notes. `GH_TOKEN` is a token of this
+   repository with `contents: write`. `MYGO_UPDATER_PRIVATE_KEY` is the key of
+   `mygo keygen`: without it the build warns and signs no update archives, and
+   installed apps then cannot update themselves.
 
    ```bash
-   git push origin :refs/tags/v0.1.8
-   gh release delete v0.1.8 --yes
+   GH_TOKEN=... go tool mygo build \
+     -platform windows/amd64,windows/arm64,linux/amd64,linux/arm64 -upload
    ```
 
-4. `.github/workflows/release.yml` builds macOS, Windows and Linux and uploads them to a draft release. Wait for every job to pass:
+   macOS needs a Mac, a Developer ID and the notary profile of `mygo.json`, so
+   this repository releases Windows and Linux. Pushing a tag instead builds it
+   in `.github/workflows/release.yml`, which covers macOS too and needs the same
+   secrets.
+
+5. Publish the draft, and mark it latest, so that `releases/latest/download/` of
+   the install scripts points at it:
 
    ```bash
-   gh run watch "$(gh run list --workflow release.yml -L1 --json databaseId -q '.[0].databaseId')" --exit-status
+   gh release edit v0.2.0 --repo zhangnjsd/mygo-cloudmusic --draft=false --latest
    ```
 
-   If a job fails, don't publish; fix it first.
-
-5. Publish the draft and mark it latest:
+6. Check what the install script downloads:
 
    ```bash
-   gh release edit v0.1.8 --draft=false --latest
+   curl -sL https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/SHA256SUMS
    ```
-
-6. Check the update feed shows the new version:
-
-   ```bash
-   curl -sL https://github.com/egoist/mygo-cloudmusic/releases/latest/download/update-darwin-arm64.json
-   ```
-
-7. Deploy the website. It reads the latest release when it's prerendered, so it has to be rebuilt after publishing:
-
-   ```bash
-   cd website && bun run deploy
-   ```
-
-   Then check https://mygo-cloudmusic.egoist.workers.dev/download/ shows the new version.
 
 ## The speech recognition libraries
 
-Podcast captions run sherpa-onnx, whose libraries the app downloads with the model from the `sherpa-onnx-<version>` release, not from the app's own. They only change with sherpa-onnx's version, in `scripts/sherpa`. Then pack them again, signing the macOS ones with the app's Developer ID (the app's hardened runtime loads no others), commit the `internal/speech/natives.go` it writes, and upload them as a prerelease, which never becomes the latest that updates look for:
+Podcast captions run sherpa-onnx, whose libraries the app downloads with the
+model from the `sherpa-onnx-<version>` release of this repository, not from the
+app's own release: `internal/speech/natives.go` says where. They only change
+with sherpa-onnx's version, in `scripts/sherpa`. Then pack them again, commit
+the `internal/speech/natives.go` it writes, and upload them as a prerelease,
+which never becomes the latest that updates look for:
 
 ```bash
-go run ./scripts/sherpa -sign "Developer ID Application: xinyu zeng (GJE9R5VE87)"
-gh release create sherpa-onnx-2.0.1 --prerelease --latest=false build/sherpa/*
+go run ./scripts/sherpa
+gh release create sherpa-onnx-2.0.1 --repo zhangnjsd/mygo-cloudmusic \
+  --prerelease --latest=false build/sherpa/*
 ```
+
+The macOS libraries are signed with a Developer ID before they are packed, which
+`scripts/sherpa -sign` does on a Mac: the app's hardened runtime loads no other.
+Packed anywhere else they are unsigned, and macOS refuses them.

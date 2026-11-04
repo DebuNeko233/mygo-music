@@ -40,7 +40,7 @@ const version = "2.0.1"
 // release is the tag of the app's release the files are uploaded to.
 const release = "sherpa-onnx-" + version
 
-const repo = "egoist/mygo-cloudmusic"
+const repo = "zhangnjsd/mygo-cloudmusic"
 
 // An archive of sherpa-onnx's release, and the libraries the app takes
 // from it, the C API's first.

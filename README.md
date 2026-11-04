@@ -2,6 +2,16 @@
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方网易云音乐桌面客户端，原生界面，无 WebView。
 
+本项目只支持网易云音乐：歌曲、歌单、播客都来自网易云，不考虑加入其它平台作为音源。
+
+## 安装
+
+Windows 上为当前用户安装，再次运行即升级，会先退出正在运行的版本：
+
+```powershell
+irm https://github.com/zhangnjsd/mygo-cloudmusic/releases/latest/download/install.ps1 | iex
+```
+
 ## 功能
 
 - 扫码登录，登录态保存在系统凭据存储中
