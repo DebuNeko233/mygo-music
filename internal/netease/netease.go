@@ -457,6 +457,10 @@ func SongURL(id int64, level string) (*Stream, error) {
 // Lyrics returns a track's timed lyrics, their translation if any, and
 // its word-timed lyrics (YRC) where NetEase has them, which only the
 // desktop client's API serves.
+//
+// lv asks for whichever version of them NetEase keeps: asked for the
+// first one instead, it serves nothing for some songs — 25 of the 300 in
+// two charts — which the player takes for an instrumental.
 func Lyrics(id int64) (lrc, translation, yrc string, err error) {
 	var res struct {
 		Lrc struct {
@@ -466,7 +470,7 @@ func Lyrics(id int64) (lrc, translation, yrc string, err error) {
 			Lyric string `json:"lyric"`
 		} `json:"tlyric"`
 	}
-	q := url.Values{"id": {strconv.FormatInt(id, 10)}, "lv": {"1"}, "tv": {"-1"}}
+	q := url.Values{"id": {strconv.FormatInt(id, 10)}, "lv": {"-1"}, "kv": {"-1"}, "tv": {"-1"}}
 	if err = get("/api/song/lyric", q, &res); err != nil {
 		return "", "", "", err
 	}

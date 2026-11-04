@@ -117,8 +117,9 @@ func eapiPost(path string, data map[string]any, out any) error {
 	req.Header.Set("Cookie", strings.Join(cookie, "; "))
 	req.Header.Set("User-Agent", eapiUA)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// Sent by hand: the jar would add the site's cookies to these.
-	res, err := (&http.Client{Timeout: httpClient.Timeout}).Do(req)
+	// Sent by hand: the jar would add the site's cookies to these. The
+	// transport is the client's, so that a test can answer these too.
+	res, err := (&http.Client{Timeout: httpClient.Timeout, Transport: httpClient.Transport}).Do(req)
 	if err != nil {
 		return err
 	}
