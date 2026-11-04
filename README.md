@@ -1,8 +1,8 @@
-# 网易云音乐 · MyGo
+# MyGO Rev.
 
-用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方网易云音乐桌面客户端，原生界面，无 WebView。
+用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方音乐桌面客户端，原生界面，无 WebView。
 
-本项目只支持网易云音乐：歌曲、歌单、播客都来自网易云，不考虑加入其它平台作为音源。
+本项目只支持某音乐：不考虑加入其它平台作为音源。
 
 ## 安装
 
@@ -52,7 +52,7 @@ go test ./...        # 运行测试
 - [folia-major](https://github.com/chthollyphile/folia-major)：歌词动画效果的参考
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)、[Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 与 [Silero VAD](https://github.com/snakers4/silero-vad)：本机语音识别
 
-本项目与网易云音乐官方无关，音乐版权归各权利人所有。
+本项目与官方无关，音乐版权归各权利人所有。
 
 ## 许可证
 
