@@ -37,7 +37,16 @@ func (a *app) view(c *ui.Context) {
 		c.OnShortcut(0, ui.KeySpace, a.pl.TogglePlay)
 	}
 	npOpen, npSettled := a.npState(c)
+	// The pictures the listener chose for the home page, painted behind
+	// it: it stands on them, over its own colour, as deep as they asked.
+	home := a.pictures(a.settings.BackdropHome)
 	root.Children(func() {
+		if pic := backdropShown(home, a.pl.Current()); pic != nil {
+			ui.Box(c.Key("backdrop")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().
+				Draw(func(painter *ui.Painter, r ui.Rect) {
+					drawPicture(painter, r, pic, float32(a.settings.BackdropOpacity))
+				})
+		}
 		page := ui.Row(c).Fill().AlignItems(ui.Stretch)
 		page.Children(func() {
 			if npOpen && npSettled {
@@ -48,13 +57,17 @@ func (a *app) view(c *ui.Context) {
 				return
 			}
 			side := ui.Column(c).Width(sidebarWidth)
-			if !c.Vibrancy() {
+			if !c.Vibrancy() && len(home) == 0 {
 				side.Background(p.sidebar)
 			}
 			side.Children(func() { a.sidebar(c) })
 			// Keyed, so that a popover of the sidebar opening or closing
 			// keeps what the page and its bars hold, their edges' fades.
-			ui.Box(c.Key("main")).Grow(1).Background(p.bg).BorderWidth(0, 0, 0, 1).BorderColor(p.hairline).Children(func() {
+			content := ui.Box(c.Key("main")).Grow(1).BorderWidth(0, 0, 0, 1).BorderColor(p.hairline)
+			if len(home) == 0 {
+				content.Background(p.bg)
+			}
+			content.Children(func() {
 				a.content(c)
 				// The bars float over the page, which scrolls under them:
 				// positioned, they paint over it.

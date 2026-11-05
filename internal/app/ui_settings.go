@@ -39,10 +39,44 @@ func (a *app) openSettings() {
 	a.syncDock()
 }
 
+// backdropRow is the pictures of one page: those chosen, more added from
+// the disk or dropped on the row, and all of them let go.
+func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string) {
+	ui.Column(c).Gap(8).Children(func() {
+		line := ui.Row(c).Gap(8).AlignItems(ui.Center)
+		// Anything dropped on the row is a picture of this page's.
+		if dropped := line.DroppedFiles(); len(dropped) > 0 {
+			a.addPictures(dropped, paths)
+		}
+		line.Children(func() {
+			if ui.Button(c.Key(key+"-add"), "选择图片…").Clicked() {
+				files, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+					Title:    "选择背景图片",
+					Filters:  []mygo.FileFilter{{Name: "图片", Extensions: pictureExts}},
+					Multiple: true,
+				})
+				if err == nil {
+					a.addPictures(files, paths)
+				}
+			}
+			if ui.Button(c.Key(key+"-clear"), "清空").Disabled(len(*paths) == 0).Clicked() {
+				*paths = nil
+				a.changed()
+			}
+			ui.Text(c, pictureList(*paths)).FontSize(12).TextColor(p.muted)
+		})
+	})
+}
+
 // changed applies the settings everywhere and keeps them.
 func (a *app) changed() {
 	a.settings.save()
-	a.settings.applyAppearance()
+	a.settings.takeAccent()
+	// The appearance is the windows' to take, and without one, as in
+	// tests, there is nothing to take it.
+	if a.win != nil {
+		a.settings.applyAppearance()
+	}
 	if a.notch != nil {
 		a.notch.setEnabled(a.settings.Notch)
 	}
@@ -186,6 +220,19 @@ func (a *app) settingsView(c *ui.Context) {
 		})
 
 		group("外观", func() {
+			// A row whose control needs the width under its label.
+			wide := func(label, desc string, control func()) {
+				ui.Column(c).Padding(12, 16).Gap(10).Children(func() {
+					ui.Column(c).Gap(3).Children(func() {
+						ui.Text(c, label).FontSize(13.5).FontWeight(500)
+						if desc != "" {
+							ui.Text(c, desc).FontSize(12).TextColor(p.muted).LineHeight(1.4)
+						}
+					})
+					control()
+				})
+			}
+
 			row("外观", "", func() {
 				modes := []string{"system", "light", "dark"}
 				i := 0
@@ -196,6 +243,43 @@ func (a *app) settingsView(c *ui.Context) {
 				}
 				if segmented(c.Key("appearance"), &i, "跟随系统", "浅色", "深色") {
 					s.Appearance = modes[i]
+					a.changed()
+				}
+			})
+			row("主题颜色", "按钮、选中项和进度条的颜色", func() {
+				labels := make([]string, len(accents))
+				chosen := "跟随外观"
+				for i, ac := range accents {
+					labels[i] = ac.name
+					if ac.name == s.Accent {
+						chosen = ac.name
+					}
+				}
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					if dot := accentColor(s.Accent, p.dark); dot != (ui.Color{}) {
+						ui.Box(c).Size(14, 14).Radius(999).Background(dot)
+					}
+					if ui.Select(c.Key("accent"), &chosen, append([]string{"跟随外观"}, labels...)).Label("选择主题颜色").Width(120).Changed() {
+						if chosen == "跟随外观" {
+							s.Accent = ""
+						} else {
+							s.Accent = chosen
+						}
+						a.changed()
+					}
+				})
+			})
+			wide("主页面背景", "主页的底色换成一张或多张图片，换歌时换一张；图片只从本机读取", func() {
+				a.backdropRow(c, p, "home", &s.BackdropHome)
+			})
+			wide("播放页背景", "播放页的最后一层底色换成一张或多张图片，换歌时换一张", func() {
+				a.backdropRow(c, p, "playing", &s.BackdropPlaying)
+			})
+			row("背景透明度", "背景图片的浓淡，越淡越透出底色", func() {
+				v := s.BackdropOpacity
+				slider := ui.SliderBase(c.Key("backdrop-opacity"), &v, 0.05, 0.9).Width(150).Height(16).FocusRing(false).Label("调整背景透明度")
+				if slider.Changed() {
+					s.BackdropOpacity = v
 					a.changed()
 				}
 			})

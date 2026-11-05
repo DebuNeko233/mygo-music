@@ -122,10 +122,27 @@ type backdropCache struct {
 	last   time.Time
 }
 
-// backdrop paints the backdrop behind Now Playing, still or fog.
+// backdrop paints the backdrop behind Now Playing, still or fog: the
+// picture the listener chose for it, if they chose one.
 func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 	pl := a.pl
 	fog, still := a.settings.Fog, c.Preferences().ReduceMotion
+	// In place of the cover's own colors, the listener's picture, as deep
+	// as they asked: the page's colour shows through it.
+	pics := a.pictures(a.settings.BackdropPlaying)
+	if pic := backdropShown(pics, pl.Current()); pic != nil {
+		// Nothing of the cover's backdrop paints behind it, for the wall's
+		// edges to fade into.
+		a.backdropCache.canvas, a.backdropCache.before = nil, nil
+		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
+			drawPicture(p, r, pic, float32(a.settings.BackdropOpacity))
+			// Darker toward the foot, under the controls.
+			p.FillGradient(r, ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
+				{Color: ui.RGBA(0, 0, 0, 0), At: 0.55}, {Color: ui.RGBA(0, 0, 0, 0.18), At: 1},
+			}}, 0)
+		})
+		return
+	}
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 		// The CPU, drawing the fog for want of a GPU, paints far fewer
 		// pixels, and those once a song: the fog stays still.

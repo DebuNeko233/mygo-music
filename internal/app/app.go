@@ -45,6 +45,9 @@ type app struct {
 	art   *artCache
 	pl    *player.Player
 	pal   palette
+	// pics are the backdrops read so far, by path: nil while one is on its
+	// way, and nil once one could not be read.
+	pics map[string]*backdropPicture
 
 	route   route
 	history []route

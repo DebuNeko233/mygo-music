@@ -27,8 +27,21 @@ type palette struct {
 }
 
 func paletteFor(t *ui.Theme) palette {
+	p := palette{
+		bg:        ui.Hex("#ffffff"),
+		sidebar:   ui.Hex("#f4f4f6"),
+		text:      ui.Hex("#1d1d1f"),
+		muted:     ui.RGBA(60, 60, 67, 0.62),
+		faint:     ui.RGBA(60, 60, 67, 0.32),
+		hairline:  ui.RGBA(0, 0, 0, 0.07),
+		hover:     ui.RGBA(0, 0, 0, 0.04),
+		press:     ui.RGBA(0, 0, 0, 0.08),
+		accent:    ui.Oklch(0.6, 0.21, 24),
+		onAccent:  ui.Hex("#ffffff"),
+		cardShade: ui.RGBA(0, 0, 0, 0.16),
+	}
 	if t.Dark {
-		return palette{
+		p = palette{
 			dark:      true,
 			bg:        ui.Hex("#141416"),
 			sidebar:   ui.Hex("#1c1c1f"),
@@ -43,19 +56,11 @@ func paletteFor(t *ui.Theme) palette {
 			cardShade: ui.RGBA(0, 0, 0, 0.45),
 		}
 	}
-	return palette{
-		bg:        ui.Hex("#ffffff"),
-		sidebar:   ui.Hex("#f4f4f6"),
-		text:      ui.Hex("#1d1d1f"),
-		muted:     ui.RGBA(60, 60, 67, 0.62),
-		faint:     ui.RGBA(60, 60, 67, 0.32),
-		hairline:  ui.RGBA(0, 0, 0, 0.07),
-		hover:     ui.RGBA(0, 0, 0, 0.04),
-		press:     ui.RGBA(0, 0, 0, 0.08),
-		accent:    ui.Oklch(0.6, 0.21, 24),
-		onAccent:  ui.Hex("#ffffff"),
-		cardShade: ui.RGBA(0, 0, 0, 0.16),
+	// The accent the listener chose, in the lightness of this appearance.
+	if c := accentColor(accentChosen, p.dark); c != (ui.Color{}) {
+		p.accent = c
 	}
+	return p
 }
 
 // iconButton is a borderless button showing an icon, which a soft circle

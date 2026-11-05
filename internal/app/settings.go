@@ -61,6 +61,17 @@ type settings struct {
 	// CacheMB is how many megabytes the songs kept on disk may take; 0
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
+	// Accent is the colour the app takes, from accents; empty for the one
+	// its appearance gives.
+	Accent string `json:"accent,omitempty"`
+	// BackdropHome and BackdropPlaying are the pictures the pages stand
+	// on, by path, in the order they come: the home page's and Now
+	// Playing's. Empty for pages that stand on none.
+	BackdropHome    []string `json:"backdropHome,omitempty"`
+	BackdropPlaying []string `json:"backdropPlaying,omitempty"`
+	// BackdropOpacity is how much of those pictures shows over the page's
+	// own colour, from 0 to 1.
+	BackdropOpacity float64 `json:"backdropOpacity,omitempty"`
 	// SearchHistory keeps submitted keywords, most recent first.
 	SearchHistory []string `json:"searchHistory,omitempty"`
 
@@ -68,7 +79,7 @@ type settings struct {
 }
 
 func defaultSettings() settings {
-	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true}
+	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, BackdropOpacity: 0.4}
 }
 
 func settingsPath() (string, error) {
@@ -145,8 +156,16 @@ func (s settings) save() error {
 	return os.WriteFile(path, b, 0o600)
 }
 
-// applyAppearance makes the windows light, dark, or follow the system.
+// takeAccent takes the accent the listener chose, which the pages paint
+// with.
+func (s settings) takeAccent() {
+	accentChosen = s.Accent
+}
+
+// applyAppearance makes the windows light, dark, or follow the system, and
+// takes the accent the listener chose.
 func (s settings) applyAppearance() {
+	s.takeAccent()
 	switch s.Appearance {
 	case "light":
 		mygo.Theme.SetSource(mygo.ThemeLight)
