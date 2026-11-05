@@ -32,7 +32,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 	tt.Advance(time.Second)
 	tt.Frame()
 
-	if err := tt.Click("喜欢"); err != nil {
+	if err := tt.Click("喜欢 宝船"); err != nil {
 		t.Fatal(err)
 	}
 	if !a.liked[7] {
@@ -42,7 +42,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 		t.Error("asked NetEase to unlike")
 	}
 	tt.Frame()
-	if err := tt.Click("取消喜欢"); err != nil {
+	if err := tt.Click("取消喜欢 宝船"); err != nil {
 		t.Fatal(err)
 	}
 	if a.liked[7] {
@@ -79,7 +79,7 @@ func TestLikeEpisode(t *testing.T) {
 	if ids := wait(t, asked, "whether the episode is liked"); !slices.Equal(ids, []int64{3}) {
 		t.Fatalf("asked of %v", ids)
 	}
-	if err := tt.Click("喜欢"); err != nil {
+	if err := tt.Click("喜欢 第一期"); err != nil {
 		t.Fatal(err)
 	}
 	if !a.likedPrograms[3] {
@@ -89,7 +89,7 @@ func TestLikeEpisode(t *testing.T) {
 		t.Errorf("asked NetEase for %+v", c)
 	}
 	tt.Frame()
-	if err := tt.Click("取消喜欢"); err != nil {
+	if err := tt.Click("取消喜欢 第一期"); err != nil {
 		t.Fatal(err)
 	}
 	if c := wait(t, calls, "the unlike"); c != (call{3, false}) || a.likedPrograms[3] {
@@ -137,16 +137,19 @@ func TestLikeEpisodeRow(t *testing.T) {
 	a.open(route{page: pagePodcast, id: 5})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
-	if _, ok := tt.Find("取消喜欢"); !ok {
+	episodes := a.podcasts[5].programs
+	if _, ok := tt.Find("取消喜欢 " + episodes[0].Name); !ok {
 		t.Fatal("the liked episode shows no heart")
 	}
-	if _, ok := tt.Find("喜欢"); ok {
-		t.Fatal("a heart shows with the pointer on no episode")
+	for _, pr := range episodes {
+		if _, ok := tt.Find("喜欢 " + pr.Name); ok {
+			t.Fatalf("%s shows a heart with the pointer on no episode", pr.Name)
+		}
 	}
-	r, _ := tt.Find(a.podcasts[5].programs[2].Name)
+	r, _ := tt.Find(episodes[2].Name)
 	tt.Move(r.X+r.W/2, r.Y+r.H/2)
 	tt.Frame()
-	if err := tt.Click("喜欢"); err != nil {
+	if err := tt.Click("喜欢 " + episodes[2].Name); err != nil {
 		t.Fatal(err)
 	}
 	if id := wait(t, liked, "the like"); id != 42 || !a.likedPrograms[42] {
@@ -175,11 +178,11 @@ func TestLikeBurstFrames(t *testing.T) {
 	tt.SetDark(true)
 	tt.Advance(time.Second)
 	tt.Frame()
-	r, ok := tt.Find("喜欢")
+	r, ok := tt.Find("喜欢 宝船")
 	if !ok {
 		t.Fatal("no heart")
 	}
-	tt.Click("喜欢")
+	tt.Click("喜欢 宝船")
 	moments := []time.Duration{0, 60, 120, 200, 300, 420, 600}
 	img := tt.Image()
 	scale := float32(img.Bounds().Dx()) / 1200

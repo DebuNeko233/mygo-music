@@ -190,6 +190,11 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 	if liked {
 		icon, color, label = iconHeartFill, a.pal.accent, "取消喜欢"
 	}
+	// The label names the song or the episode too: a page shows several
+	// hearts, and which one is which has to be said.
+	if tr.Name != "" {
+		label += " " + tr.Name
+	}
 	// The burst goes on a wrapper, which the heart's pop does not scale.
 	wrap := ui.Box(c).Center()
 	var b ui.Element
