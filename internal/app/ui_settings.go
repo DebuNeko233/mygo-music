@@ -287,13 +287,13 @@ func (a *app) settingsView(c *ui.Context) {
 					}
 				})
 			})
-			wide("主页面背景", "主页的底色换成一张或多张图片，换歌时换一张；图片只从本机读取", func() {
+			wide("主页面背景", "主页的底色换成一张或多张图片，切歌时切换一张背景图", func() {
 				a.backdropRow(c, p, "home", &s.BackdropHome)
 			})
-			wide("播放页背景", "播放页的最后一层底色换成一张或多张图片，换歌时换一张", func() {
+			wide("播放页背景", "播放页的最后一层底色换成一张或多张图片，切歌时切换一张背景图", func() {
 				a.backdropRow(c, p, "playing", &s.BackdropPlaying)
 			})
-			row("背景透明度", "背景图片的浓淡，越淡越透出底色", func() {
+			row("背景透明度", "低透明度对比度更好", func() {
 				v := s.BackdropOpacity
 				// A Slider, never a SliderBase: the base draws nothing of
 				// its own, and a settings page has no look to give it.
@@ -354,7 +354,7 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
-			row("行数", "窗口一次显示一句，还是这一句和下一句", func() {
+			row("行数", "窗口一次显示一句或本句和下句", func() {
 				i := 1
 				if s.LyricLines == 1 {
 					i = 0
@@ -391,16 +391,16 @@ func (a *app) settingsView(c *ui.Context) {
 				}
 			})
 			font("lyric-font", "字体", "歌词文字所用的字体", &s.LyricFont)
-			colour("lyric-played", "已播放颜色", "正在唱的这一句的颜色", &s.LyricPlayed)
-			colour("lyric-idle", "未播放颜色", "还没唱到的句子的颜色", &s.LyricIdle)
-			row("翻译", "在每一句歌词下方显示它的翻译", func() {
+			colour("lyric-played", "已播放颜色", "正在播放的这一句的颜色", &s.LyricPlayed)
+			colour("lyric-idle", "未播放颜色", "未播放的句子的颜色", &s.LyricIdle)
+			row("翻译", "在歌词下方显示翻译", func() {
 				if ui.Switch(c.Key("lyric-trans"), &s.LyricTrans).Label("显示翻译").Changed() {
 					a.changed()
 				}
 			})
-			font("lyric-trans-font", "翻译字体", "翻译文字所用的字体，与歌词的分开", &s.LyricTransFont)
+			font("lyric-trans-font", "翻译字体", "翻译文字所用的字体", &s.LyricTransFont)
 			colour("lyric-trans-color", "翻译颜色", "翻译文字的颜色", &s.LyricTransColor)
-			row("锁定位置", "锁住后歌词不能拖动，指针移到歌词上才出现按钮", func() {
+			row("锁定位置", "锁定桌面歌词窗格位置", func() {
 				if ui.Switch(c.Key("lyric-locked"), &s.LyricLocked).Label("锁定歌词位置").Changed() {
 					a.changed()
 				}
