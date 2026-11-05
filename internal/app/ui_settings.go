@@ -3,6 +3,7 @@ package app
 import (
 	"math"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -306,22 +307,26 @@ func (a *app) settingsView(c *ui.Context) {
 		})
 
 		group("桌面歌词", func() {
-			// A font is chosen by the name the settings use for it, and the
-			// system's own for the first.
+			// A font is one of the system's, named as the system names it,
+			// with the system's own for the first: typed into a field that
+			// narrows the list as the letters come, as a system may have
+			// hundreds of them.
 			font := func(key, label, desc string, chosen *string) {
 				row(label, desc, func() {
-					names := make([]string, len(lyricFonts))
-					now := lyricFonts[0].name
-					for i, f := range lyricFonts {
-						names[i] = f.name
-						if f.name == *chosen {
-							now = f.name
-						}
+					names := lyricFontNames()
+					now := lyricFontSystem
+					if *chosen != "" {
+						now = *chosen
 					}
-					if ui.Select(c.Key(key), &now, names).Label(label).Width(120).Changed() {
-						if now == lyricFonts[0].name {
-							*chosen = ""
-						} else {
+					// A choice an older settings file holds is none of the
+					// system's names: it keeps the place beside the system's
+					// own, showing as it did until it is replaced.
+					if !slices.Contains(names, now) {
+						names = append([]string{names[0], now}, names[1:]...)
+					}
+					if ui.Combobox(c.Key(key), &now, names).Label(label).Width(150).Changed() {
+						*chosen = ""
+						if now != lyricFontSystem {
 							*chosen = now
 						}
 						a.changed()
