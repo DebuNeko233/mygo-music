@@ -625,19 +625,32 @@ func lyricExtent(c *ui.Context, text, family string, size float32, weight int) f
 	return total
 }
 
-// padlock draws a padlock over the words: its shackle over its body, lifted
-// off it to the side when the window is open to being moved again.
+// padlock draws a padlock over the words: a body and the arm of it. Closed,
+// the arm stands on the body with its foot behind the body's top edge. Open,
+// the arm rises out of the body and comes down short of it, and the gap
+// between its foot and the body is what says the lock is open.
 func padlock(c *ui.Context, open bool, tint ui.Color, size float32) {
 	ui.Box(c).Width(size).Height(size).PassThrough().Children(func() {
-		shackle := ui.Box(c).Width(size * 0.54).Height(size * 0.48).
-			Radius(size * 0.27).Border(size*0.1, tint)
-		if open {
-			shackle.Absolute().Left(size * 0.44).Top(size * 0.02)
-		} else {
-			shackle.Absolute().Left(size * 0.23).Top(size * 0.02)
+		bar := max(size*0.12, 1.5) // as thick as the arm is drawn
+		fill := func(x, y, w, h float32) {
+			ui.Box(c).Absolute().Left(size * x).Top(size * y).
+				Width(size * w).Height(size * h).Radius(bar / 2).Background(tint)
 		}
-		ui.Box(c).Absolute().Left(0).Top(size * 0.42).Width(size).Height(size * 0.6).
-			Radius(size * 0.14).Background(tint)
+		// The body, its top edge where the arm comes down to it.
+		ui.Box(c).Absolute().Left(size * 0.10).Top(size * 0.52).
+			Width(size * 0.80).Height(size * 0.44).Radius(size * 0.15).Background(tint)
+		if open {
+			// The arm lifted out of the body: from its left up and over to
+			// its right, coming down short of the body, the gap between
+			// them what says the lock is open.
+			fill(0.24, 0.12, 0.12, 0.44) // its left side
+			fill(0.24, 0.12, 0.60, 0.12) // over the top
+			fill(0.72, 0.12, 0.12, 0.30) // down, short of the body
+			return
+		}
+		// Closed, the arm stands on the body, its foot behind the body's top.
+		ui.Box(c).Absolute().Left(size * 0.20).Top(size * 0.12).
+			Width(size * 0.60).Height(size * 0.54).Radius(size * 0.17).Border(bar, tint)
 	})
 }
 
