@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -69,33 +70,52 @@ func lyricColor(name string, fallback ui.Color) ui.Color {
 	return fallback
 }
 
-// lyricFonts are the fonts the lyrics may show in: name is what the settings
-// call one, families the names its systems give it, the first one there
-// being the one shown (Element.Font).
-var lyricFonts = []struct{ name, families string }{
-	{"跟随系统", ""},
-	{"微软雅黑", "微软雅黑, Microsoft YaHei, PingFang SC, Noto Sans CJK SC"},
-	{"苹方", "PingFang SC, Hiragino Sans GB, Microsoft YaHei"},
-	{"思源黑体", "Source Han Sans SC, Noto Sans CJK SC, Noto Sans SC"},
-	{"等线", "DengXian, DengXian Light"},
-	{"黑体", "SimHei, Heiti SC"},
-	{"宋体", "SimSun, Songti SC"},
-	{"楷体", "KaiTi, Kaiti SC"},
-	{"圆体", "Yuanti SC, YouYuan"},
-	{"Arial", "Arial"},
-	{"Segoe UI", "Segoe UI"},
-	{"Georgia", "Georgia"},
-}
+// lyricFontSystem is the choice standing for the font the system takes for
+// text of its own, which an unset setting picks as well.
+const lyricFontSystem = "跟随系统"
 
-// lyricFamily returns the families of the font named, or "" for the
-// system's and for a name the app does not know.
-func lyricFamily(name string) string {
-	for _, f := range lyricFonts {
-		if f.name == name {
-			return f.families
+// lyricFontNames lists the fonts the settings offer: the system's own first,
+// then the families this system has, which the lines are set in as every
+// other word of the app is. MyGo lists them once, as they stay the same
+// while the app runs, and a system whose text it has no engine for lists
+// none, leaving the settings the system's own alone.
+var lyricFontNames = sync.OnceValue(func() []string {
+	names := []string{lyricFontSystem}
+	for _, f := range ui.FontFamilies() {
+		if f.Name != "" && f.Name != lyricFontSystem {
+			names = append(names, f.Name)
 		}
 	}
-	return ""
+	return names
+})
+
+// lyricOldFonts are the fonts that settings files written before the
+// settings listed the system's own names call by the app's names, and the
+// families each one stood for: an older choice keeps showing in the fonts
+// it did, and the settings keep offering it as it is until it is replaced.
+var lyricOldFonts = map[string]string{
+	"微软雅黑": "微软雅黑, Microsoft YaHei, PingFang SC, Noto Sans CJK SC",
+	"苹方":   "PingFang SC, Hiragino Sans GB, Microsoft YaHei",
+	"思源黑体": "Source Han Sans SC, Noto Sans CJK SC, Noto Sans SC",
+	"等线":   "DengXian, DengXian Light",
+	"黑体":   "SimHei, Heiti SC",
+	"宋体":   "SimSun, Songti SC",
+	"楷体":   "KaiTi, Kaiti SC",
+	"圆体":   "Yuanti SC, YouYuan",
+}
+
+// lyricFamily returns the families the font named stands for: the system's
+// own for an empty name and for the choice meaning it, the families of an
+// older name for one of those, and the name itself for a family the system
+// gives, which a system without such a family sets in the system's own.
+func lyricFamily(name string) string {
+	if name == "" || name == lyricFontSystem {
+		return ""
+	}
+	if families, ok := lyricOldFonts[name]; ok {
+		return families
+	}
+	return name
 }
 
 // The sizes the lines may stand at, in points, as the settings offer them.
@@ -251,9 +271,13 @@ func (d *deskLyrics) apply() {
 	d.win.SetMovable(!s.LyricLocked)
 	d.hot = false
 	d.win.SetIgnoreMouseEvents(s.LyricLocked)
+	d.win.SetHasShadow(false)
+	clearFrame(d.win.NativeHandle())
 	d.win.SetAlwaysOnTop(true)
 	if s.LyricWindow {
 		d.win.ShowInactive()
+		d.win.SetHasShadow(false)
+		clearFrame(d.win.NativeHandle())
 	} else {
 		d.win.Hide()
 	}
@@ -276,6 +300,8 @@ func (d *deskLyrics) setLocked(locked bool) {
 	d.win.SetMovable(!locked)
 	d.hot = false
 	d.win.SetIgnoreMouseEvents(locked)
+	d.win.SetHasShadow(false)
+	clearFrame(d.win.NativeHandle())
 	d.win.Invalidate()
 }
 
@@ -360,6 +386,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 			if hot := d.overUnlock(); hot != d.hot {
 				d.hot = hot
 				d.win.SetIgnoreMouseEvents(!hot)
+				d.win.SetHasShadow(false)
+				clearFrame(d.win.NativeHandle())
 				d.win.Invalidate()
 			}
 			c.After(lyricPoll)
@@ -394,6 +422,12 @@ func (d *deskLyrics) view(c *ui.Context) {
 	// under the pointer, and they say themselves with a ring rather than a
 	// background, which would show as a pane over whatever the window stands
 	// on.
+	var words ui.Element
+	if len(shown) > 0 {
+		// An absolute group, centered in the window itself: the controls
+		// hover above it, rather than making its padding uneven.
+		words = ui.Column(c).Absolute().Top(0).Bottom(0).WidthPercent(100).Justify(ui.Center).Gap(8).PassThrough()
+	}
 	if over {
 		if s.LyricLocked {
 			// The only control that can be clicked: the same window takes
@@ -425,10 +459,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 		})
 	case len(shown) == 0:
 	default:
-		// The top is left to the buttons, so that they stand above the words
-		// and not on them.
-		col := ui.Column(c).Fill().Padding(46, 16, 8, 16).Gap(8).Center().PassThrough()
-		col.Children(func() {
+		words.Children(func() {
 			for i, l := range shown {
 				on := start+i == cur
 				tint := idle
@@ -477,7 +508,7 @@ func (d *deskLyrics) needed(c *ui.Context, shown []lyrics.Line, start, cur int, 
 		return w, h
 	}
 	trans := s.LyricTrans
-	widest, tall := float32(0), float32(54)
+	widest, tall := float32(0), float32(16)
 	for i, l := range shown {
 		lineSize := size
 		if start+i == cur {

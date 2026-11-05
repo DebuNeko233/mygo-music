@@ -130,6 +130,30 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	}
 }
 
+// The words stand in the window's middle, however large it was resized: the
+// buttons over them do not make their padding uneven.
+func TestDeskLyricsAreVerticallyCentered(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
+	a.pl.SetLyrics([]lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
+	a.pl.Hold(0)
+	tt := ui.NewTester((&deskLyrics{a: a}).view, 840, 400)
+	tt.Frame()
+	first, ok := tt.Find("第一句")
+	if !ok {
+		t.Fatal("no line to place")
+	}
+	second, ok := tt.Find("第二句")
+	if !ok {
+		t.Fatal("no second line to place")
+	}
+	middle := (first.Y + second.Y + second.H) / 2
+	if diff := middle - 200; diff < -1 || diff > 1 {
+		t.Errorf("words centered at %.1f in a 400-high window", middle)
+	}
+}
+
 // The settings choose one line or two, and the window shows that many: the
 // one being sung, and the one after it only when two are asked for.
 func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
