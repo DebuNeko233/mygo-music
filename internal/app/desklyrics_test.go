@@ -114,11 +114,15 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	if alpha := tt.Image().RGBAAt(4, 4).A; alpha != 0 {
 		t.Error("a plate left behind, with the pointer away")
 	}
-	// Pointed at it, they are back: unlocking has to be possible.
-	tt.Move(20, 20)
+	// Standing on its padlock, it hears the pointer, of which it hears
+	// nothing anywhere else: unlocking has to be possible without unlocking.
+	d.hot = true
 	tt.Frame()
 	if _, ok := tt.Find("解锁"); !ok {
-		t.Error("no way back out of the lock, pointed at")
+		t.Error("no way back out of the lock, under the pointer")
+	}
+	if _, ok := tt.Find("设置"); ok {
+		t.Error("a locked window offers more than the padlock that opens it")
 	}
 }
 
