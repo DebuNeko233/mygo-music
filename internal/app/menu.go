@@ -69,6 +69,8 @@ func (a *app) setMenu() {
 				a.showMain()
 				a.nowPlaying = !a.nowPlaying && a.pl.Current() != nil
 			})},
+			mygo.Separator(),
+			{Label: "桌面歌词", Accelerator: "CmdOrCtrl+Shift+L", Click: run(a.toggleDeskLyrics)},
 		}},
 		{Label: "窗口", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleMinimize, Label: "最小化"},

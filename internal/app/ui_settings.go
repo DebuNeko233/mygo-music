@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"runtime"
 	"time"
 
@@ -79,6 +80,9 @@ func (a *app) changed() {
 	}
 	if a.notch != nil {
 		a.notch.setEnabled(a.settings.Notch)
+	}
+	if a.lyrics != nil {
+		a.lyrics.apply()
 	}
 	a.redraw()
 }
@@ -280,6 +284,108 @@ func (a *app) settingsView(c *ui.Context) {
 				slider := ui.SliderBase(c.Key("backdrop-opacity"), &v, 0.05, 0.9).Width(150).Height(16).FocusRing(false).Label("调整背景透明度")
 				if slider.Changed() {
 					s.BackdropOpacity = v
+					a.changed()
+				}
+			})
+		})
+
+		group("桌面歌词", func() {
+			// A font is chosen by the name the settings use for it, and the
+			// system's own for the first.
+			font := func(key, label, desc string, chosen *string) {
+				row(label, desc, func() {
+					names := make([]string, len(lyricFonts))
+					now := lyricFonts[0].name
+					for i, f := range lyricFonts {
+						names[i] = f.name
+						if f.name == *chosen {
+							now = f.name
+						}
+					}
+					if ui.Select(c.Key(key), &now, names).Label(label).Width(120).Changed() {
+						if now == lyricFonts[0].name {
+							*chosen = ""
+						} else {
+							*chosen = now
+						}
+						a.changed()
+					}
+				})
+			}
+			// So is a colour, beside a dot of it.
+			colour := func(key, label, desc string, chosen *string) {
+				row(label, desc, func() {
+					names := make([]string, len(lyricColors))
+					now := lyricColors[0].name
+					for i, lc := range lyricColors {
+						names[i] = lc.name
+						if lc.name == *chosen {
+							now = lc.name
+						}
+					}
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						ui.Box(c).Size(12, 12).Radius(999).Border(1, p.hairline).Background(lyricColor(*chosen, p.text))
+						if ui.Select(c.Key(key), &now, names).Label(label).Width(110).Changed() {
+							*chosen = now
+							a.changed()
+						}
+					})
+				})
+			}
+
+			row("显示桌面歌词", "歌词单独浮在其它窗口之上，可以拖到屏幕的任意位置", func() {
+				if ui.Switch(c.Key("lyric-window"), &s.LyricWindow).Label("显示桌面歌词").Changed() {
+					a.changed()
+				}
+			})
+			row("排列", "横排一行一句，宽而扁；竖排一句一行，窄而高", func() {
+				i := 0
+				if s.LyricVertical {
+					i = 1
+				}
+				if segmented(c.Key("lyric-mode"), &i, "横排", "竖排") {
+					s.LyricVertical = i == 1
+					a.changed()
+				}
+			})
+			row("字号", "歌词文字的大小", func() {
+				v := min(max(s.LyricSize, lyricSizeMin), lyricSizeMax)
+				slider := ui.SliderBase(c.Key("lyric-size"), &v, lyricSizeMin, lyricSizeMax).Width(150).Height(16).FocusRing(false).Label("调整歌词字号")
+				if slider.Changed() {
+					s.LyricSize = math.Round(v)
+					a.changed()
+				}
+			})
+			row("字重", "歌词文字的粗细", func() {
+				weights := []int{300, 400, 600, 700, 800}
+				names := []string{"细", "常规", "中黑", "粗", "特粗"}
+				now := names[3]
+				for i, w := range weights {
+					if w == s.LyricWeight {
+						now = names[i]
+					}
+				}
+				if ui.Select(c.Key("lyric-weight"), &now, names).Label("选择字重").Width(110).Changed() {
+					for i, name := range names {
+						if name == now {
+							s.LyricWeight = weights[i]
+						}
+					}
+					a.changed()
+				}
+			})
+			font("lyric-font", "字体", "歌词文字所用的字体", &s.LyricFont)
+			colour("lyric-played", "已播放颜色", "正在唱的这一句的颜色", &s.LyricPlayed)
+			colour("lyric-idle", "未播放颜色", "还没唱到的句子的颜色", &s.LyricIdle)
+			row("翻译", "在每一句歌词下方显示它的翻译", func() {
+				if ui.Switch(c.Key("lyric-trans"), &s.LyricTrans).Label("显示翻译").Changed() {
+					a.changed()
+				}
+			})
+			font("lyric-trans-font", "翻译字体", "翻译文字所用的字体，与歌词的分开", &s.LyricTransFont)
+			colour("lyric-trans-color", "翻译颜色", "翻译文字的颜色", &s.LyricTransColor)
+			row("锁定位置", "锁住后歌词不能拖动，指针移到歌词上才出现按钮", func() {
+				if ui.Switch(c.Key("lyric-locked"), &s.LyricLocked).Label("锁定歌词位置").Changed() {
 					a.changed()
 				}
 			})

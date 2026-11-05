@@ -39,9 +39,10 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
-	win   *mygo.Window
-	notch *notch
-	tray  *mygo.Tray // the icon in the menu bar or notification area, while it shows
+	win    *mygo.Window
+	notch  *notch
+	lyrics *deskLyrics // the lyrics in their own window, once it is made
+	tray   *mygo.Tray // the icon in the menu bar or notification area, while it shows
 	art   *artCache
 	pl    *player.Player
 	pal   palette
@@ -177,6 +178,9 @@ func (a *app) redraw() {
 	if a.notch != nil && a.notch.win != nil {
 		a.notch.win.Invalidate()
 	}
+	if a.lyrics != nil && a.lyrics.win != nil {
+		a.lyrics.win.Invalidate()
+	}
 }
 
 // shotHook, when set, drives the app to check its design.
@@ -254,6 +258,9 @@ func Run() error {
 		if runtime.GOOS == "darwin" {
 			a.notch = newNotch(a)
 		}
+		// The lyrics' own window is every platform's, hidden until the
+		// listener asks for it.
+		a.lyrics = newDeskLyrics(a)
 		// From the menu bar alone, the Dock icon shows while the window
 		// does.
 		a.syncDock()
@@ -283,6 +290,10 @@ func Run() error {
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.quitting = true
 		a.settings.Volume = a.volume
+		if a.lyrics != nil {
+			// Where the lyrics were left, before the window goes.
+			a.lyrics.remember()
+		}
 		a.settings.save()
 		a.saveSession()
 		if write := a.transcriptWrite(); write != nil {

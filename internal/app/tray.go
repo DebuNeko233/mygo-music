@@ -120,6 +120,7 @@ func (a *app) trayMenu() *mygo.Menu {
 		{Label: "下一首", Click: run(func() { a.pl.Next() })},
 		{Label: "上一首", Click: run(func() { a.pl.Prev() })},
 		{Label: "喜欢/取消喜欢", Click: run(a.likeCurrent)},
+		{Label: "桌面歌词", Click: run(a.toggleDeskLyrics)},
 		mygo.Separator(),
 		{Label: "设置…", Click: run(front(a.openSettings))},
 		{Label: "检查更新…", Click: run(front(checkForUpdates))},

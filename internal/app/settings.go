@@ -72,6 +72,35 @@ type settings struct {
 	// BackdropOpacity is how much of those pictures shows over the page's
 	// own colour, from 0 to 1.
 	BackdropOpacity float64 `json:"backdropOpacity,omitempty"`
+	// LyricWindow shows the lyrics in a window of their own, over every
+	// other window: the listener turns it on.
+	LyricWindow bool `json:"lyricWindow,omitempty"`
+	// LyricVertical stacks the lines down a narrow, tall window rather
+	// than setting them across a wide, short one.
+	LyricVertical bool `json:"lyricVertical,omitempty"`
+	// LyricLocked keeps the lyrics window where it is: it is dragged by
+	// its lines, and locked, it has none that move it.
+	LyricLocked bool `json:"lyricLocked,omitempty"`
+	// LyricSize is how large the lines stand, in points, and LyricWeight
+	// how heavy they are.
+	LyricSize   float64 `json:"lyricSize,omitempty"`
+	LyricWeight int     `json:"lyricWeight,omitempty"`
+	// LyricFont is the family the lines show in, by the name lyricFonts
+	// gives it; empty for the system's.
+	LyricFont string `json:"lyricFont,omitempty"`
+	// LyricPlayed and LyricIdle colour the line being sung and those not
+	// yet, by the names lyricColors gives them.
+	LyricPlayed string `json:"lyricPlayed,omitempty"`
+	LyricIdle   string `json:"lyricIdle,omitempty"`
+	// LyricTrans shows each line's translation under it, in
+	// LyricTransFont and LyricTransColor.
+	LyricTrans      bool   `json:"lyricTrans,omitempty"`
+	LyricTransFont  string `json:"lyricTransFont,omitempty"`
+	LyricTransColor string `json:"lyricTransColor,omitempty"`
+	// LyricX and LyricY are where the lyrics window was left, in screen
+	// points; 0 and 0 for never placed.
+	LyricX int `json:"lyricX,omitempty"`
+	LyricY int `json:"lyricY,omitempty"`
 	// SearchHistory keeps submitted keywords, most recent first.
 	SearchHistory []string `json:"searchHistory,omitempty"`
 
@@ -79,7 +108,12 @@ type settings struct {
 }
 
 func defaultSettings() settings {
-	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, BackdropOpacity: 0.4}
+	return settings{
+		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
+		AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, BackdropOpacity: 0.4,
+		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
+		LyricTrans: true, LyricTransColor: "银灰",
+	}
 }
 
 func settingsPath() (string, error) {
