@@ -11,8 +11,8 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// The window shows the line being sung and the ones after it, in either
-// arrangement, and none of them lit before the song starts.
+// The window shows the line being sung and the ones after it, as many as it
+// is set to show, and none of them lit before the song starts.
 func TestLyricWindowLinesFollowTheLineSung(t *testing.T) {
 	lines := []lyrics.Line{
 		{At: 0, Text: "one"},
@@ -22,28 +22,32 @@ func TestLyricWindowLinesFollowTheLineSung(t *testing.T) {
 		{At: 8 * time.Second, Text: "five"},
 	}
 
-	// Set across: the line sung and the next.
-	shown, start := lyricWindowLines(lines, 1, false)
+	// Two lines: the one sung and the next.
+	shown, start := lyricWindowLines(lines, 1, 2)
 	if start != 1 || len(shown) != 2 || shown[0].Text != "two" || shown[1].Text != "three" {
-		t.Fatalf("set across, at two: %d from %d", len(shown), start)
+		t.Fatalf("two lines, at two: %d from %d", len(shown), start)
 	}
-	// Stacked: it and the three after it.
-	shown, start = lyricWindowLines(lines, 1, true)
-	if start != 1 || len(shown) != 4 || shown[3].Text != "five" {
-		t.Fatalf("stacked, at two: %d from %d", len(shown), start)
+	// One line: the one sung alone.
+	shown, start = lyricWindowLines(lines, 1, 1)
+	if start != 1 || len(shown) != 1 || shown[0].Text != "two" {
+		t.Fatalf("one line, at two: %d from %d", len(shown), start)
 	}
 	// The last line shows alone, not past the song's.
-	shown, start = lyricWindowLines(lines, 4, true)
+	shown, start = lyricWindowLines(lines, 4, 2)
 	if start != 4 || len(shown) != 1 || shown[0].Text != "five" {
-		t.Fatalf("stacked, at five: %d from %d", len(shown), start)
+		t.Fatalf("at five: %d from %d", len(shown), start)
 	}
 	// Before the first, the first ones show, with none of them lit.
-	shown, start = lyricWindowLines(lines, -1, false)
+	shown, start = lyricWindowLines(lines, -1, 2)
 	if start != 0 || len(shown) != 2 || shown[0].Text != "one" {
 		t.Fatalf("before the first: %d from %d", len(shown), start)
 	}
-	if shown, _ := lyricWindowLines(nil, 0, true); shown != nil {
+	// A song without lines has none to show, and no settings ask for none.
+	if shown, _ := lyricWindowLines(nil, 0, 2); shown != nil {
 		t.Fatalf("a song without lines: %d", len(shown))
+	}
+	if shown, _ := lyricWindowLines(lines, 0, 0); len(shown) != 1 {
+		t.Fatalf("no lines asked for: %d", len(shown))
 	}
 }
 
@@ -82,7 +86,7 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	d := &deskLyrics{a: a}
 	a.lyrics = d
 
-	w, h := lyricWindowSize(false, a.settings.LyricSize)
+	w, h := lyricWindowSize(false, a.settings.LyricSize, a.settings.LyricLines)
 	tt := ui.NewTester(d.view, int(w), int(h))
 	// Pointed at, the plate and the buttons show: it is through them that the
 	// window is dragged and locked, and the lines stand on the plate.

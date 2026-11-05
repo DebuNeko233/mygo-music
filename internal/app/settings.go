@@ -81,6 +81,8 @@ type settings struct {
 	// LyricVertical stacks the lines down a narrow, tall window rather
 	// than setting them across a wide, short one.
 	LyricVertical bool `json:"lyricVertical,omitempty"`
+	// LyricLines is how many lines the window shows at once: one or two.
+	LyricLines int `json:"lyricLines,omitempty"`
 	// LyricLocked keeps the lyrics window where it is: it is dragged by
 	// its lines, and locked, it has none that move it.
 	LyricLocked bool `json:"lyricLocked,omitempty"`
@@ -119,7 +121,7 @@ func defaultSettings() settings {
 		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
 		AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, BackdropOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
-		LyricTrans: true, LyricTransColor: "银灰",
+		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
 	}
 }
 

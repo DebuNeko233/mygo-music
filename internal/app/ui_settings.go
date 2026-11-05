@@ -364,6 +364,16 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
+			row("行数", "窗口一次显示一句，还是这一句和下一句", func() {
+				i := 1
+				if s.LyricLines == 1 {
+					i = 0
+				}
+				if segmented(c.Key("lyric-lines"), &i, "单行", "双行") {
+					s.LyricLines = i + 1
+					a.changed()
+				}
+			})
 			row("字号", "歌词文字的大小", func() {
 				v := min(max(s.LyricSize, lyricSizeMin), lyricSizeMax)
 				slider := ui.Slider(c.Key("lyric-size"), &v, lyricSizeMin, lyricSizeMax).Width(150).Label("调整歌词字号")

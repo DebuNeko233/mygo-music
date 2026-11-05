@@ -106,28 +106,29 @@ const (
 
 // lyricWindowSize is how large the window stands: wide and short with the
 // lines set across, narrow and tall with them set down, and either larger
-// with larger type.
-func lyricWindowSize(vertical bool, size float64) (w, h float32) {
+// with larger type and with more lines than one.
+func lyricWindowSize(vertical bool, size float64, lines int) (w, h float32) {
 	size = min(max(size, lyricSizeMin), lyricSizeMax)
+	n := float64(min(max(lines, 1), lyricLinesMax))
 	if vertical {
-		// Four columns, each with its translation beside it.
-		return float32(60 + size*11.5), float32(60 + size*10.5)
+		// A column per line, each with its translation beside it.
+		return float32(30 + size*5*n), float32(60 + size*10.5)
 	}
-	// Two lines, each with its translation.
-	return 840, float32(36 + size*5.2)
+	// A line per row, each with its translation under it.
+	return 840, float32(36 + size*2.6*n)
 }
 
+// lyricLinesMax is as many lines as the window shows at once.
+const lyricLinesMax = 2
+
 // lyricWindowLines are the lines the window shows, from start, with the one
-// at cur among them lit: that one and the one after it set across, that one
-// and the three after it set down. Before the first line, the first ones.
-func lyricWindowLines(lines []lyrics.Line, cur int, vertical bool) (shown []lyrics.Line, start int) {
+// at cur among them lit: that one and the ones after it, as many as the
+// window shows. Before the first line, the first ones.
+func lyricWindowLines(lines []lyrics.Line, cur int, count int) (shown []lyrics.Line, start int) {
 	if len(lines) == 0 {
 		return nil, 0
 	}
-	n := 2
-	if vertical {
-		n = 4
-	}
+	n := min(max(count, 1), lyricLinesMax)
 	start = max(cur, 0)
 	return lines[start:min(len(lines), start+n)], start
 }
@@ -197,7 +198,7 @@ func lyricWindowPlace(x, y int, w, h float32, area mygo.Rectangle) (int, int) {
 func newDeskLyrics(a *app) *deskLyrics {
 	d := &deskLyrics{a: a}
 	s := &a.settings
-	w, h := lyricWindowSize(s.LyricVertical, s.LyricSize)
+	w, h := lyricWindowSize(s.LyricVertical, s.LyricSize, s.LyricLines)
 	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
 	d.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:         mygo.App.Name() + "桌面歌词",
@@ -238,7 +239,7 @@ func (d *deskLyrics) apply() {
 		return // as in tests
 	}
 	s := &d.a.settings
-	needW, needH := lyricWindowSize(s.LyricVertical, s.LyricSize)
+	needW, needH := lyricWindowSize(s.LyricVertical, s.LyricSize, s.LyricLines)
 	// No smaller than the lines need, and as large as it was left.
 	w, h := needW, needH
 	if s.LyricWidth > int(needW) {
@@ -408,7 +409,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 		})
 	}
 
-	shown, start := lyricWindowLines(lines, cur, s.LyricVertical)
+	shown, start := lyricWindowLines(lines, cur, s.LyricLines)
 	switch {
 	case len(lines) == 0 && loaded:
 		ui.Column(c).Fill().Center().Children(func() {
@@ -518,7 +519,7 @@ func lyricChunks(c *ui.Context, text string, family string, size float32, weight
 
 // lyricColumnRoom is how tall the room a column stands in is.
 func lyricColumnRoom(size float32) float32 {
-	_, h := lyricWindowSize(true, float64(size))
+	_, h := lyricWindowSize(true, float64(size), 1)
 	return h - 16
 }
 
