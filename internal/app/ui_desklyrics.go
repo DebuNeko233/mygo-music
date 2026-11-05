@@ -168,20 +168,23 @@ func newDeskLyrics(a *app) *deskLyrics {
 	w, h := lyricWindowSize(s.LyricSize, s.LyricLines)
 	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
 	d.win = mygo.NewWindow(mygo.WindowOptions{
-		Title:         mygo.App.Name() + "桌面歌词",
-		Panel:         true,
-		Hidden:        true,
-		Frameless:     true,
-		Transparent:   true,
-		DisableResize: true,
-		DisableShadow: true,
-		SkipTaskbar:   true,
-		AlwaysOnTop:   true,
-		X:             x,
-		Y:             y,
-		Width:         int(w),
-		Height:        int(h),
-		Content:       ui.View(d.view),
+		Title:  mygo.App.Name() + "桌面歌词",
+		Panel:  true,
+		Hidden: true,
+		// A framed window with its title bar and buttons hidden, rather than a
+		// frameless one: the frame is what gives it edges that take the pointer
+		// to resize, and what it draws of itself is turned off below.
+		TitleBarStyle:     mygo.TitleBarHidden,
+		HideWindowButtons: true,
+		Transparent:       true,
+		DisableShadow:     true,
+		SkipTaskbar:       true,
+		AlwaysOnTop:       true,
+		X:                 x,
+		Y:                 y,
+		Width:             int(w),
+		Height:            int(h),
+		Content:           ui.View(d.view),
 	})
 	// Escape and the like close a panel: these lyrics stay, until the
 	// listener turns them off or the app quits.
@@ -231,9 +234,8 @@ func (d *deskLyrics) apply() {
 			s.save()
 		}
 	}
-	// Keep the native resize border off for the window's whole life: on
-	// Windows, toggling it changes the outer size, even for a frameless
-	// window. Mouse pass-through already prevents resizing while locked.
+	// The edges stay resizable for the window's whole life: a locked window
+	// takes no pointer, so it cannot be resized or moved either.
 	d.win.SetMovable(!s.LyricLocked)
 	d.win.SetIgnoreMouseEvents(s.LyricLocked)
 	// Locked anew or let go, the pointer is the desktop's but for the padlock.
