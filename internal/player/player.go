@@ -700,7 +700,15 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 // come now, skipped if it cannot play at all, and else left where it is
 // for the listener to play again.
 func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, err error) {
-	if err != netease.ErrUnavailable {
+	if errors.Is(err, netease.ErrNotLoggedIn) {
+		// Asked for again it would be turned down again, and the song
+		// plays once the listener is signed in: nothing is skipped.
+		p.err = "登录已过期，请重新登录"
+		p.playing = false
+		p.sync()
+		return
+	}
+	if !errors.Is(err, netease.ErrUnavailable) {
 		// What did not come now may come again: a stream URL gone stale,
 		// or a connection dropped, is asked for again a moment later.
 		if p.tries < loadTries {
@@ -812,7 +820,7 @@ func (p *Player) prefetch(at int) {
 			// spend its bytes for nothing, as it would come in vain.
 			return
 		}
-		dl := p.Cache.download(t.ID, info)
+		dl := p.Cache.download(t.ID, level, info)
 		p.post(func() {
 			if gen != p.gen || p.ahead != nil {
 				dl.Close()
@@ -889,7 +897,7 @@ func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker) (
 	if err != nil {
 		return nil, nil, err
 	}
-	return p.Cache.download(t.ID, info), info, nil
+	return p.Cache.download(t.ID, level, info), info, nil
 }
 
 // Session is where playback was left, to pick up again.

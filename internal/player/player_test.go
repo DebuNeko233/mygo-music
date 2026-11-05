@@ -169,7 +169,7 @@ func TestCache(t *testing.T) {
 		f := c.part(st)
 		f.Write(make([]byte, n))
 		f.Close()
-		c.keep(id, st, f.Name(), int64(n))
+		c.keep(id, st.Level, st, f.Name(), int64(n))
 	}
 	store(1, &netease.Stream{Level: "lossless", Type: "flac", Gain: -3}, 100)
 	dl, st, ok := c.lookup(1, "exhigh")
@@ -200,6 +200,28 @@ func TestCache(t *testing.T) {
 	c.Clear()
 	if n := c.Size(); n != 0 {
 		t.Errorf("cleared to %d", n)
+	}
+}
+
+// A song NetEase serves below the level asked for is kept where it was
+// served, and asking for that level again finds it: asked for lossless and
+// served ex-high, it was downloaded again on every play.
+func TestCacheServedBelowAsked(t *testing.T) {
+	c := NewCache(t.TempDir(), 400)
+	st := &netease.Stream{Level: "exhigh", Type: "mp3", Size: 100}
+	f := c.part(st)
+	f.Write(make([]byte, 100))
+	f.Close()
+	if _, ok := c.keep(1, "lossless", st, f.Name(), 100); !ok {
+		t.Fatal("not kept")
+	}
+	dl, got, ok := c.lookup(1, "lossless")
+	if !ok {
+		t.Fatal("kept at ex-high for a lossless ask: not found")
+	}
+	defer dl.Close()
+	if got.Level != "exhigh" || got.Size != 100 {
+		t.Errorf("lookup: %+v", got)
 	}
 }
 

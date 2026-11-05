@@ -288,15 +288,16 @@ func PlaylistDetail(id int64) (*Playlist, error) {
 	// play, as Stan's: the songs' details say right.
 	detailPrivileges(p.Tracks)
 	// Long playlists list only their first tracks in full: the rest by id.
-	if len(p.Tracks) < len(p.TrackIDs) {
+	// NetEase lists a thousand of them at most, so only those come.
+	if hi := min(len(p.TrackIDs), 1000); len(p.Tracks) < hi {
 		var ids []int64
-		for _, t := range p.TrackIDs[len(p.Tracks):min(len(p.TrackIDs), 1000)] {
+		for _, t := range p.TrackIDs[len(p.Tracks):hi] {
 			ids = append(ids, t.ID)
 		}
-		more, err := SongDetails(ids)
-		if err == nil {
-			p.Tracks = append(p.Tracks, more...)
-		}
+		// A detail that is cut short still returns the songs it got: a
+		// playlist showing part of itself beats one that fails whole.
+		more, _ := SongDetails(ids)
+		p.Tracks = append(p.Tracks, more...)
 	}
 	return p, nil
 }
@@ -387,6 +388,11 @@ func ArtistLatestSongs(id int64, limit int) ([]Track, error) {
 
 var ErrUnavailable = errors.New("this song isn't available to stream")
 
+// ErrNotLoggedIn is NetEase turning a request down for want of a session:
+// what an expired one gets. It is not about the song, so nothing that
+// meets it may take the song for one that cannot play.
+var ErrNotLoggedIn = errors.New("the listener is not signed in")
+
 // Stream is where a track streams from, and what it is.
 type Stream struct {
 	URL  string `json:"-"`
@@ -413,8 +419,10 @@ func Lossless(level string) bool { return level == "lossless" || level == "hires
 // the eapi, which carries the session, so VIP songs play for subscribers.
 func SongURL(id int64, level string) (*Stream, error) {
 	var res struct {
-		Code int `json:"code"`
-		Data []struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Msg     string `json:"msg"`
+		Data    []struct {
 			Stream
 			URL           string          `json:"url"`
 			Peak          *float64        `json:"peak"`
@@ -428,6 +436,21 @@ func SongURL(id int64, level string) (*Stream, error) {
 	data := map[string]any{"ids": fmt.Sprintf("[%d]", id), "level": level, "encodeType": encode}
 	if err := eapiPost("/api/song/enhance/player/url/v1", data, &res); err != nil {
 		return nil, err
+	}
+	// NetEase answers 200 with a URL, and something else — 301 when the
+	// session has gone, -460 when it wants the account checked — when it
+	// serves none. Taken for a song that cannot play, those said it
+	// needed VIP and skipped the whole queue.
+	switch res.Code {
+	case 200:
+	case 301:
+		return nil, ErrNotLoggedIn
+	default:
+		msg := res.Message
+		if msg == "" {
+			msg = res.Msg
+		}
+		return nil, fmt.Errorf("netease: song url: code %d %s", res.Code, msg)
 	}
 	if len(res.Data) == 0 || res.Data[0].URL == "" {
 		return nil, ErrUnavailable

@@ -238,7 +238,7 @@ func cutServer(t *testing.T, b []byte) *httptest.Server {
 // halfway, as a stream of the player's: a song of id, from url.
 func cutStream(t *testing.T, c *Cache, id int64, url string, size int) stream {
 	t.Helper()
-	dl := c.download(id, &netease.Stream{URL: url, Size: int64(size), Level: "exhigh", Type: "mp3"})
+	dl := c.download(id, "exhigh", &netease.Stream{URL: url, Size: int64(size), Level: "exhigh", Type: "mp3"})
 	dl.waitFor(int64(size))
 	if dl.Err() == nil {
 		t.Fatal("the cut download ended whole")

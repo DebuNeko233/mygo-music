@@ -39,6 +39,14 @@ func (c *Cache) SetLimit(limit int64) {
 
 func cacheKey(id int64, level string) string { return fmt.Sprintf("%d-%s", id, level) }
 
+// keptSong is what a kept song's .json holds: where it streams from, at the
+// level NetEase served, and the level it was asked for, which may be above
+// that one.
+type keptSong struct {
+	netease.Stream
+	Asked string `json:"asked,omitempty"`
+}
+
 // keepable reports whether a song of level and type ext may be kept: they
 // name its file, so only those known, which keep it in the cache's folder.
 func keepable(level, ext string) bool {
@@ -46,22 +54,27 @@ func keepable(level, ext string) bool {
 }
 
 // lookup returns a song kept at level or a better one, open to read, with
-// its stream.
+// its stream. One served below the level asked for is kept there, and is
+// what asking for that level finds.
 func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool) {
 	if c == nil {
 		return nil, nil, false
 	}
 	at := max(slices.Index(netease.Levels, level), 0)
-	for _, lv := range netease.Levels[at:] {
+	for i, lv := range netease.Levels {
 		key := cacheKey(id, lv)
 		meta, err := os.ReadFile(filepath.Join(c.dir, key+".json"))
 		if err != nil {
 			continue
 		}
-		var st netease.Stream
-		if json.Unmarshal(meta, &st) != nil || !keepable(lv, st.Type) {
+		var kept keptSong
+		if json.Unmarshal(meta, &kept) != nil || !keepable(lv, kept.Type) {
 			continue
 		}
+		if i < at && kept.Asked != level {
+			continue
+		}
+		st := kept.Stream
 		path := filepath.Join(c.dir, key+"."+st.Type)
 		f, err := os.Open(path)
 		if err != nil {
@@ -79,15 +92,16 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 	return nil, nil, false
 }
 
-// download fetches the song of the stream st into a file, to keep once it
-// has all come in; or into memory, if the cache would not keep it.
-func (c *Cache) download(id int64, st *netease.Stream) *download {
+// download fetches the song of the stream st, asked for at level, into a
+// file, to keep once it has all come in; or into memory, if the cache would
+// not keep it.
+func (c *Cache) download(id int64, level string, st *netease.Stream) *download {
 	part := c.part(st)
 	if part == nil {
 		return startDownload(st.URL, st.Size, nil, nil)
 	}
 	return startDownload(st.URL, st.Size, part, func(path string, n int64) (string, bool) {
-		return c.keep(id, st, path, n)
+		return c.keep(id, level, st, path, n)
 	})
 }
 
@@ -136,15 +150,16 @@ func (c *Cache) part(st *netease.Stream) *os.File {
 
 // keep keeps the song of the stream st, n bytes, from the file part, which
 // is closed, and drops what is over the limit then. It returns where the
-// song is: kept, or still at part.
-func (c *Cache) keep(id int64, st *netease.Stream, part string, n int64) (string, bool) {
+// song is: kept, or still at part. asked is the level it was asked for,
+// kept beside the one served so that asking for it again finds it.
+func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n int64) (string, bool) {
 	c.mu.Lock()
 	limit := c.limit
 	c.mu.Unlock()
 	if n > limit/4 {
 		return part, false
 	}
-	kept := *st
+	kept := keptSong{Stream: *st, Asked: asked}
 	if kept.Type == "" {
 		kept.Type = "mp3"
 	}
