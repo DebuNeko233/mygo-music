@@ -14,7 +14,7 @@ irm https://github.com/zhangnjsd/mygo-music/releases/latest/download/install.ps1
 
 Linux 上装在 ~/.local，不需要 root：
 
-```bash
+```sh
 curl -fsSL https://github.com/zhangnjsd/mygo-music/releases/latest/download/install.sh | sh
 ```
 
