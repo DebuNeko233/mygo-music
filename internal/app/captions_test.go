@@ -80,6 +80,7 @@ func TestAddSegmentOnce(t *testing.T) {
 // captionsTestApp plays an episode in Now Playing, with the libraries in
 // the app and the model installed or not.
 func captionsTestApp(t *testing.T, installed bool) *app {
+	isolateUserData(t)
 	oldAvail, oldInstalled := captionsAvailable, modelInstalled
 	t.Cleanup(func() { captionsAvailable, modelInstalled = oldAvail, oldInstalled })
 	captionsAvailable = func() bool { return true }

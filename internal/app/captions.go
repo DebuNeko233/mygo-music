@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -438,15 +439,36 @@ func (a *app) transcriptWrite() func() {
 	if err != nil {
 		return nil
 	}
+	seq := atomic.AddInt64(&transcriptAsked, 1)
 	return func() {
-		if os.MkdirAll(filepath.Dir(path), 0o755) == nil {
-			tmp := path + ".tmp"
-			if os.WriteFile(tmp, b, 0o644) == nil {
-				os.Rename(tmp, path)
-			}
+		// The writes of a transcript go one at a time: they all write one
+		// temporary file, and one renaming it as another writes it left a
+		// transcript half written, which the next launch threw away.
+		transcriptMu.Lock()
+		defer transcriptMu.Unlock()
+		if seq <= atomic.LoadInt64(&transcriptLanded) {
+			// A later transcript landed already: this one is older.
+			return
+		}
+		if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
+			return
+		}
+		tmp := path + ".tmp"
+		if os.WriteFile(tmp, b, 0o644) == nil && os.Rename(tmp, path) == nil {
+			atomic.StoreInt64(&transcriptLanded, seq)
 		}
 	}
 }
+
+var (
+	// transcriptMu keeps the writes of a transcript one at a time, and
+	// transcriptAsked and transcriptLanded are the sequence of the write
+	// asked for last and of the one that landed last: what an earlier
+	// write made does not land over what a later one wrote.
+	transcriptMu     sync.Mutex
+	transcriptAsked  int64
+	transcriptLanded int64
+)
 
 // captionStart returns where to write down from for a listener at pos of
 // an episode length long, of which spans are written down: pos, or the
