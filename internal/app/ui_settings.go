@@ -35,6 +35,8 @@ func (a *app) openSettings() {
 	})
 	a.settingsWin.OnClosed(func() {
 		a.settingsWin = nil
+		// The dialog asking about the folder goes with the window.
+		a.cacheConfirm.open = false
 		a.syncDock()
 	})
 	a.syncDock()
@@ -197,6 +199,18 @@ func (a *app) settingsView(c *ui.Context) {
 		}
 
 		group("缓存", func() {
+			row("歌曲缓存目录", a.cacheDirectoryDescription(), func() {
+				if ui.Button(c.Key("cache-directory"), "更改…").Label("更改歌曲缓存目录").Disabled(a.cacheMoving).Clicked() {
+					a.chooseCacheDirectory()
+				}
+			})
+			if s.CacheDir != "" {
+				row("默认缓存目录", "恢复到系统默认位置，立即生效", func() {
+					if ui.Button(c.Key("reset-cache-directory"), "恢复默认").Label("恢复默认歌曲缓存目录").Disabled(a.cacheMoving).Clicked() {
+						a.confirmCacheDirectory("")
+					}
+				})
+			}
 			row("歌曲缓存", "听过的歌曲保存在本机，再次播放无需等待，也不耗流量；"+a.cacheUsage(), func() {
 				labels := make([]string, len(cacheLimits))
 				chosen := cacheLimits[2].label
@@ -206,7 +220,7 @@ func (a *app) settingsView(c *ui.Context) {
 						chosen = l.label
 					}
 				}
-				if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存").Width(150).Changed() {
+				if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存").Width(150).Disabled(a.cacheMoving).Changed() {
 					for _, l := range cacheLimits {
 						if l.label == chosen {
 							s.CacheMB = l.mb
@@ -217,7 +231,7 @@ func (a *app) settingsView(c *ui.Context) {
 				}
 			})
 			row("清除缓存", "删除保存在本机的全部歌曲", func() {
-				if ui.Button(c.Key("clear-cache"), "清除").Disabled(a.cacheUsed <= 0).Clicked() {
+				if ui.Button(c.Key("clear-cache"), "清除").Disabled(a.cacheUsed <= 0 || a.cacheMoving).Clicked() {
 					a.clearCache()
 				}
 			})
@@ -453,5 +467,7 @@ func (a *app) settingsView(c *ui.Context) {
 				})
 			})
 		}
+
+		a.cacheDirectoryDialog(c, p)
 	})
 }

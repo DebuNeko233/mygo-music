@@ -22,6 +22,12 @@ type Cache struct {
 
 	mu    sync.Mutex
 	limit int64 // in bytes; 0 keeps nothing
+	// blocked is set while the folder is being moved: nothing is looked up,
+	// fetched into it or dropped, and what is in goes when it does.
+	blocked bool
+	// active counts what is being fetched into the folder, so that a move
+	// may stop every one of them first.
+	active map[*download]struct{}
 }
 
 // NewCache returns a cache in dir of limit bytes.
@@ -29,12 +35,25 @@ func NewCache(dir string, limit int64) *Cache {
 	return &Cache{dir: dir, limit: limit}
 }
 
+// stopped reports whether the folder is being moved, and so takes nothing.
+func (c *Cache) stopped() bool {
+	if c == nil {
+		return true
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.blocked
+}
+
 // SetLimit changes how much the cache may take, and drops what is over.
 func (c *Cache) SetLimit(limit int64) {
 	c.mu.Lock()
 	c.limit = limit
+	blocked := c.blocked
 	c.mu.Unlock()
-	c.prune("")
+	if !blocked {
+		c.prune("")
+	}
 }
 
 func cacheKey(id int64, level string) string { return fmt.Sprintf("%d-%s", id, level) }
@@ -57,7 +76,7 @@ func keepable(level, ext string) bool {
 // its stream. One served below the level asked for is kept there, and is
 // what asking for that level finds.
 func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool) {
-	if c == nil {
+	if c == nil || c.stopped() {
 		return nil, nil, false
 	}
 	at := max(slices.Index(netease.Levels, level), 0)
@@ -87,7 +106,7 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 		// Played now: the last to go.
 		now := time.Now()
 		os.Chtimes(path, now, now)
-		return opened(f, st.Size), &st, true
+		return c.track(opened(f, st.Size)), &st, true
 	}
 	return nil, nil, false
 }
@@ -98,11 +117,11 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 func (c *Cache) download(id int64, level string, st *netease.Stream) *download {
 	part := c.part(st)
 	if part == nil {
-		return startDownload(st.URL, st.Size, nil, nil)
+		return c.track(startDownload(st.URL, st.Size, nil, nil))
 	}
-	return startDownload(st.URL, st.Size, part, func(path string, n int64) (string, bool) {
+	return c.track(startDownload(st.URL, st.Size, part, func(path string, n int64) (string, bool) {
 		return c.keep(id, level, st, path, n)
-	})
+	}))
 }
 
 // Keeps reports whether the cache would keep a song of size bytes: one of
@@ -135,7 +154,7 @@ func (c *Cache) Holds(st *netease.Stream) bool {
 // nil if the cache would not keep it. Each has a name of its own: the same
 // song played again while it still comes in has another.
 func (c *Cache) part(st *netease.Stream) *os.File {
-	if !c.Keeps(st.Size) {
+	if !c.Keeps(st.Size) || c.stopped() {
 		return nil
 	}
 	if os.MkdirAll(c.dir, 0o700) != nil {
@@ -154,9 +173,9 @@ func (c *Cache) part(st *netease.Stream) *os.File {
 // kept beside the one served so that asking for it again finds it.
 func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n int64) (string, bool) {
 	c.mu.Lock()
-	limit := c.limit
+	limit, blocked := c.limit, c.blocked
 	c.mu.Unlock()
-	if n > limit/4 {
+	if blocked || n > limit/4 {
 		return part, false
 	}
 	kept := keptSong{Stream: *st, Asked: asked}
@@ -180,6 +199,9 @@ func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n 
 
 // Size returns how many bytes the songs kept take.
 func (c *Cache) Size() int64 {
+	if c.stopped() {
+		return 0
+	}
 	var n int64
 	for _, f := range c.songs() {
 		n += f.size
@@ -189,6 +211,9 @@ func (c *Cache) Size() int64 {
 
 // Clear drops every song kept.
 func (c *Cache) Clear() {
+	if c.stopped() {
+		return
+	}
 	for _, f := range c.songs() {
 		c.remove(f.path)
 	}

@@ -61,6 +61,9 @@ type settings struct {
 	// CacheMB is how many megabytes the songs kept on disk may take; 0
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
+	// CacheDir is where those songs are kept; empty for the app's own
+	// cache directory, as the system gives it.
+	CacheDir string `json:"cacheDir,omitempty"`
 	// Accent is the colour the app takes, from accents; empty for the one
 	// its appearance gives.
 	Accent string `json:"accent,omitempty"`
@@ -187,7 +190,30 @@ func (s settings) save() error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0o600)
+	// Written beside the settings and moved onto them, so that what is
+	// there is either the old settings or the new ones, never half of
+	// them: a crash as they are written loses nothing.
+	f, err := os.CreateTemp(filepath.Dir(path), "settings-*.json")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // takeAccent takes the accent the listener chose, which the pages paint

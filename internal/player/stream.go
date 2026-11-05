@@ -54,13 +54,19 @@ type download struct {
 	// runs counts the fetches of the song, so that the end of one a seek
 	// dropped is not taken for the end of the one that follows it.
 	runs int
+	// finished is closed once the fetch that runs now has stopped: what
+	// halt waits for, before it lets go of the file its readers hold.
+	finished chan struct{}
+	// onRelease takes the song out of its cache, once nothing reads or
+	// writes it any more.
+	onRelease func()
 }
 
 // startDownload fetches url, of size bytes if known, into part, a file
 // that keep keeps once it has all come in: or into memory, without one.
 func startDownload(url string, size int64, part *os.File, keep func(string, int64) (string, bool)) *download {
 	ctx, cancel := context.WithCancel(context.Background())
-	d := &download{size: size, cancel: cancel, users: 2, url: url, runs: 1}
+	d := &download{size: size, cancel: cancel, users: 2, url: url, runs: 1, finished: make(chan struct{})}
 	d.cond.L = &d.mu
 	switch {
 	case part != nil:
@@ -102,6 +108,15 @@ var stallGap = 15 * time.Second
 // run fetches the song from off, which it asks for as the bytes from there
 // on, and its end counts only as long as it is still the fetch of the song.
 func (d *download) run(ctx context.Context, from int64, run int, gap time.Duration) {
+	// Registered first, so it runs last: the fetch is over once it has let
+	// the song go, which is what halt waits for.
+	defer func() {
+		d.mu.Lock()
+		if d.runs == run {
+			close(d.finished)
+		}
+		d.mu.Unlock()
+	}()
 	defer d.release()
 	finish := func(err error) {
 		d.mu.Lock()
@@ -273,7 +288,7 @@ func (d *download) Close() {
 func (d *download) share() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.users <= 0 {
+	if d.users <= 0 || d.closed {
 		return false
 	}
 	d.users++
@@ -288,6 +303,32 @@ func (d *download) release() {
 	if d.users--; d.users > 0 {
 		return
 	}
+	if d.file != nil {
+		d.file.Close()
+	}
+	if d.part != "" {
+		os.Remove(d.part)
+	}
+	d.file, d.data, d.n, d.part = nil, nil, 0, ""
+	if d.onRelease != nil {
+		d.onRelease()
+	}
+}
+
+// halt stops the song for good, for its cache to move: the fetch stops, and
+// is waited for, then the file goes even under a decoder still reading it,
+// so that no file of the cache is left open. What reads the song reaches the
+// file under the lock, and finds none.
+func (d *download) halt() {
+	d.Close()
+	d.mu.Lock()
+	finished := d.finished
+	d.mu.Unlock()
+	if finished != nil {
+		<-finished
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.file != nil {
 		d.file.Close()
 	}

@@ -42,10 +42,10 @@ type app struct {
 	win    *mygo.Window
 	notch  *notch
 	lyrics *deskLyrics // the lyrics in their own window, once it is made
-	tray   *mygo.Tray // the icon in the menu bar or notification area, while it shows
-	art   *artCache
-	pl    *player.Player
-	pal   palette
+	tray   *mygo.Tray  // the icon in the menu bar or notification area, while it shows
+	art    *artCache
+	pl     *player.Player
+	pal    palette
 	// pics are the backdrops read so far, by path: nil while one is on its
 	// way, and nil once one could not be read.
 	pics map[string]*backdropPicture
@@ -142,10 +142,14 @@ type app struct {
 	sig                   playerSig
 	quitting              bool
 
-	settings    settings
-	settingsWin *mygo.Window
-	cacheUsed   int64 // the bytes the song cache takes, -1 until measured
-	updates     bool  // the update plugin is used (useUpdater)
+	settings     settings
+	settingsWin  *mygo.Window
+	cacheUsed    int64                      // the bytes the song cache takes, -1 until measured
+	cacheError   string                     // a move of the cache's folder failed, or left songs behind
+	cacheMoving  bool                       // the cache's folder moves
+	cacheTarget  string                     // where it moves to
+	cacheConfirm cacheDirectoryConfirmation // the folder it asks to move the songs to
+	updates      bool                       // the update plugin is used (useUpdater)
 
 	restored     bool   // playback picked up where it was left
 	savedSession string // the session as last kept
@@ -227,7 +231,7 @@ func Run() error {
 		a.pl = player.New(a.post)
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
-		a.pl.Cache = newSongCache(a.settings.CacheMB)
+		a.pl.Cache = newSongCache(a.settings.CacheMB, a.settings.CacheDir)
 		a.pl.Changed = func() {
 			a.keepSession()
 			a.syncCaptions()
@@ -287,7 +291,13 @@ func Run() error {
 			}
 		})
 	})
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+	mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
+		if a.cacheMoving {
+			// The songs are on their way to the new folder: quitting now
+			// would leave them half there.
+			e.PreventDefault()
+			return
+		}
 		a.quitting = true
 		a.settings.Volume = a.volume
 		if a.lyrics != nil {

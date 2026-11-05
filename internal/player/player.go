@@ -69,6 +69,9 @@ type Player struct {
 	playing bool // what the listener wants: false while paused
 	err     string
 	gen     int // counts loads, to drop the results of stale ones
+	// cacheChanging is set while the song cache's folder moves: nothing
+	// loads meanwhile, and what plays is let go of.
+	cacheChanging bool
 
 	// ahead is the next track's download, fetched while this one plays,
 	// so that it starts at once when this one ends: nil without one.
@@ -133,7 +136,7 @@ func (p *Player) sync() {
 		return
 	}
 	state := mygo.PlaybackPaused
-	if p.playing {
+	if p.playing && !p.cacheChanging {
 		state = mygo.PlaybackPlaying
 	}
 	mygo.NowPlaying.SetPlayback(state, p.Position())
@@ -142,7 +145,7 @@ func (p *Player) sync() {
 // announce shows the system the track, and its cover once loaded.
 func (p *Player) announce(t *netease.Track, artwork []byte) {
 	state := mygo.PlaybackPaused
-	if p.playing {
+	if p.playing && !p.cacheChanging {
 		state = mygo.PlaybackPlaying
 	}
 	mygo.NowPlaying.Set(mygo.NowPlayingInfo{
@@ -446,6 +449,12 @@ func (p *Player) Jump(i int) {
 
 // TogglePlay pauses, fading out, or plays, fading in.
 func (p *Player) TogglePlay() {
+	if p.cacheChanging {
+		// What is wanted is kept, and heard once the folder has moved.
+		p.playing = !p.playing
+		p.sync()
+		return
+	}
 	if p.out == nil {
 		switch {
 		case p.loading:
@@ -623,6 +632,10 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.lyrics, p.lyricsLoaded = nil, false
 	p.pending = from
 	p.announce(&t, nil)
+	if p.cacheChanging {
+		// The folder moves: what is chosen is loaded once it has.
+		return
+	}
 	p.refill()
 
 	go func() {
