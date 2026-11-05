@@ -207,6 +207,38 @@ func TestPlayingBackdropCoversTheStage(t *testing.T) {
 	}
 }
 
+// The settings sliders draw their track and knob: a bare SliderBase paints
+// nothing of its own, and the row looked empty while it still dragged.
+func TestSettingsSlidersPaintTheirTrack(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = defaultSettings()
+	tt := ui.NewTester(a.settingsView, 560, 2900)
+	tt.Frame()
+	img := tt.Image()
+	for _, label := range []string{"调整背景透明度", "调整歌词字号"} {
+		r, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("%s: not on the page", label)
+		}
+		if n := shades(img, r); n < 3 {
+			t.Errorf("%s: %d shades over %v, wanted a track and a knob", label, n, r)
+		}
+	}
+}
+
+// shades counts the colours img shows in the part r covers.
+func shades(img *image.RGBA, r ui.Rect) int {
+	seen := map[color.RGBA]struct{}{}
+	b := img.Bounds()
+	for y := max(int(r.Y), b.Min.Y); y < min(int(r.Y+r.H), b.Max.Y); y++ {
+		for x := max(int(r.X), b.Min.X); x < min(int(r.X+r.W), b.Max.X); x++ {
+			seen[img.RGBAAt(x, y)] = struct{}{}
+		}
+	}
+	return len(seen)
+}
+
 // redPixels counts the pixels of img that are mostly red.
 func redPixels(img *image.RGBA) int {
 	n := 0

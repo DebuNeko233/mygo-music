@@ -295,7 +295,9 @@ func (a *app) settingsView(c *ui.Context) {
 			})
 			row("背景透明度", "背景图片的浓淡，越淡越透出底色", func() {
 				v := s.BackdropOpacity
-				slider := ui.SliderBase(c.Key("backdrop-opacity"), &v, 0.05, 0.9).Width(150).Height(16).FocusRing(false).Label("调整背景透明度")
+				// A Slider, never a SliderBase: the base draws nothing of
+				// its own, and a settings page has no look to give it.
+				slider := ui.Slider(c.Key("backdrop-opacity"), &v, 0.05, 0.9).Width(150).Label("调整背景透明度")
 				if slider.Changed() {
 					s.BackdropOpacity = v
 					a.changed()
@@ -364,7 +366,7 @@ func (a *app) settingsView(c *ui.Context) {
 			})
 			row("字号", "歌词文字的大小", func() {
 				v := min(max(s.LyricSize, lyricSizeMin), lyricSizeMax)
-				slider := ui.SliderBase(c.Key("lyric-size"), &v, lyricSizeMin, lyricSizeMax).Width(150).Height(16).FocusRing(false).Label("调整歌词字号")
+				slider := ui.Slider(c.Key("lyric-size"), &v, lyricSizeMin, lyricSizeMax).Width(150).Label("调整歌词字号")
 				if slider.Changed() {
 					s.LyricSize = math.Round(v)
 					a.changed()
