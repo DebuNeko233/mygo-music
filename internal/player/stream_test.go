@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bytes"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -188,7 +189,7 @@ func TestStreamIntoCache(t *testing.T) {
 	ref := decodeAll(t, b)
 
 	st := &netease.Stream{URL: srv.URL + "/whole", Size: int64(len(b)), Level: "exhigh", Type: "mp3"}
-	s, err := openStream(c.download(1, st), int64(len(ref)/2)*1000/44100)
+	s, err := openStream(c.download(1, st.Level, st), int64(len(ref)/2)*1000/44100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +212,7 @@ func TestStreamIntoCache(t *testing.T) {
 		dl.Close()
 	}
 
-	cut := c.download(2, &netease.Stream{URL: srv.URL + "/cut", Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
+	cut := c.download(2, "exhigh", &netease.Stream{URL: srv.URL + "/cut", Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
 	cut.waitFor(int64(len(b) / 2))
 	cut.Close()
 	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
@@ -252,7 +253,7 @@ func TestSharedStream(t *testing.T) {
 		}
 	}
 
-	dl := c.download(1, &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
+	dl := c.download(1, "exhigh", &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
 	playing, err := openStream(dl, ms)
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +301,7 @@ func TestCacheKeepsOnlyKnownLevels(t *testing.T) {
 	dir := filepath.Join(root, "cache")
 	c := NewCache(dir, 1<<30)
 
-	dl := c.download(1, &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "/../../pwned", Type: "mp3"})
+	dl := c.download(1, "/../../pwned", &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "/../../pwned", Type: "mp3"})
 	dl.waitFor(int64(len(b)))
 	dl.Close()
 	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
@@ -360,5 +361,98 @@ func TestStalledDownloadIsGivenUpOn(t *testing.T) {
 	}
 	if err := dl.Err(); err == nil {
 		t.Error("asks for the rest, as if the connection were fine")
+	}
+}
+
+// stalled starts a download of b that has its first quarter in and stalls:
+// what comes next is what the test asks for, down the channel of asks.
+func stalled(t *testing.T, b []byte, handle func(w http.ResponseWriter, r *http.Request)) (*download, chan string) {
+	t.Helper()
+	asked := make(chan string, 4)
+	hold := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked <- r.Header.Get("Range")
+		if r.Header.Get("Range") == "" {
+			w.Write(b[:len(b)/4])
+			w.(http.Flusher).Flush()
+			<-hold
+			return
+		}
+		handle(w, r)
+	}))
+	t.Cleanup(func() { close(hold); srv.Close() })
+	dl := startDownload(srv.URL, int64(len(b)), nil, nil)
+	t.Cleanup(dl.Close)
+	if have := dl.waitFor(int64(len(b)) / 8); have < int64(len(b))/8 {
+		t.Fatalf("%d bytes in, wanted %d", have, int64(len(b))/8)
+	}
+	if got := <-asked; got != "" {
+		t.Fatalf("asked for %q before any seek", got)
+	}
+	return dl, asked
+}
+
+// A seek into a part of the song not downloaded yet asks for the song from
+// there, rather than waiting for the download to reach it: the song stayed
+// silent, as if paused, until the whole of it had come in.
+func TestSeekAsksForThePartNotIn(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dl, asked := stalled(t, b, func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b))
+	})
+	off := int64(len(b)) * 3 / 4
+	if !dl.seekTo(off) {
+		t.Fatal("left the seek to wait for the download")
+	}
+	want := "bytes=" + strconv.FormatInt(off, 10) + "-"
+	if got := <-asked; got != want {
+		t.Errorf("asked for %q, wanted %q", got, want)
+	}
+	if have := dl.waitFor(off + 4); have < off+4 {
+		t.Fatalf("%d bytes in, wanted %d", have, off+4)
+	}
+	if got := dl.peek(off, 4); !bytes.Equal(got, b[off:off+4]) {
+		t.Errorf("bytes at %d are %x, wanted %x", off, got, b[off:off+4])
+	}
+}
+
+// A server that sends the whole song to a seek's ask leaves the song read
+// from its start again, as it was without the seek, rather than cut off.
+func TestSeekToServerThatSendsTheWholeSong(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dl, _ := stalled(t, b, func(w http.ResponseWriter, r *http.Request) { w.Write(b) })
+	off := int64(len(b)) * 3 / 4
+	if !dl.seekTo(off) {
+		t.Fatal("left the seek to wait for the download")
+	}
+	if have := dl.waitFor(int64(len(b))); have != int64(len(b)) {
+		t.Fatalf("%d bytes in, wanted the whole song", have)
+	}
+	if got := dl.peek(off, 4); !bytes.Equal(got, b[off:off+4]) {
+		t.Errorf("bytes at %d are %x, wanted %x", off, got, b[off:off+4])
+	}
+}
+
+// A seek waits for the download rather than dropping what is in while a
+// second stream reads the song, as transcribing an episode does: what is
+// dropped may be what that one still needs.
+func TestSeekWaitsWhileASecondStreamReads(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dl, _ := stalled(t, b, func(w http.ResponseWriter, r *http.Request) { w.Write(b) })
+	if !dl.share() {
+		t.Fatal("the song is gone")
+	}
+	defer dl.release()
+	if dl.seekTo(int64(len(b)) * 3 / 4) {
+		t.Error("dropped the part another stream reads")
 	}
 }

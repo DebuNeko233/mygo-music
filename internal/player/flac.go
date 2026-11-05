@@ -156,6 +156,12 @@ func (s *flacStream) SetPosition(target int64) error {
 	}
 	loOff, lo := s.start, int64(0)
 	hiOff, hi := size, total
+	// Ask for the part the first guess is in rather than wait for the
+	// download to reach it: the seek sounds at once, if the server sends
+	// the song from a byte.
+	if target > 0 && total > 0 {
+		s.dl.seekTo(s.start + int64(float64(size-s.start)*float64(target)/float64(total)))
+	}
 	for tries := 0; tries < 8 && target-lo > int64(s.info.SampleRate) && hi > lo; tries++ {
 		guess := loOff + int64(float64(hiOff-loOff)*float64(target-lo)/float64(hi-lo))
 		off, at, ok := s.frameAfter(max(guess, loOff+1), hiOff)
