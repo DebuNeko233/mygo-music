@@ -20,27 +20,23 @@ import (
 // never broken off the end of the row.
 //
 // The controls come back under the pointer only: unlocked, anything of the
-// window drags it and its edges resize it; locked, it takes no pointer at
-// all but where the padlock that opens the lock stands, and that one ring is
-// what brings the unlock back. Where it was left and how large, it opens
+// window drags it and its edges resize it. Locked, it takes no pointer at
+// all, and the padlock that opens the lock stands in a window of its own, the
+// only thing of it that is clicked. Where it was left and how large, it opens
 // again.
 type deskLyrics struct {
 	a   *app
 	win *mygo.Window
 
-	looked  time.Time // when the window's place was last looked at
-	watched time.Time // when the pointer's place was last looked at
-	hot     bool      // whether the pointer stands on the padlock of a locked window
-	shaped  string    // what the window is laid out as, as the settings last made it
+	pin *mygo.Window // the padlock that opens a locked window, in a window of its own
+
+	looked time.Time // when the window's place was last looked at
+	shaped string    // what the window is laid out as, as the settings last made it
 }
 
-// lyricWatch is how often a locked window looks at where the pointer is: it
-// takes no pointer to hear it from.
-const lyricWatch = 200 * time.Millisecond
-
-// lyricPoll is how often a locked window asks whether the pointer stands on
-// its padlock, the one place it hears the pointer at all.
-const lyricPoll = 60 * time.Millisecond
+// pinSide is how large the padlock's window is: large enough to find, and
+// small enough to leave what stands under the words usable.
+const pinSide = 44
 
 // lyricColors are the colours the lyrics may show in.
 var lyricColors = []struct {
@@ -171,21 +167,22 @@ func newDeskLyrics(a *app) *deskLyrics {
 		Title:  mygo.App.Name() + "桌面歌词",
 		Panel:  true,
 		Hidden: true,
-		// A framed window with its title bar and buttons hidden, rather than a
-		// frameless one: the frame is what gives it edges that take the pointer
-		// to resize, and what it draws of itself is turned off below.
-		TitleBarStyle:     mygo.TitleBarHidden,
-		HideWindowButtons: true,
-		Transparent:       true,
-		DisableShadow:     true,
-		SkipTaskbar:       true,
-		AlwaysOnTop:       true,
-		X:                 x,
-		Y:                 y,
-		Width:             int(w),
-		Height:            int(h),
-		Content:           ui.View(d.view),
+		// Frameless, so that the window draws nothing of itself: no frame, no
+		// shadow. Its edges still take the pointer to resize it.
+		Frameless:     true,
+		Transparent:   true,
+		DisableShadow: true,
+		SkipTaskbar:   true,
+		AlwaysOnTop:   true,
+		X:             x,
+		Y:             y,
+		Width:         int(w),
+		Height:        int(h),
+		Content:       ui.View(d.view),
 	})
+	// Frameless still leaves the window its edges to be resized by; what it
+	// draws of itself is nothing, its shadow gone with the frame.
+	d.win.SetHasShadow(false)
 	// Escape and the like close a panel: these lyrics stay, until the
 	// listener turns them off or the app quits.
 	d.win.OnClose(func(e *mygo.CloseEvent) {
@@ -196,6 +193,29 @@ func newDeskLyrics(a *app) *deskLyrics {
 		s.LyricWindow = false
 		s.save()
 		d.apply()
+	})
+	// The padlock is a window of its own, standing where the words begin: of
+	// a locked window it is the only thing that takes the pointer, so that
+	// everything under the rest of the words can be used as if they were not
+	// there, and it is always there to open the lock again.
+	d.pin = mygo.NewWindow(mygo.WindowOptions{
+		Title:         mygo.App.Name() + "桌面歌词解锁",
+		Panel:         true,
+		Hidden:        true,
+		Frameless:     true,
+		Transparent:   true,
+		DisableShadow: true,
+		DisableResize: true,
+		SkipTaskbar:   true,
+		AlwaysOnTop:   true,
+		Width:         pinSide,
+		Height:        pinSide,
+		Content:       ui.View(d.pinView),
+	})
+	d.pin.SetHasShadow(false)
+	d.pin.OnClose(func(e *mygo.CloseEvent) {
+		// Escape and the like close a panel: the lock stays openable.
+		e.PreventDefault()
 	})
 	// A screen gone, or another one added, may leave the window off them.
 	mygo.Screen.OnDisplaysChanged(d.apply)
@@ -238,8 +258,6 @@ func (d *deskLyrics) apply() {
 	// takes no pointer, so it cannot be resized or moved either.
 	d.win.SetMovable(!s.LyricLocked)
 	d.win.SetIgnoreMouseEvents(s.LyricLocked)
-	// Locked anew or let go, the pointer is the desktop's but for the padlock.
-	d.hot = false
 	d.win.SetAlwaysOnTop(true)
 	if s.LyricWindow {
 		d.win.ShowInactive()
@@ -247,6 +265,7 @@ func (d *deskLyrics) apply() {
 		d.win.Hide()
 	}
 	d.win.Invalidate()
+	d.placePin()
 }
 
 // setLocked locks the window in place or lets it go, without making it again:
@@ -259,13 +278,13 @@ func (d *deskLyrics) setLocked(locked bool) {
 	}
 	s.LyricLocked = locked
 	s.save()
-	d.hot = false
 	if d.win == nil {
 		return // as in tests
 	}
 	d.win.SetMovable(!locked)
 	d.win.SetIgnoreMouseEvents(locked)
 	d.win.Invalidate()
+	d.placePin()
 }
 
 // remember keeps where the window stands and how large it was left, for the
@@ -283,29 +302,56 @@ func (d *deskLyrics) remember() {
 	s.LyricX, s.LyricY = b.X, b.Y
 	s.LyricWidth, s.LyricHeight = b.Width, b.Height
 	s.save()
+	d.placePin()
 }
 
-// unlockBox is where the padlock stands in the window: in the middle of its
-// top edge, as large as the ring that holds it.
-func (d *deskLyrics) unlockBox() ui.Rect {
-	b := d.win.Bounds()
-	const side = float32(40)
-	return ui.Rect{X: (float32(b.Width) - side) / 2, Y: 8, W: side, H: side}
-}
-
-// overUnlock reports whether the pointer stands on the padlock of a locked
-// window, the one place it hears the pointer: everywhere else the pointer is
-// the desktop's, so that what is under the words can be used as it could were
-// the words not there.
-func (d *deskLyrics) overUnlock() bool {
-	if d.win == nil {
-		return false
+// placePin stands the padlock's window at the middle of the words' top edge,
+// and only while they are locked and shown: unlocked, there is nothing to
+// open, and the window is not there to be found.
+func (d *deskLyrics) placePin() {
+	if d.pin == nil || d.win == nil {
+		return // as in tests
+	}
+	s := &d.a.settings
+	if !s.LyricWindow || !s.LyricLocked {
+		d.pin.Hide()
+		return
 	}
 	b := d.win.Bounds()
-	r := d.unlockBox()
-	p := mygo.Screen.CursorScreenPoint()
-	return p.X >= b.X+int(r.X) && p.X < b.X+int(r.X+r.W) &&
-		p.Y >= b.Y+int(r.Y) && p.Y < b.Y+int(r.Y+r.H)
+	d.pin.SetBounds(mygo.Rectangle{
+		X:      b.X + (b.Width-pinSide)/2,
+		Y:      b.Y + 2,
+		Width:  pinSide,
+		Height: pinSide,
+	})
+	d.pin.ShowInactive()
+}
+
+// pinView is the padlock that opens a locked window: a ring over whatever the
+// words stand on, lit under the pointer and dim without it, and the one part
+// of a locked window a click reaches.
+func (d *deskLyrics) pinView(c *ui.Context) {
+	c.Root().Background(ui.RGBA(0, 0, 0, 0))
+	over := c.Root().Hovered()
+	tint := white.Alpha(0.45)
+	border := float32(1.2)
+	if over {
+		tint, border = white, 1.6
+	}
+	ring := ui.ButtonBase(c.Key("unlock")).Label("解锁").Padding(6).Radius(999).
+		Border(border, tint).FocusRing(false)
+	ring.Children(func() {
+		padlock(c, true, tint, 20)
+	})
+	if ring.Clicked() {
+		d.setLocked(false)
+		return
+	}
+	if !over {
+		// It lights up as the pointer comes to it, which is not a change it
+		// hears from a window that sits under the pointer.
+		c.After(200 * time.Millisecond)
+	}
 }
 
 // toggleDeskLyrics shows the lyrics window or hides it, as its own button
@@ -315,23 +361,11 @@ func (a *app) toggleDeskLyrics() {
 	a.changed()
 }
 
-// controls are what the window may be asked, and only while the pointer is
-// over it: to be locked, to open the settings, to be closed, and once it is
-// locked, to be unlocked again by the padlock that says it is.
+// controls are what the window may be asked while it is not locked, and only
+// while the pointer is over it: to be locked, to open the settings, or to go.
+// Unlocking is not one of them: it is the padlock's window that says so.
 func (d *deskLyrics) controls(c *ui.Context) {
 	a := d.a
-	s := &a.settings
-	if s.LyricLocked {
-		unlock := ui.ButtonBase(c.Key("unlock")).Label("解锁").Padding(8).Radius(999).
-			Border(1.5, white.Alpha(0.9)).FocusRing(false)
-		unlock.Children(func() {
-			padlock(c, true, white, 22)
-		})
-		if unlock.Clicked() {
-			d.setLocked(false)
-		}
-		return
-	}
 	button := func(key, label string, on func()) {
 		b := ui.ButtonBase(c.Key(key)).Padding(3, 9).Radius(999).
 			Border(1, white.Alpha(0.6)).FocusRing(false)
@@ -353,35 +387,17 @@ func (d *deskLyrics) view(c *ui.Context) {
 	pl := a.pl
 	c.Root().Background(ui.RGBA(0, 0, 0, 0))
 
-	// Where the pointer is: over the window, the controls show. A locked
-	// window takes no pointer at all, so it looks at where the pointer is
-	// instead, and hears it only over the padlock that opens the lock.
-	over := c.Root().Hovered()
-	if d.win != nil && s.LyricWindow {
-		switch {
-		case s.LyricLocked:
-			if time.Since(d.watched) > lyricPoll {
-				d.watched = time.Now()
-				if hot := d.overUnlock(); hot != d.hot {
-					d.hot = hot
-					d.win.SetIgnoreMouseEvents(!hot)
-					d.win.Invalidate()
-				}
-			}
-			c.After(lyricPoll)
-		default:
-			// The window says nothing of a move or a resize: a look at
-			// where it stands now and then keeps where it was left.
-			if time.Since(d.looked) > 400*time.Millisecond {
-				d.looked = time.Now()
-				d.remember()
-			}
+	// Over the window, the controls show. A locked window takes no pointer at
+	// all, so it hears nothing of one: the padlock in its own window is where
+	// the pointer is heard, and it is what opens the lock again.
+	over := c.Root().Hovered() && !s.LyricLocked
+	if d.win != nil && s.LyricWindow && !s.LyricLocked {
+		// The window says nothing of a move or a resize: a look at where it
+		// stands now and then keeps where it was left.
+		if time.Since(d.looked) > 400*time.Millisecond {
+			d.looked = time.Now()
+			d.remember()
 		}
-	}
-	// Locked, it shows nothing of itself but under a pointer that stands on
-	// its padlock: hovering is not a thing a window that takes no pointer hears.
-	if s.LyricLocked {
-		over = d.hot
 	}
 
 	// Nothing to say before anything played.
@@ -418,9 +434,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 		if !s.LyricLocked {
 			c.Root().DragWindow()
 		}
-		// One ring, the middle of the top edge, while it is locked: the only
-		// thing a locked window may be asked, and large enough to find again.
-		// The three it may be asked while it is not stand there too.
+		// What it may be asked while it is not locked: to lock, to open the
+		// settings, or to go.
 		ui.Row(c).Absolute().Top(8).WidthPercent(100).Justify(ui.Center).Gap(10).Children(func() { d.controls(c) })
 	}
 
@@ -465,9 +480,6 @@ func (d *deskLyrics) view(c *ui.Context) {
 	// shows, an unlocked window's drag is kept, and a locked one finds the
 	// pointer again.
 	wait := 500 * time.Millisecond
-	if s.LyricLocked {
-		wait = lyricWatch
-	}
 	if pl.Playing() && cur >= 0 && cur+1 < len(lines) {
 		wait = min(wait, lines[cur+1].At-pos+20*time.Millisecond)
 	}

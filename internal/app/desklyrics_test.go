@@ -114,15 +114,17 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	if alpha := tt.Image().RGBAAt(4, 4).A; alpha != 0 {
 		t.Error("a plate left behind, with the pointer away")
 	}
-	// Standing on its padlock, it hears the pointer, of which it hears
-	// nothing anywhere else: unlocking has to be possible without unlocking.
-	d.hot = true
-	tt.Frame()
-	if _, ok := tt.Find("解锁"); !ok {
-		t.Error("no way back out of the lock, under the pointer")
+	// The padlock stands in a window of its own, the one place a locked
+	// window hears the pointer at all: the lock is undone there, and nowhere
+	// on the lines themselves.
+	pin := ui.NewTester(d.pinView, pinSide, pinSide)
+	pin.Move(pinSide/2, pinSide/2)
+	pin.Frame()
+	if err := pin.Click("解锁"); err != nil {
+		t.Fatalf("unlocking it: %v", err)
 	}
-	if _, ok := tt.Find("设置"); ok {
-		t.Error("a locked window offers more than the padlock that opens it")
+	if a.settings.LyricLocked {
+		t.Error("still locked after the click on its padlock")
 	}
 }
 
