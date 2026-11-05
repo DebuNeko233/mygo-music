@@ -226,7 +226,7 @@ func TestTheSettingsChooseAFontTheSystemHas(t *testing.T) {
 	a.settings = defaultSettings()
 	names := lyricFontNames()
 	if len(names) < 2 {
-		t.Skip("this system lists no fonts")
+		names = append(names, "测试字体")
 	}
 	font := names[1]
 
