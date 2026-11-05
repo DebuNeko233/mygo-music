@@ -752,9 +752,11 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 	p.sync()
 }
 
-// loadTries is how many times a track is tried again before it is left for
-// the listener to play again.
-const loadTries = 2
+// loadTries is how many times a track is tried before it is left for the
+// listener to play again: a network down for a moment is back within them,
+// where two tries a second apart left the listener with a song that would
+// have played had it been asked for once more.
+const loadTries = 4
 
 // retry loads the track at at again in a moment, still loading as it
 // waits: a stream URL gone stale, or a connection dropped, may work once
@@ -799,7 +801,8 @@ func (p *Player) cutOff() {
 
 // prefetch fetches the track at order[at] once this one has come in whole,
 // into the cache, so that it starts at once when it is played: what it
-// cannot fetch is fetched again then.
+// cannot fetch is asked for again while this one still plays, and once more
+// when it is due.
 func (p *Player) prefetch(at int) {
 	if at < 0 || at >= len(p.order) || !p.playing {
 		p.dropAhead()
@@ -811,37 +814,88 @@ func (p *Player) prefetch(at int) {
 		return // fetched already, or coming in
 	}
 	p.dropAhead()
-	gen := p.gen
-	ask := songURL
 	// What plays comes in first: fetching the one after it sooner would
 	// take the bytes of the song being played, which is what stutters.
 	now := p.stream
-	go func() {
-		if now != nil {
-			if playing, _ := now.source(); playing != nil {
-				playing.waitFor(playing.size)
-				if playing.Err() != nil {
-					// Let go of, not come in whole: it is not this one's
-					// turn to be fetched ahead.
-					return
-				}
-			}
-		}
-		info, err := ask(t.ID, level)
-		if err != nil || !p.Cache.Holds(info) {
-			// Not a song the cache would keep: fetching it now would
-			// spend its bytes for nothing, as it would come in vain.
-			return
-		}
-		dl := p.Cache.download(t.ID, level, info)
-		p.post(func() {
-			if gen != p.gen || p.ahead != nil {
-				dl.Close()
+	gen, ask := p.gen, songURL
+	go p.prefetching(gen, t, level, now, ask, 1)
+}
+
+// prefetchTries is how many times the track after this one is fetched ahead
+// before it is left for when it is due: a network that is out for a moment
+// is back within them, where one fetch that came in badly left the listener
+// waiting on the next song for what one more ask would have fetched.
+const prefetchTries = 3
+
+// prefetching fetches t ahead, try counting the fetches: it waits for the
+// song that plays to come in first, and for the one it fetches to come in
+// whole, so that what did not come is asked for again while this one still
+// plays, rather than when the next one is due.
+func (p *Player) prefetching(gen int, t netease.Track, level string, now stream, ask asker, try int) {
+	if now != nil {
+		if playing, _ := now.source(); playing != nil {
+			playing.waitFor(playing.size)
+			if playing.Err() != nil {
+				// Let go of, not come in whole: it is not this one's turn
+				// to be fetched ahead.
 				return
 			}
-			p.ahead = &ahead{id: t.ID, level: level, dl: dl, info: info}
+		}
+	}
+	info, err := ask(t.ID, level)
+	if err != nil {
+		if !errors.Is(err, netease.ErrUnavailable) {
+			// A URL gone stale, or a network down for a moment: asked for
+			// again in a moment, as it may be back by then.
+			p.prefetchLater(gen, t, level, ask, nil, try)
+		}
+		return
+	}
+	if !p.Cache.Holds(info) {
+		// Not a song the cache would keep: fetching it now would spend its
+		// bytes for nothing, as it would come in vain.
+		return
+	}
+	dl := p.Cache.download(t.ID, level, info)
+	p.post(func() {
+		if gen != p.gen || p.ahead != nil {
+			dl.Close()
+			return
+		}
+		p.ahead = &ahead{id: t.ID, level: level, dl: dl, info: info}
+	})
+	if try >= prefetchTries || dl.size <= 0 {
+		return
+	}
+	// Waited for, so that what came in not at all is fetched again while
+	// this one still plays: left to itself, it was played as if it were
+	// fetched ahead, and the next song could not be had.
+	dl.waitFor(dl.size)
+	if dl.Err() != nil {
+		p.prefetchLater(gen, t, level, ask, dl, try)
+	}
+}
+
+// prefetchLater asks for the track fetched ahead again in a moment, as try
+// says: what came in badly is let go of first, so that the fetch that
+// follows is the one the player keeps.
+func (p *Player) prefetchLater(gen int, t netease.Track, level string, ask asker, failed *download, try int) {
+	time.AfterFunc(retryGap(try), func() {
+		p.post(func() {
+			if gen != p.gen {
+				return // what plays moved on
+			}
+			if failed != nil {
+				if p.ahead == nil || p.ahead.dl != failed {
+					// Taken, as it is due, or dropped: it tries for itself.
+					return
+				}
+				p.ahead = nil
+				failed.Close()
+			}
+			go p.prefetching(gen, t, level, nil, ask, try+1)
 		})
-	}()
+	})
 }
 
 // takeAhead returns the track fetched ahead, if it plays as id at level,

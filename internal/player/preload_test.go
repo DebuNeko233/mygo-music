@@ -379,3 +379,83 @@ func TestPrefetchWaitsForThisOne(t *testing.T) {
 	close(rest)
 	pump(t, ch, "the next track fetched ahead", func() bool { return p.ahead != nil })
 }
+
+// A track fetched ahead whose download breaks off is fetched again while
+// this one still plays: fetched once only, one broken connection left the
+// next song unplayable, though going back and coming forward played it.
+func TestPrefetchRetriesWhatDidNotCome(t *testing.T) {
+	b := song(t)
+	var mu sync.Mutex
+	hits := map[int64]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/"), 10, 64)
+		mu.Lock()
+		hits[id]++
+		n := hits[id]
+		mu.Unlock()
+		w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+		if id == 2 && n == 1 {
+			// Cut off halfway, as a flaky connection does.
+			w.Write(b[:len(b)/2])
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					conn.Close()
+				}
+			}
+			return
+		}
+		w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	serveURL(t, srv, len(b))
+	c := NewCache(t.TempDir(), 1<<30)
+	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
+
+	pump(t, ch, "the next track fetched again, and kept", func() bool {
+		dl, _, ok := c.lookup(2, "exhigh")
+		if ok {
+			dl.Close()
+		}
+		return ok
+	})
+	mu.Lock()
+	n := hits[2]
+	mu.Unlock()
+	if n < 2 {
+		t.Errorf("asked for the next track %d times", n)
+	}
+	p.Next()
+	pump(t, ch, "the next track playing", func() bool { return p.out != nil && p.Current().ID == 2 })
+}
+
+// A track that fails to load three times in a row plays on the fourth ask:
+// two tries a moment apart left the listener with a song that would have
+// played had it been asked for once more.
+func TestLoadSurvivesABriefOutage(t *testing.T) {
+	b := song(t)
+	srv, _ := songServer(t, b)
+	old := songURL
+	var n atomic.Int64
+	songURL = func(id int64, level string) (*netease.Stream, error) {
+		if id == 1 && n.Add(1) <= 3 {
+			return nil, errors.New("connection dropped")
+		}
+		return &netease.Stream{URL: fmt.Sprintf("%s/%d", srv.URL, id), Size: int64(len(b)), Level: level, Type: "mp3"}, nil
+	}
+	defer func() { songURL = old }()
+	c := NewCache(t.TempDir(), 1<<30)
+	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
+
+	pump(t, ch, "the track to load", func() bool { return p.out != nil })
+	if id := p.Current().ID; id != 1 {
+		t.Errorf("skipped to track %d", id)
+	}
+	if n := n.Load(); n < 4 {
+		t.Errorf("asked %d times", n)
+	}
+}
