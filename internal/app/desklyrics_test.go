@@ -145,3 +145,51 @@ func TestALineStandsUprightWithItsWordsTurned(t *testing.T) {
 		}
 	}
 }
+
+// The settings choose one line or two, and the window shows that many: the
+// one being sung, and the one after it only when two are asked for.
+func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
+	a.pl.SetLyrics([]lyrics.Line{
+		{At: 0, Text: "第一句"},
+		{At: 2 * time.Second, Text: "第二句"},
+		{At: 4 * time.Second, Text: "第三句"},
+	})
+	a.pl.Hold(2 * time.Second)
+
+	settings := ui.NewTester(a.settingsView, 560, 2900)
+	settings.Frame()
+	if err := settings.Click("单行"); err != nil {
+		t.Fatalf("choosing one line: %v", err)
+	}
+	if a.settings.LyricLines != 1 {
+		t.Fatalf("lines: %d", a.settings.LyricLines)
+	}
+
+	shown := func() *ui.Tester {
+		w, h := lyricWindowSize(false, a.settings.LyricSize, a.settings.LyricLines)
+		tt := ui.NewTester((&deskLyrics{a: a}).view, int(w), int(h))
+		tt.Move(w/2, h/2)
+		tt.Frame()
+		return tt
+	}
+	one := shown()
+	if _, ok := one.Find("第二句"); !ok {
+		t.Error("the line being sung is missing")
+	}
+	if _, ok := one.Find("第三句"); ok {
+		t.Error("shows the line after it, with one line asked for")
+	}
+
+	settings.Frame()
+	if err := settings.Click("双行"); err != nil {
+		t.Fatalf("choosing two lines: %v", err)
+	}
+	two := shown()
+	if _, ok := two.Find("第三句"); !ok {
+		t.Error("the line after it is missing, with two asked for")
+	}
+}
