@@ -188,6 +188,9 @@ func do(req *http.Request, out any) error {
 		return err
 	}
 	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return fmt.Errorf("netease: %s: %s", req.URL.Path, res.Status)
+	}
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return err

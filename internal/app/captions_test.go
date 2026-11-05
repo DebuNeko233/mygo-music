@@ -77,6 +77,27 @@ func TestAddSegmentOnce(t *testing.T) {
 	}
 }
 
+// A cancelled transcription's queued callbacks must not write into its
+// replacement for the same episode.
+func TestCancelledCaptionWorkIsIgnored(t *testing.T) {
+	old := &captionWork{program: 42}
+	current := &captionWork{program: 42, from: 10 * sec}
+	a := newTestApp()
+	a.captions.program = 42
+	a.captions.tr = &transcript{}
+	a.captions.work = current
+	a.captionSaid(old, speech.Segment{Start: 0, End: sec, Text: "旧"})
+	a.captionHeard(old, sec)
+	if len(a.captions.tr.Segments) != 0 || len(a.captions.tr.Spans) != 0 {
+		t.Fatalf("cancelled work changed the transcript: %+v", a.captions.tr)
+	}
+	a.captionSaid(current, speech.Segment{Start: 10 * sec, End: 11 * sec, Text: "新"})
+	a.captionHeard(current, 11*sec)
+	if len(a.captions.tr.Segments) != 1 || len(a.captions.tr.Spans) != 1 {
+		t.Fatalf("current work did not write: %+v", a.captions.tr)
+	}
+}
+
 // captionsTestApp plays an episode in Now Playing, with the libraries in
 // the app and the model installed or not.
 func captionsTestApp(t *testing.T, installed bool) *app {

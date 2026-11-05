@@ -107,7 +107,12 @@ func (s *flacStream) Read(dst []float32) (int, error) {
 		f, err := s.parse(s.r)
 		if err != nil {
 			if err == io.ErrUnexpectedEOF {
-				err = io.EOF
+				// A partial frame is a cut download, not the song's end.
+				if dlErr := s.dl.Err(); dlErr != nil {
+					err = dlErr
+				} else {
+					err = io.EOF
+				}
 			}
 			return 0, err
 		}

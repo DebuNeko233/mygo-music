@@ -555,7 +555,13 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 		return samples, nil
 	}
 	if err == io.ErrUnexpectedEOF || err == nil {
-		err = io.EOF
+		// go-mp3 can end at a partial frame: that is a failed download,
+		// not the end of the song, or the player would skip it.
+		if dlErr := s.dl.Err(); dlErr != nil {
+			err = dlErr
+		} else {
+			err = io.EOF
+		}
 	}
 	return 0, err
 }

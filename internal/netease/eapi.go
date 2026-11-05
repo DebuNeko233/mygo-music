@@ -124,6 +124,9 @@ func eapiPost(path string, data map[string]any, out any) error {
 		return err
 	}
 	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return fmt.Errorf("netease: %s: %s", path, res.Status)
+	}
 	// Keep what it sets for the site, whichever host set it.
 	if set := res.Cookies(); len(set) > 0 {
 		for _, c := range set {

@@ -322,7 +322,7 @@ func (a *app) transcribe(program int64, from, until time.Duration) {
 // from where one stopped writes down again what that one did last.
 func (a *app) captionSaid(w *captionWork, s speech.Segment) {
 	cs := &a.captions
-	if w.program != cs.program || cs.tr == nil {
+	if cs.work != w || w.program != cs.program || cs.tr == nil {
 		return
 	}
 	cs.tr.Segments = addSegment(cs.tr.Segments, s)
@@ -332,7 +332,7 @@ func (a *app) captionSaid(w *captionWork, s speech.Segment) {
 // captionHeard marks the episode written down from where w started to at.
 func (a *app) captionHeard(w *captionWork, at time.Duration) {
 	cs := &a.captions
-	if w.program != cs.program || cs.tr == nil {
+	if cs.work != w || w.program != cs.program || cs.tr == nil {
 		return
 	}
 	w.at = max(w.at, at)

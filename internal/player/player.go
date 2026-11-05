@@ -225,6 +225,11 @@ func (p *Player) RadioFrom(name string, tracks []netease.Track, feed func(got fu
 	}
 	p.queue, p.order, p.at = []netease.Track{*p.track}, []int{0}, 0
 	p.appendTracks(tracks)
+	if p.shuffle {
+		// The current track stays first; the radio's order must agree
+		// with the shuffle mode the listener sees.
+		p.shuffleOrder(0)
+	}
 	p.AttachRadio(name, feed)
 }
 
@@ -884,13 +889,15 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 		}
 		p.ahead = &ahead{id: t.ID, level: level, dl: dl, info: info}
 	})
-	if try >= prefetchTries || dl.size <= 0 {
+	if try >= prefetchTries {
 		return
 	}
 	// Waited for, so that what came in not at all is fetched again while
 	// this one still plays: left to itself, it was played as if it were
 	// fetched ahead, and the next song could not be had.
-	dl.waitFor(dl.size)
+	// An unknown size still has a terminal result to wait for; skipping
+	// this wait used to give an unknown-size prefetch no retry at all.
+	dl.waitFor(math.MaxInt64)
 	if dl.Err() != nil {
 		p.prefetchLater(gen, t, level, ask, dl, try)
 	}
