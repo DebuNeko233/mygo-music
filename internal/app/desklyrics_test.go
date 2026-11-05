@@ -88,15 +88,15 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 
 	w, h := lyricWindowSize(false, a.settings.LyricSize, a.settings.LyricLines)
 	tt := ui.NewTester(d.view, int(w), int(h))
-	// Pointed at, the plate and the buttons show: it is through them that the
-	// window is dragged and locked, and the lines stand on the plate.
+	// Pointed at, the buttons show: they are how the window is locked. The
+	// window itself is not there: the words stand on what is under them.
 	tt.Move(w/2, h/2)
 	tt.Frame()
 	if _, ok := tt.Find("锁定"); !ok {
 		t.Fatal("no button to lock it, which it shows while it may be moved")
 	}
-	if alpha := tt.Image().RGBAAt(20, 20).A; alpha == 0 {
-		t.Error("no plate under the pointer")
+	if alpha := tt.Image().RGBAAt(4, 4).A; alpha != 0 {
+		t.Error("a plate under the words, which are to stand on what is under them")
 	}
 	if err := tt.Click("锁定"); err != nil {
 		t.Fatalf("locking it: %v", err)
@@ -111,7 +111,7 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	if _, ok := tt.Find("设置"); ok {
 		t.Error("still shows its buttons, locked and not pointed at")
 	}
-	if alpha := tt.Image().RGBAAt(20, 20).A; alpha != 0 {
+	if alpha := tt.Image().RGBAAt(4, 4).A; alpha != 0 {
 		t.Error("a plate left behind, with the pointer away")
 	}
 	// Pointed at it, they are back: unlocking has to be possible.

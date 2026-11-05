@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -12,15 +13,18 @@ import (
 // deskLyrics is the song's lyrics in a window of their own, over every
 // other window: the line being sung lit, the ones after it with it, and the
 // translation under each if the listener asks for it. Set across, the
-// window is wide and short and two lines show; set down, it is narrow and
-// tall and four lines do, each written in a column of its own as Word sets
-// Chinese, standing or falling with the script.
+// window is wide and short; set down, it turns, standing its lines in
+// columns as Word sets Chinese, upright or turned with the script.
 //
-// Only the lines show while the pointer is elsewhere. Over them, the plate
-// they stand on and their controls come back: unlocked, the plate drags the
-// window and its edges resize it; locked, the window takes no pointer at
-// all, and a pointer resting on it is what brings the plate and the unlock
-// back. Where it was left and how large, it opens again.
+// Nothing of the window shows but the words: no plate, no border, so what
+// is under it is what it stands on. The window is never smaller than the
+// lines need, and it grows until each line is shown whole, so a line is
+// never broken off the end of a column.
+//
+// The controls come back under the pointer only: unlocked, anything of the
+// window drags it and its edges resize it; locked, it takes no pointer at
+// all, and a pointer resting on it is what brings the unlock back, one
+// button in its middle. Where it was left and how large, it opens again.
 type deskLyrics struct {
 	a   *app
 	win *mygo.Window
@@ -29,6 +33,7 @@ type deskLyrics struct {
 	watched time.Time // when the pointer's place was last looked at
 	rested  time.Time // since when the pointer has been resting on it, if it is
 	live    bool      // whether a locked window has taken the pointer back
+	shaped  string    // what the window is laid out as, as the settings last made it
 }
 
 // lyricWatch is how often a locked window looks at where the pointer is: it
@@ -104,18 +109,27 @@ const (
 	lyricSizeMax = 48
 )
 
-// lyricWindowSize is how large the window stands: wide and short with the
-// lines set across, narrow and tall with them set down, and either larger
-// with larger type and with more lines than one.
+// lyricWindowSize is how large the window stands before anything is measured
+// in it: wide and short with the lines set across, narrow and tall with them
+// set down, larger with larger type and with more lines than one. What the
+// words themselves take is measured as they are set, and the window is grown
+// to hold them.
 func lyricWindowSize(vertical bool, size float64, lines int) (w, h float32) {
 	size = min(max(size, lyricSizeMin), lyricSizeMax)
 	n := float64(min(max(lines, 1), lyricLinesMax))
 	if vertical {
 		// A column per line, each with its translation beside it.
-		return float32(30 + size*5*n), float32(60 + size*10.5)
+		return float32(30 + size*2.7*n), float32(60 + size*10.5)
 	}
 	// A line per row, each with its translation under it.
 	return 840, float32(36 + size*2.6*n)
+}
+
+// lyricShape is what the window is laid out as: set across or down, at this
+// size, showing this many lines. A shape changed makes the window again, as
+// large as the new one needs; locking it or not leaves its size alone.
+func lyricShape(vertical bool, size float64, lines int) string {
+	return fmt.Sprintf("%t/%v/%d", vertical, size, lines)
 }
 
 // lyricLinesMax is as many lines as the window shows at once.
@@ -232,25 +246,37 @@ func newDeskLyrics(a *app) *deskLyrics {
 	return d
 }
 
-// apply makes the window as the settings say it stands: as large, where it
-// was left, locked or not, and showing or not.
+// apply makes the window as the settings say it stands: as large as they ask
+// or as it was left, where it was left, locked or not, and showing or not.
 func (d *deskLyrics) apply() {
 	if d.win == nil {
 		return // as in tests
 	}
 	s := &d.a.settings
 	needW, needH := lyricWindowSize(s.LyricVertical, s.LyricSize, s.LyricLines)
-	// No smaller than the lines need, and as large as it was left.
-	w, h := needW, needH
-	if s.LyricWidth > int(needW) {
-		w = float32(s.LyricWidth)
+	shape := lyricShape(s.LyricVertical, s.LyricSize, s.LyricLines)
+	reshaped := shape != d.shaped
+	d.shaped = shape
+	// A locked window is left as it stands: keeping it in place is no reason
+	// to make it larger, and its size was remembered when it was locked.
+	if !s.LyricLocked {
+		w, h := needW, needH
+		if !reshaped {
+			// As large as it was left, and never made smaller than it
+			// stands: only the words growing make it grow.
+			b := d.win.Bounds()
+			w = max(w, float32(max(s.LyricWidth, b.Width)))
+			h = max(h, float32(max(s.LyricHeight, b.Height)))
+		}
+		x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
+		d.win.SetMinimumSize(int(needW), int(needH))
+		d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: int(w), Height: int(h)})
+		if reshaped {
+			// A new shape sets the size that is remembered from here on.
+			s.LyricWidth, s.LyricHeight = int(w), int(h)
+			s.save()
+		}
 	}
-	if s.LyricHeight > int(needH) {
-		h = float32(s.LyricHeight)
-	}
-	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
-	d.win.SetMinimumSize(int(needW), int(needH))
-	d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: int(w), Height: int(h)})
 	// Locked, it is left where it is, takes no resize, and takes no
 	// pointer: the view asks for the pointer again while it rests on the
 	// window, so the unlock can be clicked.
@@ -266,6 +292,27 @@ func (d *deskLyrics) apply() {
 	} else {
 		d.win.Hide()
 	}
+	d.win.Invalidate()
+}
+
+// setLocked locks the window in place or lets it go, without making it again:
+// its size and place are kept as they stand, so that locking it does not
+// nudge it and unlocking it does not set it back.
+func (d *deskLyrics) setLocked(locked bool) {
+	s := &d.a.settings
+	if locked {
+		d.remember()
+	}
+	s.LyricLocked = locked
+	s.save()
+	d.live = false
+	d.rested = time.Time{}
+	if d.win == nil {
+		return // as in tests
+	}
+	d.win.SetMovable(!locked)
+	d.win.SetResizable(!locked)
+	d.win.SetIgnoreMouseEvents(locked)
 	d.win.Invalidate()
 }
 
@@ -304,20 +351,15 @@ func (a *app) toggleDeskLyrics() {
 	a.changed()
 }
 
-// lyricGround is the plate the lines stand on: dark enough to hold white
-// type over a bright wallpaper, thin enough to see it through.
-var lyricGround = ui.RGBA(10, 10, 13, 0.42)
-
 func (d *deskLyrics) view(c *ui.Context) {
 	a := d.a
 	s := &a.settings
 	pl := a.pl
 	c.Root().Background(ui.RGBA(0, 0, 0, 0))
 
-	// Where the pointer is: over the window, the plate and the controls show,
-	// and the lines stand on it. A locked window takes no pointer, so it
-	// looks at where the pointer is instead, and takes the pointer again
-	// once the pointer has rested on the lyrics.
+	// Where the pointer is: over the window, the controls show. A locked
+	// window takes no pointer, so it looks at where the pointer is instead,
+	// and takes the pointer again once the pointer has rested on the lyrics.
 	over := c.Root().Hovered()
 	if d.win != nil && s.LyricWindow {
 		switch {
@@ -372,20 +414,42 @@ func (d *deskLyrics) view(c *ui.Context) {
 	trans := lyricColor(s.LyricTransColor, white.Alpha(0.7))
 	family := lyricFamily(s.LyricFont)
 	transFamily := lyricFamily(s.LyricTransFont)
+	shown, start := lyricWindowLines(lines, cur, s.LyricLines)
 
+	// The window grows until every line shows whole: set across, a line is
+	// never broken off the end of the row, and set down, it stands in one
+	// column where the screen has the room for it.
+	d.grow(c, shown, start, cur, size, weight, family, transFamily)
+
+	// The window has no plate of its own, showing or not: what is under it is
+	// what it stands on. Only the controls come over the words, and only
+	// under the pointer, and they say themselves with a ring rather than a
+	// background, which would show as a pane over whatever the window stands
+	// on.
 	if over {
-		// The root is the plate: absolute children are painted over the lines,
-		// so a plate of their own would bury them, and the drag goes to
-		// whatever takes the pointer, which the lines must not.
-		c.Root().Background(lyricGround).Radius(18)
-		// Unlocked, the plate is what the window is dragged by.
+		// Unlocked, anything of the window drags it: the lines take no
+		// pointer themselves, so the window does.
 		if !s.LyricLocked {
 			c.Root().DragWindow()
 		}
-		// Below the words, on the side the columns leave free.
-		ui.Row(c).Absolute().Bottom(6).Left(8).Gap(4).Opacity(0.6).Children(func() {
+		// One ring, the middle of the top edge, while it is locked: the only
+		// thing a locked window may be asked, and large enough to find again.
+		// The three it may be asked while it is not stand there too.
+		ui.Row(c).Absolute().Top(8).WidthPercent(100).Justify(ui.Center).Gap(10).Children(func() {
+			if s.LyricLocked {
+				unlock := ui.ButtonBase(c.Key("unlock")).Label("解锁").Padding(10).Radius(999).
+					Border(1.5, white.Alpha(0.9)).FocusRing(false)
+				unlock.Children(func() {
+					padlock(c, true, white, 22)
+				})
+				if unlock.Clicked() {
+					d.setLocked(false)
+				}
+				return
+			}
 			button := func(key, label string, on func()) {
-				b := ui.ButtonBase(c.Key(key)).Padding(3, 8).Radius(7).FocusRing(false)
+				b := ui.ButtonBase(c.Key(key)).Padding(3, 9).Radius(999).
+					Border(1, white.Alpha(0.6)).FocusRing(false)
 				b.Children(func() {
 					ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(white)
 				})
@@ -393,23 +457,12 @@ func (d *deskLyrics) view(c *ui.Context) {
 					on()
 				}
 			}
-			if s.LyricLocked {
-				button("unlock", "解锁", func() {
-					s.LyricLocked = false
-					a.changed()
-				})
-				return
-			}
-			button("lock", "锁定", func() {
-				s.LyricLocked = true
-				a.changed()
-			})
+			button("lock", "锁定", func() { d.setLocked(true) })
 			button("settings", "设置", func() { a.openSettings() })
 			button("off", "关闭", func() { a.toggleDeskLyrics() })
 		})
 	}
 
-	shown, start := lyricWindowLines(lines, cur, s.LyricLines)
 	switch {
 	case len(lines) == 0 && loaded:
 		ui.Column(c).Fill().Center().Children(func() {
@@ -419,6 +472,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 	case s.LyricVertical:
 		// Lines stand in columns, the first of them rightmost, as vertical
 		// text runs right to left, and each translation beside its line.
+		room := d.columnRoom(c, shown, start, cur, size, weight, family, transFamily)
 		area := ui.Row(c).Fill().Padding(8).Gap(10).Justify(ui.End).AlignItems(ui.Start).PassThrough()
 		area.Children(func() {
 			for i := len(shown) - 1; i >= 0; i-- {
@@ -431,9 +485,9 @@ func (d *deskLyrics) view(c *ui.Context) {
 					lineSize = size * 1.04
 				}
 				if s.LyricTrans && l.Translation != "" {
-					lyricColumns(c, l.Translation, transFamily, size*0.62, 500, trans)
+					lyricColumns(c, l.Translation, transFamily, size*0.62, 500, trans, room)
 				}
-				lyricColumns(c, l.Text, family, lineSize, weight, tint)
+				lyricColumns(c, l.Text, family, lineSize, weight, tint, room)
 			}
 		})
 	default:
@@ -480,21 +534,126 @@ func (d *deskLyrics) view(c *ui.Context) {
 	}
 }
 
+// needed is as large as the window must stand to show the lines whole: set
+// across, as wide as the widest of them and as tall as they stand together;
+// set down, as tall as the longest of them and as wide as their columns
+// take. Never smaller than the settings ask for.
+func (d *deskLyrics) needed(c *ui.Context, shown []lyrics.Line, start, cur int, size float32, weight int, family, transFamily string) (w, h float32) {
+	s := &d.a.settings
+	w, h = lyricWindowSize(s.LyricVertical, s.LyricSize, s.LyricLines)
+	if len(shown) == 0 {
+		return w, h
+	}
+	trans := s.LyricTrans
+	if s.LyricVertical {
+		tallest, columns := float32(0), float32(16)
+		for i, l := range shown {
+			lineSize := size
+			if start+i == cur {
+				lineSize = size * 1.04
+			}
+			tallest = max(tallest, lyricExtent(c, l.Text, family, lineSize, weight))
+			columns += lineSize*1.3 + 10
+			if trans && l.Translation != "" {
+				columns += size*0.62*1.3 + 10
+				tallest = max(tallest, lyricExtent(c, l.Translation, transFamily, size*0.62, 500))
+			}
+		}
+		return max(w, columns), max(h, tallest+24)
+	}
+	widest, tall := float32(0), float32(20)
+	for i, l := range shown {
+		lineSize := size
+		if start+i == cur {
+			lineSize = size * 1.04
+		}
+		widest = max(widest, textWidth(c, l.Text, family, lineSize, weight))
+		tall += lineSize * 1.35
+		if trans && l.Translation != "" {
+			widest = max(widest, textWidth(c, l.Translation, transFamily, size*0.62, 500))
+			tall += size * 0.62 * 1.4
+		}
+	}
+	return max(w, widest+32), max(h, tall)
+}
+
+// grow makes the window large enough for the lines to show whole, and no
+// larger: unlocked, the size it stands at is the listener's, so it only ever
+// grows, and only when the words are what need the room.
+func (d *deskLyrics) grow(c *ui.Context, shown []lyrics.Line, start, cur int, size float32, weight int, family, transFamily string) {
+	if d.win == nil || d.a.settings.LyricLocked {
+		return // as in tests, and a locked window keeps the size it was locked at
+	}
+	needW, needH := d.needed(c, shown, start, cur, size, weight, family, transFamily)
+	b := d.win.Bounds()
+	w, h := max(b.Width, int(needW)), max(b.Height, int(needH))
+	if w == b.Width && h == b.Height {
+		return
+	}
+	x, y := lyricWindowPlace(b.X, b.Y, float32(w), float32(h), mygo.Screen.PrimaryDisplay().WorkArea)
+	d.win.SetMinimumSize(int(needW), int(needH))
+	d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: w, Height: h})
+}
+
+// columnRoom is how far down a column has room to run: as tall as the window
+// stands, or as tall as the lines need when there is no window to ask, as in
+// tests.
+func (d *deskLyrics) columnRoom(c *ui.Context, shown []lyrics.Line, start, cur int, size float32, weight int, family, transFamily string) float32 {
+	if d.win != nil {
+		if h := float32(d.win.Bounds().Height) - 24; h > 0 {
+			return h
+		}
+	}
+	_, h := d.needed(c, shown, start, cur, size, weight, family, transFamily)
+	return max(h-24, size*1.3)
+}
+
+// textWidth is how wide a line is set, and lyricExtent how far down a column
+// it runs.
+func textWidth(c *ui.Context, text, family string, size float32, weight int) float32 {
+	w, _ := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight})
+	return w
+}
+
+// lyricExtent is how far down a column a line runs: its characters one under
+// the next, and its words as wide as they were set.
+func lyricExtent(c *ui.Context, text, family string, size float32, weight int) float32 {
+	total := float32(0)
+	for _, run := range lyricRuns(text) {
+		total += runHeight(c, run, family, size, weight)
+	}
+	return total
+}
+
+// padlock draws a padlock over the words: its shackle over its body, lifted
+// off it to the side when the window is open to being moved again.
+func padlock(c *ui.Context, open bool, tint ui.Color, size float32) {
+	ui.Box(c).Width(size).Height(size).PassThrough().Children(func() {
+		shackle := ui.Box(c).Width(size * 0.54).Height(size * 0.48).
+			Radius(size * 0.27).Border(size*0.1, tint)
+		if open {
+			shackle.Absolute().Left(size * 0.44).Top(size * 0.02)
+		} else {
+			shackle.Absolute().Left(size * 0.23).Top(size * 0.02)
+		}
+		ui.Box(c).Absolute().Left(0).Top(size * 0.42).Width(size).Height(size * 0.6).
+			Radius(size * 0.14).Background(tint)
+	})
+}
+
 // lyricColumns sets one line down the columns it needs: its characters
 // upright, one under another, and its words turned beside them, as Word sets
 // a line of Chinese with Latin in it vertically. What a column cannot hold
 // runs on into the next column, which stands to its left.
-func lyricColumns(c *ui.Context, text string, family string, size float32, weight int, tint ui.Color) {
-	chunks := lyricChunks(c, text, family, size, weight)
+func lyricColumns(c *ui.Context, text string, family string, size float32, weight int, tint ui.Color, room float32) {
+	chunks := lyricChunks(c, text, family, size, weight, room)
 	for i := len(chunks) - 1; i >= 0; i-- {
 		lyricColumn(c, chunks[i], family, size, weight, tint)
 	}
 }
 
 // lyricChunks splits a line into what each column holds, in reading order.
-func lyricChunks(c *ui.Context, text string, family string, size float32, weight int) [][]lyricRun {
-	// As much as a column holds, in the room the window gives it.
-	room := lyricColumnRoom(size)
+func lyricChunks(c *ui.Context, text string, family string, size float32, weight int, room float32) [][]lyricRun {
 	var chunks [][]lyricRun
 	var col []lyricRun
 	used := float32(0)
@@ -515,12 +674,6 @@ func lyricChunks(c *ui.Context, text string, family string, size float32, weight
 	}
 	set()
 	return chunks
-}
-
-// lyricColumnRoom is how tall the room a column stands in is.
-func lyricColumnRoom(size float32) float32 {
-	_, h := lyricWindowSize(true, float64(size), 1)
-	return h - 16
 }
 
 // runHeight is how far down a column a run takes it: a character as tall as
