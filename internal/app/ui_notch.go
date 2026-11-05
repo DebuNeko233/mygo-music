@@ -1,7 +1,6 @@
 package app
 
 import (
-	"runtime"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -154,10 +153,11 @@ func (n *notch) setEnabled(on bool) {
 
 // greet shows the notch once, as the first song plays, to a listener who
 // never turned it on: it grows out of the housing, or the top of a screen
-// without one, with the song and a way to keep it, and goes back in.
+// without one, with the song and a way to keep it, and goes back in. The
+// notch is a window of the Mac's alone, so this is only reached there.
 func (n *notch) greet() {
 	s := &n.a.settings
-	if runtime.GOOS != "darwin" || s.Notch || s.NotchGreeted {
+	if s.Notch || s.NotchGreeted {
 		return
 	}
 	s.NotchGreeted = true
