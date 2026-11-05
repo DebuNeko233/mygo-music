@@ -78,9 +78,6 @@ type settings struct {
 	// LyricWindow shows the lyrics in a window of their own, over every
 	// other window: the listener turns it on.
 	LyricWindow bool `json:"lyricWindow,omitempty"`
-	// LyricVertical stacks the lines down a narrow, tall window rather
-	// than setting them across a wide, short one.
-	LyricVertical bool `json:"lyricVertical,omitempty"`
 	// LyricLines is how many lines the window shows at once: one or two.
 	LyricLines int `json:"lyricLines,omitempty"`
 	// LyricLocked keeps the lyrics window where it is: it is dragged by

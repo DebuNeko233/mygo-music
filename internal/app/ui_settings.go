@@ -354,16 +354,6 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
-			row("排列", "横排一行一句，宽而扁；竖排一句一行，窄而高", func() {
-				i := 0
-				if s.LyricVertical {
-					i = 1
-				}
-				if segmented(c.Key("lyric-mode"), &i, "横排", "竖排") {
-					s.LyricVertical = i == 1
-					a.changed()
-				}
-			})
 			row("行数", "窗口一次显示一句，还是这一句和下一句", func() {
 				i := 1
 				if s.LyricLines == 1 {

@@ -86,7 +86,7 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	d := &deskLyrics{a: a}
 	a.lyrics = d
 
-	w, h := lyricWindowSize(false, a.settings.LyricSize, a.settings.LyricLines)
+	w, h := lyricWindowSize(a.settings.LyricSize, a.settings.LyricLines)
 	tt := ui.NewTester(d.view, int(w), int(h))
 	// Pointed at, the buttons show: they are how the window is locked. The
 	// window itself is not there: the words stand on what is under them.
@@ -126,30 +126,6 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	}
 }
 
-// A line set vertically stands its Chinese upright, one character under the
-// next, and turns the words in it a quarter beside them, as Word does.
-func TestALineStandsUprightWithItsWordsTurned(t *testing.T) {
-	runs := lyricRuns("我们去看 Hello World 演唱会")
-	want := []lyricRun{
-		{text: "我", upright: true},
-		{text: "们", upright: true},
-		{text: "去", upright: true},
-		{text: "看", upright: true},
-		{text: " Hello World ", upright: false},
-		{text: "演", upright: true},
-		{text: "唱", upright: true},
-		{text: "会", upright: true},
-	}
-	if len(runs) != len(want) {
-		t.Fatalf("%d runs, wanted %d: %+v", len(runs), len(want), runs)
-	}
-	for i, run := range runs {
-		if run != want[i] {
-			t.Errorf("run %d: %+v, wanted %+v", i, run, want[i])
-		}
-	}
-}
-
 // The settings choose one line or two, and the window shows that many: the
 // one being sung, and the one after it only when two are asked for.
 func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
@@ -174,7 +150,7 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	}
 
 	shown := func() *ui.Tester {
-		w, h := lyricWindowSize(false, a.settings.LyricSize, a.settings.LyricLines)
+		w, h := lyricWindowSize(a.settings.LyricSize, a.settings.LyricLines)
 		tt := ui.NewTester((&deskLyrics{a: a}).view, int(w), int(h))
 		tt.Move(w/2, h/2)
 		tt.Frame()
