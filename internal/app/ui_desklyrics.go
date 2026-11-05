@@ -30,11 +30,43 @@ type deskLyrics struct {
 
 	shaped string // what the window is laid out as, as the settings last made it
 	hot    bool   // the pointer over the padlock of a locked window
+	resize *lyricResize
 }
 
 // lyricPoll is how often a locked window looks for its padlock: it takes no
 // pointer elsewhere, so it hears no pointer arriving.
 const lyricPoll = 60 * time.Millisecond
+
+// lyricResize remembers where a transparent resize edge was grabbed. Windows
+// has no native resize edge without a thick frame, whose DWM shadow it draws.
+type lyricResize struct {
+	bounds        mygo.Rectangle
+	x, y          float32
+	left, top     bool
+	right, bottom bool
+}
+
+// moved resizes from the edges held, never smaller than the words allow.
+func (r *lyricResize) moved(x, y float32, minW, minH int) mygo.Rectangle {
+	b := r.bounds
+	if r.right {
+		b.Width = max(minW, b.Width+int(x-r.x))
+	}
+	if r.bottom {
+		b.Height = max(minH, b.Height+int(y-r.y))
+	}
+	if r.left {
+		w := max(minW, b.Width-int(x-r.x))
+		b.X += b.Width - w
+		b.Width = w
+	}
+	if r.top {
+		h := max(minH, b.Height-int(y-r.y))
+		b.Y += b.Height - h
+		b.Height = h
+	}
+	return b
+}
 
 // iconUnlock is the open padlock, drawn as paths rather than assembled from
 // boxes, so its arm stays round and its gap clear at every size.
@@ -186,7 +218,6 @@ func newDeskLyrics(a *app) *deskLyrics {
 	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
 	d.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:  mygo.App.Name() + "桌面歌词",
-		Panel:  true,
 		Hidden: true,
 		// Frameless, so that the window draws nothing of itself: no frame, no
 		// shadow. Its edges still take the pointer to resize it.
@@ -194,6 +225,7 @@ func newDeskLyrics(a *app) *deskLyrics {
 		Transparent:   true,
 		DisableShadow: true,
 		SkipTaskbar:   true,
+		DisableResize: true,
 		AlwaysOnTop:   true,
 		X:             x,
 		Y:             y,
@@ -201,10 +233,8 @@ func newDeskLyrics(a *app) *deskLyrics {
 		Height:        int(h),
 		Content:       ui.View(d.view),
 	})
-	// Frameless still leaves the window its edges to be resized by; what it
-	// draws of itself is nothing, its shadow gone with the frame.
-	d.win.SetHasShadow(false)
-	clearFrame(d.win.NativeHandle())
+	// No native frame: resizeEdges supplies the invisible resizing edges.
+	clearFrame(d.win)
 	// Escape and the like close a panel: these lyrics stay, until the
 	// listener turns them off or the app quits.
 	d.win.OnClose(func(e *mygo.CloseEvent) {
@@ -259,25 +289,24 @@ func (d *deskLyrics) apply() {
 		d.win.SetMinimumSize(int(needW), int(needH))
 		d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: int(w), Height: int(h)})
 		d.win.SetHasShadow(false)
-		clearFrame(d.win.NativeHandle())
+		clearFrame(d.win)
 		if reshaped {
 			// A new shape sets the size that is remembered from here on.
 			s.LyricWidth, s.LyricHeight = int(w), int(h)
 			s.save()
 		}
 	}
-	// The edges stay resizable for the window's whole life: a locked window
+	// The transparent edges resize only while unlocked; a locked window
 	// takes no pointer, so it cannot be resized or moved either.
 	d.win.SetMovable(!s.LyricLocked)
 	d.hot = false
 	d.win.SetIgnoreMouseEvents(s.LyricLocked)
-	d.win.SetHasShadow(false)
-	clearFrame(d.win.NativeHandle())
+	clearFrame(d.win)
 	d.win.SetAlwaysOnTop(true)
 	if s.LyricWindow {
 		d.win.ShowInactive()
 		d.win.SetHasShadow(false)
-		clearFrame(d.win.NativeHandle())
+		clearFrame(d.win)
 	} else {
 		d.win.Hide()
 	}
@@ -300,8 +329,7 @@ func (d *deskLyrics) setLocked(locked bool) {
 	d.win.SetMovable(!locked)
 	d.hot = false
 	d.win.SetIgnoreMouseEvents(locked)
-	d.win.SetHasShadow(false)
-	clearFrame(d.win.NativeHandle())
+	clearFrame(d.win)
 	d.win.Invalidate()
 }
 
@@ -387,7 +415,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 				d.hot = hot
 				d.win.SetIgnoreMouseEvents(!hot)
 				d.win.SetHasShadow(false)
-				clearFrame(d.win.NativeHandle())
+				clearFrame(d.win)
 				d.win.Invalidate()
 			}
 			c.After(lyricPoll)
@@ -445,6 +473,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 				d.setLocked(false)
 			}
 		} else {
+			d.resizeEdges(c)
 			// Unlocked, anything of the window drags it: the lines take no
 			// pointer themselves, so the window does.
 			c.Root().DragWindow()
@@ -498,6 +527,73 @@ func (d *deskLyrics) view(c *ui.Context) {
 	}
 }
 
+// resizeEdges gives the undecorated window invisible edges and corners to
+// resize from. They do not cover any buttons, which sit further inside it.
+func (d *deskLyrics) resizeEdges(c *ui.Context) {
+	const edge = 5.0
+	for _, side := range []struct {
+		key                      string
+		left, top, right, bottom bool
+		cursor                   ui.Cursor
+	}{
+		{"top", false, true, false, false, ui.CursorResizeN},
+		{"bottom", false, false, false, true, ui.CursorResizeS},
+		{"left", true, false, false, false, ui.CursorResizeW},
+		{"right", false, false, true, false, ui.CursorResizeE},
+		{"topleft", true, true, false, false, ui.CursorResizeNWSE},
+		{"bottomright", false, false, true, true, ui.CursorResizeNWSE},
+		{"topright", false, true, true, false, ui.CursorResizeNESW},
+		{"bottomleft", true, false, false, true, ui.CursorResizeNESW},
+	} {
+		e := ui.Box(c.Key("resize-" + side.key)).Absolute().Cursor(side.cursor)
+		if side.left {
+			e.Left(0).Width(edge)
+		}
+		if side.right {
+			e.Right(0).Width(edge)
+		}
+		if side.top {
+			e.Top(0).Height(edge)
+		}
+		if side.bottom {
+			e.Bottom(0).Height(edge)
+		}
+		if !side.left && !side.right {
+			e.Left(edge).Right(edge)
+		}
+		if !side.top && !side.bottom {
+			e.Top(edge).Bottom(edge)
+		}
+		side := side
+		e.HandleInput(func(ev ui.InputEvent) bool {
+			switch ev.Kind {
+			case ui.InputPointerDown:
+				if ev.Button != 0 || d.win == nil {
+					return false
+				}
+				b := d.win.Bounds()
+				d.resize = &lyricResize{bounds: b, x: ev.X, y: ev.Y,
+					left: side.left, top: side.top, right: side.right, bottom: side.bottom}
+				return true
+			case ui.InputPointerMove:
+				if d.resize == nil {
+					return false
+				}
+				r := d.resize
+				w, h := lyricWindowSize(d.a.settings.LyricSize, d.a.settings.LyricLines)
+				b := d.win.Bounds()
+				d.win.SetBounds(r.moved(float32(b.X)+ev.X, float32(b.Y)+ev.Y, int(w), int(h)))
+				clearFrame(d.win)
+				return true
+			case ui.InputPointerUp:
+				d.resize = nil
+				return true
+			}
+			return false
+		})
+	}
+}
+
 // needed is as large as the window must stand to show the lines whole: as wide
 // as the widest of them and as tall as they stand together. Never smaller than
 // the settings ask for.
@@ -541,8 +637,7 @@ func (d *deskLyrics) grow(c *ui.Context, shown []lyrics.Line, start, cur int, si
 	d.win.SetMinimumSize(int(needW), int(needH))
 	d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: w, Height: h})
 	// A new size may bring the window's frame and shadow back.
-	d.win.SetHasShadow(false)
-	clearFrame(d.win.NativeHandle())
+	clearFrame(d.win)
 }
 
 // textWidth is how wide a line is set.

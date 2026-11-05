@@ -2,4 +2,6 @@
 
 package app
 
-func clearFrame(handle uintptr) {}
+import "github.com/egoist/mygo"
+
+func clearFrame(win *mygo.Window) {}
