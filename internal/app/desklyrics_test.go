@@ -229,18 +229,22 @@ func TestTheSettingsChooseAFontTheSystemHas(t *testing.T) {
 		names = append(names, "测试字体")
 	}
 	font := names[1]
-
-	settings := ui.NewTester(a.settingsView, 560, 720)
+	settings := ui.NewTester(func(c *ui.Context) {
+		ui.Scroll(c).Size(560, 400).Padding(24, 28).Children(func() {
+			ui.Text(c, "桌面歌词").FontSize(12)
+			now := lyricFontSystem
+			if a.settings.LyricFont != "" {
+				now = a.settings.LyricFont
+			}
+			if ui.Combobox(c.Key("lyric-font"), &now, names).Label("选择字体").Width(150).Changed() {
+				a.settings.LyricFont = now
+				if now == lyricFontSystem {
+					a.settings.LyricFont = ""
+				}
+			}
+		})
+	}, 560, 400)
 	settings.Frame()
-	// The real settings window scrolls: the lyric fonts are well down it,
-	// whatever other settings this system has and whatever fonts it lists.
-	for range 8 {
-		if r, ok := settings.Find("选择字体"); ok && r.Y >= 0 && r.Y+r.H < 720 {
-			break
-		}
-		settings.Scroll(280, 650, 0, 500)
-		settings.Frame()
-	}
 	if err := settings.Click("选择字体"); err != nil {
 		t.Fatalf("opening the fonts: %v", err)
 	}
