@@ -29,6 +29,7 @@ type deskLyrics struct {
 	win *mygo.Window
 
 	shaped string // what the window is laid out as, as the settings last made it
+	shown  bool   // whether the window was shown at its last update
 	hot    bool   // the pointer over the padlock of a locked window
 	resize *lyricResize
 }
@@ -189,13 +190,12 @@ func lyricWindowLines(lines []lyrics.Line, cur int, count int) (shown []lyrics.L
 	return lines[start:min(len(lines), start+n)], start
 }
 
-// lyricWindowPlace is where the window goes: where it was left, or over the
-// foot of the screen when it was never placed, and inside the screen's work
-// area all the same, which may have changed since it was left there.
+// lyricWindowPlace centres a newly opened window, its centre three quarters
+// of the way down the screen's work area. It keeps the window on that screen.
 func lyricWindowPlace(x, y int, w, h float32, area mygo.Rectangle) (int, int) {
 	if x == 0 && y == 0 {
 		x = area.X + (area.Width-int(w))/2
-		y = area.Y + area.Height - int(h) - 64
+		y = area.Y + area.Height*3/4 - int(h)/2
 	}
 	if area.Width > int(w) {
 		x = min(max(x, area.X), area.X+area.Width-int(w))
@@ -274,18 +274,18 @@ func (d *deskLyrics) apply() {
 	shape := lyricShape(s.LyricSize, s.LyricLines)
 	reshaped := shape != d.shaped
 	d.shaped = shape
-	// A locked window is left as it stands: keeping it in place is no reason
-	// to make it larger, and its size was remembered when it was locked.
-	if !s.LyricLocked {
+	// Only opening places and sizes the window. Playing, dragging and resizing
+	// must not put it back at a position or size remembered earlier.
+	if !s.LyricLocked && (!d.shown || reshaped) {
 		w, h := needW, needH
-		if !reshaped {
-			// As large as it was left, and never made smaller than it
-			// stands: only the words growing make it grow.
-			b := d.win.Bounds()
-			w = max(w, float32(max(s.LyricWidth, b.Width)))
-			h = max(h, float32(max(s.LyricHeight, b.Height)))
+		if !reshaped && d.shown {
+			w = max(w, float32(s.LyricWidth))
+			h = max(h, float32(s.LyricHeight))
 		}
 		x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
+		if !d.shown {
+			x, y = lyricWindowPlace(0, 0, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
+		}
 		d.win.SetMinimumSize(int(needW), int(needH))
 		d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: int(w), Height: int(h)})
 		d.win.SetHasShadow(false)
@@ -303,9 +303,9 @@ func (d *deskLyrics) apply() {
 	d.win.SetIgnoreMouseEvents(s.LyricLocked)
 	clearFrame(d.win)
 	d.win.SetAlwaysOnTop(true)
+	d.shown = s.LyricWindow
 	if s.LyricWindow {
 		d.win.ShowInactive()
-		d.win.SetHasShadow(false)
 		clearFrame(d.win)
 	} else {
 		d.win.Hide()
@@ -405,7 +405,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 	pl := a.pl
 	c.Root().Background(ui.RGBA(0, 0, 0, 0))
 
-	// Over an unlocked window, the controls show. A locked window watches the
+	// Over an unlocked window, a light-dark plate shows where it ends. A locked window watches the
 	// one part that takes a pointer, its padlock, and lets the rest through.
 	over := c.Root().Hovered()
 	if s.LyricLocked {
@@ -441,9 +441,9 @@ func (d *deskLyrics) view(c *ui.Context) {
 	transFamily := lyricFamily(s.LyricTransFont)
 	shown, start := lyricWindowLines(lines, cur, s.LyricLines)
 
-	// The window grows until every line shows whole: a line is never broken
-	// off the end of the row.
-	d.grow(c, shown, start, cur, size, weight, family, transFamily)
+	if over && !s.LyricLocked {
+		c.Root().Background(ui.RGBA(0, 0, 0, 0.2))
+	}
 
 	// The window has no plate of its own, showing or not: what is under it is
 	// what it stands on. Only the controls come over the words, and only
@@ -620,9 +620,8 @@ func (d *deskLyrics) needed(c *ui.Context, shown []lyrics.Line, start, cur int, 
 	return max(w, widest+32), max(h, tall)
 }
 
-// grow makes the window large enough for the lines to show whole, and no
-// larger: unlocked, the size it stands at is the listener's, so it only ever
-// grows, and only when the words are what need the room.
+// grow is only for opening a window over long words. Playing and hovering
+// never change its size: it stays the size the listener dragged it to.
 func (d *deskLyrics) grow(c *ui.Context, shown []lyrics.Line, start, cur int, size float32, weight int, family, transFamily string) {
 	if d.win == nil || d.a.settings.LyricLocked {
 		return // as in tests, and a locked window keeps the size it was locked at

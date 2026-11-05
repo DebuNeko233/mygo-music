@@ -51,12 +51,12 @@ func TestLyricWindowLinesFollowTheLineSung(t *testing.T) {
 	}
 }
 
-// The window stays on the screen, wherever it was left and whatever the
-// screen has become since; never placed, it stands over the foot of it.
+// A newly opened window is horizontally centred, its centre 75% down the
+// screen; a remembered one stays on the screen when its display has changed.
 func TestLyricWindowStaysOnScreen(t *testing.T) {
 	area := mygo.Rectangle{X: 0, Y: 25, Width: 1440, Height: 875}
 
-	if x, y := lyricWindowPlace(0, 0, 840, 172, area); x != 300 || y+172 > area.Y+area.Height || y < area.Y {
+	if x, y := lyricWindowPlace(0, 0, 840, 172, area); x != 300 || y != area.Y+area.Height*3/4-86 {
 		t.Errorf("never placed: %d, %d", x, y)
 	}
 	// Past the right of it, as a screen went away from under the window.
@@ -95,8 +95,8 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	if _, ok := tt.Find("锁定"); !ok {
 		t.Fatal("no button to lock it, which it shows while it may be moved")
 	}
-	if alpha := tt.Image().RGBAAt(4, 4).A; alpha != 0 {
-		t.Error("a plate under the words, which are to stand on what is under them")
+	if alpha := tt.Image().RGBAAt(4, 4).A; alpha != 51 {
+		t.Errorf("hovering the unlocked window: alpha %d, want 20%%", alpha)
 	}
 	if err := tt.Click("锁定"); err != nil {
 		t.Fatalf("locking it: %v", err)
@@ -154,6 +154,21 @@ func TestDeskLyricsAreVerticallyCentered(t *testing.T) {
 	}
 }
 
+// A transparent resize edge keeps the opposite side still, and never makes
+// the window smaller than the settings' minimum.
+func TestTransparentResizeEdgesKeepTheirOppositeSide(t *testing.T) {
+	r := &lyricResize{bounds: mygo.Rectangle{X: 100, Y: 200, Width: 700, Height: 300}, x: 0, y: 0, left: true, top: true}
+	got := r.moved(50, 60, 600, 240)
+	want := (mygo.Rectangle{X: 150, Y: 260, Width: 650, Height: 240})
+	if got != want {
+		t.Fatalf("dragging top-left: got %+v, want %+v", got, want)
+	}
+	got = r.moved(200, 200, 600, 240)
+	if got.X != 200 || got.Y != 260 || got.Width != 600 || got.Height != 240 {
+		t.Errorf("minimum size moved the opposite side: %+v", got)
+	}
+}
+
 // The settings choose one line or two, and the window shows that many: the
 // one being sung, and the one after it only when two are asked for.
 func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
@@ -199,5 +214,67 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	two := shown()
 	if _, ok := two.Find("第三句"); !ok {
 		t.Error("the line after it is missing, with two asked for")
+	}
+}
+
+// The settings offer the fonts the system has, store one as the system names
+// it, and keep the system's own as no name, so that the lines take the
+// system's font again.
+func TestTheSettingsChooseAFontTheSystemHas(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = defaultSettings()
+	names := lyricFontNames()
+	if len(names) < 2 {
+		t.Skip("this system lists no fonts")
+	}
+	font := names[1]
+
+	settings := ui.NewTester(a.settingsView, 560, 2900)
+	settings.Frame()
+	if err := settings.Click("选择字体"); err != nil {
+		t.Fatalf("opening the fonts: %v", err)
+	}
+	if !settings.HasText(font) {
+		t.Fatalf("the fonts offered show none of the system's")
+	}
+	if err := settings.Click(font); err != nil {
+		t.Fatalf("choosing %s: %v", font, err)
+	}
+	if a.settings.LyricFont != font {
+		t.Fatalf("font: %q", a.settings.LyricFont)
+	}
+
+	// The system's own is the first of them, and names no font.
+	if err := settings.Click("选择字体"); err != nil {
+		t.Fatalf("opening the fonts again: %v", err)
+	}
+	settings.Key(0, ui.KeyDown)
+	settings.Key(0, ui.KeyEnter)
+	if a.settings.LyricFont != "" {
+		t.Fatalf("font: %q, with the system's own chosen", a.settings.LyricFont)
+	}
+}
+
+// A font setting stands for the families an older settings file named by a
+// name of the app's, for the family the system gives, and for none at all
+// when it names the system's own.
+func TestTheFamiliesAFontSettingStandsFor(t *testing.T) {
+	if got := lyricFamily(lyricFontSystem); got != "" {
+		t.Errorf("the system's own stands for %q", got)
+	}
+	if got := lyricFamily(""); got != "" {
+		t.Errorf("no choice stands for %q", got)
+	}
+	for old, families := range lyricOldFonts {
+		if got := lyricFamily(old); got != families {
+			t.Errorf("%q stands for %q", old, got)
+		}
+	}
+	names := lyricFontNames()
+	if len(names) > 1 {
+		if got := lyricFamily(names[1]); got != names[1] {
+			t.Errorf("the system's font %q stands for %q", names[1], got)
+		}
 	}
 }
