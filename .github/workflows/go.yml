@@ -1,0 +1,40 @@
+# Every push and pull request packages the app for Windows and Linux, with
+# its installers, the way a release does: a change that breaks the build or
+# the packaging fails here instead of on a tag, and the installers of a run
+# can be downloaded from its artifacts. test.yml compiles the Go packages
+# and runs the tests; release.yml signs what this builds and uploads it.
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The Windows installers are made with NSIS. macOS is left out: its
+      # app takes a Developer ID and a notary profile that only a release
+      # has, so it is built on a tag.
+      - name: Install NSIS, for the Windows installers
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      # mygo build warns and signs no update archives without the updater
+      # key, which is a release secret: these are the installers of a
+      # release, unsigned, and -upload would need a draft release.
+      - name: Build the packages
+        run: |
+          go tool mygo build \
+            -platform windows/amd64,windows/arm64,linux/amd64,linux/arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: build/
+          retention-days: 7
