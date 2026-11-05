@@ -101,9 +101,13 @@ type settings struct {
 	LyricTransFont  string `json:"lyricTransFont,omitempty"`
 	LyricTransColor string `json:"lyricTransColor,omitempty"`
 	// LyricX and LyricY are where the lyrics window was left, in screen
-	// points; 0 and 0 for never placed.
-	LyricX int `json:"lyricX,omitempty"`
-	LyricY int `json:"lyricY,omitempty"`
+	// points; 0 and 0 for never placed. LyricWidth and LyricHeight are how
+	// large it was left, which is how large it opens again, and at least as
+	// large as the lines need.
+	LyricX      int `json:"lyricX,omitempty"`
+	LyricY      int `json:"lyricY,omitempty"`
+	LyricWidth  int `json:"lyricWidth,omitempty"`
+	LyricHeight int `json:"lyricHeight,omitempty"`
 	// SearchHistory keeps submitted keywords, most recent first.
 	SearchHistory []string `json:"searchHistory,omitempty"`
 

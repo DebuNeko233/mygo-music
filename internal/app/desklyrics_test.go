@@ -84,8 +84,15 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 
 	w, h := lyricWindowSize(false, a.settings.LyricSize)
 	tt := ui.NewTester(d.view, int(w), int(h))
+	// Pointed at, the plate and the buttons show: it is through them that the
+	// window is dragged and locked, and the lines stand on the plate.
+	tt.Move(w/2, h/2)
+	tt.Frame()
 	if _, ok := tt.Find("锁定"); !ok {
 		t.Fatal("no button to lock it, which it shows while it may be moved")
+	}
+	if alpha := tt.Image().RGBAAt(20, 20).A; alpha == 0 {
+		t.Error("no plate under the pointer")
 	}
 	if err := tt.Click("锁定"); err != nil {
 		t.Fatalf("locking it: %v", err)
@@ -93,16 +100,44 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	if !a.settings.LyricLocked {
 		t.Error("still unlocked after its own button")
 	}
-	// Pointer off it, as it sits behind what the listener works in.
+	// Pointer off it, as it sits behind what the listener works in: nothing
+	// but the lines is left, not even a plate to see the desktop through.
 	tt.Move(-20, -20)
 	tt.Frame()
 	if _, ok := tt.Find("设置"); ok {
 		t.Error("still shows its buttons, locked and not pointed at")
+	}
+	if alpha := tt.Image().RGBAAt(20, 20).A; alpha != 0 {
+		t.Error("a plate left behind, with the pointer away")
 	}
 	// Pointed at it, they are back: unlocking has to be possible.
 	tt.Move(20, 20)
 	tt.Frame()
 	if _, ok := tt.Find("解锁"); !ok {
 		t.Error("no way back out of the lock, pointed at")
+	}
+}
+
+// A line set vertically stands its Chinese upright, one character under the
+// next, and turns the words in it a quarter beside them, as Word does.
+func TestALineStandsUprightWithItsWordsTurned(t *testing.T) {
+	runs := lyricRuns("我们去看 Hello World 演唱会")
+	want := []lyricRun{
+		{text: "我", upright: true},
+		{text: "们", upright: true},
+		{text: "去", upright: true},
+		{text: "看", upright: true},
+		{text: " Hello World ", upright: false},
+		{text: "演", upright: true},
+		{text: "唱", upright: true},
+		{text: "会", upright: true},
+	}
+	if len(runs) != len(want) {
+		t.Fatalf("%d runs, wanted %d: %+v", len(runs), len(want), runs)
+	}
+	for i, run := range runs {
+		if run != want[i] {
+			t.Errorf("run %d: %+v, wanted %+v", i, run, want[i])
+		}
 	}
 }
