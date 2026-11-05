@@ -80,6 +80,7 @@ type app struct {
 
 	playlists  map[int64]*netease.Playlist
 	loadingPl  map[int64]bool
+	plPlay     map[int64]bool // playlists asked to play once they are in
 	plErr      map[int64]string
 	artists    map[int64]*artistData
 	artistTab  int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
@@ -151,9 +152,12 @@ type app struct {
 }
 
 // post runs fn on the main thread and redraws both windows. Without a
-// window, as in tests, it drops fn.
+// window, as in tests, it drops fn, unless testPost takes it.
 func (a *app) post(fn func()) {
 	if a.win == nil {
+		if testPost != nil {
+			testPost(fn)
+		}
 		return
 	}
 	a.win.Update(func() {
@@ -161,6 +165,10 @@ func (a *app) post(fn func()) {
 		a.redraw()
 	})
 }
+
+// testPost, when set, takes what post hands the main thread: tests run with
+// no window to hand it to.
+var testPost func(fn func())
 
 func (a *app) redraw() {
 	if a.win != nil {
@@ -191,6 +199,7 @@ func Run() error {
 	a := &app{
 		playlists:  map[int64]*netease.Playlist{},
 		loadingPl:  map[int64]bool{},
+		plPlay:     map[int64]bool{},
 		plErr:      map[int64]string{},
 		artists:    map[int64]*artistData{},
 		albums:     map[int64]*albumData{},

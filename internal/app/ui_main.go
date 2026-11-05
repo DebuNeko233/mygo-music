@@ -451,6 +451,9 @@ func dailyRenewed(loaded, now time.Time) bool {
 	return loaded.Before(six)
 }
 
+// playlistDetail is what a playlist is asked of NetEase with.
+var playlistDetail func(id int64) (*netease.Playlist, error) = netease.PlaylistDetail
+
 func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	if pl := a.playlists[id]; pl != nil {
 		if thenPlay {
@@ -459,20 +462,27 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 		return
 	}
 	if a.loadingPl[id] {
+		// It is on its way: what asked for it plays once it is here, rather
+		// than the ask being dropped and the button doing nothing.
+		if thenPlay {
+			a.plPlay[id] = true
+		}
 		return
 	}
 	a.loadingPl[id] = true
 	delete(a.plErr, id)
 	go func() {
-		pl, err := netease.PlaylistDetail(id)
+		pl, err := playlistDetail(id)
 		a.post(func() {
 			delete(a.loadingPl, id)
+			play := thenPlay || a.plPlay[id]
+			delete(a.plPlay, id)
 			if err != nil {
 				a.plErr[id] = "歌单加载失败"
 				return
 			}
 			a.playlists[id] = pl
-			if thenPlay {
+			if play {
 				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
 			}
 		})
