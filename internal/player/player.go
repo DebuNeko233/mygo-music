@@ -21,6 +21,10 @@ type asker func(id int64, level string) (*netease.Stream, error)
 // outlives the call that started it.
 var songURL asker = netease.SongURL
 
+// lyricsOf is the words of a track: what the API says, or what the tests
+// serve. Taken on the main thread for the same reason as songURL.
+var lyricsOf = netease.Lyrics
+
 type RepeatMode int
 
 const (
@@ -625,6 +629,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	level := p.level()
 	ahead := p.takeAhead(t.ID, level)
 	ask := songURL
+	words := lyricsOf
 	p.at = at
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
@@ -650,10 +655,21 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	}()
 
 	go func() {
-		lrc, trans, yrc, err := netease.Lyrics(t.ID)
+		// A song whose words did not come is not a song without any: the
+		// request is asked again, and until one answers the words stay
+		// unloaded rather than empty, so that nothing says the song is
+		// instrumental when it only failed to be asked for.
 		var lines []lyrics.Line
-		if err == nil {
-			lines = lyrics.Build(lrc, trans, yrc)
+		for try := 1; ; try++ {
+			lrc, trans, yrc, err := words(t.ID)
+			if err == nil {
+				lines = lyrics.Build(lrc, trans, yrc)
+				break
+			}
+			if try >= lyricTries {
+				return
+			}
+			time.Sleep(retryGap(try))
 		}
 		p.post(func() {
 			if gen == p.gen {
@@ -757,6 +773,10 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 // where two tries a second apart left the listener with a song that would
 // have played had it been asked for once more.
 const loadTries = 4
+
+// lyricTries is how many times the words of a song are asked for before they
+// are given up on: a request that fails is not a song without words.
+const lyricTries = 3
 
 // retry loads the track at at again in a moment, still loading as it
 // waits: a stream URL gone stale, or a connection dropped, may work once
