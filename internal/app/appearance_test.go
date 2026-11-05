@@ -139,10 +139,10 @@ func TestEveryPictureFormatIsRead(t *testing.T) {
 // what is outside the page is cut off, never squeezed in.
 func TestCoverSourceKeepsTheShape(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		page   ui.Rect
-		w, h   float32
-		want   ui.Rect
+		name string
+		page ui.Rect
+		w, h float32
+		want ui.Rect
 	}{
 		{"a wide picture in a tall page", ui.Rect{W: 100, H: 400}, 200, 100, ui.Rect{X: 87.5, W: 25, H: 100}},
 		{"a wide picture in a wide page", ui.Rect{W: 400, H: 100}, 200, 100, ui.Rect{Y: 25, W: 200, H: 50}},
