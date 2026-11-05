@@ -268,7 +268,7 @@ func (a *app) programRow(c *ui.Context, d *podcastData, i int, cur *netease.Trac
 		ui.Box(c).Size(32, 32).Center().Children(func() {
 			if a.likedPrograms[pr.ID] || row.Hovered() {
 				tr := pr.Track(d.podcast)
-				a.likeButton(c.Key("like"), &tr, 15, p.muted)
+				a.likeButton(c.Key(fmt.Sprintf("like-%d", pr.ID)), &tr, 15, p.muted)
 			}
 		})
 		ui.Text(c, clock(time.Duration(pr.Duration)*time.Millisecond)).FontSize(12).FontFeatures("tnum").TextColor(p.muted)

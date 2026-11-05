@@ -183,7 +183,7 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	})
 	a.pl.Hold(2 * time.Second)
 
-	settings := ui.NewTester(a.settingsView, 560, 2900)
+	settings := ui.NewTester(a.settingsView, 560, 3400)
 	settings.Frame()
 	if err := settings.Click("单行"); err != nil {
 		t.Fatalf("choosing one line: %v", err)
@@ -230,7 +230,7 @@ func TestTheSettingsChooseAFontTheSystemHas(t *testing.T) {
 	}
 	font := names[1]
 
-	settings := ui.NewTester(a.settingsView, 560, 2900)
+	settings := ui.NewTester(a.settingsView, 560, 3400)
 	settings.Frame()
 	if err := settings.Click("选择字体"); err != nil {
 		t.Fatalf("opening the fonts: %v", err)
