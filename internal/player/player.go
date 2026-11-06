@@ -614,6 +614,7 @@ func (p *Player) stop() {
 	p.out, p.stream, p.info = nil, nil, nil
 	p.seeking = false
 	p.fade.attach(nil, 1)
+	p.gen++ // Invalidate all pending callbacks.
 }
 
 // load plays the track at order[at], skipping those that cannot play.
