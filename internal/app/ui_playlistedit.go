@@ -193,9 +193,15 @@ func (a *app) submitName() {
 	}
 	d.busy = true
 	add := d.add
+	uid := a.profile.UserID // Capture UID for validation
 	go func() {
 		pl, err := createPlaylist(name)
 		a.post(func() {
+			// Validate that the user is still logged in with the same account
+			if a.profile == nil || a.profile.UserID != uid {
+				a.naming.busy = false
+				return
+			}
 			a.naming.busy = false
 			if err != nil {
 				a.toast = "创建歌单失败，请稍后再试"

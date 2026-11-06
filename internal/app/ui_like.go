@@ -53,10 +53,15 @@ func (a *app) toggleLike(tr *netease.Track) {
 		a.liked = map[int64]bool{}
 	}
 	id, like := tr.ID, !a.liked[tr.ID]
+	uid := a.profile.UserID // Capture UID for validation
 	a.setLiked(id, like)
 	go func() {
 		err := likeSong(id, like)
 		a.post(func() {
+			// Validate that the user is still logged in with the same account
+			if a.profile == nil || a.profile.UserID != uid {
+				return
+			}
 			if err != nil {
 				a.setLiked(id, !like)
 				a.toast = "操作失败，请稍后再试"
@@ -76,11 +81,19 @@ func (a *app) toggleLike(tr *netease.Track) {
 }
 
 func (a *app) toggleProgramLike(id int64) {
+	if a.profile == nil {
+		return
+	}
 	like := !a.likedPrograms[id]
+	uid := a.profile.UserID // Capture UID for validation
 	a.setProgramLiked(id, like)
 	go func() {
 		err := likeProgram(id, like)
 		a.post(func() {
+			// Validate that the user is still logged in with the same account
+			if a.profile == nil || a.profile.UserID != uid {
+				return
+			}
 			if err != nil {
 				a.setProgramLiked(id, !like)
 				a.toast = "操作失败，请稍后再试"
@@ -119,6 +132,9 @@ func (a *app) likeCurrent() {
 
 func (a *app) setLiked(id int64, like bool) {
 	if like {
+		if a.liked == nil {
+			a.liked = map[int64]bool{}
+		}
 		a.liked[id] = true
 	} else {
 		delete(a.liked, id)

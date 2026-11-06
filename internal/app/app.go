@@ -78,6 +78,7 @@ type app struct {
 	homeErr     string
 	homeLoading bool
 	homeAt      time.Time // when what the home page shows was asked for
+	homeGen     int       // generation counter to discard stale responses
 
 	playlists  map[int64]*netease.Playlist
 	loadingPl  map[int64]bool

@@ -404,6 +404,7 @@ func (a *app) centered(c *ui.Context, err string, retry func()) {
 func (a *app) loadHome() {
 	a.homeLoading, a.homeErr = true, ""
 	signedIn := a.profile != nil
+	gen := a.homeGen // Capture generation for validation
 	at := time.Now()
 	go func() {
 		featured, err1 := netease.FeaturedPlaylists(30)
@@ -414,6 +415,10 @@ func (a *app) loadHome() {
 			rec, _ = netease.RecommendedPlaylists()
 		}
 		a.post(func() {
+			// Discard stale responses from previous generations
+			if gen != a.homeGen {
+				return
+			}
 			a.homeLoading = false
 			if err1 != nil && err2 != nil {
 				// Loading the new day's again, what shows stays, to try
