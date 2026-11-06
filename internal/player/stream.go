@@ -62,6 +62,9 @@ type download struct {
 	// onRelease takes the song out of its cache, once nothing reads or
 	// writes it any more.
 	onRelease func()
+	// drop is where the song is kept and is to go: what a discard marks,
+	// since Windows removes no file a reader still holds open.
+	drop string
 }
 
 // startDownload fetches url, of size bytes if known, into part, a file
@@ -243,22 +246,24 @@ func (d *download) hand(run int) {
 	}
 }
 
-// discard prevents a failed stream from being kept or served from the cache again.
+// discard prevents a failed stream from being kept or served from the cache
+// again: its metadata goes at once, and the song itself as soon as nothing
+// reads it, which is when Windows lets it go.
 func (d *download) discard() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.keep = nil
-	if d.file != nil && d.part == "" {
-		path := d.file.Name()
-		opened, err := d.file.Stat()
-		current, statErr := os.Stat(path)
-		if err != nil || statErr != nil || !os.SameFile(opened, current) {
-			return // Another download has already replaced this file.
-		}
-		os.Remove(strings.TrimSuffix(path, filepath.Ext(path)) + ".json")
-		// Removing the metadata first also invalidates an open file on Windows.
-		os.Remove(path)
+	if d.file == nil || d.part != "" {
+		return
 	}
+	path := d.file.Name()
+	opened, err := d.file.Stat()
+	current, statErr := os.Stat(path)
+	if err != nil || statErr != nil || !os.SameFile(opened, current) {
+		return // Another download has already replaced this file.
+	}
+	os.Remove(strings.TrimSuffix(path, filepath.Ext(path)) + ".json")
+	d.drop = path
 }
 
 // seekTo asks for the song again from off, unless off is among the bytes in
@@ -334,6 +339,13 @@ func (d *download) release() {
 	if d.part != "" {
 		os.Remove(d.part)
 	}
+	if d.drop != "" {
+		// Marked by a discard: it goes now that no handle holds it, and
+		// stays if one still does, for the cache to drop when it is over
+		// its limit.
+		os.Remove(d.drop)
+		d.drop = ""
+	}
 	d.file, d.data, d.n, d.part = nil, nil, 0, ""
 	if d.onRelease != nil {
 		d.onRelease()
@@ -359,6 +371,10 @@ func (d *download) halt() {
 	}
 	if d.part != "" {
 		os.Remove(d.part)
+	}
+	if d.drop != "" {
+		os.Remove(d.drop)
+		d.drop = ""
 	}
 	d.file, d.data, d.n, d.part = nil, nil, 0, ""
 }
@@ -586,7 +602,13 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 		return samples, nil
 	}
 	if err == io.ErrUnexpectedEOF || err == nil {
-		err = io.EOF
+		// go-mp3 can end at a partial frame: that is a failed download,
+		// not the end of the song, or the player would skip it.
+		if dlErr := s.dl.Err(); dlErr != nil {
+			err = dlErr
+		} else {
+			err = io.EOF
+		}
 	}
 	return 0, err
 }

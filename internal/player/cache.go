@@ -64,6 +64,10 @@ func cacheKey(id int64, level string) string { return fmt.Sprintf("%d-%s", id, l
 type keptSong struct {
 	netease.Stream
 	Asked string `json:"asked,omitempty"`
+	// File is the name it is kept under, when that is not the one its key
+	// names: a copy kept beside one another stream still reads, which
+	// Windows lets no file replace.
+	File string `json:"file,omitempty"`
 }
 
 // keepable reports whether a song of level and type ext may be kept: they
@@ -95,6 +99,9 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 		}
 		st := kept.Stream
 		path := filepath.Join(c.dir, key+"."+st.Type)
+		if kept.File != "" {
+			path = filepath.Join(c.dir, kept.File)
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			continue
@@ -187,11 +194,20 @@ func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n 
 		return part, false
 	}
 	key := cacheKey(id, kept.Level)
-	meta, _ := json.Marshal(kept)
 	path := filepath.Join(c.dir, key+"."+kept.Type)
 	if os.Rename(part, path) != nil {
-		return part, false
+		// Windows replaces no file another stream still reads: rather than
+		// lose the song, it is kept under a name of its own, which its
+		// metadata names, and the one it could not take goes when that
+		// stream lets go of it.
+		aside := fmt.Sprintf("%s-%d.%s", key, time.Now().UnixNano(), kept.Type)
+		path = filepath.Join(c.dir, aside)
+		if os.Rename(part, path) != nil {
+			return part, false
+		}
+		kept.File = aside
 	}
+	meta, _ := json.Marshal(kept)
 	os.WriteFile(filepath.Join(c.dir, key+".json"), meta, 0o600)
 	c.prune(path)
 	return path, true
