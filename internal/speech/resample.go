@@ -18,8 +18,14 @@ type resampler struct {
 }
 
 func newResampler(rate, channels int) *resampler {
+	if rate <= 0 {
+		rate = SampleRate // Fallback to avoid division by zero
+	}
+	if channels <= 0 {
+		channels = 1
+	}
 	step := float64(rate) / SampleRate
-	r := &resampler{ch: max(channels, 1), step: step}
+	r := &resampler{ch: channels, step: step}
 	// Just under the output's Nyquist frequency, with eight of its
 	// periods on either side.
 	r.fc = 0.45 / max(step, 1)

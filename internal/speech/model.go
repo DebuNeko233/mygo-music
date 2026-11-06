@@ -89,7 +89,7 @@ func Installed(root string) bool {
 	}
 	for _, f := range modelFiles {
 		info, err := os.Stat(filepath.Join(root, ModelName, filepath.FromSlash(f.path)))
-		if err != nil || info.Size() != f.size {
+		if err != nil || info.Size() != f.size || digest(filepath.Join(root, ModelName, filepath.FromSlash(f.path))) != f.sha256 {
 			return false
 		}
 	}
@@ -137,7 +137,7 @@ func Download(ctx context.Context, root string, progress func(done, total int64)
 	dir := filepath.Join(root, ModelName)
 	for _, f := range modelFiles {
 		path := filepath.Join(dir, filepath.FromSlash(f.path))
-		if info, err := os.Stat(path); err == nil && info.Size() == f.size {
+		if info, err := os.Stat(path); err == nil && info.Size() == f.size && digest(path) == f.sha256 {
 			before += f.size
 			progress(before, total)
 			continue
