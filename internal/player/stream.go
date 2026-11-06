@@ -169,7 +169,7 @@ func (d *download) run(ctx context.Context, from int64, run int, gap time.Durati
 		n, err := res.Body.Read(buf)
 		if n > 0 {
 			stall.Reset(gap)
-			d.write(buf[:n])
+			d.write(buf[:n], run)
 		}
 		if err == io.EOF {
 			// A range's clean EOF can still stop short of the song promised by the API.
@@ -193,19 +193,23 @@ func (d *download) run(ctx context.Context, from int64, run int, gap time.Durati
 
 // write adds b to what is in. Only run writes, so it reads the file and
 // what is in without the lock, which guards them from readers.
-func (d *download) write(b []byte) {
+func (d *download) write(b []byte, run int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	// Discard data from an old run that was cancelled by seekTo.
+	if d.runs != run {
+		return
+	}
 	if d.file != nil {
 		if _, err := d.file.Write(b); err != nil {
 			d.toMemory()
 		}
 	}
-	d.mu.Lock()
 	if d.file == nil {
 		d.data = append(d.data, b...)
 	}
 	d.n += int64(len(b))
 	d.cond.Broadcast()
-	d.mu.Unlock()
 }
 
 // toMemory moves the song into memory from a file that takes no more, as
@@ -433,6 +437,9 @@ func (d *download) waitFor(n int64) int64 {
 // holds the lock.
 func (d *download) readAt(b []byte, off int64) (int, error) {
 	at := off - d.base
+	if at < 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
 	n := min(int64(len(b)), d.n-at)
 	if n <= 0 {
 		return 0, nil
