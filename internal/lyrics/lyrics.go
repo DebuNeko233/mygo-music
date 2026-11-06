@@ -43,18 +43,31 @@ func parseLRC(lrc string) []Line {
 		}
 		text := strings.TrimSpace(raw[times[len(times)-1][1]:])
 		for _, m := range times {
-			min, _ := strconv.Atoi(raw[m[2]:m[3]])
-			sec, _ := strconv.Atoi(raw[m[4]:m[5]])
+			min, err := strconv.Atoi(raw[m[2]:m[3]])
+			if err != nil || min < 0 {
+				continue // Skip malformed timestamps
+			}
+			sec, err := strconv.Atoi(raw[m[4]:m[5]])
+			if err != nil || sec < 0 || sec > 59 {
+				continue // Skip malformed timestamps
+			}
 			var frac time.Duration
 			if m[6] >= 0 {
 				f := raw[m[6]:m[7]]
-				n, _ := strconv.Atoi(f)
+				n, err := strconv.Atoi(f)
+				if err != nil || n < 0 {
+					continue // Skip malformed fractional seconds
+				}
 				frac = time.Duration(n) * time.Second
 				for range len(f) {
 					frac /= 10
 				}
 			}
 			at := time.Duration(min)*time.Minute + time.Duration(sec)*time.Second + frac
+			// Prevent overflow: max 24 hours
+			if at > 24*time.Hour {
+				continue
+			}
 			out = append(out, Line{At: at, Text: text})
 		}
 	}
@@ -72,8 +85,16 @@ var (
 // milliseconds. Credits come as lines of JSON, which it leaves out.
 func parseYRC(yrc string) []Line {
 	ms := func(s string) time.Duration {
-		n, _ := strconv.Atoi(s)
-		return time.Duration(n) * time.Millisecond
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 0 {
+			return 0 // Invalid timestamps become 0
+		}
+		d := time.Duration(n) * time.Millisecond
+		// Prevent overflow: max 24 hours
+		if d > 24*time.Hour {
+			return 0
+		}
+		return d
 	}
 	var out []Line
 	for _, raw := range strings.Split(yrc, "\n") {
