@@ -851,7 +851,8 @@ func (p *Player) prefetch(at int) {
 	// take the bytes of the song being played, which is what stutters.
 	now := p.stream
 	gen, ask := p.gen, songURL
-	go p.prefetching(gen, t, level, now, ask, 1)
+	cache := p.Cache // Capture cache reference on main thread.
+	go p.prefetching(gen, t, level, now, ask, cache, 1)
 }
 
 // prefetchTries is how many times the track after this one is fetched ahead
@@ -864,7 +865,7 @@ const prefetchTries = 3
 // song that plays to come in first, and for the one it fetches to come in
 // whole, so that what did not come is asked for again while this one still
 // plays, rather than when the next one is due.
-func (p *Player) prefetching(gen int, t netease.Track, level string, now stream, ask asker, try int) {
+func (p *Player) prefetching(gen int, t netease.Track, level string, now stream, ask asker, cache *Cache, try int) {
 	if now != nil {
 		if playing, _ := now.source(); playing != nil {
 			playing.waitFor(playing.size)
@@ -884,12 +885,12 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 		}
 		return
 	}
-	if !p.Cache.Holds(info) {
+	if !cache.Holds(info) {
 		// Not a song the cache would keep: fetching it now would spend its
 		// bytes for nothing, as it would come in vain.
 		return
 	}
-	dl := p.Cache.download(t.ID, level, info)
+	dl := cache.download(t.ID, level, info)
 	p.post(func() {
 		if gen != p.gen || p.ahead != nil {
 			dl.Close()
@@ -928,7 +929,7 @@ func (p *Player) prefetchLater(gen int, t netease.Track, level string, ask asker
 				p.ahead = nil
 				failed.Close()
 			}
-			go p.prefetching(gen, t, level, nil, ask, try+1)
+			go p.prefetching(gen, t, level, nil, ask, p.Cache, try+1)
 		})
 	})
 }
