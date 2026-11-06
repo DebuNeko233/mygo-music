@@ -20,10 +20,9 @@ curl -fsSL https://github.com/zhangnjsd/mygo-music/releases/latest/download/inst
 
 ## 本分支新增功能
 
-- 预加载下一首歌曲；网络错误自动重试，避免加载失败后直接跳歌（[#67](https://github.com/egoist/mygo-cloudmusic/issues/67)）
 - 主题颜色与播放页、主页面背景图片自定义
 - 无边框桌面歌词：字体、颜色与行数设置，拖动调整位置和大小，悬停显示控制，锁定后仅解锁按钮接收鼠标操作
-- Windows 桌面歌词透明窗口，无系统边框和阴影
+- 桌面歌词透明窗口，无系统边框和阴影
 
 ## 上游功能
 
