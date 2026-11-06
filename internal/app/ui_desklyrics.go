@@ -568,7 +568,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 						fontSize = size * 1.04
 					}
 					outlineColor := lyricColor(s.LyricOutlineColor, ui.Hex("#16161a"))
-					outlineWidth := float32(s.LyricOutlineWidth)
+					// Clamp outline width to prevent layout issues from corrupted settings
+					outlineWidth := float32(max(0, min(2.5, s.LyricOutlineWidth)))
 					outlinedText(c, l.Text, fontSize, weight, family, tint, outlineColor, outlineWidth)
 					if s.LyricTrans && l.Translation != "" {
 						outlinedText(c, l.Translation, size*0.62, 500, transFamily, trans, outlineColor, outlineWidth*0.62)
