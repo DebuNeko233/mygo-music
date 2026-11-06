@@ -333,19 +333,26 @@ func (d *download) release() {
 	if d.users--; d.users > 0 {
 		return
 	}
+	// Check before closing: the file may have been replaced by a new
+	// download at the same path, in which case we must not delete it.
+	var shouldDrop bool
+	if d.drop != "" && d.file != nil {
+		if opened, err := d.file.Stat(); err == nil {
+			if current, statErr := os.Stat(d.drop); statErr == nil && os.SameFile(opened, current) {
+				shouldDrop = true
+			}
+		}
+	}
 	if d.file != nil {
 		d.file.Close()
 	}
 	if d.part != "" {
 		os.Remove(d.part)
 	}
-	if d.drop != "" {
-		// Marked by a discard: it goes now that no handle holds it, and
-		// stays if one still does, for the cache to drop when it is over
-		// its limit.
+	if shouldDrop {
 		os.Remove(d.drop)
-		d.drop = ""
 	}
+	d.drop = ""
 	d.file, d.data, d.n, d.part = nil, nil, 0, ""
 	if d.onRelease != nil {
 		d.onRelease()
@@ -366,16 +373,24 @@ func (d *download) halt() {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	var shouldDrop bool
+	if d.drop != "" && d.file != nil {
+		if opened, err := d.file.Stat(); err == nil {
+			if current, statErr := os.Stat(d.drop); statErr == nil && os.SameFile(opened, current) {
+				shouldDrop = true
+			}
+		}
+	}
 	if d.file != nil {
 		d.file.Close()
 	}
 	if d.part != "" {
 		os.Remove(d.part)
 	}
-	if d.drop != "" {
+	if shouldDrop {
 		os.Remove(d.drop)
-		d.drop = ""
 	}
+	d.drop = ""
 	d.file, d.data, d.n, d.part = nil, nil, 0, ""
 }
 
