@@ -66,6 +66,8 @@ type captionState struct {
 type modelState struct {
 	checked, installed bool
 	downloading        bool
+	deleting           bool // deletion in progress
+	gen                int  // generation to discard stale operations
 	done, total        int64
 	err                string
 	cancel             context.CancelFunc
@@ -189,13 +191,17 @@ func (a *app) cancelModelDownload() {
 // deleteModel stops the transcription, lets the model go and removes it.
 func (a *app) deleteModel() {
 	m := &a.captions.model
-	if !m.installed {
+	if !m.installed || m.deleting {
 		return
 	}
 	a.stopCaptions()
 	m.installed = false
+	m.deleting = true
+	m.gen++
+	gen := m.gen
 	dir, err := modelDir()
 	if err != nil {
+		m.deleting = false
 		return
 	}
 	go func() {
@@ -204,8 +210,20 @@ func (a *app) deleteModel() {
 			recognizer.t.Close()
 			recognizer.t = nil
 		}
-		removeModel(dir)
+		err := removeModel(dir)
 		recognizer.Unlock()
+		a.post(func() {
+			m.deleting = false
+			if gen != m.gen {
+				return // A new operation started
+			}
+			if err != nil {
+				m.err = "删除模型失败：" + err.Error()
+				m.installed = true // Revert on failure
+			} else {
+				m.checked = false // Force re-check on next use
+			}
+		})
 	}()
 }
 
