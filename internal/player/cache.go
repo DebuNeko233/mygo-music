@@ -260,6 +260,23 @@ func (c *Cache) songs() []cachedSong {
 
 func (c *Cache) remove(path string) {
 	os.Remove(path)
+	// For aside files (key-nanos.ext), the metadata is stored in key.json
+	// We need to find the base key and remove its metadata
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	// Check if this is an aside file (contains a timestamp suffix)
+	if idx := strings.LastIndex(name, "-"); idx > 0 {
+		// Extract the base key (everything before the last dash)
+		baseKey := name[:idx]
+		// Check if the remainder is a timestamp (numeric)
+		if _, err := fmt.Sscanf(name[idx+1:], "%d", new(int64)); err == nil {
+			// This is an aside file, remove the base key's metadata
+			os.Remove(filepath.Join(filepath.Dir(path), baseKey+".json"))
+			return
+		}
+	}
+	// Normal file, remove its own metadata
 	os.Remove(strings.TrimSuffix(path, filepath.Ext(path)) + ".json")
 }
 
