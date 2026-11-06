@@ -39,7 +39,7 @@ func (a *app) boot() {
 			// The one request that says who is listening is asked again:
 			// lost to a slow or failing network, it left the listener
 			// signed out until they signed in again.
-			p, err := a.account(accountTries, accountWait)
+			p, err := account(accountTries, accountWait)
 			switch {
 			case err != nil:
 				// The session itself may be fine: keep it, and say so.
@@ -70,7 +70,7 @@ const (
 
 // account asks NetEase whose session this is, tries times at most, waiting
 // longer before each try after the first.
-func (a *app) account(tries int, wait time.Duration) (*netease.Profile, error) {
+func account(tries int, wait time.Duration) (*netease.Profile, error) {
 	var (
 		prof *netease.Profile
 		err  error

@@ -157,6 +157,9 @@ type app struct {
 	sessionDue   bool   // a save of the session is due
 
 	// kept is what post took before the window was made, run once it is.
+	// Only post and flushKept touch it: post is called from background
+	// goroutines, but they all block on the window being made, and
+	// flushKept runs on the main thread right after NewWindow returns.
 	kept []func()
 }
 

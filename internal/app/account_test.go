@@ -30,8 +30,7 @@ func TestAccountIsAskedAgainWhenItsRequestFails(t *testing.T) {
 		}
 		return want, nil
 	}
-	a := newTestApp()
-	got, err := a.account(accountTries, time.Millisecond)
+	got, err := account(accountTries, time.Millisecond)
 	if err != nil || got != want {
 		t.Fatalf("the last of %d tries signed in as %v: %v", asked, got, err)
 	}
@@ -41,7 +40,7 @@ func TestAccountIsAskedAgainWhenItsRequestFails(t *testing.T) {
 	// A request that fails every time says so, so that the session it was
 	// about is kept rather than taken for an expired one.
 	accountAsk = func() (*netease.Profile, error) { return nil, errors.New("the network is down") }
-	if _, err := a.account(accountTries, time.Millisecond); err == nil {
+	if _, err := account(accountTries, time.Millisecond); err == nil {
 		t.Fatal("a request that failed every time reported no error")
 	}
 }
