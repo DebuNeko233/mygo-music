@@ -811,6 +811,9 @@ func (p *Player) cutOff() {
 		p.ended()
 		return
 	}
+	err := p.stream.cut()
+	dl, _ := p.stream.source()
+	dl.discard()
 	if p.tries < loadTries {
 		p.retry(p.at, 0, p.Position())
 		return
@@ -818,6 +821,10 @@ func (p *Player) cutOff() {
 	// It cannot be had: stop where it stopped, for the listener to play
 	// again.
 	p.err = "播放中断，请重试"
+	var decoded *decodeError
+	if errors.As(err, &decoded) {
+		p.err = "音频解码失败，请重试或切换音质"
+	}
 	p.playing = false
 	p.pending = p.Position()
 	p.stop()
@@ -967,6 +974,7 @@ func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker) (*
 	}
 	s, err := openStream(dl, t.Duration)
 	if err != nil {
+		dl.discard()
 		dl.Close()
 		return nil, nil, err
 	}

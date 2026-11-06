@@ -10,7 +10,9 @@ import (
 	"math/cmplx"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,6 +62,9 @@ type download struct {
 	// onRelease takes the song out of its cache, once nothing reads or
 	// writes it any more.
 	onRelease func()
+	// drop is where the song is kept and is to go: what a discard marks,
+	// since Windows removes no file a reader still holds open.
+	drop string
 }
 
 // startDownload fetches url, of size bytes if known, into part, a file
@@ -167,10 +172,15 @@ func (d *download) run(ctx context.Context, from int64, run int, gap time.Durati
 			d.write(buf[:n])
 		}
 		if err == io.EOF {
-			// Whole if as long as promised: the cache's.
-			if d.part != "" {
-				d.hand(run)
+			// A range's clean EOF can still stop short of the song promised by the API.
+			d.mu.Lock()
+			short := d.runs == run && d.size > 0 && d.base+d.n < d.size
+			d.mu.Unlock()
+			if short {
+				finish(io.ErrUnexpectedEOF)
+				return
 			}
+			d.hand(run)
 			finish(nil)
 			return
 		}
@@ -220,7 +230,7 @@ func (d *download) toMemory() {
 func (d *download) hand(run int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.runs != run || d.base != 0 || (d.size > 0 && d.n != d.size) {
+	if d.runs != run || d.base != 0 || d.file == nil || d.part == "" || d.keep == nil || (d.size > 0 && d.n != d.size) {
 		return
 	}
 	d.file.Close()
@@ -234,6 +244,26 @@ func (d *download) hand(run int) {
 	if ok {
 		d.part = ""
 	}
+}
+
+// discard prevents a failed stream from being kept or served from the cache
+// again: its metadata goes at once, and the song itself as soon as nothing
+// reads it, which is when Windows lets it go.
+func (d *download) discard() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.keep = nil
+	if d.file == nil || d.part != "" {
+		return
+	}
+	path := d.file.Name()
+	opened, err := d.file.Stat()
+	current, statErr := os.Stat(path)
+	if err != nil || statErr != nil || !os.SameFile(opened, current) {
+		return // Another download has already replaced this file.
+	}
+	os.Remove(strings.TrimSuffix(path, filepath.Ext(path)) + ".json")
+	d.drop = path
 }
 
 // seekTo asks for the song again from off, unless off is among the bytes in
@@ -309,6 +339,13 @@ func (d *download) release() {
 	if d.part != "" {
 		os.Remove(d.part)
 	}
+	if d.drop != "" {
+		// Marked by a discard: it goes now that no handle holds it, and
+		// stays if one still does, for the cache to drop when it is over
+		// its limit.
+		os.Remove(d.drop)
+		d.drop = ""
+	}
 	d.file, d.data, d.n, d.part = nil, nil, 0, ""
 	if d.onRelease != nil {
 		d.onRelease()
@@ -334,6 +371,10 @@ func (d *download) halt() {
 	}
 	if d.part != "" {
 		os.Remove(d.part)
+	}
+	if d.drop != "" {
+		os.Remove(d.drop)
+		d.drop = ""
 	}
 	d.file, d.data, d.n, d.part = nil, nil, 0, ""
 }
@@ -499,6 +540,7 @@ type mp3Stream struct {
 	spec    *spectrum
 	drop    func() // lets the download go, as the stream closes
 	closeMu sync.Once
+	failure decoderFailure
 }
 
 func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
@@ -540,9 +582,14 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 		s.skip -= got
 		if err != nil {
 			s.skip = 0
+			s.failure.record(err)
 		}
 	}
 	got, err := io.ReadFull(s.dec, b)
+	// UnexpectedEOF from ReadFull is normal for a final partial PCM buffer.
+	if err != io.ErrUnexpectedEOF {
+		s.failure.record(err)
+	}
 	got -= got % 4
 	samples := got / 2
 	for i := range samples {
@@ -589,9 +636,11 @@ func (s *mp3Stream) SetPosition(frame int64) error {
 	}
 	dec, err := gomp3.NewDecoder(&downloadReader{d: s.dl, pos: off})
 	if err != nil {
+		s.failure.record(err)
 		return err
 	}
 	s.dec, s.pos = dec, frame
+	s.failure.clear()
 	// Drop what comes before frame: the preroll, or near the start, all
 	// of it from there.
 	s.skip = int(min(frame, preroll)) * 4
@@ -601,7 +650,7 @@ func (s *mp3Stream) SetPosition(frame int64) error {
 func (s *mp3Stream) source() (*download, *spectrum) { return s.dl, s.spec }
 
 // cut returns why the download was cut off, or nil: the song itself ended.
-func (s *mp3Stream) cut() error { return s.dl.Err() }
+func (s *mp3Stream) cut() error { return cmp.Or(s.dl.Err(), s.failure.load()) }
 
 func (s *mp3Stream) Close() error {
 	s.closeMu.Do(s.drop)

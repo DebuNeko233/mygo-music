@@ -456,7 +456,8 @@ func SongURL(id int64, level string) (*Stream, error) {
 		return nil, fmt.Errorf("netease: song url: code %d %s", res.Code, msg)
 	}
 	if len(res.Data) == 0 || res.Data[0].URL == "" {
-		return nil, ErrUnavailable
+		// A missing URL alone does not establish a restriction on the song.
+		return nil, errors.New("netease: no playback URL returned")
 	}
 	d := res.Data[0]
 	// A preview of a VIP song is no song.
