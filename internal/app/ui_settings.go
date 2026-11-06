@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"math"
 	"runtime"
 	"slices"
@@ -398,6 +399,16 @@ func (a *app) settingsView(c *ui.Context) {
 			font("lyric-font", "字体", "歌词文字所用的字体", &s.LyricFont)
 			colour("lyric-played", "已播放颜色", "正在播放的这一句的颜色", &s.LyricPlayed)
 			colour("lyric-idle", "未播放颜色", "未播放的句子的颜色", &s.LyricIdle)
+			row("描边厚度", "歌词文字描边的粗细（像素），0 为无描边", func() {
+				v := min(max(s.LyricOutlineWidth, 0), 2.5)
+				slider := ui.StepSlider(c.Key("lyric-outline-width"), &v, 0, 2.5, 0.1).Width(150).Label("调整描边厚度")
+				if slider.Changed() {
+					s.LyricOutlineWidth = v
+					a.changed()
+				}
+				ui.Text(c, fmt.Sprintf("%.1f", v)).FontSize(12).TextColor(p.muted)
+			})
+			colour("lyric-outline-color", "描边颜色", "歌词文字描边的颜色", &s.LyricOutlineColor)
 			row("翻译", "在歌词下方显示翻译", func() {
 				if ui.Switch(c.Key("lyric-trans"), &s.LyricTrans).Label("显示翻译").Changed() {
 					a.changed()

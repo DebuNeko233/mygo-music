@@ -19,17 +19,19 @@ var (
 // clearFrame leaves the transparent lyrics window no native decoration: a
 // tool window keeps Windows 11's rounded corners and DWM shadow even with
 // HasShadow false. A popup has no frame whose alpha could darken the desktop.
-// Call this before showing the window; it is not resizable by its old frame.
+// The window stays resizable: WS_THICKFRAME is kept so Windows handles the
+// resize, while WM_NCCALCSIZE (in MyGo) hides the frame visually.
 func clearFrame(win *mygo.Window) {
 	handle := win.NativeHandle()
-	win.SetResizable(false)
+	win.SetResizable(true)
 	const (
 		decorations = 0x00C00000 | 0x00080000 | 0x00040000 | 0x00020000 | 0x00010000
+		thickFrame  = 0x00040000 // WS_THICKFRAME: keep for native resize
 		popup       = 0x80000000
 		frameFlags  = 0x0037 // NOSIZE | NOMOVE | NOZORDER | NOACTIVATE | FRAMECHANGED
 	)
 	style, _, _ := getWindowLong.Call(handle, ^uintptr(15))
-	style = style&^decorations | popup
+	style = style&^(decorations&^thickFrame) | popup | thickFrame
 	setWindowLong.Call(handle, ^uintptr(15), style)
 	setWindowPos.Call(handle, 0, 0, 0, 0, 0, frameFlags)
 

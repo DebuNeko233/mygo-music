@@ -42,27 +42,29 @@ const lyricPoll = 60 * time.Millisecond
 // has no native resize edge without a thick frame, whose DWM shadow it draws.
 type lyricResize struct {
 	bounds        mygo.Rectangle
-	x, y          float32
+	x, y          float32 // screen coordinates at grab
 	left, top     bool
 	right, bottom bool
 }
 
 // moved resizes from the edges held, never smaller than the words allow.
+// x, y are the pointer's current screen coordinates.
 func (r *lyricResize) moved(x, y float32, minW, minH int) mygo.Rectangle {
 	b := r.bounds
+	dx, dy := int(x-r.x), int(y-r.y)
 	if r.right {
-		b.Width = max(minW, b.Width+int(x-r.x))
+		b.Width = max(minW, b.Width+dx)
 	}
 	if r.bottom {
-		b.Height = max(minH, b.Height+int(y-r.y))
+		b.Height = max(minH, b.Height+dy)
 	}
 	if r.left {
-		w := max(minW, b.Width-int(x-r.x))
+		w := max(minW, b.Width-dx)
 		b.X += b.Width - w
 		b.Width = w
 	}
 	if r.top {
-		h := max(minH, b.Height-int(y-r.y))
+		h := max(minH, b.Height-dy)
 		b.Y += b.Height - h
 		b.Height = h
 	}
@@ -225,7 +227,7 @@ func newDeskLyrics(a *app) *deskLyrics {
 		Transparent:   true,
 		DisableShadow: true,
 		SkipTaskbar:   true,
-		DisableResize: true,
+		DisableResize: false, // Windows handles resize via WS_THICKFRAME
 		AlwaysOnTop:   true,
 		X:             x,
 		Y:             y,
@@ -399,6 +401,58 @@ func (d *deskLyrics) controls(c *ui.Context) {
 	button("off", "关闭", func() { a.toggleDeskLyrics() })
 }
 
+// outlinedText creates a text element with an outline by drawing multiple
+// offset copies of the text in the outline color behind the main text.
+// This is a common technique when true text stroke is not available.
+func outlinedText(c *ui.Context, text string, size float32, weight int, family string, color, outlineColor ui.Color, outlineWidth float32) {
+	if outlineWidth <= 0 {
+		// No outline: just draw a simple text element.
+		e := ui.Text(c, text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(color).PassThrough()
+		if family != "" {
+			e.Font(family)
+		}
+		return
+	}
+
+	// Measure the text to size the container.
+	w, h := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight})
+	// Add padding for the outline on all sides.
+	w += outlineWidth * 2
+	h += outlineWidth * 2
+
+	// Draw outline in 8 directions (N, NE, E, SE, S, SW, W, NW).
+	offsets := []struct{ dx, dy float32 }{
+		{0, -outlineWidth},                        // N
+		{outlineWidth * 0.7, -outlineWidth * 0.7}, // NE
+		{outlineWidth, 0},                         // E
+		{outlineWidth * 0.7, outlineWidth * 0.7},  // SE
+		{0, outlineWidth},                         // S
+		{-outlineWidth * 0.7, outlineWidth * 0.7}, // SW
+		{-outlineWidth, 0},                        // W
+		{-outlineWidth * 0.7, -outlineWidth * 0.7}, // NW
+	}
+
+	// Create a container with explicit size for absolute positioning.
+	ui.Box(c).Size(w, h).Children(func() {
+		// Draw outline layers first, centered with offset.
+		for _, off := range offsets {
+			ui.Box(c).Absolute().Left(outlineWidth+off.dx).Top(outlineWidth + off.dy).Children(func() {
+				e := ui.Text(c, text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(outlineColor).PassThrough()
+				if family != "" {
+					e.Font(family)
+				}
+			})
+		}
+		// Draw the main text on top, centered.
+		ui.Box(c).Absolute().Left(outlineWidth).Top(outlineWidth).Children(func() {
+			e := ui.Text(c, text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(color).PassThrough()
+			if family != "" {
+				e.Font(family)
+			}
+		})
+	})
+}
+
 func (d *deskLyrics) view(c *ui.Context) {
 	a := d.a
 	s := &a.settings
@@ -408,6 +462,13 @@ func (d *deskLyrics) view(c *ui.Context) {
 	// Over an unlocked window, a light-dark plate shows where it ends. A locked window watches the
 	// one part that takes a pointer, its padlock, and lets the rest through.
 	over := c.Root().Hovered()
+	if !s.LyricLocked && d.win != nil {
+		// Include the window's edges (non-client area) where Windows shows
+		// the resize cursor: the grey background should appear there too.
+		pt := mygo.Screen.CursorScreenPoint()
+		b := d.win.Bounds()
+		over = over || (pt.X >= b.X && pt.X < b.X+b.Width && pt.Y >= b.Y && pt.Y < b.Y+b.Height)
+	}
 	if s.LyricLocked {
 		over = d.hot
 		if d.win != nil && s.LyricWindow {
@@ -473,9 +534,9 @@ func (d *deskLyrics) view(c *ui.Context) {
 				d.setLocked(false)
 			}
 		} else {
-			d.resizeEdges(c)
-			// Unlocked, anything of the window drags it: the lines take no
-			// pointer themselves, so the window does.
+			// Windows handles resize natively via WS_THICKFRAME; no manual
+			// edge tracking needed. Unlocked, anything of the window drags it:
+			// the lines take no pointer themselves, so the window does.
 			c.Root().DragWindow()
 			ui.Row(c).Absolute().Top(8).WidthPercent(100).Justify(ui.Center).Gap(10).Children(func() { d.controls(c) })
 		}
@@ -497,18 +558,15 @@ func (d *deskLyrics) view(c *ui.Context) {
 				}
 				line := ui.Column(c).Gap(4).AlignItems(ui.Center).PassThrough()
 				line.Children(func() {
-					text := ui.Text(c, l.Text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(tint).PassThrough()
+					fontSize := size
 					if on {
-						text.FontSize(size * 1.04)
+						fontSize = size * 1.04
 					}
-					if family != "" {
-						text.Font(family)
-					}
+					outlineColor := lyricColor(s.LyricOutlineColor, ui.Hex("#16161a"))
+					outlineWidth := float32(s.LyricOutlineWidth)
+					outlinedText(c, l.Text, fontSize, weight, family, tint, outlineColor, outlineWidth)
 					if s.LyricTrans && l.Translation != "" {
-						under := ui.Text(c, l.Translation).FontSize(size * 0.62).FontWeight(500).MaxLines(1).TextColor(trans).PassThrough()
-						if transFamily != "" {
-							under.Font(transFamily)
-						}
+						outlinedText(c, l.Translation, size*0.62, 500, transFamily, trans, outlineColor, outlineWidth*0.62)
 					}
 				})
 			}
@@ -572,7 +630,8 @@ func (d *deskLyrics) resizeEdges(c *ui.Context) {
 					return false
 				}
 				b := d.win.Bounds()
-				d.resize = &lyricResize{bounds: b, x: ev.X, y: ev.Y,
+				pt := mygo.Screen.CursorScreenPoint()
+				d.resize = &lyricResize{bounds: b, x: float32(pt.X), y: float32(pt.Y),
 					left: side.left, top: side.top, right: side.right, bottom: side.bottom}
 				return true
 			case ui.InputPointerMove:
@@ -581,9 +640,8 @@ func (d *deskLyrics) resizeEdges(c *ui.Context) {
 				}
 				r := d.resize
 				w, h := lyricWindowSize(d.a.settings.LyricSize, d.a.settings.LyricLines)
-				b := d.win.Bounds()
-				d.win.SetBounds(r.moved(float32(b.X)+ev.X, float32(b.Y)+ev.Y, int(w), int(h)))
-				clearFrame(d.win)
+				pt := mygo.Screen.CursorScreenPoint()
+				d.win.SetBounds(r.moved(float32(pt.X), float32(pt.Y), int(w), int(h)))
 				return true
 			case ui.InputPointerUp:
 				d.resize = nil

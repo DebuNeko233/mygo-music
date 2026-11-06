@@ -99,6 +99,10 @@ type settings struct {
 	LyricTrans      bool   `json:"lyricTrans,omitempty"`
 	LyricTransFont  string `json:"lyricTransFont,omitempty"`
 	LyricTransColor string `json:"lyricTransColor,omitempty"`
+	// LyricOutlineWidth is the text outline thickness in pixels, 0 for none.
+	// LyricOutlineColor is the outline colour, by the names lyricColors gives.
+	LyricOutlineWidth float64 `json:"lyricOutlineWidth,omitempty"`
+	LyricOutlineColor string  `json:"lyricOutlineColor,omitempty"`
 	// LyricX and LyricY are where the lyrics window was left, in screen
 	// points; 0 and 0 for never placed. LyricWidth and LyricHeight are how
 	// large it was left, which is how large it opens again, and at least as
@@ -119,6 +123,7 @@ func defaultSettings() settings {
 		AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, BackdropOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
 		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
+		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
 	}
 }
 
