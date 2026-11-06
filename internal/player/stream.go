@@ -465,7 +465,17 @@ func (w *window) at(off int64, n int) []byte {
 	if off < w.off || off+int64(n) > w.off+int64(len(w.b)) {
 		w.off, w.b = off, w.dl.peek(off, max(n, 32<<10))
 	}
-	return w.b[off-w.off : min(int64(len(w.b)), off-w.off+int64(n))]
+	// Guard against out-of-bounds access when the download has not reached
+	// the requested offset yet (e.g., during rapid song switching).
+	start := off - w.off
+	if start < 0 || start >= int64(len(w.b)) {
+		return nil
+	}
+	end := min(int64(len(w.b)), start+int64(n))
+	if end <= start {
+		return nil
+	}
+	return w.b[start:end]
 }
 
 // A downloadReader reads a download from an offset, waiting for its bytes.

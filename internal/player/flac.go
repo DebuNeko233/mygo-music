@@ -203,7 +203,7 @@ func (s *flacStream) frameAfter(off, end int64) (int64, int64, bool) {
 			return 0, 0, false
 		}
 		b := w.at(off, 2)
-		if b[0] != 0xff || b[1]&0xfe != 0xf8 {
+		if len(b) < 2 || b[0] != 0xff || b[1]&0xfe != 0xf8 {
 			continue
 		}
 		if at, ok := s.frameAt(off); ok {

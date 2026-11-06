@@ -216,7 +216,11 @@ func lyricWindowPlace(x, y int, w, h float32, area mygo.Rectangle) (int, int) {
 func newDeskLyrics(a *app) *deskLyrics {
 	d := &deskLyrics{a: a}
 	s := &a.settings
-	w, h := lyricWindowSize(s.LyricSize, s.LyricLines)
+	// Use saved size if available, otherwise calculate from settings
+	w, h := float32(s.LyricWidth), float32(s.LyricHeight)
+	if w == 0 || h == 0 {
+		w, h = lyricWindowSize(s.LyricSize, s.LyricLines)
+	}
 	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
 	d.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:  mygo.App.Name() + "桌面歌词",
@@ -279,13 +283,14 @@ func (d *deskLyrics) apply() {
 	// Only opening places and sizes the window. Playing, dragging and resizing
 	// must not put it back at a position or size remembered earlier.
 	if !s.LyricLocked && (!d.shown || reshaped) {
-		w, h := needW, needH
-		if !reshaped && d.shown {
-			w = max(w, float32(s.LyricWidth))
-			h = max(h, float32(s.LyricHeight))
+		// Use saved size if available, otherwise use calculated default
+		w, h := float32(s.LyricWidth), float32(s.LyricHeight)
+		if w == 0 || h == 0 {
+			w, h = needW, needH
 		}
 		x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
-		if !d.shown {
+		// Use saved position if available, otherwise center on first open
+		if s.LyricX == 0 && s.LyricY == 0 {
 			x, y = lyricWindowPlace(0, 0, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
 		}
 		d.win.SetMinimumSize(int(needW), int(needH))
