@@ -155,21 +155,40 @@ type app struct {
 	restored     bool   // playback picked up where it was left
 	savedSession string // the session as last kept
 	sessionDue   bool   // a save of the session is due
+
+	// kept is what post took before the window was made, run once it is.
+	kept []func()
 }
 
-// post runs fn on the main thread and redraws both windows. Without a
-// window, as in tests, it drops fn, unless testPost takes it.
+// post runs fn on the main thread and redraws both windows. Before the
+// window is made there is none to run it in: what the window asks for while
+// it is made, a backdrop being read, is kept until there is one, so that the
+// read still lands. Tests have no window at all, so testPost takes it.
 func (a *app) post(fn func()) {
 	if a.win == nil {
 		if testPost != nil {
 			testPost(fn)
+			return
 		}
+		a.kept = append(a.kept, fn)
 		return
 	}
 	a.win.Update(func() {
 		fn()
 		a.redraw()
 	})
+}
+
+// flushKept runs what post kept while the window was being made.
+func (a *app) flushKept() {
+	kept := a.kept
+	a.kept = nil
+	for _, fn := range kept {
+		fn()
+	}
+	if len(kept) > 0 {
+		a.redraw()
+	}
 }
 
 // testPost, when set, takes what post hands the main thread: tests run with
@@ -256,6 +275,9 @@ func Run() error {
 			BackgroundColor:      "light-dark(#ffffff, #141416)",
 			Content:              ui.View(a.view),
 		})
+		// The view the window laid out as it was made asked for pictures
+		// before there was a window to read them back into.
+		a.flushKept()
 		a.setMenu()
 		a.boot()
 		// The notch player is macOS's, over its menu bar: elsewhere it would

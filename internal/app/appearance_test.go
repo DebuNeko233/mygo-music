@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -183,6 +184,34 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 	tt.Frame()
 	if got := redPixels(tt.Image()); got > w*h/10 {
 		t.Errorf("the picture covers %d of %d pixels at the faintest", got, w*h)
+	}
+}
+
+// The home page's picture shows after a restart: the page asks for it while
+// the window is being made, before there is a window to read it back into,
+// and the read was dropped there and never asked for again.
+func TestHomeBackdropLandsAfterTheWindowIsMade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "red.png")
+	writePicture(t, path, 8, 8, color.RGBA{R: 255, A: 255})
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settings.BackdropHome = []string{path}
+	a.settings.BackdropOpacity = 1
+	const w, h = 900, 600
+	tt := ui.NewTester(a.view, w, h)
+	// The window is still being made here: the page asks for the picture and
+	// it is read off the main thread.
+	tt.Frame()
+	for waited := time.Duration(0); len(a.kept) == 0; waited += 2 * time.Millisecond {
+		if waited > 5*time.Second {
+			t.Fatal("the picture was read and what it landed in was dropped")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	a.flushKept()
+	tt.Frame()
+	if got := redPixels(tt.Image()); got < w*h/2 {
+		t.Fatalf("the picture covers %d of %d pixels after a restart", got, w*h)
 	}
 }
 
