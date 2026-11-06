@@ -5,8 +5,8 @@
   "version": "0.2.1",
   "out": "build",
   "updates": {
-    "publicKey": "6o93JWWtkqPDgjiXf2cOI+hhNayRtuecWHzo1f8YN0I=",
-    "github": "zhangnjsd/mygo-music"
+    "publicKey": "I4d3vfue5JdMTLh3Gar9BkwxhjhcvhOuEVTJ3lgJUA0=",
+    "github": "owner/name"
   },
   "macos": {
     "icon": "icon/AppIcon.icon",
