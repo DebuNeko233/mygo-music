@@ -175,17 +175,21 @@ func moveDir(old, dir string) {
 // loadSettings reads the settings, or returns the defaults.
 func loadSettings() settings {
 	s := defaultSettings()
-	if path, err := settingsPath(); err == nil {
-		if b, err := os.ReadFile(path); err == nil {
-			if err := json.Unmarshal(b, &s); err != nil {
-				// On parse error, return defaults to avoid partial state
-				return defaultSettings()
-			}
-			// Clamp values to valid ranges
-			s.clamp()
-		}
-		s.path = path
+	path, err := settingsPath()
+	if err != nil {
+		return s
 	}
+	s.path = path
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return s
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		// On parse error, return defaults with path set for saving
+		return s
+	}
+	// Clamp values to valid ranges
+	s.clamp()
 	return s
 }
 
