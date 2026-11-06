@@ -177,11 +177,33 @@ func loadSettings() settings {
 	s := defaultSettings()
 	if path, err := settingsPath(); err == nil {
 		if b, err := os.ReadFile(path); err == nil {
-			json.Unmarshal(b, &s)
+			if err := json.Unmarshal(b, &s); err != nil {
+				// On parse error, return defaults to avoid partial state
+				return defaultSettings()
+			}
+			// Clamp values to valid ranges
+			s.clamp()
 		}
 		s.path = path
 	}
 	return s
+}
+
+// clamp ensures all settings values are within valid ranges.
+func (s *settings) clamp() {
+	s.Volume = max(0, min(1, s.Volume))
+	s.CacheMB = max(0, s.CacheMB)
+	s.BackdropOpacity = max(0, min(1, s.BackdropOpacity))
+	s.LyricSize = max(12, min(72, s.LyricSize))
+	s.LyricWeight = max(100, min(900, s.LyricWeight))
+	s.LyricOutlineWidth = max(0, min(2.5, s.LyricOutlineWidth))
+	s.LyricLines = max(1, min(4, s.LyricLines))
+	if s.LyricWidth < 0 {
+		s.LyricWidth = 0
+	}
+	if s.LyricHeight < 0 {
+		s.LyricHeight = 0
+	}
 }
 
 // save keeps the settings where they were loaded from; defaults that were
