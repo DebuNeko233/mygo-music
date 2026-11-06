@@ -64,7 +64,7 @@ the `internal/speech/natives.go` it writes, and upload them as a prerelease,
 which never becomes the latest that updates look for:
 
 ```bash
-go run ./scripts/sherpa
+go run ./scripts/sherpa -sign -
 gh release create sherpa-onnx-2.0.1 --repo zhangnjsd/mygo-music \
   --prerelease --latest=false build/sherpa/*
 ```
@@ -76,6 +76,16 @@ libraries out, and an app there has no captions until they are packed on a Mac.
 go run ./scripts/sherpa -platforms windows-amd64,windows-arm64,linux-amd64,linux-arm64
 ```
 
-The macOS libraries are signed with a Developer ID before they are packed, which
-`scripts/sherpa -sign` does on a Mac: the app's hardened runtime loads no other.
-Packed anywhere else they are unsigned, and macOS refuses them.
+On a Mac, `-sign -` uses ad hoc signing, without an Apple Developer certificate,
+for an app that is also ad hoc signed. If the app uses Developer ID signing
+with hardened runtime library validation, pass its Developer ID instead so
+that the libraries and app belong to the same team.
+
+Keep the default platforms when regenerating the manifest to retain Windows
+and Linux too. To add macOS to an existing library release, upload its four
+new library assets before shipping the manifest that refers to them:
+
+```bash
+gh release upload sherpa-onnx-2.0.1 --repo zhangnjsd/mygo-music \
+  build/sherpa/darwin-*.gz
+```

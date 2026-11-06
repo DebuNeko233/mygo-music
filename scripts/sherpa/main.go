@@ -1,17 +1,17 @@
 // Command sherpa packs sherpa-onnx's libraries, which write podcasts'
 // captions on the device, for the app to download with the model: each
-// platform's, signed for macOS with the app's Developer ID so that its
-// hardened runtime loads them, and Silero's voice activity detector, which
+// platform's, signed on macOS, and Silero's voice activity detector, which
 // every platform shares. It writes them, gzipped, into a directory to
 // upload as the assets of the release internal/speech downloads them from,
 // and internal/speech/natives.go, which names them with their digests:
 //
+//	go run ./scripts/sherpa -sign - -out build/sherpa
 //	go run ./scripts/sherpa -sign "Developer ID Application: …" -out build/sherpa
 //	go run ./scripts/sherpa -platforms windows-amd64,linux-amd64 -out build/sherpa
 //	gh release create sherpa-onnx-2.0.1 --prerelease --latest=false build/sherpa/*
 //
-// Packing macOS needs a Mac, which signs with the app's Developer ID: without
-// one, pack the platforms the release ships.
+// Packing macOS needs a Mac. Use -sign - for an ad hoc signed app, or the
+// app's Developer ID when its hardened runtime enables library validation.
 //
 // The upstream archives are checked against their digests, and kept in the
 // user's cache between runs.
@@ -77,7 +77,7 @@ const (
 )
 
 func main() {
-	sign := flag.String("sign", "", "the Developer ID that signs the macOS libraries")
+	sign := flag.String("sign", "", "the macOS signing identity ('-' for ad hoc)")
 	out := flag.String("out", "build/sherpa", "where to write the files to upload")
 	names := flag.String("platforms", all(), "the platforms to pack, of "+all())
 	flag.Parse()
@@ -87,7 +87,7 @@ func main() {
 		os.Exit(2)
 	}
 	if *sign == "" && slices.ContainsFunc(platforms, func(p string) bool { return strings.HasPrefix(p, "darwin-") }) {
-		fmt.Fprintln(os.Stderr, "sherpa: -sign is required for the macOS libraries: the app's hardened runtime loads no library signed by another team")
+		fmt.Fprintln(os.Stderr, "sherpa: -sign is required for macOS libraries: use '-' for an ad hoc app, or the app's Developer ID for library validation")
 		os.Exit(2)
 	}
 	if err := run(*sign, *out, platforms); err != nil {
