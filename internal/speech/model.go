@@ -51,8 +51,8 @@ var modelSources = []func(f modelFile) string{
 }
 
 // A nativeFile is a library of sherpa-onnx, or the VAD, as the app's
-// release has it gzipped (scripts/sherpa): signed, on macOS, by the app's
-// team, whose hardened runtime loads no other.
+// release has it gzipped (scripts/sherpa). On macOS, library validation,
+// when enabled, requires the libraries to be signed by the app's team.
 type nativeFile struct {
 	name, asset      string
 	size, gzSize     int64
