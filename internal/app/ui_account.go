@@ -23,25 +23,67 @@ type loginState struct {
 	finished bool
 }
 
+// accountAsk asks NetEase whose session this is: tests set it.
+var accountAsk = netease.Account
+
 // boot signs in with the session in the keychain, if any, then loads the
 // home page for whoever is listening.
 func (a *app) boot() {
 	a.homeLoading = true
 	go func() {
-		var prof *netease.Profile
+		var (
+			prof *netease.Profile
+			lost bool
+		)
 		if netease.RestoreSession() {
-			p, err := netease.Account()
+			// The one request that says who is listening is asked again:
+			// lost to a slow or failing network, it left the listener
+			// signed out until they signed in again.
+			p, err := a.account(accountTries, accountWait)
 			switch {
-			case err == nil && p == nil:
+			case err != nil:
+				// The session itself may be fine: keep it, and say so.
+				lost = true
+			case p == nil:
 				netease.ClearSession() // expired
-			case err == nil:
+			default:
 				prof = p
+				// NetEase may have renewed the cookie since it was kept.
+				netease.SaveSession()
 			}
 		}
 		a.post(func() {
 			a.signedIn(prof)
+			if lost {
+				a.toast = "登录状态未能确认，请检查网络后重启应用"
+			}
 		})
 	}()
+}
+
+// accountTries is how often the account is asked for, and accountWait how
+// long the second try waits, and the third twice that.
+const (
+	accountTries = 3
+	accountWait  = time.Second
+)
+
+// account asks NetEase whose session this is, tries times at most, waiting
+// longer before each try after the first.
+func (a *app) account(tries int, wait time.Duration) (*netease.Profile, error) {
+	var (
+		prof *netease.Profile
+		err  error
+	)
+	for try := 0; try < tries; try++ {
+		if try > 0 {
+			time.Sleep(time.Duration(try) * wait)
+		}
+		if prof, err = accountAsk(); err == nil {
+			return prof, nil
+		}
+	}
+	return nil, err
 }
 
 // signedIn shows what is personal to prof, or to nobody.
