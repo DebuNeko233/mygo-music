@@ -3,6 +3,7 @@ package player
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"errors"
 	"io"
 	"math"
@@ -18,16 +19,17 @@ import (
 // before, so a seek lands on the very sample: decoding from the frame that
 // holds it, found by its header near where the bytes say it is.
 type flacStream struct {
-	dl    *download
-	info  *meta.StreamInfo
-	start int64 // the first frame's byte, after the metadata
-	r     *bufio.Reader
-	pos   int64     // the frame Read returns next
-	skip  int64     // frames to drop before it, after a seek
-	pend  []float32 // decoded, and not yet read: stereo
-	spec  *spectrum
-	drop  func() // lets the download go, as the stream closes
-	once  sync.Once
+	dl      *download
+	info    *meta.StreamInfo
+	start   int64 // the first frame's byte, after the metadata
+	r       *bufio.Reader
+	pos     int64     // the frame Read returns next
+	skip    int64     // frames to drop before it, after a seek
+	pend    []float32 // decoded, and not yet read: stereo
+	spec    *spectrum
+	drop    func() // lets the download go, as the stream closes
+	once    sync.Once
+	failure decoderFailure
 }
 
 func openFLACStream(dl *download) (*flacStream, error) {
@@ -106,14 +108,20 @@ func (s *flacStream) Read(dst []float32) (int, error) {
 	for len(s.pend) == 0 {
 		f, err := s.parse(s.r)
 		if err != nil {
-			if err == io.ErrUnexpectedEOF {
-				// A partial frame is a cut download, not the song's end.
-				if dlErr := s.dl.Err(); dlErr != nil {
-					err = dlErr
-				} else {
+			// An end before the samples the stream says it has is a
+			// download cut short, not the song's end; so is the error the
+			// download itself reports, which says more than an EOF does.
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				if s.Len() > 0 && s.pos < s.Len() {
+					err = io.ErrUnexpectedEOF
+				} else if errors.Is(err, io.ErrUnexpectedEOF) {
 					err = io.EOF
 				}
 			}
+			if dlErr := s.dl.Err(); dlErr != nil {
+				err = dlErr
+			}
+			s.failure.record(err)
 			return 0, err
 		}
 		s.decode(f)
@@ -181,6 +189,7 @@ func (s *flacStream) SetPosition(target int64) error {
 	}
 	s.r = bufio.NewReaderSize(&downloadReader{d: s.dl, pos: loOff}, 64<<10)
 	s.pos, s.skip, s.pend = target, target-lo, s.pend[:0]
+	s.failure.clear()
 	return nil
 }
 
@@ -228,4 +237,4 @@ func (s *flacStream) Close() error {
 func (s *flacStream) source() (*download, *spectrum) { return s.dl, s.spec }
 
 // cut returns why the download was cut off, or nil: the song itself ended.
-func (s *flacStream) cut() error { return s.dl.Err() }
+func (s *flacStream) cut() error { return cmp.Or(s.dl.Err(), s.failure.load()) }
