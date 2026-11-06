@@ -324,7 +324,7 @@ func (a *app) settingsView(c *ui.Context) {
 					if !slices.Contains(names, now) {
 						names = append([]string{names[0], now}, names[1:]...)
 					}
-					if ui.Combobox(c.Key(key), &now, names).Label(label).Width(150).Changed() {
+					if ui.Combobox(c.Key(key), &now, names).Label("选择" + label).Width(150).Changed() {
 						*chosen = ""
 						if now != lyricFontSystem {
 							*chosen = now
