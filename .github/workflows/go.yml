@@ -1,8 +1,8 @@
-# Every push and pull request packages the app for Windows and Linux, with
+# Every push and pull request packages the app for macOS, Windows and Linux, with
 # its installers, the way a release does: a change that breaks the build or
 # the packaging fails here instead of on a tag, and the installers of a run
 # can be downloaded from its artifacts. test.yml compiles the Go packages
-# and runs the tests; release.yml signs what this builds and uploads it.
+# and runs the tests; release.yml signs the updates and uploads the packages.
 name: Build
 
 on:
@@ -21,9 +21,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # The Windows installers are made with NSIS. macOS is left out: its
-      # app takes a Developer ID and a notary profile that only a release
-      # has, so it is built on a tag.
+      # The Windows installers are made with NSIS.
       - name: Install NSIS, for the Windows installers
         run: sudo apt-get update && sudo apt-get install -y nsis
       # mygo build warns and signs no update archives without the updater
@@ -36,5 +34,23 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: packages
+          path: build/
+          retention-days: 7
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # Ad hoc signing needs no Apple certificate; the DMGs are not notarized.
+      - name: Build the packages
+        run: |
+          go tool mygo build \
+            -platform darwin/arm64,darwin/amd64 -sign - -skip-notarize
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-macos
           path: build/
           retention-days: 7

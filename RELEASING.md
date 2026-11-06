@@ -28,18 +28,25 @@ remote to sync with.
    install scripts, and `-upload` puts them in a draft release of the version's
    tag, with the changelog's section as its notes. `GH_TOKEN` is a token of this
    repository with `contents: write`. `MYGO_UPDATER_PRIVATE_KEY` is the key of
-   `mygo keygen`: without it the build warns and signs no update archives, and
-   installed apps then cannot update themselves.
+   `mygo keygen`, matching the public key in `mygo.json`; `-upload` requires it
+   to sign the automatic-update archives.
 
    ```bash
    GH_TOKEN=... go tool mygo build \
      -platform windows/amd64,windows/arm64,linux/amd64,linux/arm64 -upload
    ```
 
-   macOS needs a Mac, a Developer ID and the notary profile of `mygo.json`, so
-   this repository releases Windows and Linux. Pushing a tag instead builds it
-   in `.github/workflows/release.yml`, which covers macOS too and needs the same
-   secrets.
+   macOS needs a Mac to build, but no Apple Developer certificate to package
+   or publish. Build and Release use ad hoc signing and skip notarization:
+
+   ```bash
+   go tool mygo build -platform darwin/arm64,darwin/amd64 -sign - -skip-notarize
+   ```
+
+   These DMGs are not Developer ID signed or notarized, so macOS may ask the
+   user to allow the app in Privacy & Security. Pushing a tag builds all three
+   platforms in `.github/workflows/release.yml` and uploads them to the same
+   draft. It needs `MYGO_UPDATER_PRIVATE_KEY` for updates, not Apple credentials.
 
 5. Publish the draft, and mark it latest, so that `releases/latest/download/` of
    the install scripts points at it:
