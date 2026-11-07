@@ -409,10 +409,10 @@ func (d *deskLyrics) controls(c *ui.Context) {
 // outlinedText creates a text element with an outline by drawing multiple
 // offset copies of the text in the outline color behind the main text.
 // This is a common technique when true text stroke is not available.
-func outlinedText(c *ui.Context, text string, size float32, weight int, family string, color, outlineColor ui.Color, outlineWidth float32) {
+func outlinedText(c *ui.Context, text string, size float32, weight int, family string, color, outlineColor ui.Color, outlineWidth float32, lang string) {
 	if outlineWidth <= 0 {
 		// No outline: just draw a simple text element.
-		e := ui.Text(c, text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(color).PassThrough()
+		e := ui.Text(c, text).Lang(lang).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(color).PassThrough()
 		if family != "" {
 			e.Font(family)
 		}
@@ -420,20 +420,20 @@ func outlinedText(c *ui.Context, text string, size float32, weight int, family s
 	}
 
 	// Measure the text to size the container.
-	w, h := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight})
+	w, h := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight, Lang: lang})
 	// Add padding for the outline on all sides.
 	w += outlineWidth * 2
 	h += outlineWidth * 2
 
 	// Draw outline in 8 directions (N, NE, E, SE, S, SW, W, NW).
 	offsets := []struct{ dx, dy float32 }{
-		{0, -outlineWidth},                        // N
-		{outlineWidth * 0.7, -outlineWidth * 0.7}, // NE
-		{outlineWidth, 0},                         // E
-		{outlineWidth * 0.7, outlineWidth * 0.7},  // SE
-		{0, outlineWidth},                         // S
-		{-outlineWidth * 0.7, outlineWidth * 0.7}, // SW
-		{-outlineWidth, 0},                        // W
+		{0, -outlineWidth},                         // N
+		{outlineWidth * 0.7, -outlineWidth * 0.7},  // NE
+		{outlineWidth, 0},                          // E
+		{outlineWidth * 0.7, outlineWidth * 0.7},   // SE
+		{0, outlineWidth},                          // S
+		{-outlineWidth * 0.7, outlineWidth * 0.7},  // SW
+		{-outlineWidth, 0},                         // W
 		{-outlineWidth * 0.7, -outlineWidth * 0.7}, // NW
 	}
 
@@ -441,8 +441,8 @@ func outlinedText(c *ui.Context, text string, size float32, weight int, family s
 	ui.Box(c).Size(w, h).Children(func() {
 		// Draw outline layers first, centered with offset.
 		for _, off := range offsets {
-			ui.Box(c).Absolute().Left(outlineWidth+off.dx).Top(outlineWidth + off.dy).Children(func() {
-				e := ui.Text(c, text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(outlineColor).PassThrough()
+			ui.Box(c).Absolute().Left(outlineWidth + off.dx).Top(outlineWidth + off.dy).Children(func() {
+				e := ui.Text(c, text).Lang(lang).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(outlineColor).PassThrough()
 				if family != "" {
 					e.Font(family)
 				}
@@ -450,7 +450,7 @@ func outlinedText(c *ui.Context, text string, size float32, weight int, family s
 		}
 		// Draw the main text on top, centered.
 		ui.Box(c).Absolute().Left(outlineWidth).Top(outlineWidth).Children(func() {
-			e := ui.Text(c, text).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(color).PassThrough()
+			e := ui.Text(c, text).Lang(lang).FontSize(size).FontWeight(weight).MaxLines(1).TextColor(color).PassThrough()
 			if family != "" {
 				e.Font(family)
 			}
@@ -506,6 +506,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 	family := lyricFamily(s.LyricFont)
 	transFamily := lyricFamily(s.LyricTransFont)
 	shown, start := lyricWindowLines(lines, cur, s.LyricLines)
+	lang := lyrics.Lang(lines)
 
 	if over && !s.LyricLocked {
 		c.Root().Background(ui.RGBA(0, 0, 0, 0.2))
@@ -570,9 +571,9 @@ func (d *deskLyrics) view(c *ui.Context) {
 					outlineColor := lyricColor(s.LyricOutlineColor, ui.Hex("#16161a"))
 					// Clamp outline width to prevent layout issues from corrupted settings
 					outlineWidth := float32(max(0, min(2.5, s.LyricOutlineWidth)))
-					outlinedText(c, l.Text, fontSize, weight, family, tint, outlineColor, outlineWidth)
+					outlinedText(c, l.Text, fontSize, weight, family, tint, outlineColor, outlineWidth, lang)
 					if s.LyricTrans && l.Translation != "" {
-						outlinedText(c, l.Translation, size*0.62, 500, transFamily, trans, outlineColor, outlineWidth*0.62)
+						outlinedText(c, l.Translation, size*0.62, 500, transFamily, trans, outlineColor, outlineWidth*0.62, c.Locale())
 					}
 				})
 			}
@@ -668,16 +669,18 @@ func (d *deskLyrics) needed(c *ui.Context, shown []lyrics.Line, start, cur int, 
 		return w, h
 	}
 	trans := s.LyricTrans
+	lines, _ := d.a.pl.Lyrics()
+	lang := lyrics.Lang(lines)
 	widest, tall := float32(0), float32(16)
 	for i, l := range shown {
 		lineSize := size
 		if start+i == cur {
 			lineSize = size * 1.04
 		}
-		widest = max(widest, textWidth(c, l.Text, family, lineSize, weight))
+		widest = max(widest, textWidth(c, l.Text, family, lineSize, weight, lang))
 		tall += lineSize * 1.35
 		if trans && l.Translation != "" {
-			widest = max(widest, textWidth(c, l.Translation, transFamily, size*0.62, 500))
+			widest = max(widest, textWidth(c, l.Translation, transFamily, size*0.62, 500, c.Locale()))
 			tall += size * 0.62 * 1.4
 		}
 	}
@@ -704,7 +707,7 @@ func (d *deskLyrics) grow(c *ui.Context, shown []lyrics.Line, start, cur int, si
 }
 
 // textWidth is how wide a line is set.
-func textWidth(c *ui.Context, text, family string, size float32, weight int) float32 {
-	w, _ := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight})
+func textWidth(c *ui.Context, text, family string, size float32, weight int, lang string) float32 {
+	w, _ := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight, Lang: lang})
 	return w
 }
