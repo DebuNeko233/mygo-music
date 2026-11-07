@@ -285,3 +285,97 @@ func TestLibraryRefreshPendingEditWins(t *testing.T) {
 		})
 	}
 }
+
+// An unrelated edit used to discard a successful refresh and leave it marked
+// fresh; the next view must retry once, after any pending edit has finished.
+func TestLibraryRefreshDiscardedSuccessRetries(t *testing.T) {
+	for _, resource := range []string{"likes", "mine", "playlist"} {
+		for _, pending := range []bool{false, true} {
+			t.Run(resource+map[bool]string{false: "/finished", true: "/pending"}[pending], func(t *testing.T) {
+				a, posts, _ := refreshFixture(t)
+				a.profile = &netease.Profile{UserID: 1}
+				var calls atomic.Int32
+				likedIDs = func(int64) ([]int64, error) { calls.Add(1); return []int64{42}, nil }
+				userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
+					calls.Add(1)
+					return []netease.Playlist{{ID: 42, Name: "Fresh"}}, nil, nil
+				}
+				playlistDetail = func(id int64) (*netease.Playlist, error) {
+					calls.Add(1)
+					return &netease.Playlist{ID: id, Name: "Fresh"}, nil
+				}
+				switch resource {
+				case "likes":
+					a.loadLiked(1)
+				case "mine":
+					a.loadMine(1)
+				case "playlist":
+					a.route = route{page: pagePlaylist, id: 7}
+					a.playlists[7] = &netease.Playlist{ID: 7, Name: "Local"}
+					a.loadPlaylist(7, false)
+				}
+				finish := a.beginLibraryEdit()
+				if !pending {
+					finish()
+				}
+				refreshPost(t, posts)
+				tt := ui.NewTester(a.view, 1000, 700)
+				if pending {
+					tt.Frame()
+					if calls.Load() != 1 {
+						t.Fatal("retried while an edit was pending")
+					}
+					finish()
+				}
+				tt.Frame()
+				refreshPost(t, posts)
+				switch resource {
+				case "likes":
+					if !a.liked[42] {
+						t.Fatal("initial likes never recovered")
+					}
+				case "mine":
+					if len(a.mine) != 1 || a.mine[0].ID != 42 {
+						t.Fatal("initial sidebar never recovered")
+					}
+				case "playlist":
+					if a.playlists[7].Name != "Fresh" {
+						t.Fatal("discarded playlist never recovered")
+					}
+				}
+				tt.Frame()
+				tt.Frame()
+				if calls.Load() != 2 {
+					t.Fatalf("retry did not coalesce: %d calls", calls.Load())
+				}
+			})
+		}
+	}
+}
+
+// A failed replacement request must retain the retry interval, not turn a
+// stale response's follow-up into an offline network loop.
+func TestLibraryRefreshRetryFailureStops(t *testing.T) {
+	a, posts, _ := refreshFixture(t)
+	a.profile = &netease.Profile{UserID: 1}
+	var calls atomic.Int32
+	likedIDs = func(int64) ([]int64, error) {
+		if calls.Add(1) == 1 {
+			return []int64{42}, nil
+		}
+		return nil, errors.New("offline")
+	}
+	a.loadLiked(1)
+	finish := a.beginLibraryEdit()
+	finish()
+	refreshPost(t, posts)
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.Frame()
+	refreshPost(t, posts)
+	tt.Frame()
+	tt.Frame()
+	a.freshenLikes()
+	if calls.Load() != 2 || a.listRefresh.likes.retry || listDue(a.listRefresh.likes.at, a.listsNow()) {
+		t.Fatal("failed follow-up kept retrying")
+	}
+}

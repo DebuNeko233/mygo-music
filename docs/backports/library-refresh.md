@@ -22,3 +22,5 @@ Target base: `zhangnjsd/mygo-music` commit `52e0184d258984e6f0184bd52c3a7bcabe89
 - Network responses are mocked; authenticated live NetEase behavior has not been tested.
 
 No version, dependency, changelog or `mygo.json` changes are included.
+
+A successful reply rejected after a local edit remains stale. The next view retries flagged resources once all pending edits have finished; starting a request clears its flag, so extra build passes coalesce. Network failures retain the normal retry interval and never trigger an immediate retry loop. This also covers an initial liked/sidebar load rejected because an unrelated edit changed the global revision.

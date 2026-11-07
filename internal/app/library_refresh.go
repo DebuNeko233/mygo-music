@@ -16,8 +16,9 @@ const listsFresh = 30 * time.Second
 var likedIDs = netease.LikedIDs
 
 type listRequest struct {
-	at   time.Time
-	busy bool
+	at    time.Time
+	busy  bool
+	retry bool
 }
 type libraryRefreshState struct {
 	edits       int
@@ -115,7 +116,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	if was != nil && (a.listRefresh.edits != 0 || !listDue(r.at, a.listsNow())) {
 		return
 	}
-	r.at, r.busy = a.listsNow(), true
+	r.at, r.busy, r.retry = a.listsNow(), true, false
 	if was == nil {
 		a.loadingPl[id] = true
 		delete(a.plErr, id)
@@ -144,6 +145,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			if was != nil {
 				// A local rename, subscription, addition/removal or a replacement wins.
 				if a.listRefresh.edits != 0 || a.listRefresh.revision != revision || a.playlists[id] != was || !reflect.DeepEqual(*was, before) {
+					r.stale()
 					return
 				}
 			} else if a.playlists[id] != nil {
@@ -164,7 +166,7 @@ func (a *app) loadMine(uid int64) {
 		return
 	}
 	r := &a.listRefresh.mine
-	r.at, r.busy = a.listsNow(), true
+	r.at, r.busy, r.retry = a.listsNow(), true, false
 	gen, revision := a.homeGen, a.listRefresh.revision
 	beforeMine, beforeSaved := copyPlaylists(a.mine), copyPlaylists(a.saved)
 	go func() {
@@ -174,7 +176,11 @@ func (a *app) loadMine(uid int64) {
 				return
 			}
 			r.busy = false
-			if err != nil || a.listRefresh.edits != 0 || a.listRefresh.revision != revision || !reflect.DeepEqual(a.mine, beforeMine) || !reflect.DeepEqual(a.saved, beforeSaved) {
+			if err != nil {
+				return
+			}
+			if a.listRefresh.edits != 0 || a.listRefresh.revision != revision || !reflect.DeepEqual(a.mine, beforeMine) || !reflect.DeepEqual(a.saved, beforeSaved) {
+				r.stale()
 				return
 			}
 			a.mine, a.saved = made, saved
@@ -189,7 +195,7 @@ func (a *app) loadLiked(uid int64) {
 		return
 	}
 	r := &a.listRefresh.likes
-	r.at, r.busy = a.listsNow(), true
+	r.at, r.busy, r.retry = a.listsNow(), true, false
 	gen, revision := a.homeGen, a.listRefresh.revision
 	before := maps.Clone(a.liked)
 	go func() {
@@ -199,7 +205,11 @@ func (a *app) loadLiked(uid int64) {
 				return
 			}
 			r.busy = false
-			if err != nil || a.listRefresh.edits != 0 || a.listRefresh.revision != revision || !maps.Equal(a.liked, before) {
+			if err != nil {
+				return
+			}
+			if a.listRefresh.edits != 0 || a.listRefresh.revision != revision || !maps.Equal(a.liked, before) {
+				r.stale()
 				return
 			}
 			a.liked = make(map[int64]bool, len(ids))
@@ -223,5 +233,33 @@ func (a *app) freshenLibrary() {
 	}
 	if a.route.page == pagePlaylist {
 		a.loadPlaylist(a.route.id, false)
+	}
+}
+
+// stale keeps a discarded success due for refresh instead of treating data
+// we never accepted as fresh. Network failures retain their retry interval.
+func (r *listRequest) stale() {
+	r.at, r.retry = time.Time{}, true
+}
+
+// retryLibraryRefresh runs on the next view after post, including the post
+// that finishes an edit. Each load clears its flag before starting, so extra
+// build passes coalesce; a failed follow-up does not start a retry loop.
+func (a *app) retryLibraryRefresh() {
+	if a.listRefresh.edits != 0 {
+		return
+	}
+	if a.profile != nil {
+		if a.listRefresh.mine.retry {
+			a.loadMine(a.profile.UserID)
+		}
+		if a.listRefresh.likes.retry {
+			a.loadLiked(a.profile.UserID)
+		}
+	}
+	if a.route.page == pagePlaylist {
+		if r := a.listRefresh.playlists[a.route.id]; r != nil && r.retry {
+			a.loadPlaylist(a.route.id, false)
+		}
 	}
 }

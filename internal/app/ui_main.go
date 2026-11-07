@@ -26,6 +26,7 @@ func (a *app) view(c *ui.Context) {
 		a.freshenLibrary()
 	}
 	a.wasBehind = !active
+	a.retryLibraryRefresh()
 
 	if c.Vibrancy() {
 		c.Root().Background(ui.Transparent)
