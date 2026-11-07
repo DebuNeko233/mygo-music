@@ -126,9 +126,10 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		stageNextFrame(c, lines, cur, pos, lead)
 	}
 
+	lang := lyrics.Lang(lines)
 	box.Children(func() {
 		defer a.stageQuiet(c, dim, f, w)
-		quietUnder(ui.Box(c.Key("sung")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {
+		quietUnder(ui.Box(c.Key("sung")).Lang(lang).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {
 			// The line before goes as the new one comes.
 			if cur > 0 {
 				gone := float32((pos - lines[cur].At).Seconds()) / 0.4
@@ -149,7 +150,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 			// The translation, and the line coming next, along the foot.
 			ui.Column(c).Absolute().Left(0).Right(0).Bottom(24).AlignItems(ui.Center).Gap(8).PassThrough().Children(func() {
 				if cur >= 0 && lines[cur].Translation != "" {
-					ui.Text(c.Key("translation"), lines[cur].Translation).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
+					ui.Text(c.Key("translation"), lines[cur].Translation).Lang(c.Locale()).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
 				}
 				if cur+1 < len(lines) {
 					ui.Text(c.Key("next"), lines[cur+1].Text).FontSize(14).TextColor(white.Alpha(0.32)).TextAlign(ui.Center).SingleLine()
