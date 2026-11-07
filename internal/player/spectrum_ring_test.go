@@ -2,7 +2,6 @@ package player
 
 import (
 	"math"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -54,16 +53,13 @@ func TestSpectrumKeepsRecentChunks(t *testing.T) {
 	}
 }
 
-// Very long and unknown-length audio must not preallocate a duration-sized
-// table; the ring stays small at both ordinary and high sample rates.
-func TestSpectrumAllocationBounded(t *testing.T) {
+// Unknown-length streams keep measuring, with a bounded history at both
+// ordinary and high sample rates, without sampling process-wide allocations.
+func TestSpectrumUnknownLength(t *testing.T) {
 	for _, rate := range []int{44100, 192000} {
-		var before, after runtime.MemStats
-		runtime.ReadMemStats(&before)
 		s := newSpectrum(rate)
-		runtime.ReadMemStats(&after)
-		if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 512<<10 {
-			t.Fatalf("%dHz spectrum allocated %d bytes", rate, allocated)
+		if keep := time.Duration(len(s.ring)) * fftSize * time.Second / time.Duration(rate); keep < spectrumKeep || keep > spectrumKeep+time.Second {
+			t.Fatalf("%dHz spectrum keeps %v, want about %v", rate, keep, spectrumKeep)
 		}
 		// With no known duration, measurement must continue beyond two chunks.
 		for at := int64(0); at < int64(rate); at += fftSize {

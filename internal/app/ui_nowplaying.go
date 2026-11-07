@@ -481,6 +481,14 @@ type linesStyle struct {
 // lit has still to go (lyricGlide). foot, if set, follows the lines.
 func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, pos time.Duration, cur int, lag, scrollY float32, st linesStyle, foot func()) {
 	pl := a.pl
+	// Bounds below belong to the last layout. A width-only window resize
+	// may leave the cover and pane top unchanged: schedule a pass after the
+	// new text wrapping is laid out, even if this pass sees the old viewport.
+	w, h := c.Size()
+	if w != a.lyricWindowW || h != a.lyricWindowH {
+		a.lyricWindowW, a.lyricWindowH = w, h
+		c.AnimationFrame()
+	}
 	var active ui.Element
 	lang := lyrics.Lang(lines)
 	scroll.Children(func() {
@@ -558,6 +566,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 				// adding that new offset would count the scroll twice.
 				target = lb.Y - box.Y + scrollY - box.H*0.3
 			} else {
+				c.AnimationFrame()
 				return // not laid out yet: the next frame scrolls
 			}
 		}

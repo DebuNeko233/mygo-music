@@ -190,6 +190,9 @@ func (p *Player) PlayQueue(tracks []netease.Track, start int) {
 // PlayShuffled starts a whole list with any song at its head. Explicitly
 // choosing a song through PlayQueue still keeps that song first.
 func (p *Player) PlayShuffled(tracks []netease.Track) {
+	if len(tracks) == 0 {
+		return
+	}
 	p.shuffle = true
 	p.playQueue(tracks, -1)
 }
