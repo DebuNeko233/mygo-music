@@ -108,19 +108,20 @@ type app struct {
 	searched    route                 // the search last shown, which the sidebar goes back to
 	suggestions suggestState          // what the search field's query may be after
 
-	nowPlaying  bool
-	npOpen      bool      // Now Playing as it last showed: open or not
-	npChangedAt time.Time // when it last opened or closed
-	npPane      int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
-	npPaneTop   float32   // how far the cover beside the pane starts below its top
-	lyricScroll ui.ScrollState
-	lyricGlide  lyricGlide
-	lyricAt     int
-	lyricTrack  int64
-	queueList   ui.ListState
-	queueAt     int // the row of the queue pane last scrolled to, -1 while it is hidden
-	comments    commentState
-	tabCount    rollState // the count on the comments' tab, as it rolls
+	nowPlaying                     bool
+	npOpen                         bool      // Now Playing as it last showed: open or not
+	npChangedAt                    time.Time // when it last opened or closed
+	npPane                         int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
+	npPaneTop                      float32   // how far the cover beside the pane starts below its top
+	lyricScroll                    ui.ScrollState
+	lyricGlide                     lyricGlide
+	lyricAt                        int
+	lyricTrack                     int64
+	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
+	queueList                      ui.ListState
+	queueAt                        int // the row of the queue pane last scrolled to, -1 while it is hidden
+	comments                       commentState
+	tabCount                       rollState // the count on the comments' tab, as it rolls
 
 	fmMode        int    // the FM mode chosen, in fmModes
 	radioStarting string // the radio asked for its first songs, or ""
