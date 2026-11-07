@@ -445,7 +445,7 @@ func TestSegmentedFrames(t *testing.T) {
 		a := newTestApp()
 		a.settings = defaultSettings()
 		a.settings.Appearance = "light"
-		tt := ui.NewTester(a.settingsView, 560, 640)
+		tt := ui.NewTester(a.settingsView, 780, 640)
 		tt.SetScale(2)
 		tt.SetDark(dark)
 		tt.Frame()

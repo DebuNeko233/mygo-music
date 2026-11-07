@@ -21,7 +21,8 @@ func TestChoosingAccentColorsIt(t *testing.T) {
 	defer func() { accentChosen = old }()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(a.settingsView, 560, 2400)
+	tt := ui.NewTester(a.settingsView, 780, 640)
+	showSettingsPage(t, tt, "外观")
 	tt.Frame()
 	// The select opens on a click, and the option under the pointer picks
 	// itself.
@@ -242,10 +243,15 @@ func TestSettingsSlidersPaintTheirTrack(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(a.settingsView, 560, 2900)
+	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()
-	img := tt.Image()
 	for _, label := range []string{"调整背景透明度", "调整歌词字号"} {
+		page := "外观"
+		if label == "调整歌词字号" {
+			page = "桌面歌词"
+		}
+		showSettingsPage(t, tt, page)
+		img := tt.Image()
 		r, ok := tt.Find(label)
 		if !ok {
 			t.Fatalf("%s: not on the page", label)

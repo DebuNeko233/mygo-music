@@ -146,6 +146,12 @@ type app struct {
 	sig                   playerSig
 	quitting              bool
 
+	// Settings navigation stays in memory; only user preferences are persisted.
+	settingsPage      string
+	settingsQuery     string
+	settingsSearchBox ui.Handle
+	settingsUnderTop  bool
+
 	settings     settings
 	settingsWin  *mygo.Window
 	cacheUsed    int64                      // the bytes the song cache takes, -1 until measured
