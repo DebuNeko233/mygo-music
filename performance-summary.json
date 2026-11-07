@@ -1,0 +1,202 @@
+[
+  {
+    "run": "formal-1-before",
+    "phases": {
+      "static_initial": {
+        "cpu_pct": 0.09,
+        "rss_mib": 115.52,
+        "footprint": null,
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 14745600,
+        "last_elapsed": 10.001239167
+      },
+      "fog_1": {
+        "cpu_pct": 5.328,
+        "rss_mib": 117.89,
+        "footprint": "170.9M",
+        "frames": 392,
+        "repaints": 392,
+        "canvas_bytes": 925540,
+        "last_elapsed": 25.001235042
+      },
+      "static_return_1": {
+        "cpu_pct": 0.041,
+        "rss_mib": 118.12,
+        "footprint": "58.2M",
+        "frames": 32,
+        "repaints": 31,
+        "canvas_bytes": 14745600,
+        "last_elapsed": 45.0012175
+      },
+      "fog_2": {
+        "cpu_pct": 5.552,
+        "rss_mib": 118.65,
+        "footprint": "171.3M",
+        "frames": 393,
+        "repaints": 393,
+        "canvas_bytes": 925540,
+        "last_elapsed": 60.001255292
+      },
+      "static_return_2": {
+        "cpu_pct": 0.039,
+        "rss_mib": 118.78,
+        "footprint": "58.7M",
+        "frames": 33,
+        "repaints": 32,
+        "canvas_bytes": 14745600,
+        "last_elapsed": 80.001224167
+      }
+    }
+  },
+  {
+    "run": "formal-2-after",
+    "phases": {
+      "static_initial": {
+        "cpu_pct": 0.079,
+        "rss_mib": 116.12,
+        "footprint": "60.8M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 0,
+        "last_elapsed": 10.001361666
+      },
+      "fog_1": {
+        "cpu_pct": 5.299,
+        "rss_mib": 117.94,
+        "footprint": "171.1M",
+        "frames": 393,
+        "repaints": 393,
+        "canvas_bytes": 925540,
+        "last_elapsed": 25.000685583
+      },
+      "static_return_1": {
+        "cpu_pct": 0.049,
+        "rss_mib": 118.09,
+        "footprint": "58.4M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 0,
+        "last_elapsed": 45.00135525
+      },
+      "fog_2": {
+        "cpu_pct": 5.49,
+        "rss_mib": 118.59,
+        "footprint": "172.0M",
+        "frames": 393,
+        "repaints": 392,
+        "canvas_bytes": 925540,
+        "last_elapsed": 60.000956083
+      },
+      "static_return_2": {
+        "cpu_pct": 0.15,
+        "rss_mib": 118.83,
+        "footprint": "58.9M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 0,
+        "last_elapsed": 80.0012805
+      }
+    }
+  },
+  {
+    "run": "formal-3-after",
+    "phases": {
+      "static_initial": {
+        "cpu_pct": 0.071,
+        "rss_mib": 116.02,
+        "footprint": "60.9M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 0,
+        "last_elapsed": 10.001211167
+      },
+      "fog_1": {
+        "cpu_pct": 5.494,
+        "rss_mib": 117.88,
+        "footprint": "171.3M",
+        "frames": 393,
+        "repaints": 393,
+        "canvas_bytes": 925540,
+        "last_elapsed": 25.000445458
+      },
+      "static_return_1": {
+        "cpu_pct": 0.048,
+        "rss_mib": 118.09,
+        "footprint": "58.7M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 0,
+        "last_elapsed": 45.00119875
+      },
+      "fog_2": {
+        "cpu_pct": 5.473,
+        "rss_mib": 118.45,
+        "footprint": "171.7M",
+        "frames": 393,
+        "repaints": 393,
+        "canvas_bytes": 925540,
+        "last_elapsed": 60.000203292
+      },
+      "static_return_2": {
+        "cpu_pct": 0.043,
+        "rss_mib": 118.45,
+        "footprint": "59.0M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 0,
+        "last_elapsed": 80.001203542
+      }
+    }
+  },
+  {
+    "run": "formal-4-before",
+    "phases": {
+      "static_initial": {
+        "cpu_pct": 0.067,
+        "rss_mib": 115.7,
+        "footprint": "60.0M",
+        "frames": 0,
+        "repaints": 0,
+        "canvas_bytes": 14745600,
+        "last_elapsed": 10.0002115
+      },
+      "fog_1": {
+        "cpu_pct": 5.561,
+        "rss_mib": 117.88,
+        "footprint": "170.6M",
+        "frames": 392,
+        "repaints": 392,
+        "canvas_bytes": 925540,
+        "last_elapsed": 25.001162792
+      },
+      "static_return_1": {
+        "cpu_pct": 0.05,
+        "rss_mib": 118.02,
+        "footprint": "58.0M",
+        "frames": 33,
+        "repaints": 32,
+        "canvas_bytes": 14745600,
+        "last_elapsed": 45.000929042
+      },
+      "fog_2": {
+        "cpu_pct": 5.425,
+        "rss_mib": 118.61,
+        "footprint": "171.1M",
+        "frames": 392,
+        "repaints": 392,
+        "canvas_bytes": 925540,
+        "last_elapsed": 60.001189875
+      },
+      "static_return_2": {
+        "cpu_pct": 0.05,
+        "rss_mib": 118.52,
+        "footprint": "58.3M",
+        "frames": 33,
+        "repaints": 32,
+        "canvas_bytes": 14745600,
+        "last_elapsed": 80.001170583
+      }
+    }
+  }
+]
