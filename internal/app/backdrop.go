@@ -14,9 +14,10 @@ import (
 // The backdrop of Now Playing paints the cover's colors behind it, as
 // NetEase's own player does: a deep gradient of its main color, lighter at
 // the top, with the cover itself, blurred, faintly through it. It stays
-// still, so it is painted once a song, into a small canvas an eighth of the
-// window across, which shows scaled up as smooth as it is: what moves over
-// it then draws one image under it.
+// still, so it is painted once a song, into a canvas at the window's pixel
+// resolution. Its colors are mixed before quantizing, with a little stable
+// dither: rounding a small dark gradient and enlarging it leaves bands.
+// What moves over the backdrop then draws one image under it.
 //
 // The experimental fog (settings.Fog) makes it alive, as NetEase's mobile
 // player's is: fog of the cover's color, billowing as it rises slowly
@@ -100,6 +101,48 @@ func Fragment(dst vec4, pos vec2) vec4 {
 
 var fogShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(fogSource) })
 
+// backdropSource keeps the gradient, cover wash and shading in floating
+// point until their final color is dithered into the canvas. The noise is
+// fixed to physical pixels, so it neither grows on Retina displays nor
+// shimmers while the song is paused.
+const backdropSource = `package main
+
+var Top vec3
+var Foot vec3
+var Cover vec4
+var HasCover float
+
+func srgb(v float) float {
+	if v <= 0.0031308 {
+		return 12.92 * v
+	}
+	return 1.055 * pow(max(v, 0), 1.0/2.4) - 0.055
+}
+
+func Fragment(dst vec4, pos vec2) vec4 {
+	uv := pos / rectSize()
+	lab := mix(Top, Foot, clamp(uv.y, 0, 1))
+	l := lab.x + 0.3963377774*lab.y + 0.2158037573*lab.z
+	m := lab.x - 0.1055613458*lab.y - 0.0638541728*lab.z
+	s := lab.x - 0.0894841775*lab.y - 1.2914855480*lab.z
+	l, m, s = l*l*l, m*m*m, s*s*s
+	c := vec3(
+		srgb(4.0767416621*l - 3.3077115913*m + 0.2309699292*s),
+		srgb(-1.2684380046*l + 2.6097574011*m - 0.3413193965*s),
+		srgb(-0.0041960863*l - 0.7034186147*m + 1.7076147010*s),
+	)
+	if HasCover > 0 {
+		wash := image0Sample((pos - Cover.xy) / Cover.zw * image0Size())
+		c = wash.rgb*0.1 + c*(1.0-wash.a*0.1)
+	}
+	c *= 1.0 - 0.18*clamp((uv.y-0.55)/0.45, 0, 1)
+	noise := fract(52.9829189 * fract(dot(floor(dst.xy), vec2(0.06711056, 0.00583715)))) - 0.5
+	return vec4(clamp(c + vec3(noise/255.0), vec3(0), vec3(1)), 1)
+}
+`
+
+var backdropShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(backdropSource) })
+
 // backdropFrame is how often the fog is painted while it moves.
 const backdropFrame = time.Second / 30
 
@@ -152,6 +195,12 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 			div = 2
 		}
 		cw, ch := int(r.W/div)+1, int(r.H/div)+1
+		if !fog {
+			// Dither at the final pixel size: scaling a noisy thumbnail
+			// would turn its grains and rounded colors into visible blocks.
+			cw = max(1, int(math.Ceil(float64(r.W*p.Scale()))))
+			ch = max(1, int(math.Ceil(float64(r.H*p.Scale()))))
+		}
 		bd := &a.backdropCache
 		if bd.canvas != nil {
 			if w, h := bd.canvas.Size(); w != cw || h != ch {
@@ -224,17 +273,39 @@ func (bd *backdropCache) step(now time.Time, playing bool, lv [player.Bands]floa
 // drawBackdrop paints the still backdrop in r.
 func drawBackdrop(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color) {
 	top, foot := backdropColors(tint)
-	p.FillGradient(r, ui.LinearGradient{Angle: 180, Oklab: true, Stops: []ui.GradientStop{
-		{Color: top, At: 0}, {Color: foot, At: 1},
-	}}, 0)
+	cover := coverRect(ui.Rect{W: r.W, H: r.H}, 48, 48)
+	var image *ui.Bitmap
+	var hasCover float32
 	if art != nil && art.backdrop != nil {
-		// The cover, blurred, as a faint wash of its own colors.
-		p.ImageRegion(art.backdrop, ui.Rect{W: 48, H: 48}, coverRect(r, 48, 48), ui.ImageOptions{Tint: white.Alpha(0.1)})
+		image, hasCover = art.backdrop, 1
 	}
-	// Darker toward the foot, under the controls.
-	p.FillGradient(r, ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
-		{Color: ui.RGBA(0, 0, 0, 0), At: 0.55}, {Color: ui.RGBA(0, 0, 0, 0.18), At: 1},
-	}}, 0)
+	backdropShader().Draw(p, r, shader.Options{
+		Uniforms: map[string]any{
+			"Top": backdropLab(top), "Foot": backdropLab(foot),
+			"Cover": [4]float32{cover.X, cover.Y, cover.W, cover.H}, "HasCover": hasCover,
+		},
+		Images: [4]*ui.Bitmap{image},
+	})
+}
+
+// backdropLab converts the two endpoints once, rather than per pixel.
+func backdropLab(c ui.Color) [3]float32 {
+	linear := func(v uint8) float64 {
+		x := float64(v) / 255
+		if x <= 0.04045 {
+			return x / 12.92
+		}
+		return math.Pow((x+0.055)/1.055, 2.4)
+	}
+	r, g, b := linear(c.R), linear(c.G), linear(c.B)
+	l := math.Cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b)
+	m := math.Cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b)
+	s := math.Cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b)
+	return [3]float32{
+		float32(0.2104542553*l + 0.7936177850*m - 0.0040720468*s),
+		float32(1.9779984951*l - 2.4285922050*m + 0.4505937099*s),
+		float32(0.0259040371*l + 0.7827717662*m - 0.8086757660*s),
+	}
 }
 
 // coverRect returns where an image of w×h goes to cover r, centered.

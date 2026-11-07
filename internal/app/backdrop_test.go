@@ -53,6 +53,75 @@ func TestBackdropDrifts(t *testing.T) {
 	}
 }
 
+// The still background keeps one sample per display pixel, including
+// after a Retina-scale change or resize: an enlarged thumbnail banded.
+func TestBackdropPixelResolution(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
+	check := func() {
+		t.Helper()
+		w, h := a.backdropCache.canvas.Size()
+		want := tt.Image().Bounds().Size()
+		if w != want.X || h != want.Y {
+			t.Fatalf("background %dx%d for a %dx%d display", w, h, want.X, want.Y)
+		}
+	}
+	check()
+	first := a.backdropCache.canvas
+	tt.Frame()
+	if a.backdropCache.canvas != first {
+		t.Fatal("unchanged background replaced its canvas")
+	}
+	if tt.FramePending() {
+		t.Fatal("still background requested another frame")
+	}
+	tt.SetScale(2)
+	check()
+	tt.SetSize(280, 180)
+	check()
+}
+
+// With NM_FRAMES set, saves still gradients at normal and Retina scale
+// for inspecting dark color transitions without network or playback.
+func TestBackdropGradientFrames(t *testing.T) {
+	dir := os.Getenv("NM_FRAMES")
+	if dir == "" {
+		t.Skip()
+	}
+	for _, tc := range []struct {
+		name string
+		tint ui.Color
+	}{
+		{"blue", ui.RGB(50, 80, 140)},
+		{"red", ui.RGB(180, 50, 45)},
+		{"gray", ui.RGB(100, 100, 100)},
+	} {
+		for _, scale := range []float32{1, 2} {
+			a := newTestApp()
+			a.settings = defaultSettings()
+			tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, tc.tint) }, 800, 600)
+			tt.SetScale(scale)
+			name := tc.name + "-1x.png"
+			if scale == 2 {
+				name = tc.name + "-2x.png"
+			}
+			f, err := os.Create(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = png.Encode(f, tt.Image())
+			closeErr := f.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if closeErr != nil {
+				t.Fatal(closeErr)
+			}
+		}
+	}
+}
+
 // With NM_FRAMES set, saves the fog of a few covers as it drifts,
 // and on a beat, one row a cover.
 func TestBackdropDriftFrames(t *testing.T) {
