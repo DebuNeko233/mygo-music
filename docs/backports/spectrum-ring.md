@@ -20,3 +20,5 @@ Target base: `zhangnjsd/mygo-music` commit `52e0184d258984e6f0184bd52c3a7bcabe89
 - A constructor-adapted behavior probe fails on the unchanged base (about 150 MB allocated for ten hours; unknown-duration measurements stop) and passes on this branch. This measures spectrum allocation, not whole-app RSS.
 
 No version, dependency, changelog or `mygo.json` changes are included.
+
+The unit checks use the retained time window and chunk eviction to bound history at 44.1/192 kHz, rather than process-wide `runtime.MemStats` deltas that include unrelated background allocations.
