@@ -6,12 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/netease"
 )
 
@@ -165,9 +166,6 @@ func TestPlaylistLocateFollowsVisibleArea(t *testing.T) {
 	offset := a.pageScroll.Y
 	// Match the platform bar insets in this headless fixture.
 	top := float32(buttonsHeight)
-	if runtime.GOOS == "darwin" {
-		top = topBarHeight + 6
-	}
 	for _, tc := range []struct {
 		name  string
 		y     float32
@@ -242,6 +240,62 @@ func TestPlaylistLocateVisibilityAfterReorder(t *testing.T) {
 	tt.Frame()
 	if _, shown := tt.Find("定位正在播放的歌曲"); !shown {
 		t.Fatal("locate did not return when refresh moved the row out of view")
+	}
+}
+
+// Renaming or refreshing a playlist header used to leave locate hidden
+// when text wrapping covered the current row without changing the list range.
+func TestPlaylistLocateFollowsHeaderChanges(t *testing.T) {
+	for _, field := range []string{"name", "description"} {
+		t.Run(field, func(t *testing.T) {
+			a, pl, tt := locateFixture(t, 7, false)
+			longName := strings.Repeat("A very long playlist name ", 20)
+			longDescription := strings.Repeat("A playlist description with several words. ", 30)
+			if field == "name" {
+				pl.Description = longDescription
+			} else {
+				pl.Name = longName
+			}
+			tt.Frame()
+			row, ok := tt.AccessByRole(ui.RoleButton, pl.Tracks[7].Name)
+			if !ok {
+				t.Fatal("fixture current row not built")
+			}
+			// Keep only the top two DIPs of the row visible, independently of
+			// font metrics. A slightly taller header will cover it completely.
+			h := int(row.Bounds.Y) + playerBarHeight + 2
+			tt.SetSize(1100, h)
+			tt.Move(100, 100)
+			tt.Advance(time.Second)
+			tt.Frame()
+			if _, shown := tt.Find("定位正在播放的歌曲"); shown {
+				t.Fatal("locate shown before header grows")
+			}
+			first, last := a.trackList.Visible()
+			offset := a.pageScroll.Y
+			name, description := pl.Name, pl.Description
+			if field == "name" {
+				pl.Name = longName
+			} else {
+				pl.Description = longDescription
+			}
+			tt.Frame()
+			row, ok = tt.AccessByRole(ui.RoleButton, pl.Tracks[7].Name)
+			if !ok || row.Bounds.Y < float32(h-playerBarHeight) {
+				t.Fatal("fixture header did not cover the row")
+			}
+			if lo, hi := a.trackList.Visible(); lo != first || hi != last || a.pageScroll.Y != offset {
+				t.Fatal("fixture changed the list range or scroll offset")
+			}
+			if _, shown := tt.Find("定位正在播放的歌曲"); !shown {
+				t.Fatal("locate remained hidden after header covered current row")
+			}
+			pl.Name, pl.Description = name, description
+			tt.Frame()
+			if _, shown := tt.Find("定位正在播放的歌曲"); shown {
+				t.Fatal("locate remained after shorter header revealed the row")
+			}
+		})
 	}
 }
 

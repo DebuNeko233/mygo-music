@@ -132,13 +132,17 @@ func TestStaticBackdropStopsFog(t *testing.T) {
 	}
 }
 
-// A paused playlist must stop scheduling frames both with its glass locate
-// button visible and after locating hides it.
+// A paused playlist must stop scheduling frames with its glass locate
+// button visible, after locating hides it, and after its header changes.
 func TestPlaylistLocateFrameBudget(t *testing.T) {
-	_, _, tt := locateFixture(t, 199, false)
-	for _, stage := range []string{"offscreen", "visible"} {
-		if stage == "visible" {
+	_, pl, tt := locateFixture(t, 199, false)
+	for _, stage := range []string{"offscreen", "visible", "header changed"} {
+		switch stage {
+		case "visible":
 			clickLocate(t, tt)
+		case "header changed":
+			pl.Description = "A refreshed playlist description."
+			tt.Frame()
 		}
 		tt.Move(100, 100)
 		tt.Advance(time.Second)
