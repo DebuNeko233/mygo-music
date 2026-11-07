@@ -878,7 +878,7 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 	}
 	info, err := ask(t.ID, level)
 	if err != nil {
-		if !errors.Is(err, netease.ErrUnavailable) {
+		if !errors.Is(err, netease.ErrUnavailable) && !errors.Is(err, netease.ErrNotLoggedIn) {
 			// A URL gone stale, or a network down for a moment: asked for
 			// again in a moment, as it may be back by then.
 			p.prefetchLater(gen, t, level, ask, nil, try)

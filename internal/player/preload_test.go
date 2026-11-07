@@ -3,6 +3,7 @@ package player
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -189,6 +190,32 @@ func TestLoadRetries(t *testing.T) {
 	}
 }
 
+// Temporary errors on one song leave the next one able to load.
+func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
+	b := song(t)
+	srv, _ := songServer(t, b)
+	var asks sync.Map
+	old := songURL
+	songURL = func(id int64, level string) (*netease.Stream, error) {
+		v, _ := asks.LoadOrStore(id, new(int))
+		n := v.(*int)
+		*n++
+		if *n < 3 {
+			return nil, errors.New("netease: song url: code -460")
+		}
+		return &netease.Stream{URL: fmt.Sprintf("%s/%d", srv.URL, id), Size: int64(len(b)), Level: level, Type: "mp3"}, nil
+	}
+	defer func() { songURL = old }()
+	c := NewCache(t.TempDir(), 1<<30)
+	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
+	pump(t, ch, "the first song after a temporary refusal", func() bool { return p.out != nil })
+	if p.err != "" || p.Current().ID != 1 {
+		t.Fatalf("did not recover: %s", p.Err())
+	}
+	pump(t, ch, "the next song after the same refusal", func() bool { return p.ahead != nil && p.ahead.dl.Err() == nil && p.ahead.dl.Progress() == 1 })
+}
+
 // A track that does not load at all stops there, with what went wrong on
 // show, rather than playing the one after it.
 func TestLoadFailureDoesNotSkip(t *testing.T) {
@@ -249,6 +276,45 @@ func cutStream(t *testing.T, c *Cache, id int64, url string, size int) stream {
 	}
 	t.Cleanup(func() { s.Close() }) // what came of it, closed as a stream of the player's would be
 	return s
+}
+
+// A download that failed is not shown as a complete song.
+// A response with no length is not a song whose bytes have all arrived.
+func TestDownloadWithoutALengthKeepsComing(t *testing.T) {
+	b := song(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			w.WriteHeader(http.StatusPartialContent)
+		}
+		w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	d := startDownload(srv.URL, 0, nil, nil)
+	d.waitFor(math.MaxInt64)
+	if err := d.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if d.n != int64(len(b)) {
+		t.Fatalf("downloaded %d of %d", d.n, len(b))
+	}
+	d.seekTo(10)
+	d.waitFor(math.MaxInt64)
+	if err := d.Err(); err != nil {
+		t.Fatal("seek of a song whose length was unknown: ", err)
+	}
+}
+
+func TestFailedDownloadHasNoCompleteProgress(t *testing.T) {
+	b := song(t)
+	cut := cutServer(t, b)
+	d := startDownload(cut.URL, int64(len(b)), nil, nil)
+	d.waitFor(math.MaxInt64)
+	if d.Err() == nil {
+		t.Fatal("cut download succeeded")
+	}
+	if got := d.Progress(); got != 0 {
+		t.Fatalf("failed download showed progress %v", got)
+	}
 }
 
 // A download cut off as it plays is asked for again, and the song goes on

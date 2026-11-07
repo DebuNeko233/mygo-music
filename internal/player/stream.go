@@ -73,6 +73,9 @@ func startDownload(url string, size int64, part *os.File, keep func(string, int6
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &download{size: size, cancel: cancel, users: 2, url: url, runs: 1, finished: make(chan struct{})}
 	d.cond.L = &d.mu
+	if size == 0 {
+		d.size = -1 // A response with no Content-Length is still a download.
+	}
 	switch {
 	case part != nil:
 		d.file, d.part, d.keep = part, part.Name(), keep
@@ -402,8 +405,11 @@ func (d *download) halt() {
 func (d *download) Progress() float64 {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.done && d.err == nil {
-		return 1
+	if d.done {
+		if d.err == nil {
+			return 1
+		}
+		return 0
 	}
 	if d.size <= 0 {
 		return 0
