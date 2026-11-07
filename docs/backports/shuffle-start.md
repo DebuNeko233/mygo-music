@@ -18,3 +18,5 @@ Target base: `zhangnjsd/mygo-music` commit `52e0184d258984e6f0184bd52c3a7bcabe89
 - The actual playlist/daily buttons are exercised repeatedly. The UI regression also fails against the unchanged base because every shuffle starts with track 1.
 
 No version, dependency, changelog or `mygo.json` changes are included.
+
+Empty lists are rejected before enabling shuffle, preserving the existing queue, current song and mode. The empty-input regression covers both sequential and shuffled playback.
