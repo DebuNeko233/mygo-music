@@ -4,17 +4,17 @@
   "slug": "mygo-cloudmusic",
   "version": "0.2.2",
   "out": "build",
+  "updates": {
+    "publicKey": "I4d3vfue5JdMTLh3Gar9BkwxhjhcvhOuEVTJ3lgJUA0=",
+    "github": "zhangnjsd/mygo-music"
+  },
   "macos": {
     "icon": "icon/AppIcon.icon",
     "minimumSystemVersion": "13.0"
   },
   "linux": {
     "comment": "第三方某音乐桌面客户端",
-    "categories": [
-      "AudioVideo",
-      "Audio",
-      "Player"
-    ],
+    "categories": ["AudioVideo", "Audio", "Player"],
     "webview": false
   }
 }
