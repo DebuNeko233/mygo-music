@@ -2,7 +2,7 @@
   "name": "MyGo 云音乐",
   "identifier": "dev.egoist.cloudmusic",
   "slug": "mygo-cloudmusic",
-  "version": "0.2.2-mygo.0.8.1",
+  "version": "0.2.2",
   "out": "build",
   "macos": {
     "icon": "icon/AppIcon.icon",
