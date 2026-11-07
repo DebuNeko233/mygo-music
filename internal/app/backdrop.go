@@ -14,10 +14,9 @@ import (
 // The backdrop of Now Playing paints the cover's colors behind it, as
 // NetEase's own player does: a deep gradient of its main color, lighter at
 // the top, with the cover itself, blurred, faintly through it. It stays
-// still, so it is painted once a song, into a canvas at the window's pixel
-// resolution. Its colors are mixed before quantizing, with a little stable
-// dither: rounding a small dark gradient and enlarging it leaves bands.
-// What moves over the backdrop then draws one image under it.
+// still. On the GPU a small 16-bit palette is sampled and dithered at each
+// screen pixel, without a window-sized background texture. Software
+// rendering keeps a canvas, to avoid interpreting the shader every frame.
 //
 // The experimental fog (settings.Fog) makes it alive, as NetEase's mobile
 // player's is: fog of the cover's color, billowing as it rises slowly
@@ -152,17 +151,21 @@ const backdropFade = 700 * time.Millisecond
 // backdropCache is the backdrop as last painted, and where the fog's
 // drift and its pulse are.
 type backdropCache struct {
-	canvas *ui.Canvas
-	before *ui.Canvas // the song before's, fading out over it
-	fadeAt time.Time  // when it began to
-	art    *artwork
-	tint   ui.Color
-	fog    bool
-	at     time.Time // when it was painted
-	drift  float64   // the clouds' time, in seconds, which stops on pause
-	speed  float64   // how fast drift goes: 1 playing, 0 paused
-	level  barState
-	last   time.Time
+	still         *stillBackdrop
+	previousStill *stillBackdrop
+	stillAt       time.Time
+	stillValues   *shader.Values
+	canvas        *ui.Canvas
+	before        *ui.Canvas // the song before's, fading out over it
+	fadeAt        time.Time  // when it began to
+	art           *artwork
+	tint          ui.Color
+	fog           bool
+	at            time.Time // when it was painted
+	drift         float64   // the clouds' time, in seconds, which stops on pause
+	speed         float64   // how fast drift goes: 1 playing, 0 paused
+	level         barState
+	last          time.Time
 }
 
 // backdrop paints the backdrop behind Now Playing, still or fog: the
@@ -177,6 +180,8 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		// Nothing of the cover's backdrop paints behind it, for the wall's
 		// edges to fade into.
 		a.backdropCache.canvas, a.backdropCache.before = nil, nil
+		a.backdropCache.still, a.backdropCache.previousStill = nil, nil
+		a.backdropCache.speed, a.backdropCache.level, a.backdropCache.last = 0, barState{}, time.Time{}
 		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 			drawPicture(p, r, pic, float32(a.settings.BackdropOpacity))
 			// Darker toward the foot, under the controls.
@@ -186,7 +191,24 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		})
 		return
 	}
+	bd := &a.backdropCache
+	if !fog {
+		bd.prepareStill(art, tint, c.Now())
+		// A static background has no lingering fog animation to finish.
+		bd.speed, bd.level, bd.last = 0, barState{}, time.Time{}
+	} else {
+		bd.still, bd.previousStill = nil, nil
+	}
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
+		previous := bd.stillWeight(p.Now())
+		if !fog && p.Accelerated() {
+			bd.canvas, bd.before = nil, nil
+			bd.drawStill(p, r, r, previous, 1)
+			if previous > 0 {
+				p.AnimationFrame()
+			}
+			return
+		}
 		// The CPU, drawing the fog for want of a GPU, paints far fewer
 		// pixels, and those once a song: the fog stays still.
 		gpu := p.Accelerated()
@@ -201,7 +223,6 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 			cw = max(1, int(math.Ceil(float64(r.W*p.Scale()))))
 			ch = max(1, int(math.Ceil(float64(r.H*p.Scale()))))
 		}
-		bd := &a.backdropCache
 		if bd.canvas != nil {
 			if w, h := bd.canvas.Size(); w != cw || h != ch {
 				bd.canvas, bd.before = nil, nil
@@ -213,8 +234,15 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 			bd.canvas, bd.before, bd.fadeAt = bd.before, bd.canvas, now
 		}
 		moving := fog && gpu && !still
-		lv, live := pl.Levels()
-		moved := bd.step(now, pl.Playing() && moving, lv, live && moving)
+		var moved bool
+		if fog {
+			var lv [player.Bands]float32
+			var live bool
+			if moving {
+				lv, live = pl.Levels()
+			}
+			moved = bd.step(now, pl.Playing() && moving, lv, live && moving)
+		}
 		due := now.Sub(bd.at) >= backdropFrame-2*time.Millisecond
 		if bd.canvas == nil || bd.art != art || bd.tint != tint || bd.fog != fog || moved && due {
 			if bd.canvas == nil {
@@ -375,6 +403,17 @@ func hsvColor(h, s, v float64) ui.Color {
 // it is opaque.
 func (a *app) backdropOver(p *ui.Painter, win, band ui.Rect, alpha func(t float32) float32) {
 	bd := &a.backdropCache
+	if !a.settings.Fog && p.Accelerated() && bd.still != nil && band.H > 0 {
+		previous := bd.stillWeight(p.Now())
+		for y := float32(0); y < band.H; y += 2 {
+			o := alpha((y + 1) / band.H)
+			if o > 0.004 {
+				dst := ui.Rect{X: band.X, Y: band.Y + y, W: band.W, H: min(float32(2), band.H-y)}
+				bd.drawStill(p, win, dst, previous, o)
+			}
+		}
+		return
+	}
 	if bd.canvas == nil || win.W <= 0 || win.H <= 0 || band.H <= 0 {
 		return
 	}
