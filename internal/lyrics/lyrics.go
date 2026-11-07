@@ -238,7 +238,7 @@ func isCJK(r rune) bool {
 func Lang(lines []Line) string {
 	for _, l := range lines {
 		for _, r := range l.Text {
-			if unicode.In(r, unicode.Hiragana, unicode.Katakana) && r != 'ー' && r != '・' {
+			if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
 				return "ja"
 			}
 		}
