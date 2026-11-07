@@ -7,7 +7,7 @@ Design sources:
 - [ceed8343de1f1036b4c2c9d76d3f529c05580bb8](https://github.com/egoist/mygo-music/commit/ceed8343de1f1036b4c2c9d76d3f529c05580bb8): category sidebar, cross-page search, hidden title bar and scroll-edge header.
 - [9ebbc6d33f0576bc6a131c27945e6944f44b1aaf](https://github.com/egoist/mygo-music/commit/9ebbc6d33f0576bc6a131c27945e6944f44b1aaf): the whole search field, including its icon, focuses the input.
 
-This is an adapted design port. The branch starts at the local four-backport merge `88cc584a2211172830676acc6c32d8eb372722a4`, preserving those changes.
+This is an adapted design port. The PR branch starts directly at `zhangnjsd/mygo-music` commit `52e0184d258984e6f0184bd52c3a7bcabe8943e1`; the earlier shuffle, Japanese-lyrics, spectrum and library-refresh PRs are independent and are not included.
 
 ## Behavior
 

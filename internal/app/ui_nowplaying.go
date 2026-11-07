@@ -154,7 +154,11 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		side := float32(math.Min(float64(w)*0.36, 440))
 		// The cover leaves room above it for the tabs, starting as far
 		// under them as the wall's song does.
-		coverSize := min(side, h-436)
+		coverRoom := h - 436
+		coverSize := min(side, coverRoom)
+		// Once the cover stops growing, its centered column sinks by half
+		// the spare room. The adjacent pane must not inherit that offset.
+		coverSunk := (coverRoom - coverSize) / 2
 		// The column is as wide as the cover, for the cover, what plays
 		// and the tabs over it to start at one edge, but wide enough for
 		// the controls.
@@ -205,9 +209,11 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				// The pane starts level with the cover beside it, but below the
 				// tabs, which start level with the pane's top: they come and go
 				// with the pointer, so they sit out of the flow, never over it.
+				// Subtract the cover's sink in tall windows so lyrics, comments
+				// and the queue can use the space directly below the tabs.
 				b := pane.LayoutBounds()
 				if b.H > 0 && coverTop > 0 {
-					if top := max(coverTop-b.Y, npTabsHeight+8); top != a.npPaneTop {
+					if top := max(coverTop-coverSunk-b.Y, npTabsHeight+8); top != a.npPaneTop {
 						a.npPaneTop = top
 						c.AnimationFrame()
 					}
@@ -446,6 +452,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		a.lyricTrack, a.lyricAt = tr.ID, -2
 		a.lyricScroll, a.lyricGlide = ui.ScrollState{}, lyricGlide{}
 	}
+	scrollY := a.lyricScroll.Y // offset matching the previous frame
 	lag := a.lyricGlide.step(c, &a.lyricScroll)
 
 	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, h*0.5, 0)
@@ -455,7 +462,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, pos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
+	a.timedLines(c, scroll, lines, pos, cur, lag, scrollY, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
 }
 
 // linesStyle is how timedLines sets its lines: the size, weight and
@@ -468,11 +475,11 @@ type linesStyle struct {
 }
 
 // timedLines fills scroll with lines that follow the track playing at
-// pos: the line at cur lit, and brought to a third of the way down once
-// it changes, but none with cur -1 before the first; a click on one seeks
+// pos: the line at cur lit, brought to a third of the way down when it or
+// the viewport size changes; none with cur -1 before the first. A click seeks
 // to it. The lines are held back by lag, how far the glide to the line
 // lit has still to go (lyricGlide). foot, if set, follows the lines.
-func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, pos time.Duration, cur int, lag float32, st linesStyle, foot func()) {
+func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, pos time.Duration, cur int, lag, scrollY float32, st linesStyle, foot func()) {
 	pl := a.pl
 	var active ui.Element
 	scroll.Children(func() {
@@ -536,19 +543,25 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			foot()
 		}
 	})
-	// Bring the line sung to a third of the way down, once it changed.
-	if cur != a.lyricAt {
-		box := scroll.Bounds()
+	// Follow a new line, or a resized viewport whose width can reflow it.
+	// Unchanged geometry leaves a listener's manual scrolling alone.
+	box := scroll.LayoutBounds()
+	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
+	if cur != a.lyricAt || resized {
 		target := float32(0)
 		if active.Valid() {
 			// Where the glide is going, without where it still is.
 			if lb := active.LayoutBounds(); lb.H > 0 && box.H > 0 {
-				target = lb.Y - box.Y + a.lyricScroll.Y - box.H*0.3
+				// Both boxes are from the previous layout. step may already
+				// have applied a pending target to lyricScroll this build;
+				// adding that new offset would count the scroll twice.
+				target = lb.Y - box.Y + scrollY - box.H*0.3
 			} else {
 				return // not laid out yet: the next frame scrolls
 			}
 		}
 		a.lyricAt = cur
+		a.lyricViewportW, a.lyricViewportH = box.W, box.H
 		a.lyricGlide.to(c, &a.lyricScroll, min(max(0, target), a.lyricScroll.MaxY))
 	}
 }
