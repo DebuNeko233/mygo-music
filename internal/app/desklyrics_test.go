@@ -183,7 +183,8 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	})
 	a.pl.Hold(2 * time.Second)
 
-	settings := ui.NewTester(a.settingsView, 560, 3400)
+	settings := ui.NewTester(a.settingsView, 780, 3400)
+	showSettingsPage(t, settings, "桌面歌词")
 	settings.Frame()
 	if err := settings.Click("单行"); err != nil {
 		t.Fatalf("choosing one line: %v", err)
