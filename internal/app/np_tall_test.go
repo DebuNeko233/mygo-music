@@ -3,8 +3,10 @@ package app
 import (
 	"fmt"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,5 +133,30 @@ func TestLyricsManualScrollStaysAfterResize(t *testing.T) {
 	held, _ := tt.Find("第15句")
 	if held.Y < scrolled.Y-1 || held.Y > scrolled.Y+1 {
 		t.Fatal("lyrics re-centered after manual scrolling")
+	}
+}
+
+// Width-only resizing could reflow long lyrics out of view without asking
+// for a frame to follow them; test-driven Frame calls used to hide this.
+func TestLyricsWidthResizeSchedulesFollowUp(t *testing.T) {
+	a := tallLyricsApp(t)
+	lines, _ := a.pl.Lyrics()
+	for i := range lines {
+		lines[i].Text = fmt.Sprintf("%02d%s", i, strings.Repeat("lyrics ", 14))
+	}
+	a.pl.SetLyrics(lines)
+	tt := ui.NewTester(a.view, 1200, 800)
+	settleTallLyrics(tt)
+	before, ok := tt.AccessByRole(ui.RoleButton, lines[15].Text)
+	if !ok || before.Offscreen {
+		t.Fatal("current line not visible before resize")
+	}
+	tt.SetSize(1400, 800)
+	// Advance renders only frames the view actually requested. Do not call
+	// Frame here: it would conceal the missing layout-followup regression.
+	tt.Advance(2 * time.Second)
+	after, ok := tt.AccessByRole(ui.RoleButton, lines[15].Text)
+	if !ok || after.Offscreen || math.Abs(float64(after.Bounds.Y-before.Bounds.Y)) > 3 {
+		t.Fatalf("resize lost current line: %+v -> %+v", before.Bounds, after.Bounds)
 	}
 }

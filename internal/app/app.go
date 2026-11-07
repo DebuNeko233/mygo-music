@@ -115,6 +115,7 @@ type app struct {
 	lyricAt                        int
 	lyricTrack                     int64
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
+	lyricWindowW, lyricWindowH     float32 // window size whose reflow has been scheduled
 	queueList                      ui.ListState
 	queueAt                        int // the row of the queue pane last scrolled to, -1 while it is hidden
 	comments                       commentState

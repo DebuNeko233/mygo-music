@@ -27,3 +27,5 @@ This fix accompanies the settings design on a PR branch based directly on upstre
 The full ordinary test suite, MyGo vet, the new UI regressions repeated five times, and the focused layout race check passed on macOS. No Windows package was built for this fix.
 
 An expanded race run also reported races in the unchanged `TestEpisodeLikeClickBeatsAnswer` test. Re-running that test alone with `-race -count=5` on the unmodified upstream baseline `52e0184` reproduced the failure: callbacks append to `app.kept` concurrently without the test's `testPost` hook. This pre-existing issue is recorded separately from the layout changes. The slow broad rendering run was stopped after about 5m37s, and focused layout race coverage completed successfully.
+
+A width-only resize now schedules a follow-up build after text is laid out, even when the cover and pane top stay in place. The regression advances only scheduled frames after `SetSize` (no test-forced `Frame` calls), so a missing follow-up cannot be hidden by the test helper.
