@@ -26,8 +26,9 @@ import (
 // the CPU paints it still. Paused, the fog glides to a stop, and the
 // canvas stays as it is.
 //
-// Another song's backdrop fades in over the last one's, which stays as it
-// was, in a canvas of its own, until it is gone.
+// Another song's backdrop fades in over the last one's. The static GPU
+// path keeps only the two small palette states during that transition;
+// fog and software rendering use the previous canvas until it is gone.
 
 // fogSource paints the fog: noise of five octaves, warped by noise of
 // its own so that it billows rather than slides, rising with Time, Fog
@@ -194,7 +195,8 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 	bd := &a.backdropCache
 	if !fog {
 		bd.prepareStill(art, tint, c.Now())
-		// A static background has no lingering fog animation to finish.
+		// Static mode must not ease the old fog's speed or spectrum down:
+		// that scheduled about two seconds of full-size static repaints.
 		bd.speed, bd.level, bd.last = 0, barState{}, time.Time{}
 	} else {
 		bd.still, bd.previousStill = nil, nil
@@ -202,6 +204,9 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 		previous := bd.stillWeight(p.Now())
 		if !fog && p.Accelerated() {
+			// Render at the destination's physical pixels. Keeping a tiny
+			// dithered canvas and stretching it would enlarge its grain and
+			// recreate bands; caching a full-size one costs a resize allocation.
 			bd.canvas, bd.before = nil, nil
 			bd.drawStill(p, r, r, previous, 1)
 			if previous > 0 {

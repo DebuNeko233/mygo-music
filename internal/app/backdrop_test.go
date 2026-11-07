@@ -86,28 +86,47 @@ func TestBackdropPixelResolution(t *testing.T) {
 // Dark gradient samples keep distinctions below one 8-bit color step,
 // so the final pixel dither can reproduce their intermediate averages.
 func TestBackdropRampPrecision(t *testing.T) {
-	tint := ui.RGB(100, 100, 100)
-	ramp := backdropRamp(tint)
-	decode := func(x int) float64 {
-		return float64(uint16(ramp.Pix[x*4])<<8|uint16(ramp.Pix[ramp.Stride+x*4])) / 65535
-	}
-	top, foot := backdropColors(tint)
-	if math.Abs(decode(0)-float64(top.R)/255) > 1.0/65535 ||
-		math.Abs(decode(backdropRampSize-1)-float64(foot.R)/255) > 1.0/65535 {
-		t.Fatal("packed gradient lost its endpoints")
-	}
-	distinct := map[float64]bool{}
-	last := decode(0)
-	for x := range backdropRampSize {
-		v := decode(x)
-		if v > last {
-			t.Fatal("dark gradient reversed its direction")
-		}
-		distinct[v] = true
-		last = v
-	}
-	if len(distinct) <= backdropRampSize/2 {
-		t.Fatalf("only %d distinct colors in a dark gradient", len(distinct))
+	for _, tc := range []struct {
+		name string
+		tint ui.Color
+	}{
+		{"gray", ui.RGB(100, 100, 100)},
+		{"blue", ui.RGB(50, 80, 140)},
+		{"red", ui.RGB(180, 50, 45)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ramp := backdropRamp(tc.tint)
+			decode := func(x, channel int) uint16 {
+				return uint16(ramp.Pix[x*4+channel])<<8 | uint16(ramp.Pix[ramp.Stride+x*4+channel])
+			}
+			top, foot := backdropColors(tc.tint)
+			for i, colors := range [][3]uint8{{top.R, top.G, top.B}, {foot.R, foot.G, foot.B}} {
+				x := i * (backdropRampSize - 1)
+				for channel, want := range colors {
+					if math.Abs(float64(decode(x, channel))/65535-float64(want)/255) > 1.0/65535 {
+						t.Fatalf("endpoint %d channel %d lost precision", i, channel)
+					}
+				}
+			}
+			distinct := map[[3]uint16]bool{}
+			last := decode(0, 0)
+			for x := range backdropRampSize {
+				v := [3]uint16{decode(x, 0), decode(x, 1), decode(x, 2)}
+				if tc.name == "gray" && v[0] > last {
+					t.Fatal("dark gradient reversed its direction")
+				}
+				// The packed bytes are sampled as opaque RGBA. Translucent
+				// rows would be premultiplied and decode to different values.
+				if ramp.Pix[x*4+3] != 255 || ramp.Pix[ramp.Stride+x*4+3] != 255 {
+					t.Fatal("packed gradient bytes are not opaque")
+				}
+				distinct[v] = true
+				last = v[0]
+			}
+			if len(distinct) <= backdropRampSize/2 {
+				t.Fatalf("only %d distinct colors in a dark gradient", len(distinct))
+			}
+		})
 	}
 }
 
@@ -121,30 +140,11 @@ func TestBackdropRampSurvivesResize(t *testing.T) {
 	if palette == nil {
 		t.Fatal("no palette")
 	}
+	ramp := palette.ramp
 	tt.SetScale(2)
 	tt.SetSize(280, 180)
-	if a.backdropCache.still != palette {
+	if a.backdropCache.still != palette || a.backdropCache.still.ramp != ramp {
 		t.Fatal("resize replaced the palette")
-	}
-}
-
-// Turning fog off stops its drift immediately: its old easing state
-// previously repainted the static background another 59 times.
-func TestStaticBackdropStopsFog(t *testing.T) {
-	a := newTestApp()
-	a.settings = defaultSettings()
-	a.backdropCache.speed = 1
-	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
-	at := a.backdropCache.at
-	for range 120 {
-		tt.Advance(backdropFrame)
-		tt.Frame()
-		if a.backdropCache.at != at || a.backdropCache.speed != 0 {
-			t.Fatal("static background kept repainting the fog's easing")
-		}
-	}
-	if tt.FramePending() {
-		t.Fatal("static background requested another frame")
 	}
 }
 
@@ -156,12 +156,17 @@ func TestStillBackdropTransition(t *testing.T) {
 	blue := ui.RGB(50, 80, 140)
 	bd.prepareStill(nil, blue, now)
 	first := bd.still
+	bd.prepareStill(nil, blue, now.Add(backdropFade/4))
+	if bd.still != first || bd.previousStill != nil || bd.stillAt != now {
+		t.Fatal("unchanged background restarted its transition")
+	}
 	bd.prepareStill(&artwork{}, blue, now)
 	if bd.still.ramp != first.ramp || bd.previousStill != first {
 		t.Fatal("unchanged color failed to reuse its ramp")
 	}
+	second := bd.still
 	bd.prepareStill(nil, ui.RGB(180, 50, 45), now)
-	if bd.previousStill == first {
+	if bd.previousStill != second || bd.still.ramp == second.ramp {
 		t.Fatal("rapid track change kept more than the previous palette")
 	}
 	if got := bd.stillWeight(now.Add(backdropFade / 2)); math.Abs(float64(got-0.125)) > 0.001 {
@@ -169,6 +174,25 @@ func TestStillBackdropTransition(t *testing.T) {
 	}
 	if bd.stillWeight(now.Add(backdropFade)) != 0 || bd.previousStill != nil {
 		t.Fatal("transition retained the old palette")
+	}
+}
+
+// Switching to fog drops both static palettes, including a song whose
+// crossfade was interrupted, so unused artwork is no longer retained.
+func TestFogDropsStillPalettes(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	tint := ui.RGB(50, 80, 140)
+	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, tint) }, 240, 160)
+	tint = ui.RGB(180, 50, 45)
+	tt.Frame()
+	if a.backdropCache.still == nil || a.backdropCache.previousStill == nil {
+		t.Fatal("song change did not retain two palettes for its transition")
+	}
+	a.settings.Fog = true
+	tt.Frame()
+	if a.backdropCache.still != nil || a.backdropCache.previousStill != nil {
+		t.Fatal("fog retained static palette states")
 	}
 }
 

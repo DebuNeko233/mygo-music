@@ -13,6 +13,8 @@ import (
 // A still backdrop keeps its colors, not a window-sized image. Each color
 // is 16-bit sRGB, split into two opaque RGBA8 rows; interpolating and then
 // decoding them preserves that precision until the final screen pixel.
+// 512 samples * 2 rows * 4 bytes = 4 KiB, independent of window size.
+// This is the palette's payload, not the renderer's total GPU memory.
 const backdropRampSize = 512
 
 type stillBackdrop struct {
@@ -21,6 +23,11 @@ type stillBackdrop struct {
 	ramp *ui.Bitmap
 }
 
+// Sample the high and low bytes at their row centers, so filtering only
+// interpolates along the ramp. A normalized byte sample is byte/255:
+// (high*256 + low)/257 therefore reconstructs the original value/65535.
+// Decode and blend the cover and previous song before adding dither;
+// quantizing intermediate layers would introduce new band boundaries.
 const stillBackdropSource = `package main
 
 var Origin vec2
@@ -32,6 +39,7 @@ var Alpha float
 func Fragment(dst vec4, pos vec2) vec4 {
 	point := pos + Origin
 	uv := point / Size
+	// Half-texel centers keep the two packed rows from mixing.
 	x := 0.5 + clamp(uv.y, 0, 1)*(image0Size().x-1.0)
 	c := (image0Sample(vec2(x, 0.5)).rgb*256.0 + image0Sample(vec2(x, 1.5)).rgb)/257.0
 	cover := (uv-vec2(0.5))*Size/max(Size.x, Size.y) + vec2(0.5)
@@ -48,6 +56,9 @@ func Fragment(dst vec4, pos vec2) vec4 {
 		c = mix(c, old, Previous)
 	}
 	c *= 1.0 - 0.18*clamp((uv.y-0.55)/0.45, 0, 1)
+	// A fixed +/- half 8-bit step breaks up rounding boundaries. Use
+	// physical window pixels, including when drawing only a wall strip:
+	// the grain must neither shimmer with time nor jump across masks.
 	noise := fract(52.9829189*fract(dot(floor(point*pixelScale()), vec2(0.06711056, 0.00583715)))) - 0.5
 	c = clamp(c + vec3(noise/255.0), vec3(0), vec3(1))
 	return vec4(c*Alpha, Alpha)
@@ -66,7 +77,9 @@ var stillUniforms = sync.OnceValue(func() stillBackdropUniforms {
 })
 
 // prepareStill changes the palette only when its artwork or color changes.
-// A resize changes the draw's coordinates, not these textures.
+// A resize changes the draw's coordinates, not these textures. Repeated
+// builds must not restart a fade; rapid song changes keep only the most
+// recent previous state, rather than a chain of retained textures.
 func (bd *backdropCache) prepareStill(art *artwork, tint ui.Color, now time.Time) {
 	if bd.still != nil && bd.still.art == art && bd.still.tint == tint {
 		return
@@ -83,7 +96,8 @@ func (bd *backdropCache) prepareStill(art *artwork, tint ui.Color, now time.Time
 	bd.stillAt = now
 }
 
-// stillWeight releases the old palette when the existing crossfade ends.
+// stillWeight drops our reference to the previous palette after the
+// crossfade; actual GPU resource reclamation belongs to the renderer.
 func (bd *backdropCache) stillWeight(now time.Time) float32 {
 	if bd.previousStill == nil {
 		return 0
@@ -102,6 +116,8 @@ func (bd *backdropCache) drawStill(p *ui.Painter, win, r ui.Rect, previous, alph
 	if bd.still == nil || win.W <= 0 || win.H <= 0 {
 		return
 	}
+	// Shader.Draw copies the values into its draw command, so reusing this
+	// storage for several wall strips cannot change an earlier command.
 	if bd.stillValues == nil {
 		bd.stillValues = stillBackdropShader().NewValues()
 	}
@@ -123,7 +139,10 @@ func (bd *backdropCache) drawStill(p *ui.Painter, win, r ui.Rect, previous, alph
 	stillBackdropShader().Draw(p, r, shader.Options{Values: v, Images: images})
 }
 
-// backdropRamp does the Oklab conversion once per song, not per screen pixel.
+// backdropRamp interpolates in Oklab and converts to sRGB once per tint,
+// rather than doing these conversions for every physical screen pixel.
+// Packing happens at 16-bit precision; the shader delays the final 8-bit
+// rounding until after its composition and physical-pixel dither.
 func backdropRamp(tint ui.Color) *image.RGBA {
 	top, foot := backdropColors(tint)
 	a, b := backdropLab(top), backdropLab(foot)
@@ -153,6 +172,8 @@ func backdropRamp(tint ui.Color) *image.RGBA {
 			img.Pix[x*4+i] = byte(v >> 8)
 			img.Pix[img.Stride+x*4+i] = byte(v)
 		}
+		// Both rows are data, not translucent colors: opaque alpha avoids
+		// premultiplication changing the stored high and low bytes.
 		img.Pix[x*4+3], img.Pix[img.Stride+x*4+3] = 255, 255
 	}
 	return img

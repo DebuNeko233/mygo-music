@@ -102,3 +102,32 @@ func TestBackdropFadeEnds(t *testing.T) {
 		t.Error("the last song's backdrop still fades after the fade")
 	}
 }
+
+// Turning fog off discards its speed and bass immediately: the old easing
+// state repainted the static background for about two seconds after a switch.
+func TestStaticBackdropStopsFog(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settings.Fog = true
+	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
+	// Tester uses software rendering, so seed the moving GPU fog's state
+	// before switching modes; no audio device or wall-clock phase is needed.
+	bd := &a.backdropCache
+	bd.speed, bd.last = 1, time.Unix(1, 0)
+	bd.level.h[0], bd.level.last = 1, bd.last
+	a.settings.Fog = false
+	tt.Frame()
+	at, canvas := bd.at, bd.canvas
+	for range 120 {
+		tt.Advance(backdropFrame)
+		tt.Frame()
+		// FramePending alone misses delayed Painter.After callbacks, so
+		// also verify that the cache and paint timestamp never change.
+		if bd.at != at || bd.canvas != canvas || bd.speed != 0 || bd.level != (barState{}) || !bd.last.IsZero() {
+			t.Fatal("static background kept the fog's animation state or repainted")
+		}
+		if tt.FramePending() {
+			t.Fatal("static background requested another frame")
+		}
+	}
+}
