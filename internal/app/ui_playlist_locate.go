@@ -7,25 +7,43 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// playlistHeaderKey holds the text sources that can change the header's height.
+// Keep values: a rename or refresh can mutate the existing playlist in place.
+type playlistHeaderKey struct {
+	name, description, creator, frequency string
+	tracks                                int
+	plays                                 float64
+}
+
 // playlistViewport keeps viewport/target values, never UI elements.
 type playlistViewport struct {
 	y, width, height float32
 	playlist, song   int64
 	index            int
+	header           playlistHeaderKey
 }
 
 // Geometry queries read the committed frame. After a scroll or resize, build
 // once more to read the newly laid-out rows, including a small movement that
 // changes visibility behind a bar without changing ListState.Visible's range.
-// A new playlist/song/index also gets that pass, so refreshed rows cannot
-// reuse stale geometry. No frames are requested while these are unchanged.
-func (a *app) syncPlaylistViewport(c *ui.Context, at int) {
+// A new target or header text also gets that pass: text wrapping can move
+// rows behind a bar even while the scroll offset and list range stay the same.
+// No frames are requested while these are unchanged.
+func (a *app) syncPlaylistViewport(c *ui.Context, pl *netease.Playlist, at int) {
 	w, h := c.Size()
 	var song int64
 	if current := a.pl.Current(); current != nil {
 		song = current.ID
 	}
-	next := playlistViewport{a.pageScroll.Y, w, h, a.route.id, song, at}
+	next := playlistViewport{
+		y: a.pageScroll.Y, width: w, height: h,
+		playlist: a.route.id, song: song, index: at,
+		header: playlistHeaderKey{
+			name: pl.Name, description: pl.Description,
+			creator: pl.Creator.Nickname, frequency: pl.UpdateFreq,
+			tracks: len(pl.Tracks), plays: pl.PlayCount,
+		},
+	}
 	if next != a.locateViewport {
 		a.locateViewport = next
 		c.AnimationFrame()

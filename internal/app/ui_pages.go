@@ -250,7 +250,7 @@ func (a *app) playlistPage(c *ui.Context) {
 		return
 	}
 	at := a.playlistCurrentIndex(pl.Tracks)
-	a.syncPlaylistViewport(c, at)
+	a.syncPlaylistViewport(c, pl, at)
 	visible := a.trackRows(c, pl.Tracks, true, func(c *ui.Context) { a.playlistHeader(c, pl) })
 	a.playlistLocateButton(c, at, visible)
 }
