@@ -100,6 +100,8 @@ type app struct {
 	navScroll  ui.ScrollState
 	scrolled   route // the page trackList and pageScroll are of
 
+	locateViewport playlistViewport
+
 	mineCollapsed, savedCollapsed bool
 
 	query       string
