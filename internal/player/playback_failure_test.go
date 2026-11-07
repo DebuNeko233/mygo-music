@@ -105,7 +105,7 @@ func TestCorruptFLACKeepsSelectedSong(t *testing.T) {
 	t.Cleanup(func() { songURL = old })
 	ch, p := newLoadPlayer(t, nil)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}, {ID: 3, Duration: 5000}}, 0)
-	pump(t, ch, "decoder retries to stop on the selected song", func() bool { return !p.Playing() && !p.Loading() && p.Err() != "" })
+	pumpFor(t, ch, "decoder retries to stop on the selected song", 15*time.Second, func() bool { return !p.Playing() && !p.Loading() && p.Err() != "" })
 	if p.Current().ID != 1 || p.tries != loadTries {
 		t.Fatalf("song=%d retries=%d error=%q", p.Current().ID, p.tries, p.Err())
 	}

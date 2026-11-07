@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -53,8 +54,14 @@ func serveURL(t *testing.T, srv *httptest.Server, size int) {
 // pump runs what the player posts on the test's goroutine, until done is
 // true: a player only changes as its posts run.
 func pump(t *testing.T, ch chan func(), what string, done func() bool) {
+	pumpFor(t, ch, what, 10*time.Second, done)
+}
+
+// pumpFor runs the player's posts until done, allowing for a deliberately
+// long retry gap when the test exercises NetEase's risk check.
+func pumpFor(t *testing.T, ch chan func(), what string, wait time.Duration, done func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(wait)
 	for !done() {
 		if time.Now().After(deadline) {
 			t.Fatalf("waited for %s", what)
@@ -209,9 +216,47 @@ func TestRiskControlUsesLongerRetryGaps(t *testing.T) {
 	}
 }
 
+// Risk control keeps asking for the next song until the one playing ends.
+func TestRiskControlPrefetchIsNotLimited(t *testing.T) {
+	var asks atomic.Int64
+	ch := make(chan func(), 64)
+	p := New(func(fn func()) { ch <- fn })
+	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+	p.Hold(time.Second)
+	ask := func(int64, string) (*netease.Stream, error) {
+		asks.Add(1)
+		return nil, netease.ErrRiskControl
+	}
+	p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
+	for i := 0; i < prefetchTries+2; i++ {
+		before := asks.Load()
+		pumpFor(t, ch, "another prefetch while the song still plays", 12*time.Second, func() bool { return asks.Load() > before })
+	}
+}
+
+// A prefetch waiting out risk control stops when the song has moved on.
+func TestRiskControlPrefetchStopsWhenTheSongMovesOn(t *testing.T) {
+	var asks atomic.Int64
+	ch := make(chan func(), 64)
+	p := New(func(fn func()) { ch <- fn })
+	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+	p.Hold(time.Second)
+	ask := func(int64, string) (*netease.Stream, error) {
+		asks.Add(1)
+		return nil, netease.ErrRiskControl
+	}
+	p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, prefetchTries)
+	p.gen++ // Next, previous, or another queue invalidates this wait.
+	run(ch)
+	time.Sleep(50 * time.Millisecond)
+	if got := asks.Load(); got != 1 {
+		t.Errorf("the old song asked again: %d requests", got)
+	}
+}
+
 // Temporary errors on one song leave the next one able to load.
 func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
-	b := song(t)
+	b := bytes.Repeat(song(t), 15) // Long enough for the risk-check waits.
 	srv, _ := songServer(t, b)
 	var asks sync.Map
 	old := songURL
@@ -227,12 +272,15 @@ func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 	defer func() { songURL = old }()
 	c := NewCache(t.TempDir(), 1<<30)
 	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
-	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
-	pump(t, ch, "the first song after a temporary refusal", func() bool { return p.out != nil })
+	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5 * 60 * 1000}, {ID: 2, Duration: 5 * 60 * 1000}}, 0)
+	pumpFor(t, ch, "the first song after a temporary refusal", 45*time.Second, func() bool { return p.out != nil })
 	if p.err != "" || p.Current().ID != 1 {
 		t.Fatalf("did not recover: %s", p.Err())
 	}
-	pump(t, ch, "the next song after the same refusal", func() bool { return p.ahead != nil && p.ahead.dl.Err() == nil && p.ahead.dl.Progress() == 1 })
+	pumpFor(t, ch, "the next song after the same refusal", 60*time.Second, func() bool { return p.ahead != nil && p.ahead.dl.Err() == nil && p.ahead.dl.Progress() == 1 })
+	if p.ahead == nil {
+		t.Fatalf("next song had no prefetch: error=%q", p.Err())
+	}
 }
 
 // A track that does not load at all stops there, with what went wrong on
@@ -249,7 +297,7 @@ func TestLoadFailureDoesNotSkip(t *testing.T) {
 	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
 
-	pump(t, ch, "the load to give up", func() bool { return !p.loading && p.err != "" })
+	pumpFor(t, ch, "the load to give up", 15*time.Second, func() bool { return !p.loading && p.err != "" })
 	if id := p.Current().ID; id != 1 {
 		t.Errorf("skipped to track %d", id)
 	}
