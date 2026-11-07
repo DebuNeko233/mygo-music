@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+// NetEase's risk check is a retryable refusal, not a song restriction.
+func TestSongURLMarksRiskControl(t *testing.T) {
+	answer(t, func(*http.Request) string { return `{"code":-460,"message":"risk"}` })
+	_, err := SongURL(1, "exhigh")
+	if !errors.Is(err, ErrRiskControl) {
+		t.Fatalf("error %v does not identify risk control", err)
+	}
+}
+
 // A missing playback URL is not proof of a song restriction, even in a successful API response.
 func TestSongURLDistinguishesMissingURLAndPreview(t *testing.T) {
 	deviceOnce.Do(func() { deviceID = strings.Repeat("0", 52) })

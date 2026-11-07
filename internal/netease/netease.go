@@ -396,6 +396,11 @@ var ErrUnavailable = errors.New("this song isn't available to stream")
 // meets it may take the song for one that cannot play.
 var ErrNotLoggedIn = errors.New("the listener is not signed in")
 
+// ErrRiskControl is NetEase temporarily refusing a playback address while
+// checking the network. The address may work a little later; callers should
+// retry it after a longer gap rather than treating the song as unavailable.
+var ErrRiskControl = errors.New("NetEase is checking the network")
+
 // Stream is where a track streams from, and what it is.
 type Stream struct {
 	URL  string `json:"-"`
@@ -448,6 +453,12 @@ func SongURL(id int64, level string) (*Stream, error) {
 	case 200:
 	case 301:
 		return nil, ErrNotLoggedIn
+	case -460:
+		msg := res.Message
+		if msg == "" {
+			msg = res.Msg
+		}
+		return nil, fmt.Errorf("%w: netease: song url: code %d %s", ErrRiskControl, res.Code, msg)
 	default:
 		msg := res.Message
 		if msg == "" {

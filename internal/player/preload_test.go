@@ -190,6 +190,25 @@ func TestLoadRetries(t *testing.T) {
 	}
 }
 
+// Risk control waits six seconds when the song is due, ten when it is only
+// being fetched ahead; an ordinary failure keeps the existing backoff.
+func TestRiskControlUsesLongerRetryGaps(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		what func(int, error) time.Duration
+		want time.Duration
+	}{
+		{netease.ErrRiskControl, loadGap, 6 * time.Second},
+		{errors.New("connection dropped"), loadGap, 400 * time.Millisecond},
+		{netease.ErrRiskControl, prefetchGap, 10 * time.Second},
+		{errors.New("connection dropped"), prefetchGap, 400 * time.Millisecond},
+	} {
+		if got := tc.what(1, tc.err); got != tc.want {
+			t.Errorf("retry gap for %v: %s, want %s", tc.err, got, tc.want)
+		}
+	}
+}
+
 // Temporary errors on one song leave the next one able to load.
 func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 	b := song(t)
@@ -201,7 +220,7 @@ func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 		n := v.(*int)
 		*n++
 		if *n < 3 {
-			return nil, errors.New("netease: song url: code -460")
+			return nil, netease.ErrRiskControl
 		}
 		return &netease.Stream{URL: fmt.Sprintf("%s/%d", srv.URL, id), Size: int64(len(b)), Level: level, Type: "mp3"}, nil
 	}

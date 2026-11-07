@@ -747,7 +747,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		// What did not come now may come again: a stream URL gone stale,
 		// or a connection dropped, is asked for again a moment later.
 		if p.tries < loadTries {
-			p.retry(at, skipped, from)
+			p.retry(at, skipped, from, err)
 			return
 		}
 		p.err = "加载失败，请重试"
@@ -787,11 +787,11 @@ const lyricTries = 3
 // retry loads the track at at again in a moment, still loading as it
 // waits: a stream URL gone stale, or a connection dropped, may work once
 // more.
-func (p *Player) retry(at, skipped int, from time.Duration) {
+func (p *Player) retry(at, skipped int, from time.Duration, err error) {
 	p.tries++
 	p.loading = true
 	gen, tries := p.gen, p.tries
-	time.AfterFunc(retryGap(tries), func() {
+	time.AfterFunc(loadGap(tries, err), func() {
 		p.post(func() {
 			if gen == p.gen {
 				p.loadSkipping(at, skipped, p.playing, from)
@@ -805,6 +805,24 @@ func (p *Player) retry(at, skipped int, from time.Duration) {
 // time, for a network that may be back by then.
 func retryGap(n int) time.Duration { return (400 << (n - 1)) * time.Millisecond }
 
+// loadGap gives NetEase's risk check six seconds between immediate tries,
+// rather than the shorter gaps used for an ordinary connection failure.
+func loadGap(n int, err error) time.Duration {
+	if errors.Is(err, netease.ErrRiskControl) {
+		return 6 * time.Second
+	}
+	return retryGap(n)
+}
+
+// prefetchGap gives a background risk-check retry ten seconds, without
+// changing the backoff for other failures.
+func prefetchGap(n int, err error) time.Duration {
+	if errors.Is(err, netease.ErrRiskControl) {
+		return 10 * time.Second
+	}
+	return retryGap(n)
+}
+
 // cutOff runs as what plays comes to its end: the song's, or the
 // download's, cut off, which is played again from where it stopped.
 func (p *Player) cutOff() {
@@ -816,7 +834,7 @@ func (p *Player) cutOff() {
 	dl, _ := p.stream.source()
 	dl.discard()
 	if p.tries < loadTries {
-		p.retry(p.at, 0, p.Position())
+		p.retry(p.at, 0, p.Position(), err)
 		return
 	}
 	// It cannot be had: stop where it stopped, for the listener to play
@@ -881,7 +899,7 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 		if !errors.Is(err, netease.ErrUnavailable) && !errors.Is(err, netease.ErrNotLoggedIn) {
 			// A URL gone stale, or a network down for a moment: asked for
 			// again in a moment, as it may be back by then.
-			p.prefetchLater(gen, t, level, ask, nil, try)
+			p.prefetchLater(gen, t, level, ask, nil, try, err)
 		}
 		return
 	}
@@ -908,15 +926,15 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 	// this wait used to give an unknown-size prefetch no retry at all.
 	dl.waitFor(math.MaxInt64)
 	if dl.Err() != nil {
-		p.prefetchLater(gen, t, level, ask, dl, try)
+		p.prefetchLater(gen, t, level, ask, dl, try, dl.Err())
 	}
 }
 
 // prefetchLater asks for the track fetched ahead again in a moment, as try
 // says: what came in badly is let go of first, so that the fetch that
 // follows is the one the player keeps.
-func (p *Player) prefetchLater(gen int, t netease.Track, level string, ask asker, failed *download, try int) {
-	time.AfterFunc(retryGap(try), func() {
+func (p *Player) prefetchLater(gen int, t netease.Track, level string, ask asker, failed *download, try int, err error) {
+	time.AfterFunc(prefetchGap(try, err), func() {
 		p.post(func() {
 			if gen != p.gen {
 				return // what plays moved on
