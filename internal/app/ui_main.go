@@ -21,6 +21,11 @@ func (a *app) view(c *ui.Context) {
 	c.SetTheme(&t)
 
 	a.shortcuts(c)
+	active := c.WindowActive()
+	if active && a.wasBehind {
+		a.freshenLibrary()
+	}
+	a.wasBehind = !active
 
 	if c.Vibrancy() {
 		c.Root().Background(ui.Transparent)
@@ -114,6 +119,7 @@ func (a *app) shortcuts(c *ui.Context) {
 func (a *app) open(r route) {
 	a.nowPlaying = false
 	if r == a.route {
+		a.load(r)
 		return
 	}
 	a.history, a.forward = append(a.history, a.route), nil
@@ -136,6 +142,7 @@ func (a *app) load(r route) {
 		a.freshenHome()
 	case pagePlaylist:
 		a.loadPlaylist(r.id, false)
+		a.freshenLikes()
 	case pageSearch:
 		a.loadSearch(r, false)
 	case pageArtist:
@@ -458,41 +465,6 @@ func dailyRenewed(loaded, now time.Time) bool {
 
 // playlistDetail is what a playlist is asked of NetEase with.
 var playlistDetail func(id int64) (*netease.Playlist, error) = netease.PlaylistDetail
-
-func (a *app) loadPlaylist(id int64, thenPlay bool) {
-	if pl := a.playlists[id]; pl != nil {
-		if thenPlay {
-			a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
-		}
-		return
-	}
-	if a.loadingPl[id] {
-		// It is on its way: what asked for it plays once it is here, rather
-		// than the ask being dropped and the button doing nothing.
-		if thenPlay {
-			a.plPlay[id] = true
-		}
-		return
-	}
-	a.loadingPl[id] = true
-	delete(a.plErr, id)
-	go func() {
-		pl, err := playlistDetail(id)
-		a.post(func() {
-			delete(a.loadingPl, id)
-			play := thenPlay || a.plPlay[id]
-			delete(a.plPlay, id)
-			if err != nil {
-				a.plErr[id] = "歌单加载失败"
-				return
-			}
-			a.playlists[id] = pl
-			if play {
-				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
-			}
-		})
-	}()
-}
 
 func firstPlayable(tracks []netease.Track) int {
 	for i := range tracks {

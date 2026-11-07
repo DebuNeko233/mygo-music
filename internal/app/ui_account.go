@@ -95,6 +95,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
 	a.likedPrograms, a.askedPrograms = nil, nil
 	a.homeGen++ // Invalidate pending home page requests
+	a.resetLibraryFreshness()
 	// What the listener may play, and follows, changed: load the pages
 	// again.
 	a.playlists = map[int64]*netease.Playlist{}

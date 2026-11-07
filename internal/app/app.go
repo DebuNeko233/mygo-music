@@ -39,6 +39,9 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
+	listRefresh libraryRefreshState
+	wasBehind   bool
+
 	win    *mygo.Window
 	notch  *notch
 	lyrics *deskLyrics // the lyrics in their own window, once it is made

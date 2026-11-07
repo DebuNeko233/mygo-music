@@ -82,9 +82,11 @@ func (a *app) toggleSaved(pl netease.Playlist) {
 	save := !a.isSaved(&pl)
 	at := a.setSaved(pl, save, 0)
 	uid := a.profile.UserID
+	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := savePlaylist(id, save)
 		a.post(func() {
+			finishEdit()
 			delete(a.savingPl, id)
 			switch {
 			case a.profile == nil || a.profile.UserID != uid:
@@ -123,22 +125,10 @@ func (a *app) setSaved(pl netease.Playlist, save bool, at int) int {
 	return was
 }
 
-// loadMine loads the playlists the listener uid made and saved.
-func (a *app) loadMine(uid int64) {
-	go func() {
-		made, saved, err := netease.UserPlaylists(uid)
-		a.post(func() {
-			if err == nil && a.profile != nil && a.profile.UserID == uid {
-				a.mine, a.saved = made, saved
-			}
-		})
-	}()
-}
-
 // playlistChanged forgets what was loaded of playlist id, which NetEase
 // changed: loaded anew if shown, and the sidebar's covers with it.
 func (a *app) playlistChanged(id int64) {
-	delete(a.playlists, id)
+	a.forgetPlaylist(id)
 	if a.route.page == pagePlaylist && a.route.id == id {
 		a.loadPlaylist(id, false)
 	}
@@ -180,9 +170,11 @@ func (a *app) submitName() {
 		}
 		old := pl.Name
 		a.setPlaylistName(id, name)
+		finishEdit := a.beginLibraryEdit()
 		go func() {
 			err := renamePlaylist(id, name)
 			a.post(func() {
+				finishEdit()
 				if err != nil {
 					a.setPlaylistName(id, old)
 					a.toast = "重命名失败，请稍后再试"
@@ -194,9 +186,11 @@ func (a *app) submitName() {
 	d.busy = true
 	add := d.add
 	uid := a.profile.UserID // Capture UID for validation
+	finishEdit := a.beginLibraryEdit()
 	go func() {
 		pl, err := createPlaylist(name)
 		a.post(func() {
+			finishEdit()
 			// Validate that the user is still logged in with the same account
 			if a.profile == nil || a.profile.UserID != uid {
 				a.naming.busy = false
@@ -216,6 +210,7 @@ func (a *app) submitName() {
 			a.mine = slices.Insert(a.mine, at, *pl)
 			pl.Tracks = nil
 			a.playlists[pl.ID] = pl
+			a.touchPlaylist(pl.ID)
 			a.open(route{page: pagePlaylist, id: pl.ID})
 			if add != nil {
 				a.addTo(pl.ID, add)
@@ -252,15 +247,17 @@ func (a *app) deleteChosen() {
 		}
 		a.show(r)
 	}
+	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := deletePlaylist(id)
 		a.post(func() {
+			finishEdit()
 			if err != nil {
 				a.mine = slices.Insert(a.mine, min(i, len(a.mine)), pl)
 				a.toast = "删除失败，请稍后再试"
 				return
 			}
-			delete(a.playlists, id)
+			a.forgetPlaylist(id)
 			a.toast = "已删除歌单"
 		})
 	}()
@@ -278,9 +275,11 @@ func (a *app) setPlaylistName(id int64, name string) {
 // addTo adds tr to the listener's playlist pid; a toast says how it went.
 func (a *app) addTo(pid int64, tr *netease.Track) {
 	id := tr.ID
+	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := addToPlaylist(pid, id)
 		a.post(func() {
+			finishEdit()
 			switch {
 			case errors.Is(err, netease.ErrInPlaylist):
 				a.toast = "歌曲已在歌单中"
@@ -305,9 +304,11 @@ func (a *app) removeFrom(pid int64, tr *netease.Track) {
 		before = pl.Tracks
 		pl.Tracks = slices.DeleteFunc(slices.Clone(before), func(t netease.Track) bool { return t.ID == id })
 	}
+	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := removeFromPlaylist(pid, id)
 		a.post(func() {
+			finishEdit()
 			if err != nil {
 				if pl != nil && a.playlists[pid] == pl {
 					pl.Tracks = before
