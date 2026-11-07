@@ -47,7 +47,7 @@ func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Colo
 
 // link is text in a RichText that opens a page.
 func (a *app) link(c *ui.Context, text string, color, hover ui.Color, r route) {
-	link := ui.Link(c, text, "").TextColor(color)
+	link := ui.Link(c, text, "").Label("查看：" + text).TextColor(color)
 	if link.Hovered() {
 		link.TextColor(hover)
 	}

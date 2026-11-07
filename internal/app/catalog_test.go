@@ -353,11 +353,9 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 	tt.Advance(time.Second)
 	tt.Frame()
 	// The host, as Now Playing credits them, not the podcast's.
-	r, ok := tt.Find(d.podcast.DJ.Nickname)
-	if !ok {
-		t.Fatal("no host")
+	if err := tt.Click("查看：" + d.podcast.DJ.Nickname); err != nil {
+		t.Fatal(err)
 	}
-	tt.ClickAt(r.X+4, r.Y+r.H/2)
 	tt.Frame()
 	if a.nowPlaying || a.route != (route{page: pagePodcast, id: 5}) {
 		t.Fatalf("Now Playing open %v over %+v", a.nowPlaying, a.route)
