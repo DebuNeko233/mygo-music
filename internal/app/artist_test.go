@@ -31,7 +31,7 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 	tt.Frame()
 
 	// The second of two artists credited.
-	if err := tt.Click("乙"); err != nil {
+	if err := tt.Click("查看：乙"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -41,7 +41,9 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 
 	tt.Advance(time.Second)
 	tt.Frame()
-	if err := tt.Click("丙"); err != nil {
+	// A sole artist also names its RichText paragraph: target the link's
+	// explicit label so MyGo 0.8's hit check doesn't pick that paragraph.
+	if err := tt.Click("查看：丙"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
