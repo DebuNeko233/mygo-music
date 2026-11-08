@@ -561,13 +561,16 @@ func Fetch(url string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", UserAgent)
+	if cache := images.Load(); cache != nil {
+		return cache.fetch(req)
+	}
 	res, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, errors.New(res.Status)
+		return nil, coverHTTPError{res.StatusCode, res.Status}
 	}
 	return io.ReadAll(res.Body)
 }
