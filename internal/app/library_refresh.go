@@ -124,7 +124,6 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	r.failed = false
 	if was == nil {
 		a.loadingPl[id] = true
-		delete(a.plErr, id)
 	}
 	var before netease.Playlist
 	if was != nil {
@@ -184,6 +183,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 				return
 			}
 			a.playlists[id] = pl
+			delete(a.plErr, id)
 			req.keep(bytes)
 			if was == nil && play {
 				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))

@@ -23,7 +23,7 @@ func (a *app) loadHomeModules(failedOnly bool) {
 	if !failedOnly {
 		a.homeFailures = map[string]bool{}
 	}
-	a.homeLoading, a.homeErr = true, ""
+	a.homeLoading = true
 	a.homePending = 0
 	run := func(key string) bool {
 		if failedOnly && !a.homeFailures[key] {
@@ -98,6 +98,7 @@ func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T
 				a.homeLoading = false
 				if !a.homeFailed {
 					a.homeAt = time.Now()
+					a.homeErr = ""
 				}
 				if a.homeFailed && len(a.featured) == 0 && len(a.charts) == 0 {
 					a.homeErr = "暂无离线内容，请检查网络后重试"

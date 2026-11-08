@@ -129,7 +129,7 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 			req.Header.Set("If-Modified-Since", old.Modified)
 		}
 	}
-	response, err := httpClient.Do(req)
+	response, err := DoRequest(httpClient, req)
 	if err != nil {
 		f.err = err
 		return
@@ -300,5 +300,5 @@ func RetryableCoverError(err error) bool {
 		return status.code >= 500 || status.code == 408 || status.code == 429
 	}
 	var network net.Error
-	return errors.As(err, &network) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
+	return errors.Is(err, ErrOffline) || errors.As(err, &network) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }

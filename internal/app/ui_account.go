@@ -136,6 +136,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.homeLoading = false
 	a.homeFailed = false
+	a.homeErr = ""
 	a.homeFailures = nil
 	a.dirtySnapshots = nil
 	a.featured, a.charts, a.daily = nil, nil, nil

@@ -29,7 +29,7 @@ func (a *app) loadAlbum(id int64) {
 	if d.album != nil && d.err == "" || d.loading {
 		return
 	}
-	d.loading, d.err = true, ""
+	d.loading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("album/%d", id)), a.homeGen
 	go func() {
 		var kept *netease.AlbumProfile
@@ -53,6 +53,7 @@ func (a *app) loadAlbum(id int64) {
 				return
 			}
 			d.album = al
+			d.err = ""
 			req.keep(bytes)
 		})
 	}()
@@ -62,7 +63,7 @@ func (a *app) albumPage(c *ui.Context) {
 	id := a.route.id
 	d := a.albums[id]
 	if d.album == nil {
-		if !d.loading {
+		if !d.loading || d.err != "" {
 			a.centered(c, d.err, func() { a.loadAlbum(id) })
 			return
 		}

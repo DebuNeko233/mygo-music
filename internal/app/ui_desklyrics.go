@@ -549,6 +549,10 @@ func (d *deskLyrics) view(c *ui.Context) {
 	}
 
 	switch {
+	case len(lines) == 0 && pl.LyricsError() != "":
+		ui.Column(c).Fill().Center().Children(func() {
+			ui.Text(c, pl.LyricsError()).FontSize(size * .8).FontWeight(weight).TextColor(idle).PassThrough()
+		})
 	case len(lines) == 0 && loaded:
 		ui.Column(c).Fill().Center().Children(func() {
 			ui.Text(c, "纯音乐，请欣赏").FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()

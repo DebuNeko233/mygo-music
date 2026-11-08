@@ -193,6 +193,8 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 					status := "-" + clock(pl.Duration()-pl.Position())
 					if pl.Loading() {
 						status = "正在缓冲…"
+					} else if pl.Err() != "" {
+						status = pl.Err()
 					}
 					ui.Text(c, status).FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.5))
 				})
@@ -427,12 +429,16 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 	lines, loaded := pl.Lyrics()
 	if len(lines) == 0 {
 		col := ui.Column(c).Grow(1)
-		if loaded {
+		if loaded || pl.LyricsError() != "" {
 			col.Center()
 		}
 		dim, _ := a.quietShown(c, col, tr, lines, loaded)
 		quietUnder(col, dim)
 		col.Children(func() {
+			if !loaded && pl.LyricsError() != "" {
+				ui.Text(c, pl.LyricsError()).FontSize(16).TextColor(white.Alpha(.5))
+				return
+			}
 			if !loaded {
 				lyricsSkeleton(c, npShimmer(c))
 				return

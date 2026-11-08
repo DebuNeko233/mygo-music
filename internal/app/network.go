@@ -1,6 +1,9 @@
 package app
 
-import "github.com/egoist/mygo"
+import (
+	"github.com/egoist/mygo"
+	"netease-music-mygo/internal/netease"
+)
 
 type networkState struct {
 	known, offline bool
@@ -16,6 +19,7 @@ var readNetworkStatus = mygo.Network.Status
 func (a *app) watchNetwork() {
 	a.network.known = true
 	a.network.offline = !readNetworkStatus().Online
+	netease.SetOffline(a.network.offline)
 	a.network.stop = mygo.Network.OnChanged(a.networkChanged)
 }
 
@@ -28,6 +32,10 @@ func (a *app) networkChanged(status mygo.NetworkStatus) {
 		return // metered-only changes need no reload
 	}
 	a.network.known, a.network.offline = true, offline
+	netease.SetOffline(offline)
+	if offline {
+		a.pl.NetworkOffline()
+	}
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()
 		a.recovery.timer = nil

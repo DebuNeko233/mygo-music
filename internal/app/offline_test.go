@@ -19,7 +19,7 @@ func offlineFixture(t *testing.T) (*app, chan func()) {
 	a.browseCache = diskcache.New(filepath.Join(t.TempDir(), "browse"), 1<<20)
 	a.identityCache = diskcache.New(filepath.Join(t.TempDir(), "identity"), 64<<10)
 	a.profile = &netease.Profile{UserID: 7, Nickname: "Offline"}
-	t.Cleanup(func() { a.browseCache.Close(); a.identityCache.Close() })
+	t.Cleanup(func() { netease.SetOffline(false); a.browseCache.Close(); a.identityCache.Close() })
 	return a, posts
 }
 

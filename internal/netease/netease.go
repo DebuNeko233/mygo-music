@@ -200,7 +200,7 @@ func post(path string, form url.Values, out any) error {
 func do(req *http.Request, out any) error {
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Referer", apiBase+"/")
-	res, err := httpClient.Do(req)
+	res, err := DoRequest(httpClient, req)
 	if err != nil {
 		return err
 	}
@@ -564,7 +564,7 @@ func Fetch(url string) ([]byte, error) {
 	if cache := images.Load(); cache != nil {
 		return cache.fetch(req)
 	}
-	res, err := httpClient.Do(req)
+	res, err := DoRequest(httpClient, req)
 	if err != nil {
 		return nil, err
 	}

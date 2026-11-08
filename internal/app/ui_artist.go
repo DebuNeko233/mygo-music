@@ -140,7 +140,7 @@ func (a *app) loadArtist(id int64) {
 		}
 		return
 	}
-	d.loading, d.err = true, ""
+	d.loading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("artist/%d", id)), a.homeGen
 	go func() {
 		var kept *netease.ArtistProfile
@@ -167,6 +167,7 @@ func (a *app) loadArtist(id int64) {
 				return
 			}
 			d.profile = ar
+			d.err = ""
 			req.keep(bytes)
 			// Their events are their account's, which their profile names.
 			if a.artistTab == artistEvents && a.route == (route{page: pageArtist, id: id}) {
@@ -181,7 +182,7 @@ func (a *app) loadLatest(id int64) {
 	if d.latest != nil && d.latestErr == "" || d.latestLoading {
 		return
 	}
-	d.latestLoading, d.latestErr = true, ""
+	d.latestLoading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("artist-latest/%d", id)), a.homeGen
 	go func() {
 		var kept []netease.Track
@@ -205,6 +206,7 @@ func (a *app) loadLatest(id int64) {
 				return
 			}
 			d.latest = songs
+			d.latestErr = ""
 			req.keep(bytes)
 		})
 	}()
@@ -346,7 +348,7 @@ func (a *app) artistPage(c *ui.Context) {
 	id := a.route.id
 	d := a.artist(id)
 	if d.profile == nil {
-		if !d.loading {
+		if !d.loading || d.err != "" {
 			a.centered(c, d.err, func() { a.loadArtist(id) })
 			return
 		}
@@ -378,7 +380,7 @@ func (a *app) artistPage(c *ui.Context) {
 		switch {
 		case d.latest != nil:
 			songs = d.latest
-		case d.latestLoading:
+		case d.latestLoading && d.latestErr == "":
 			a.trackSkeleton(c, a.pageShimmer(c), true, header)
 			return
 		default:

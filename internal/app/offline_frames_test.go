@@ -5,9 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // With NM_FRAMES set, saves the offline account hint and both cache controls
@@ -47,5 +50,42 @@ func TestOfflineFrames(t *testing.T) {
 			}
 			file.Close()
 		}
+	}
+}
+
+// With NM_FRAMES set, saves settled uncached audio/lyrics failures after a
+// system disconnect, rather than a buffering label and animated skeleton.
+func TestOfflineUnavailableFrames(t *testing.T) {
+	dir := os.Getenv("NM_FRAMES")
+	if dir == "" {
+		t.Skip()
+	}
+	for _, dark := range []bool{false, true} {
+		a, posts := offlineFixture(t)
+		a.pl = player.New(a.post)
+		a.bindOfflineLyrics()
+		a.networkChanged(mygo.NetworkStatus{})
+		a.pl.PlayQueue([]netease.Track{{ID: 1, Name: "尚未缓存的音乐", Artists: []netease.Artist{{Name: "歌手"}}, Duration: 180000}}, 0)
+		for a.pl.Loading() || a.pl.MetadataLoading() {
+			refreshPost(t, posts)
+		}
+		a.nowPlaying, a.npPane = true, paneLyrics
+		tt := ui.NewTester(a.view, 1180, 780)
+		tt.SetDark(dark)
+		tt.Frame()
+		tt.Advance(2 * time.Second)
+		tt.Frame()
+		suffix := "light"
+		if dark {
+			suffix = "dark"
+		}
+		file, err := os.Create(filepath.Join(dir, "offline-unavailable-"+suffix+".png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = png.Encode(file, tt.Image()); err != nil {
+			t.Fatal(err)
+		}
+		file.Close()
 	}
 }

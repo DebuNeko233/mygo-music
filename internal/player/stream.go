@@ -147,7 +147,7 @@ func (d *download) run(ctx context.Context, from int64, run int, gap time.Durati
 	if from > 0 {
 		req.Header.Set("Range", "bytes="+strconv.FormatInt(from, 10)+"-")
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := netease.DoRequest(http.DefaultClient, req)
 	if err != nil {
 		finish(err)
 		return
