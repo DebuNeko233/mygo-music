@@ -23,6 +23,33 @@ func offlineFixture(t *testing.T) (*app, chan func()) {
 	return a, posts
 }
 
+// AlbumProfile omits Songs from API JSON: a disk-reloaded offline album must
+// preserve its playable track list rather than displaying an empty album.
+func TestOfflineAlbumRetainsSongsAcrossRestart(t *testing.T) {
+	a, posts := offlineFixture(t)
+	a.browseCache.Close()
+	dir := t.TempDir()
+	a.browseCache = diskcache.New(dir, 1<<20)
+	ask := albumDetail
+	t.Cleanup(func() { albumDetail = ask })
+	al := &netease.AlbumProfile{Album: netease.Album{ID: 101, Name: "Cached album"}, Size: 2, Songs: []netease.Track{{ID: 1}, {ID: 2}}}
+	albumDetail = func(int64) (*netease.AlbumProfile, error) { return al, nil }
+	a.loadAlbum(101)
+	refreshPost(t, posts)
+	a.browseCache.Close() // Accepted snapshots must reach disk before restart.
+	a.browseCache = diskcache.New(dir, 1<<20)
+	a.albums = map[int64]*albumData{}
+	albumDetail = func(int64) (*netease.AlbumProfile, error) { return nil, netease.ErrOffline }
+	a.loadAlbum(101)
+	for a.albums[101].loading {
+		refreshPost(t, posts)
+	}
+	got := a.albums[101].album
+	if got == nil || got == al || len(got.Songs) != 2 || got.Songs[0].ID != 1 || got.Songs[1].ID != 2 || got.Size != 2 {
+		t.Fatalf("offline album lost tracks: %+v", got)
+	}
+}
+
 // A playlist appears from disk before a stalled network request completes,
 // survives its failure, then refreshes in place without touching playback.
 func TestOfflinePlaylistRecoversWithoutRestart(t *testing.T) {

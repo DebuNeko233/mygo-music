@@ -20,6 +20,13 @@ type albumData struct {
 	err     string
 }
 
+// AlbumProfile omits Songs from JSON because API responses carry them beside
+// the album. A persistent snapshot must explicitly keep both parts together.
+type keptAlbum struct {
+	Album *netease.AlbumProfile
+	Songs []netease.Track
+}
+
 func (a *app) loadAlbum(id int64) {
 	d := a.albums[id]
 	if d == nil {
@@ -32,17 +39,21 @@ func (a *app) loadAlbum(id int64) {
 	d.loading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("album/%d", id)), a.homeGen
 	go func() {
-		var kept *netease.AlbumProfile
-		if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
+		var kept keptAlbum
+		if at := req.read(&kept); !at.IsZero() && kept.Album != nil && kept.Album.ID == id {
+			kept.Album.Songs = kept.Songs
 			a.post(func() {
 				if a.homeGen == gen && a.albums[id] == d && d.album == nil {
-					d.album = kept
+					d.album = kept.Album
 					a.cacheShownAt = at
 				}
 			})
 		}
 		al, err := albumDetail(id)
-		bytes := cacheBytes(al)
+		var bytes []byte
+		if err == nil && al != nil {
+			bytes = cacheBytes(keptAlbum{al, al.Songs})
+		}
 		a.post(func() {
 			if a.homeGen != gen || a.albums[id] != d {
 				return
