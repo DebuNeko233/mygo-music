@@ -23,12 +23,14 @@ import (
 // artwork is a cover, decoded and ready to draw, with what the player
 // derives from it: its color, and a blurred copy to fill a backdrop.
 type artwork struct {
-	bmp      *ui.Bitmap
-	backdrop *ui.Bitmap
-	tint     ui.Color // the cover's most vivid color
-	failed   bool
-	used     time.Time // when it was last asked for
-	size     int       // the bytes it keeps: its data, and the backdrop's pixels
+	retryable bool
+	bmp       *ui.Bitmap
+	backdrop  *ui.Bitmap
+	tint      ui.Color // the cover's most vivid color
+	failed    bool
+	used      time.Time // when it was last asked for
+	loaded    time.Time
+	size      int // the bytes it keeps: its data, and the backdrop's pixels
 }
 
 // artCache loads covers on goroutines and keeps them, up to artLimit
@@ -40,13 +42,15 @@ type artCache struct {
 	// gone are the covers dropped, for as long as something else holds
 	// them: Now Playing keeps the cover it shows, which comes back as it
 	// was rather than loading again.
-	gone  map[string]weak.Pointer[artwork]
-	busy  map[string]bool
-	sem   chan struct{}
-	post  func(func())
-	now   func() time.Time
-	size  int // the bytes the covers in art keep
-	limit int
+	gone   map[string]weak.Pointer[artwork]
+	busy   map[string]uint64
+	sem    chan struct{}
+	post   func(func())
+	now    func() time.Time
+	size   int // the bytes the covers in art keep
+	limit  int
+	serial uint64
+	seen   map[string]struct{}
 }
 
 // artLimit is how many bytes of covers the cache keeps. A cover keeps its
@@ -56,7 +60,7 @@ type artCache struct {
 const artLimit = 64 << 20
 
 func newArtCache(post func(func())) *artCache {
-	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]bool{}, sem: make(chan struct{}, 8), post: post, now: time.Now, limit: artLimit}
+	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{}, sem: make(chan struct{}, 8), post: post, now: time.Now, limit: artLimit, seen: map[string]struct{}{}}
 }
 
 // add keeps a cover, and drops those asked for least recently once the
@@ -99,9 +103,14 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 		key += "#backdrop"
 	}
 	now := c.now()
+	c.seen[key] = struct{}{}
 	if a, ok := c.art[key]; ok {
 		a.used = now
-		return a
+		if !a.failed && !a.loaded.IsZero() && now.Sub(a.loaded) > 24*time.Hour {
+			c.invalidate(url)
+		} else {
+			return a
+		}
 	}
 	if a := c.gone[key].Value(); a != nil {
 		delete(c.gone, key)
@@ -109,13 +118,16 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 		c.add(key, a)
 		return a
 	}
-	if c.busy[key] {
+	if c.busy[key] != 0 {
 		return nil
 	}
-	c.busy[key] = true
+	c.serial++
+	request := c.serial
+	c.busy[key] = request
+	load := loadArt
 	go func() {
 		c.sem <- struct{}{}
-		bmp, img, size, err := loadArt(url)
+		bmp, img, size, err := load(url)
 		<-c.sem
 		var blurred *image.RGBA
 		var tint ui.Color
@@ -126,12 +138,15 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			}
 		}
 		c.post(func() {
-			delete(c.busy, key)
-			if err != nil {
-				c.add(key, &artwork{failed: true, used: c.now()})
+			if c.busy[key] != request {
 				return
 			}
-			a := &artwork{bmp: bmp, tint: tint, used: c.now(), size: size}
+			delete(c.busy, key)
+			if err != nil {
+				c.add(key, &artwork{failed: true, retryable: netease.RetryableCoverError(err), loaded: c.now(), used: c.now()})
+				return
+			}
+			a := &artwork{loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size}
 			if blurred != nil {
 				a.backdrop = ui.NewBitmap(blurred)
 				a.size += len(blurred.Pix)
@@ -151,7 +166,7 @@ const artRelease = 2 * time.Second
 
 // loadArt fetches the cover at url, as a bitmap to draw and an image to
 // measure, with the bytes of its data.
-func loadArt(url string) (*ui.Bitmap, image.Image, int, error) {
+var loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
 	b, err := netease.Fetch(url)
 	if err != nil {
 		return nil, nil, 0, err
@@ -391,4 +406,52 @@ func boxBlur(px, tmp [][3]float64, n, r int) {
 			px[y*n+x] = [3]float64{s[0] / d, s[1] / d, s[2] / d}
 		}
 	}
+}
+
+// Visibility is collected during normal drawing, without retaining page objects.
+func (c *artCache) beginFrame() {
+	if len(c.art) > 512 {
+		for key, a := range c.art {
+			if a.failed {
+				if _, visible := c.seen[key]; !visible {
+					delete(c.art, key)
+				}
+			}
+		}
+	}
+	clear(c.seen)
+}
+func (c *artCache) hasFailed() bool {
+	for key := range c.seen {
+		if a := c.art[key]; a != nil && a.failed && a.retryable {
+			return true
+		}
+	}
+	return false
+}
+func (c *artCache) retryFailed() {
+	for key := range c.seen {
+		if a := c.art[key]; a != nil && a.failed && a.retryable {
+			delete(c.art, key)
+		}
+	}
+}
+func (c *artCache) invalidate(url string) {
+	for _, key := range []string{url, url + "#backdrop"} {
+		if a := c.art[key]; a != nil {
+			c.size -= a.size
+			delete(c.art, key)
+		}
+		delete(c.gone, key)
+		delete(c.busy, key)
+	}
+}
+
+func (c *artCache) hasLoading() bool {
+	for key := range c.seen {
+		if c.busy[key] != 0 {
+			return true
+		}
+	}
+	return false
 }

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"image"
 	"image/draw"
 	"image/png"
@@ -14,36 +13,6 @@ import (
 
 	"netease-music-mygo/internal/netease"
 )
-
-// The account is asked for again when its request fails: one lost to the
-// network signed the listener out of their own session until they signed in
-// again.
-func TestAccountIsAskedAgainWhenItsRequestFails(t *testing.T) {
-	old := accountAsk
-	defer func() { accountAsk = old }()
-	want := &netease.Profile{UserID: 7, Nickname: "小明"}
-	asked := 0
-	accountAsk = func() (*netease.Profile, error) {
-		asked++
-		if asked < accountTries {
-			return nil, errors.New("the network is down")
-		}
-		return want, nil
-	}
-	got, err := account(accountTries, time.Millisecond)
-	if err != nil || got != want {
-		t.Fatalf("the last of %d tries signed in as %v: %v", asked, got, err)
-	}
-	if asked != accountTries {
-		t.Fatalf("asked %d times", asked)
-	}
-	// A request that fails every time says so, so that the session it was
-	// about is kept rather than taken for an expired one.
-	accountAsk = func() (*netease.Profile, error) { return nil, errors.New("the network is down") }
-	if _, err := account(accountTries, time.Millisecond); err == nil {
-		t.Fatal("a request that failed every time reported no error")
-	}
-}
 
 // Clicking the account row drops its menu, which takes the focus so the
 // arrows walk its items, and Escape or a second click puts it away.

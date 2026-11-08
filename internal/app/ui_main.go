@@ -20,6 +20,8 @@ func (a *app) view(c *ui.Context) {
 	t.Selection = p.accent.Alpha(0.3)
 	c.SetTheme(&t)
 
+	a.art.beginFrame()
+	defer a.recoveryFrame(c.WindowActive())
 	a.shortcuts(c)
 	active := c.WindowActive()
 	if active && a.wasBehind {
@@ -90,6 +92,7 @@ func (a *app) view(c *ui.Context) {
 		c.Toast(a.toast)
 		a.toast = ""
 	}
+	a.offlineNotice(c)
 	a.syncWindows()
 }
 
@@ -409,43 +412,10 @@ func (a *app) centered(c *ui.Context, err string, retry func()) {
 
 // Loading what the pages show.
 
-func (a *app) loadHome() {
-	a.homeLoading, a.homeErr = true, ""
-	signedIn := a.profile != nil
-	gen := a.homeGen // Capture generation for validation
-	at := time.Now()
-	go func() {
-		featured, err1 := netease.FeaturedPlaylists(30)
-		charts, err2 := netease.Charts()
-		daily, _ := netease.DailySongs()
-		var rec []netease.Playlist
-		if signedIn {
-			rec, _ = netease.RecommendedPlaylists()
-		}
-		a.post(func() {
-			// Discard stale responses from previous generations
-			if gen != a.homeGen {
-				return
-			}
-			a.homeLoading = false
-			if err1 != nil && err2 != nil {
-				// Loading the new day's again, what shows stays, to try
-				// once more.
-				if len(a.featured) == 0 && len(a.charts) == 0 {
-					a.homeErr = "无法连接网易云音乐，请检查网络"
-				}
-				return
-			}
-			a.featured, a.charts, a.daily, a.recPlaylists = featured, charts, daily, rec
-			a.homeAt = at
-		})
-	}()
-}
-
 // freshenHome loads the home page again once NetEase has picked the day's
 // songs anew since it last did: the app may stay open overnight.
 func (a *app) freshenHome() {
-	if !a.homeLoading && !a.homeAt.IsZero() && dailyRenewed(a.homeAt, time.Now()) {
+	if !a.homeLoading && (a.homeAt.IsZero() || dailyRenewed(a.homeAt, time.Now())) {
 		a.loadHome()
 	}
 }

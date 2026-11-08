@@ -44,6 +44,7 @@ func (a *app) toggleLike(tr *netease.Track) {
 		err := likeSong(id, like)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary()
 			// Validate that the user is still logged in with the same account
 			if a.profile == nil || a.profile.UserID != uid {
 				return

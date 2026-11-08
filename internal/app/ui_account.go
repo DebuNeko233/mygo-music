@@ -1,6 +1,9 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"runtime"
 	"time"
 
@@ -25,70 +28,114 @@ type loginState struct {
 
 // accountAsk asks NetEase whose session this is: tests set it.
 var accountAsk = netease.Account
+var restoreLoginSession = netease.RestoreSession
+var saveLoginSession = netease.SaveSession
+var clearLoginSession = netease.ClearSession
+var loginIdentity = netease.SessionIdentity
 
 // boot signs in with the session in the keychain, if any, then loads the
 // home page for whoever is listening.
 func (a *app) boot() {
 	a.homeLoading = true
+	gen := a.homeGen
 	go func() {
-		var (
-			prof *netease.Profile
-			lost bool
-		)
-		if netease.RestoreSession() {
-			// The one request that says who is listening is asked again:
-			// lost to a slow or failing network, it left the listener
-			// signed out until they signed in again.
-			p, err := account(accountTries, accountWait)
-			switch {
-			case err != nil:
-				// The session itself may be fine: keep it, and say so.
-				lost = true
-			case p == nil:
-				netease.ClearSession() // expired
-			default:
-				prof = p
-				// NetEase may have renewed the cookie since it was kept.
-				netease.SaveSession()
+		restored := restoreLoginSession()
+		var kept *netease.Profile
+		identity := loginIdentity()
+		if restored && identity != "" {
+			b, _ := a.identityCache.Read(identity, "profile")
+			json.Unmarshal(b, &kept)
+			if kept != nil && kept.UserID <= 0 {
+				kept = nil
 			}
 		}
 		a.post(func() {
-			a.signedIn(prof)
-			if lost {
-				a.toast = "登录状态未能确认，请检查网络后重启应用"
+			if a.homeGen != gen {
+				return
+			}
+			a.signedIn(kept)
+			if restored {
+				a.recovery.accountPending = true
+				a.confirmAccount()
 			}
 		})
 	}()
 }
 
-// accountTries is how often the account is asked for, and accountWait how
-// long the second try waits, and the third twice that.
-const (
-	accountTries = 3
-	accountWait  = time.Second
-)
-
-// account asks NetEase whose session this is, tries times at most, waiting
-// longer before each try after the first.
-func account(tries int, wait time.Duration) (*netease.Profile, error) {
-	var (
-		prof *netease.Profile
-		err  error
-	)
-	for try := 0; try < tries; try++ {
-		if try > 0 {
-			time.Sleep(time.Duration(try) * wait)
-		}
-		if prof, err = accountAsk(); err == nil {
-			return prof, nil
-		}
+// confirmAccount changes identity only after a definite answer. A transport
+// error keeps the offline account and can recover without clearing its pages.
+func (a *app) confirmAccount() {
+	if a.recovery.accountBusy {
+		return
 	}
-	return nil, err
+	a.recovery.accountBusy = true
+	gen := a.homeGen
+	ask := accountAsk
+	go func() {
+		prof, err := ask()
+		if prof != nil && prof.UserID <= 0 {
+			prof = nil
+		}
+
+		identity := loginIdentity()
+		a.post(func() {
+			if a.homeGen != gen {
+				return
+			}
+			a.recovery.accountBusy = false
+			if err != nil && !errors.Is(err, netease.ErrNotLoggedIn) {
+				a.recovery.accountPending = true
+				return
+			}
+			a.recovery.accountPending = false
+			if prof == nil {
+				clearLoginSession()
+				a.identityCache.Clear("", nil)
+				a.discardAccount()
+				a.signedIn(nil)
+				return
+			}
+			if a.profile == nil || a.profile.UserID != prof.UserID {
+				a.discardAccount()
+				a.signedIn(prof)
+			} else {
+				a.profile = prof
+			}
+			go saveLoginSession()
+			a.bindOfflineLyrics()
+			if identity != "" {
+				a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
+			}
+			a.freshenLibrary()
+		})
+	}()
+}
+
+func (a *app) discardAccount() {
+	if a.profile != nil {
+		a.browseCache.Clear(fmt.Sprint(a.profile.UserID), nil)
+	}
 }
 
 // signedIn shows what is personal to prof, or to nobody.
 func (a *app) signedIn(prof *netease.Profile) {
+	if a.recovery.timer != nil {
+		a.recovery.timer.Stop()
+		a.recovery.timer = nil
+	}
+	a.recovery.accountBusy = false
+	a.recovery.accountPending = false
 	a.profile = prof
+	a.bindOfflineLyrics()
+	if identity := loginIdentity(); identity != "" && prof != nil {
+		a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
+	}
+	a.homeLoading = false
+	a.homeFailed = false
+	a.homeFailures = nil
+	a.dirtySnapshots = nil
+	a.featured, a.charts, a.daily = nil, nil, nil
+	a.homeAt = time.Time{}
 	// Playback picks up where it was left, once the session that lets
 	// the listener play their songs is back.
 	a.restoreSession()
@@ -144,7 +191,7 @@ func (a *app) pollLogin(gen int, key string) {
 			code, msg, name, avatar, err := netease.QRCheck(key)
 			var prof *netease.Profile
 			if code == netease.QRConfirmed {
-				netease.SaveSession()
+				saveLoginSession()
 				prof, _ = netease.Account()
 			}
 			done := make(chan bool, 1)
@@ -159,7 +206,12 @@ func (a *app) pollLogin(gen int, key string) {
 					// Try again: the network may come back.
 				case code == netease.QRConfirmed:
 					l.status, l.finished = code, true
+					a.discardAccount()
 					a.signedIn(prof)
+					if prof == nil {
+						a.recovery.accountPending = true
+						a.confirmAccount()
+					}
 					if prof != nil {
 						a.pickUp(prof.UserID)
 					}
@@ -198,6 +250,10 @@ func (a *app) closeLoginSoon(gen int) {
 
 func (a *app) signOut() {
 	a.login.gen++
+	a.recovery.accountPending = false
+	a.identityCache.Clear("", nil)
+	a.discardAccount()
+	clearLoginSession()
 	a.signedIn(nil)
 	go netease.Logout()
 }

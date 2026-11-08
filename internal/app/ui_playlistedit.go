@@ -87,6 +87,7 @@ func (a *app) toggleSaved(pl netease.Playlist) {
 		err := savePlaylist(id, save)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary(id)
 			delete(a.savingPl, id)
 			switch {
 			case a.profile == nil || a.profile.UserID != uid:
@@ -175,6 +176,7 @@ func (a *app) submitName() {
 			err := renamePlaylist(id, name)
 			a.post(func() {
 				finishEdit()
+				defer a.persistLibrary(id)
 				if err != nil {
 					a.setPlaylistName(id, old)
 					a.toast = "重命名失败，请稍后再试"
@@ -191,6 +193,7 @@ func (a *app) submitName() {
 		pl, err := createPlaylist(name)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary()
 			// Validate that the user is still logged in with the same account
 			if a.profile == nil || a.profile.UserID != uid {
 				a.naming.busy = false
@@ -252,6 +255,7 @@ func (a *app) deleteChosen() {
 		err := deletePlaylist(id)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary()
 			if err != nil {
 				a.mine = slices.Insert(a.mine, min(i, len(a.mine)), pl)
 				a.toast = "删除失败，请稍后再试"
@@ -280,6 +284,7 @@ func (a *app) addTo(pid int64, tr *netease.Track) {
 		err := addToPlaylist(pid, id)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary(pid)
 			switch {
 			case errors.Is(err, netease.ErrInPlaylist):
 				a.toast = "歌曲已在歌单中"
@@ -309,6 +314,7 @@ func (a *app) removeFrom(pid int64, tr *netease.Track) {
 		err := removeFromPlaylist(pid, id)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary(pid)
 			if err != nil {
 				if pl != nil && a.playlists[pid] == pl {
 					pl.Tracks = before

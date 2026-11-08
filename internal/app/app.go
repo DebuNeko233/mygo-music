@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -39,6 +40,15 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
+	homeFailures                           map[string]bool
+	dirtySnapshots                         map[int64]bool
+	browseCache, imageCache, identityCache *diskcache.Store
+	recovery                               recoveryState
+	browseUsed, imagesUsed                 int64
+	cacheShownAt                           time.Time
+	homeFailed                             bool
+	homePending                            int
+
 	listRefresh libraryRefreshState
 	wasBehind   bool
 
@@ -265,6 +275,7 @@ func Run() error {
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
 		a.pl = player.New(a.post)
+		a.initOffline()
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
 		a.pl.Cache = newSongCache(a.settings.CacheMB, a.settings.CacheDir)
@@ -358,5 +369,9 @@ func Run() error {
 	})
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
-	return mygo.App.Run()
+	err := mygo.App.Run()
+	a.browseCache.Close()
+	a.imageCache.Close()
+	a.identityCache.Close()
+	return err
 }

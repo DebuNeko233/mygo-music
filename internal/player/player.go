@@ -44,6 +44,8 @@ type Player struct {
 	Normalize func() bool
 	// Cache keeps the songs played, if set.
 	Cache *Cache
+	// FetchLyrics optionally supplies persistent lyrics; captured per load.
+	FetchLyrics func(int64) (string, string, string, error)
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -85,8 +87,10 @@ type Player struct {
 	// track, so that a song that keeps breaking off is left where it is.
 	tries int
 
-	lyrics       []lyrics.Line
-	lyricsLoaded bool
+	lyrics                            []lyrics.Line
+	lyricsLoaded                      bool
+	lyricRevision                     uint64
+	lyricBusy, coverBusy, coverLoaded bool
 
 	// pending holds a seek asked for while the track loads.
 	pending time.Duration
@@ -649,12 +653,12 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	level := p.level()
 	ahead := p.takeAhead(t.ID, level)
 	ask := songURL
-	words := lyricsOf
 	p.at = at
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
 	p.awaiting = false
 	p.lyrics, p.lyricsLoaded = nil, false
+	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
 	p.pending = from
 	p.announce(&t, nil)
 	if p.cacheChanging {
@@ -663,41 +667,8 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	}
 	p.refill()
 
-	go func() {
-		cover, err := netease.Fetch(netease.Sized(t.Album.PicURL, 600))
-		if err == nil {
-			p.post(func() {
-				if gen == p.gen {
-					p.announce(&t, cover)
-				}
-			})
-		}
-	}()
+	p.RetryMetadata()
 
-	go func() {
-		// A song whose words did not come is not a song without any: the
-		// request is asked again, and until one answers the words stay
-		// unloaded rather than empty, so that nothing says the song is
-		// instrumental when it only failed to be asked for.
-		var lines []lyrics.Line
-		for try := 1; ; try++ {
-			lrc, trans, yrc, err := words(t.ID)
-			if err == nil {
-				lines = lyrics.Build(lrc, trans, yrc)
-				break
-			}
-			if try >= lyricTries {
-				return
-			}
-			time.Sleep(retryGap(try))
-		}
-		p.post(func() {
-			if gen == p.gen {
-				p.lyrics = lines
-				p.lyricsLoaded = true
-			}
-		})
-	}()
 	go func() {
 		info, s, err := p.open(t, level, ahead, ask)
 		p.post(func() {

@@ -19,9 +19,11 @@ func (a *app) openSettings() {
 		a.settingsWin.Show()
 		a.settingsWin.Focus()
 		a.measureCache()
+		a.measureOfflineCache()
 		return
 	}
 	a.measureCache()
+	a.measureOfflineCache()
 	a.settingsWin = mygo.NewWindow(mygo.WindowOptions{
 		Title:                "设置",
 		Width:                780,
@@ -614,6 +616,16 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 			}
 		})
 
+		row("浏览数据与歌词", fmt.Sprintf("已浏览页面和歌词可离线读取；上限 64 MiB，已用 %.1f MiB", float64(a.browseUsed)/(1<<20)), func() {
+			if ui.Button(c.Key("clear-browse-cache"), "清除浏览缓存").Clicked() {
+				a.clearBrowseCache()
+			}
+		})
+		row("图片缓存", fmt.Sprintf("所有页面共用封面缓存；上限 256 MiB，已用 %.1f MiB", float64(a.imagesUsed)/(1<<20)), func() {
+			if ui.Button(c.Key("clear-image-cache"), "清除图片缓存").Clicked() {
+				a.clearImageCache()
+			}
+		})
 	})
 
 	if a.captionsShown() {

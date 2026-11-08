@@ -26,19 +26,34 @@ func (a *app) loadAlbum(id int64) {
 		d = &albumData{}
 		a.albums[id] = d
 	}
-	if d.album != nil || d.loading {
+	if d.album != nil && d.err == "" || d.loading {
 		return
 	}
 	d.loading, d.err = true, ""
+	req, gen := a.cacheRequest(fmt.Sprintf("album/%d", id)), a.homeGen
 	go func() {
+		var kept *netease.AlbumProfile
+		if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
+			a.post(func() {
+				if a.homeGen == gen && a.albums[id] == d && d.album == nil {
+					d.album = kept
+					a.cacheShownAt = at
+				}
+			})
+		}
 		al, err := albumDetail(id)
+		bytes := cacheBytes(al)
 		a.post(func() {
+			if a.homeGen != gen || a.albums[id] != d {
+				return
+			}
 			d.loading = false
 			if err != nil {
 				d.err = "专辑加载失败"
 				return
 			}
 			d.album = al
+			req.keep(bytes)
 		})
 	}()
 }
