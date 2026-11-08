@@ -16,12 +16,15 @@ import (
 )
 
 // IndexFile is the only metadata file copied with an indexed cache.
-const IndexFile = "index.jsonl"
-const maxIndexValue = 16 << 10
-const maxIndexLine = 32 << 10
-const maxIndexEntries = 8192
-const indexBatch = 16 << 10
-const indexDelay = 250 * time.Millisecond
+const (
+	IndexFile       = "index.jsonl"
+	indexVersion    = 1
+	maxIndexValue   = 16 << 10
+	maxIndexLine    = 32 << 10
+	maxIndexEntries = 8192
+	indexBatch      = 16 << 10
+	indexDelay      = 250 * time.Millisecond
+)
 
 // indexLog is owned by Store.io: replay, append and compaction cannot race.
 // Keys are already digests. Raw request URLs and credentials never enter it.
@@ -70,7 +73,7 @@ func NewIndexed(dir string, limit int64, scopes ...string) *Store {
 	return s
 }
 func (j *indexLog) accepts(key string) bool {
-	return j != nil && len(key) == 135 && key[64] == '-' && strings.HasSuffix(key, ".entry") && j.scopes[key[:64]]
+	return j != nil && len(key) == 2*digestLength+1+len(entrySuffix) && key[digestLength] == '-' && strings.HasSuffix(key, entrySuffix) && j.scopes[key[:digestLength]]
 }
 func (j *indexLog) reset() {
 	j.batch++
@@ -115,10 +118,10 @@ func (j *indexLog) decode(b []byte) (indexRecord, error) {
 		return r, errors.New("invalid index envelope")
 	}
 	sum := sha256.Sum256(line.Record)
-	if line.Sum != hex.EncodeToString(sum[:]) || json.Unmarshal(line.Record, &r) != nil || r.Version != 1 || !j.accepts(r.Key) {
+	if line.Sum != hex.EncodeToString(sum[:]) || json.Unmarshal(line.Record, &r) != nil || r.Version != indexVersion || !j.accepts(r.Key) {
 		return r, errors.New("invalid index record")
 	}
-	if _, err := hex.DecodeString(r.Key[:64] + r.Key[65:129]); err != nil {
+	if _, err := hex.DecodeString(r.Key[digestLength+1 : 2*digestLength+1]); err != nil {
 		return r, err
 	}
 	if r.Op != "del" && (r.Op != "put" || r.At <= 0 || len(r.Value) == 0 || len(r.Value) > maxIndexValue) {
@@ -216,11 +219,16 @@ func (j *indexLog) enqueue(r indexRecord) error {
 	if err != nil {
 		return err
 	}
-	j.pending = append(j.pending, b...)
-	j.size += int64(len(b))
-	j.lines++
-	j.apply(r, len(b))
+	j.append(r, b)
 	return nil
+}
+
+// append applies the same already-encoded record to the map and the log batch.
+func (j *indexLog) append(r indexRecord, encoded []byte) {
+	j.pending = append(j.pending, encoded...)
+	j.size += int64(len(encoded))
+	j.lines++
+	j.apply(r, len(encoded))
 }
 func (j *indexLog) put(dir, key string, b []byte) (bool, error) {
 	if len(b) > maxIndexValue {
@@ -232,7 +240,7 @@ func (j *indexLog) put(dir, key string, b []byte) (bool, error) {
 	if err := j.load(dir); err != nil {
 		return false, err
 	}
-	r := indexRecord{Version: 1, Op: "put", Key: key, At: time.Now().UnixNano(), Value: bytes.Clone(b)}
+	r := indexRecord{Version: indexVersion, Op: "put", Key: key, At: time.Now().UnixNano(), Value: bytes.Clone(b)}
 	encoded, err := encodeIndex(r)
 	if err != nil {
 		return false, err
@@ -240,9 +248,7 @@ func (j *indexLog) put(dir, key string, b []byte) (bool, error) {
 	if len(encoded) > maxIndexLine || int64(len(encoded)) > j.liveLimit {
 		return false, nil
 	}
-	if err := j.enqueue(r); err != nil {
-		return false, err
-	}
+	j.append(r, encoded)
 	trimmed := false
 	if j.live > j.liveLimit || len(j.entries) > maxIndexEntries {
 		for j.live > j.liveLimit*3/4 || len(j.entries) > maxIndexEntries*3/4 {
@@ -250,7 +256,7 @@ func (j *indexLog) put(dir, key string, b []byte) (bool, error) {
 			if old == nil {
 				break
 			}
-			if err := j.enqueue(indexRecord{Version: 1, Op: "del", Key: old.Value.(indexValue).record.Key}); err != nil {
+			if err := j.enqueue(indexRecord{Version: indexVersion, Op: "del", Key: old.Value.(indexValue).record.Key}); err != nil {
 				return true, err
 			}
 			trimmed = true
@@ -271,7 +277,7 @@ func (j *indexLog) forget(dir, key string) error {
 	if j.entries[key] == nil {
 		return nil
 	}
-	if err := j.enqueue(indexRecord{Version: 1, Op: "del", Key: key}); err != nil {
+	if err := j.enqueue(indexRecord{Version: indexVersion, Op: "del", Key: key}); err != nil {
 		return err
 	}
 	// Refused/missing resources must not reappear after a successful deletion.
@@ -287,7 +293,7 @@ func (j *indexLog) clearScope(dir, scope string) error {
 	prefix := digest(scope) + "-"
 	for key := range j.entries {
 		if strings.HasPrefix(key, prefix) {
-			if err := j.enqueue(indexRecord{Version: 1, Op: "del", Key: key}); err != nil {
+			if err := j.enqueue(indexRecord{Version: indexVersion, Op: "del", Key: key}); err != nil {
 				return err
 			}
 		}
@@ -329,9 +335,8 @@ func (j *indexLog) flush(dir string) (err error) {
 	}
 	err = errors.Join(err, f.Close())
 	if err != nil {
-		j.corrupt = true
 		return err
-	} // A partial append is repaired by atomic rewrite.
+	}
 	j.pending = nil
 	return nil
 }

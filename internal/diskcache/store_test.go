@@ -109,3 +109,42 @@ func TestPreparedWritesKeepAcceptanceOrder(t *testing.T) {
 	}
 	s.Close()
 }
+
+// Moving a store must discard its old headroom estimate before writing into the destination.
+func TestRelocationRechecksDiskBudget(t *testing.T) {
+	root := t.TempDir()
+	source, target := filepath.Join(root, "old"), filepath.Join(root, "new")
+	s := New(source, 400)
+	defer s.Close()
+	s.Put("a", "small", bytes.Repeat([]byte{1}, 100), 0)
+	other := New(target, 400)
+	other.Put("a", "old", bytes.Repeat([]byte{2}, 230), 0)
+	other.Close()
+	resume, err := s.Suspend()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume(target)
+	s.Put("a", "new", bytes.Repeat([]byte{3}, 100), s.Epoch())
+	if s.Size() > 400 {
+		t.Fatal("reused headroom from the old directory", s.Size())
+	}
+	if b, _ := s.Read("a", "new"); len(b) != 100 {
+		t.Fatal("evicted the newly written entry")
+	}
+}
+
+// Charging full replacements may cause an early scan, but must not evict entries that still fit.
+func TestReplacementsKeepValidCapacity(t *testing.T) {
+	s := New(t.TempDir(), 1024)
+	defer s.Close()
+	for i := range 30 {
+		s.Put("a", "same", bytes.Repeat([]byte{byte(i)}, 200), 0)
+	}
+	if s.Size() != headerSize+200 {
+		t.Fatal("replacement accounting changed disk usage", s.Size())
+	}
+	if b, _ := s.Read("a", "same"); len(b) != 200 || b[0] != 29 {
+		t.Fatal("replacement was lost")
+	}
+}

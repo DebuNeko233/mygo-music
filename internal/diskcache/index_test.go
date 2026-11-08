@@ -400,3 +400,20 @@ func TestIndexSuspendRejectsFlushFailure(t *testing.T) {
 		t.Fatal("failed suspend prevented recovery")
 	}
 }
+
+// Durable delete records count toward the cache budget just like new index records.
+func TestIndexDeletionRespectsDiskLimit(t *testing.T) {
+	const limit = 16 << 10
+	s := NewIndexed(t.TempDir(), limit, "requests")
+	defer s.Close()
+	s.Put("requests", "gone", []byte(`{"v":1}`), 0)
+	payload := int64(limit) - s.Size() - headerSize
+	s.Put("content", "large", bytes.Repeat([]byte{1}, int(payload)), 0)
+	if s.Size() != limit {
+		t.Fatal("fixture did not fill cache", s.Size())
+	}
+	s.prepareForget("requests", "gone")()
+	if s.Size() > limit {
+		t.Fatal("delete log grew cache beyond limit", s.Size())
+	}
+}

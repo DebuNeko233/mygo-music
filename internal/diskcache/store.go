@@ -19,6 +19,8 @@ import (
 
 const headerSize = 48 // magic, timestamp and checksum, followed by the payload
 const maxEntry = 24 << 20
+const digestLength = sha256.Size * 2
+const entrySuffix = ".entry"
 
 // The I/O lock precedes mu whenever both are needed. Acceptance uses mu alone:
 // the latest per-entry operation wins, while Clear and Suspend invalidate the
@@ -28,6 +30,7 @@ type Store struct {
 	forgotten map[string]uint64
 	dir       string
 	limit     int64
+	spare     int64 // conservative headroom; owned by io, reset after clear/move
 	io        sync.Mutex
 	mu        sync.Mutex
 	pending   map[string]uint64
@@ -51,7 +54,7 @@ func (s *Store) Epoch() uint64 {
 	return s.epoch.Load()
 }
 func digest(s string) string        { sum := sha256.Sum256([]byte(s)); return hex.EncodeToString(sum[:]) }
-func name(scope, key string) string { return digest(scope) + "-" + digest(key) + ".entry" }
+func name(scope, key string) string { return digest(scope) + "-" + digest(key) + entrySuffix }
 
 // Read verifies the complete payload before returning it. Corrupt and partial
 // files are misses, never empty successful responses.
@@ -83,6 +86,9 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 	sum := sha256.Sum256(b[headerSize:])
 	if string(b[:8]) != "MYCACHE1" || !bytes.Equal(sum[:], b[16:48]) {
 		os.Remove(path)
+		// Unexpected filesystem damage invalidates our last size estimate;
+		// the next write also removes any interrupted temporary files.
+		s.spare = 0
 		return nil, time.Time{}
 	}
 	now := time.Now()
@@ -160,7 +166,9 @@ func (s *Store) prepareForget(scope, key string) func() {
 			return
 		}
 		if s.index.accepts(file) {
+			before := s.index.size
 			s.indexError(s.index.forget(s.dir, file))
+			s.prune(max(0, s.index.size-before))
 		} else {
 			os.Remove(filepath.Join(s.dir, file))
 		}
@@ -192,6 +200,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 		return
 	}
 	if s.index.accepts(file) {
+		before := s.index.size
 		accepted, err := s.index.put(s.dir, file, b)
 		s.indexError(err)
 		if accepted {
@@ -201,7 +210,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 			}
 			s.mu.Unlock()
 			s.scheduleIndex()
-			s.prune()
+			s.prune(max(0, s.index.size-before))
 		}
 		return
 	}
@@ -234,7 +243,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 	}
 	s.mu.Unlock()
 	if committed {
-		s.prune()
+		s.prune(int64(headerSize + len(b)))
 	}
 }
 
@@ -287,6 +296,7 @@ func (s *Store) prepareClear(scope string) func() {
 				os.Remove(filepath.Join(s.dir, e.Name()))
 			}
 		}
+		s.spare = 0
 		s.mu.Lock()
 		s.clears--
 		s.clearing.Store(s.clears != 0)
@@ -313,9 +323,16 @@ func (s *Store) Size() int64 {
 	return n
 }
 
-// prune runs under the I/O lock, evicting least recently read files. A batch
-// leaves headroom, so a directory is not sorted after every small write.
-func (s *Store) prune() {
+// prune charges worst-case growth against the last measured free space.
+// Replacements deliberately receive no credit: this can trigger an early scan,
+// but cannot exceed the limit. A full directory scan happens only when that
+// headroom runs out; eviction then frees a batch rather than one file at a time.
+// The caller holds io, so normal app writes cannot bypass this accounting.
+func (s *Store) prune(added int64) {
+	if s.spare > 0 && added <= s.spare {
+		s.spare -= added
+		return
+	}
 	entries, _ := os.ReadDir(s.dir)
 	var files []os.FileInfo
 	var size int64
@@ -334,6 +351,7 @@ func (s *Store) prune() {
 			size += i.Size()
 		}
 	}
+	defer func() { s.spare = max(0, s.limit-size) }()
 	if size <= s.limit {
 		return
 	}
@@ -393,6 +411,7 @@ func (s *Store) Suspend() (func(string), error) {
 	return func(dir string) {
 		if dir != "" {
 			s.dir = dir
+			s.spare = 0
 			if s.index != nil {
 				s.index.reset()
 			}
@@ -404,6 +423,9 @@ func (s *Store) Suspend() (func(string), error) {
 
 func (s *Store) indexError(err error) {
 	if err != nil {
+		// A failed append can leave partial bytes on disk. Recheck usage
+		// before trusting headroom for another write; callers hold io.
+		s.spare = 0
 		log.Printf("cache index: operation failed (%T)", err)
 	}
 }
