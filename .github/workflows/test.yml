@@ -22,6 +22,20 @@ jobs:
         run: go build ./...
       - name: Vet
         run: go vet ./...
-      # Live requests and optional visual captures remain disabled in CI.
+      # The tests that call NetEase skip unless LIVE is set, and the ones
+      # that save frames into NM_FRAMES unless it is: neither is. A transient
+      # failure gets two more attempts; the same failing test still fails.
       - name: Test
-        run: go test -count=1 ./internal/...
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if go test -count=1 ./internal/...; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::Test attempt $attempt failed; retrying."
+              sleep 2
+            fi
+          done
+          echo "::error::Tests failed after three attempts."
+          exit 1

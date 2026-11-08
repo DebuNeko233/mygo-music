@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"image"
+	"net"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -148,6 +149,59 @@ func TestOfflineAccountConfirmationRecoversInPlace(t *testing.T) {
 	refreshPost(t, posts)
 	if a.recovery.accountPending || a.homeGen != gen || a.playlists[9] != original {
 		t.Fatal("confirmation reset the current pages")
+	}
+}
+
+// Failed account confirmations keep cached pages until scheduled retries succeed without restarting the app.
+func TestOfflineAccountScheduledRetriesRecover(t *testing.T) {
+	a, posts := offlineFixture(t)
+	ask, save, identity, after := accountAsk, saveLoginSession, loginIdentity, recoveryAfter
+	var callbacks []func()
+	var timers []*time.Timer
+	t.Cleanup(func() {
+		accountAsk, saveLoginSession, loginIdentity, recoveryAfter = ask, save, identity, after
+		for _, timer := range timers {
+			timer.Stop()
+		}
+	})
+	saveLoginSession = func() error { return nil }
+	loginIdentity = func() string { return "" }
+	recoveryAfter = func(_ time.Duration, fn func()) *time.Timer {
+		callbacks = append(callbacks, fn)
+		timer := time.NewTimer(time.Hour)
+		timers = append(timers, timer)
+		return timer
+	}
+	calls := 0
+	accountAsk = func() (*netease.Profile, error) {
+		calls++
+		if calls < 3 {
+			return nil, &net.DNSError{Err: "temporary failure", IsTemporary: true}
+		}
+		return &netease.Profile{UserID: 7, Nickname: "Confirmed"}, nil
+	}
+	original := &netease.Playlist{ID: 9, Name: "Cached"}
+	a.playlists[9] = original
+	a.listRefresh.mine.at, a.listRefresh.likes.at = a.listsNow(), a.listsNow()
+	a.recovery.active, a.recovery.accountPending = true, true
+	gen := a.homeGen
+	a.confirmAccount()
+	refreshPost(t, posts)
+	for attempt := 1; attempt < 3; attempt++ {
+		if calls != attempt || a.profile == nil || a.profile.UserID != 7 || !a.recovery.accountPending || a.recovery.accountBusy || a.playlists[9] != original {
+			t.Fatal("failed confirmation discarded the account or cached page")
+		}
+		a.recoveryFrame(true)
+		if a.recovery.timer == nil || len(callbacks) != attempt {
+			t.Fatal("failed account confirmation did not schedule one retry")
+		}
+		callbacks[attempt-1]()
+		refreshPost(t, posts) // The timer starts confirmation on the UI queue.
+		refreshPost(t, posts) // The request publishes its answer on that queue.
+	}
+	a.recoveryFrame(true)
+	if calls != 3 || a.recovery.accountPending || a.recovery.accountBusy || a.recovery.timer != nil || a.homeGen != gen || a.profile == nil || a.profile.Nickname != "Confirmed" || a.playlists[9] != original {
+		t.Fatal("scheduled confirmation failed to recover in place or kept retrying")
 	}
 }
 
