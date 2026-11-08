@@ -403,8 +403,12 @@ func (a *app) content(c *ui.Context) {
 func (a *app) centered(c *ui.Context, err string, retry func()) {
 	top, bottom := a.insets(c)
 	ui.Column(c).Grow(1).Padding(top, 0, bottom, 0).Center().Gap(12).Children(func() {
+		if a.network.offline {
+			ui.Icon(c, iconOffline).Size(24, 24).TextColor(a.pal.muted)
+			err = "暂无缓存内容"
+		}
 		ui.Text(c, err).TextColor(a.pal.muted).FontSize(13)
-		if retry != nil && ui.Button(c, "重试").Clicked() {
+		if retry != nil && iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载内容").Tooltip("重新加载内容").Clicked() {
 			retry()
 		}
 	})

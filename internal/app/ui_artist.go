@@ -389,7 +389,7 @@ func (a *app) artistPage(c *ui.Context) {
 				a.artistHeader(c, d)
 				ui.Column(c).Padding(40, 0).Gap(12).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, d.latestErr).TextColor(a.pal.muted).FontSize(13)
-					if ui.Button(c.Key("retry"), "重试").Clicked() {
+					if iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载歌曲").Tooltip("重新加载歌曲").Clicked() {
 						a.loadLatest(d.profile.ID)
 					}
 				})

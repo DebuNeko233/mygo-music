@@ -36,9 +36,11 @@ const (
 // Player plays a queue of tracks. Its methods run on the main thread;
 // loading happens on goroutines, whose results post brings back there.
 type Player struct {
-	retrying  bool
-	lyricsErr string
-	post      func(func())
+	// Failure causes survive a connection change; their display text does not.
+	offlineAudioError, offlineLyricsError bool
+	retrying                              bool
+	lyricsErr                             string
+	post                                  func(func())
 	// Quality returns the stream level to load, as the settings say.
 	Quality func() string
 	// Normalize reports whether to even out the loudness of tracks, as
@@ -387,7 +389,18 @@ func (p *Player) Loading() bool { return p.loading || p.awaiting }
 func (p *Player) Ready() bool { return p.out != nil }
 
 // Err returns why the current track did not play, or "".
-func (p *Player) Err() string { return p.err }
+func (p *Player) Err() string {
+	if p.offlineAudioError && !netease.Offline() {
+		return "播放中断"
+	}
+	return p.err
+}
+
+// PlaybackRetryable offers an explicit restart after reconnecting; a system
+// event alone never starts audio or moves the listener's saved position.
+func (p *Player) PlaybackRetryable() bool {
+	return p.offlineAudioError && !netease.Offline() && !p.Loading() && !p.cacheChanging
+}
 
 // Stream returns what the current track streams, once loaded, or nil.
 func (p *Player) Stream() *netease.Stream { return p.info }
@@ -660,6 +673,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.at = at
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
+	p.offlineAudioError, p.offlineLyricsError = false, false
 	p.retrying = false
 	p.lyricsErr = ""
 	p.awaiting = false
@@ -726,9 +740,10 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 // come now, skipped if it cannot play at all, and else left where it is
 // for the listener to play again.
 func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, err error) {
+	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	if errors.Is(err, netease.ErrOffline) {
 		p.loading, p.playing = false, false
-		p.err = "当前离线，歌曲尚未完整缓存"
+		p.err = "未缓存"
 		p.sync()
 		return
 	}
@@ -844,6 +859,7 @@ func (p *Player) cutOff() {
 		return
 	}
 	err := p.stream.cut()
+	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	dl, _ := p.stream.source()
 	dl.discard()
 	if p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
@@ -854,10 +870,10 @@ func (p *Player) cutOff() {
 	// again.
 	p.err = "播放中断，请重试"
 	if errors.Is(err, netease.ErrOffline) {
-		p.err = "当前离线，已缓冲内容播放完毕"
+		p.err = "播放中断"
 	}
 	var decoded *decodeError
-	if errors.As(err, &decoded) {
+	if errors.As(err, &decoded) && !p.offlineAudioError {
 		p.err = "音频解码失败，请重试或切换音质"
 	}
 	p.playing = false

@@ -239,16 +239,16 @@ func (a *app) offlineNotice(c *ui.Context) {
 	if a.browseCache == nil && !a.network.known {
 		return
 	}
-	description := "部分内容暂时无法加载，点击刷新重试"
-	if a.network.offline {
-		description = "当前离线；可继续浏览已缓存内容"
-	}
 	ui.Row(c.Key("offline-status")).Absolute().Top(topBar(c) + 4).Right(24).
 		Gap(2).Padding(3).Radius(999).AlignItems(ui.Center).Material(glass.Glass{}).Children(func() {
-		ui.Box(c.Key("offline-icon")).Size(30, 30).Center().Label("网络连接状态").Tooltip(description).Children(func() {
-			ui.Icon(c, iconOffline).Size(18, 18).TextColor(a.pal.muted)
-		})
-		if iconButton(c.Key("refresh-connection"), iconReload, 18, a.pal.muted, "刷新网络与内容").Size(30, 30).Tooltip("刷新网络与内容").Clicked() {
+		// A reachable network may still have failed resources. Keep the refresh
+		// action, but never display the offline symbol for that online state.
+		if a.network.offline {
+			ui.Box(c.Key("offline-icon")).Size(30, 30).Center().Label("离线").Tooltip("离线，可浏览缓存").Children(func() {
+				ui.Icon(c, iconOffline).Size(18, 18).TextColor(a.pal.muted)
+			})
+		}
+		if iconButton(c.Key("refresh-connection"), iconReload, 18, a.pal.muted, "刷新内容").Size(30, 30).Tooltip("刷新内容").Clicked() {
 			a.refreshConnection()
 		}
 	})

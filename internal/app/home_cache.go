@@ -101,7 +101,7 @@ func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T
 					a.homeErr = ""
 				}
 				if a.homeFailed && len(a.featured) == 0 && len(a.charts) == 0 {
-					a.homeErr = "暂无离线内容，请检查网络后重试"
+					a.homeErr = "内容加载失败"
 				}
 			}
 		})

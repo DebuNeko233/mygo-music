@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // A system disconnect is visible on an idle cached page and cancels retries,
@@ -28,7 +29,7 @@ func TestNetworkDisconnectOnCachedPage(t *testing.T) {
 	readNetworkStatus = func() mygo.NetworkStatus { return mygo.NetworkStatus{} }
 	tt := ui.NewTester(a.view, 1100, 800)
 	tt.Frame()
-	if err := tt.Click("刷新网络与内容"); err != nil {
+	if err := tt.Click("刷新内容"); err != nil {
 		t.Fatal(err)
 	}
 	if !a.network.offline || a.playlists[9] != pl {
@@ -81,14 +82,14 @@ func TestNetworkRefreshIcon(t *testing.T) {
 	a.playlistRequest(9).at = a.listsNow()
 	tt := ui.NewTester(a.view, 1100, 800)
 	tt.Frame()
-	if err := tt.Click("刷新网络与内容"); err != nil {
+	if err := tt.Click("刷新内容"); err != nil {
 		t.Fatal(err)
 	}
 	if !a.network.offline || calls.Load() != 0 || checks != 1 {
 		t.Fatal("offline refresh issued an account request")
 	}
 	tt.Frame()
-	if err := tt.Click("刷新网络与内容"); err != nil {
+	if err := tt.Click("刷新内容"); err != nil {
 		t.Fatal(err)
 	}
 	refreshPost(t, posts)
@@ -96,7 +97,7 @@ func TestNetworkRefreshIcon(t *testing.T) {
 		t.Fatal("refresh did not confirm the restored connection")
 	}
 	tt.Frame()
-	if err := tt.Click("刷新网络与内容"); err == nil {
+	if err := tt.Click("刷新内容"); err == nil {
 		t.Fatal("healthy connection retained the offline controls")
 	}
 }
@@ -109,5 +110,98 @@ func TestNetworkReconnectionWhileHidden(t *testing.T) {
 	a.networkChanged(mygo.NetworkStatus{Online: true})
 	if a.network.offline || a.recovery.accountBusy {
 		t.Fatal("hidden window started a request or missed reconnection")
+	}
+}
+
+// Reconnection replaces stale offline status with recovery controls without
+// playing audio; another disconnect removes those actions immediately.
+func TestNetworkChangesUpdateVisibleComponentStates(t *testing.T) {
+	a, posts := offlineFixture(t)
+	a.pl = player.New(a.post)
+	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
+	a.networkChanged(mygo.NetworkStatus{})
+	a.pl.PlayQueue([]netease.Track{{ID: 1, Name: "Connection test", Duration: 180000}}, 0)
+	for a.pl.Loading() || a.pl.MetadataLoading() {
+		refreshPost(t, posts)
+	}
+	tt := ui.NewTester(a.view, 1100, 800)
+	tt.Frame()
+	if a.pl.PlaybackRetryable() || a.pl.LyricsRetryable() {
+		t.Fatal("offered network retries while offline")
+	}
+	a.recovery.active = false
+	a.networkChanged(mygo.NetworkStatus{Online: true})
+	tt.Frame()
+	if !a.pl.PlaybackRetryable() {
+		t.Fatal("reconnect did not offer recovery")
+	}
+	if _, offline := tt.Find("离线"); offline {
+		t.Fatal("connected network retained offline icon")
+	}
+	if _, play := tt.Find("重试播放"); !play {
+		t.Fatal("reconnected playback did not offer retry")
+	}
+	for a.pl.MetadataLoading() {
+		refreshPost(t, posts)
+	}
+	a.nowPlaying, a.npPane = true, paneLyrics
+	tt.Frame()
+	tt.Advance(time.Second)
+	tt.Frame()
+	if _, retry := tt.Find("重新加载歌词"); !retry {
+		t.Fatal("missing lyrics recovery action")
+	}
+	a.networkChanged(mygo.NetworkStatus{})
+	tt.Frame()
+	if a.pl.PlaybackRetryable() || a.pl.LyricsRetryable() {
+		t.Fatal("second disconnect retained network retries")
+	}
+	if a.pl.Playing() || a.pl.Loading() || a.pl.Current().ID != 1 {
+		t.Fatal("status update restarted or changed playback")
+	}
+}
+
+// Clicking lyric recovery in either layout starts one request, removes the
+// action until it finishes, and preserves the selected song and pause state.
+func TestNetworkLyricsRetryAction(t *testing.T) {
+	for _, pane := range []int{paneLyrics, paneStage} {
+		a, posts := offlineFixture(t)
+		a.pl = player.New(a.post)
+		a.pl.Cue([]netease.Track{{ID: 7, Name: "Recovery"}})
+		a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
+		a.networkChanged(mygo.NetworkStatus{})
+		a.networkChanged(mygo.NetworkStatus{Online: true})
+		a.nowPlaying, a.npPane = true, pane
+		tt := ui.NewTester(a.view, 1100, 800)
+		tt.Frame()
+		for a.pl.MetadataLoading() {
+			refreshPost(t, posts)
+		}
+		tt.Advance(time.Second)
+		tt.Frame()
+		started, release := make(chan struct{}, 2), make(chan struct{})
+		var calls atomic.Int32
+		a.pl.FetchLyrics = func(int64) (string, string, string, error) {
+			calls.Add(1)
+			started <- struct{}{}
+			<-release
+			return "[00:01]Recovered", "", "", nil
+		}
+		if err := tt.Click("重新加载歌词"); err != nil {
+			t.Fatal(err)
+		}
+		<-started
+		tt.Frame()
+		if err := tt.Click("重新加载歌词"); err == nil {
+			t.Fatal("in-flight lyrics offered duplicate retry")
+		}
+		close(release)
+		for a.pl.MetadataLoading() {
+			refreshPost(t, posts)
+		}
+		lines, loaded := a.pl.Lyrics()
+		if !loaded || len(lines) != 1 || calls.Load() != 1 || a.pl.Playing() || a.pl.Current().ID != 7 {
+			t.Fatalf("lyrics recovery: loaded=%v lines=%d calls=%d playing=%v track=%d", loaded, len(lines), calls.Load(), a.pl.Playing(), a.pl.Current().ID)
+		}
 	}
 }

@@ -352,7 +352,7 @@ func (a *app) pageFoot(c *ui.Context, pg *paged, next func()) {
 			ui.Text(c, "正在加载…").FontSize(12.5).TextColor(a.pal.muted)
 		case pg.err != "":
 			ui.Text(c, pg.err).FontSize(12.5).TextColor(a.pal.muted)
-			if ui.Button(c.Key("retry"), "重试").Clicked() {
+			if iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载内容").Tooltip("重新加载内容").Clicked() {
 				next()
 			}
 		}

@@ -104,7 +104,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		box.Children(func() {
 			quietUnder(ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center(), dim).Children(func() {
 				if !loaded && pl.LyricsError() != "" {
-					ui.Text(c, pl.LyricsError()).FontSize(20).TextColor(white.Alpha(.5))
+					a.lyricsNotice(c, 20)
 					return
 				}
 				if !loaded {

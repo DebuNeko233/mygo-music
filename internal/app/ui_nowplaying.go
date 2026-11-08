@@ -193,7 +193,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 					status := "-" + clock(pl.Duration()-pl.Position())
 					if pl.Loading() {
 						status = "正在缓冲…"
-					} else if pl.Err() != "" {
+					} else if pl.Err() != "" && !pl.PlaybackRetryable() {
 						status = pl.Err()
 					}
 					ui.Text(c, status).FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.5))
@@ -436,7 +436,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		quietUnder(col, dim)
 		col.Children(func() {
 			if !loaded && pl.LyricsError() != "" {
-				ui.Text(c, pl.LyricsError()).FontSize(16).TextColor(white.Alpha(.5))
+				a.lyricsNotice(c, 16)
 				return
 			}
 			if !loaded {
@@ -469,6 +469,17 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 	}
 	defer a.quietCard(c, dim, h*0.18)
 	a.timedLines(c, scroll, lines, pos, cur, lag, scrollY, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
+}
+
+// Both lyric layouts share the same recovery action and settled error state.
+// Desktop lyrics use the player's short text without interactive controls.
+func (a *app) lyricsNotice(c *ui.Context, size float32) {
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, a.pl.LyricsError()).FontSize(size).TextColor(white.Alpha(.5))
+		if a.pl.LyricsRetryable() && iconButton(c.Key("retry-lyrics"), iconReload, 18, white.Alpha(.5), "重新加载歌词").Tooltip("重新加载歌词").Clicked() {
+			a.pl.RetryMetadata()
+		}
+	})
 }
 
 // linesStyle is how timedLines sets its lines: the size, weight and
