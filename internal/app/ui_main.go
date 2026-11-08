@@ -92,7 +92,11 @@ func (a *app) view(c *ui.Context) {
 		c.Toast(a.toast)
 		a.toast = ""
 	}
-	a.offlineNotice(c)
+	// Keep network controls off the player, including its closing transition.
+	// Recovery still runs independently through network events and recoveryFrame.
+	if !npOpen && npSettled {
+		a.offlineNotice(c)
+	}
 	a.syncWindows()
 }
 

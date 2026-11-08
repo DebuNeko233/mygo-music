@@ -113,6 +113,64 @@ func TestNetworkReconnectionWhileHidden(t *testing.T) {
 	}
 }
 
+// Opening either player layout hides the page's network actions immediately;
+// they return only after closing, and network events still recover resources.
+func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
+	a, posts := offlineFixture(t)
+	a.route = route{page: pagePlaylist, id: 9}
+	a.playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
+	a.pl = player.New(a.post)
+	a.pl.Cue([]netease.Track{{ID: 1}})
+	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
+	read, comments := readNetworkStatus, threadComments
+	t.Cleanup(func() { readNetworkStatus, threadComments = read, comments })
+	status, checks := mygo.NetworkStatus{}, 0
+	readNetworkStatus = func() mygo.NetworkStatus { checks++; return status }
+	threadComments = func(string, int, int) (*netease.Comments, error) { return nil, netease.ErrOffline }
+	a.networkChanged(status)
+	tt := ui.NewTester(a.view, 1100, 800)
+	tt.Frame()
+	if err := tt.Click("刷新内容"); err != nil {
+		t.Fatal(err)
+	}
+	a.nowPlaying = true
+	for _, pane := range []int{paneLyrics, paneStage, paneQueue} {
+		a.npPane = pane
+		tt.Frame()
+		if _, found := tt.Find("离线"); found {
+			t.Fatal("player retained the offline symbol")
+		}
+		if err := tt.Click("刷新内容"); err == nil {
+			t.Fatal("player retained the page refresh action")
+		}
+	}
+	status.Online = true
+	a.networkChanged(status)
+	for a.pl.MetadataLoading() || a.comments.loading {
+		refreshPost(t, posts)
+	}
+	tt.Frame()
+	if err := tt.Click("刷新内容"); err == nil || a.network.offline || a.pl.Playing() {
+		t.Fatal("reconnect exposed page controls or altered playback")
+	}
+	a.nowPlaying = false
+	tt.Frame()
+	if err := tt.Click("刷新内容"); err == nil {
+		t.Fatal("page controls appeared over the closing player")
+	}
+	tt.Advance(npSettle + time.Millisecond)
+	tt.Frame()
+	if err := tt.Click("刷新内容"); err != nil {
+		t.Fatal(err)
+	}
+	for a.pl.MetadataLoading() {
+		refreshPost(t, posts)
+	}
+	if checks != 2 {
+		t.Fatal("hidden network actions rechecked connectivity")
+	}
+}
+
 // Reconnection replaces stale offline status with recovery controls without
 // playing audio; another disconnect removes those actions immediately.
 func TestNetworkChangesUpdateVisibleComponentStates(t *testing.T) {
