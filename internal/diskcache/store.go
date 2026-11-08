@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,6 +24,7 @@ const maxEntry = 24 << 20
 // the latest per-entry operation wins, while Clear and Suspend invalidate the
 // whole epoch. Clearing stays a barrier until every accepted clear finishes.
 type Store struct {
+	index     *indexLog // configured once; all mutable index state belongs to io
 	forgotten map[string]uint64
 	dir       string
 	limit     int64
@@ -65,6 +67,9 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 	s.mu.Unlock()
 	if unavailable {
 		return nil, time.Time{}
+	}
+	if s.index.accepts(file) {
+		return s.index.read(s.dir, file)
 	}
 	path := filepath.Join(s.dir, file)
 	info, err := os.Stat(path)
@@ -149,11 +154,21 @@ func (s *Store) prepareForget(scope, key string) func() {
 		s.io.Lock()
 		defer s.io.Unlock()
 		s.mu.Lock()
-		defer s.mu.Unlock()
-		if s.forgotten[file] == seq {
+		current := s.forgotten[file] == seq
+		s.mu.Unlock()
+		if !current {
+			return
+		}
+		if s.index.accepts(file) {
+			s.indexError(s.index.forget(s.dir, file))
+		} else {
 			os.Remove(filepath.Join(s.dir, file))
+		}
+		s.mu.Lock()
+		if s.forgotten[file] == seq {
 			delete(s.forgotten, file)
 		}
+		s.mu.Unlock()
 	}
 }
 
@@ -174,6 +189,20 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 		return s.pending[file] == seq && s.Epoch() == epoch && !s.clearing.Load()
 	}
 	if b == nil || !current() || s.limit <= 0 || len(b) > maxEntry {
+		return
+	}
+	if s.index.accepts(file) {
+		accepted, err := s.index.put(s.dir, file, b)
+		s.indexError(err)
+		if accepted {
+			s.mu.Lock()
+			if s.pending[file] == seq {
+				delete(s.forgotten, file)
+			}
+			s.mu.Unlock()
+			s.scheduleIndex()
+			s.prune()
+		}
 		return
 	}
 	if os.MkdirAll(s.dir, 0700) != nil {
@@ -245,6 +274,13 @@ func (s *Store) prepareClear(scope string) func() {
 		defer s.cleaners.Done()
 		s.io.Lock()
 		defer s.io.Unlock()
+		if s.index != nil {
+			if scope == "" {
+				s.index.reset()
+			} else if s.index.scopes[digest(scope)] {
+				s.indexError(s.index.clearScope(s.dir, scope))
+			}
+		}
 		entries, _ := os.ReadDir(s.dir)
 		for _, e := range entries {
 			if !e.IsDir() && (scope == "" || strings.HasPrefix(e.Name(), digest(scope)+"-")) {
@@ -271,6 +307,9 @@ func (s *Store) Size() int64 {
 			n += i.Size()
 		}
 	}
+	if s.index != nil {
+		n += int64(len(s.index.pending))
+	}
 	return n
 }
 
@@ -280,13 +319,18 @@ func (s *Store) prune() {
 	entries, _ := os.ReadDir(s.dir)
 	var files []os.FileInfo
 	var size int64
+	if s.index != nil {
+		size = int64(len(s.index.pending))
+	}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), ".part-") {
 			os.Remove(filepath.Join(s.dir, e.Name()))
 			continue
 		}
 		if i, err := e.Info(); err == nil && !i.IsDir() {
-			files = append(files, i)
+			if s.index == nil || e.Name() != IndexFile {
+				files = append(files, i)
+			}
 			size += i.Size()
 		}
 	}
@@ -314,6 +358,12 @@ func (s *Store) Close() {
 	s.mu.Unlock()
 	s.workers.Wait()
 	s.cleaners.Wait()
+	s.io.Lock()
+	if s.index != nil {
+		s.indexError(s.index.flush(s.dir))
+		s.index.reset()
+	}
+	s.io.Unlock()
 }
 
 // Suspend holds file access while its directory moves. It invalidates writes
@@ -331,11 +381,23 @@ func (s *Store) Suspend() func(string) {
 	s.workers.Wait()
 	s.epoch.Add(1)
 	s.io.Lock()
+	if s.index != nil {
+		s.indexError(s.index.flush(s.dir))
+	}
 	return func(dir string) {
 		if dir != "" {
 			s.dir = dir
+			if s.index != nil {
+				s.index.reset()
+			}
 		}
 		s.moving.Store(false)
 		s.io.Unlock()
+	}
+}
+
+func (s *Store) indexError(err error) {
+	if err != nil {
+		log.Printf("cache index: operation failed (%T)", err)
 	}
 }
