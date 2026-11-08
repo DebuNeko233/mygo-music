@@ -9,7 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"netease-music-mygo/internal/diskcache"
 )
+
+// ArtworkDir separates the shared JSONL format from older development caches.
+const ArtworkDir = "artwork-v2"
 
 // Layout names all managed caches. Root can also hold unrelated files; they
 // are never copied or removed. Legacy layouts may keep these folders apart.
@@ -43,7 +48,7 @@ func MoveLayout(source Layout, target string, migrate, shared bool, save func() 
 	if shared {
 		publications = nil
 	}
-	groups := []struct{ name, source string }{{"songs", source.Songs}, {"browse-v1", source.Browse}, {"artwork-v1", source.Artwork}}
+	groups := []struct{ name, source string }{{"songs", source.Songs}, {"browse-v1", source.Browse}, {ArtworkDir, source.Artwork}}
 	validate := func() error { return Validate(source.Root, target) }
 	if shared {
 		validate = func() error { return nil }
@@ -77,6 +82,15 @@ func MoveLayout(source Layout, target string, migrate, shared bool, save func() 
 				names, err = songFiles(group.source)
 			} else {
 				names, err = entryFiles(group.source)
+				if err == nil && group.name == ArtworkDir {
+					info, statErr := os.Lstat(filepath.Join(group.source, diskcache.IndexFile))
+					if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+						return nil, statErr
+					}
+					if statErr == nil && info.Mode().IsRegular() {
+						names = append(names, diskcache.IndexFile)
+					}
+				}
 			}
 			if err != nil {
 				return nil, err
@@ -226,7 +240,7 @@ func transfer(target string, files []cacheFile, publications []string, validate 
 				os.Remove(filepath.Join(target, file.name))
 			}
 		}
-		for _, name := range []string{"songs", "browse-v1", "artwork-v1"} {
+		for _, name := range []string{"songs", "browse-v1", ArtworkDir} {
 			if owned(name) {
 				os.Remove(filepath.Join(target, name))
 			}

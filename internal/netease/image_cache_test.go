@@ -11,6 +11,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,9 +36,9 @@ func imageFixture(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *di
 	server := httptest.NewServer(handler)
 	client, cache := httpClient, images.Load()
 	httpClient = server.Client()
-	store := diskcache.New(t.TempDir(), 1<<20)
+	store := NewArtworkStore(t.TempDir(), 1<<20)
 	UseImageCache(store, nil)
-	t.Cleanup(func() { server.Close(); httpClient = client; images.Store(cache) })
+	t.Cleanup(func() { store.Close(); server.Close(); httpClient = client; images.Store(cache) })
 	return server, store
 }
 
@@ -195,7 +197,7 @@ func TestImageCacheClearDuringDownload(t *testing.T) {
 // adding unrelated query parameters disables this explicit size relationship.
 func TestImageCacheCDNSizeReuse(t *testing.T) {
 	client, previous := httpClient, images.Load()
-	store := diskcache.New(t.TempDir(), 8<<20)
+	store := NewArtworkStore(t.TempDir(), 8<<20)
 	UseImageCache(store, nil)
 	t.Cleanup(func() { httpClient = client; images.Store(previous); store.Close() })
 	calls := 0
@@ -256,5 +258,54 @@ func TestImageCacheRequiredValidation(t *testing.T) {
 				t.Fatal("served a cover requiring successful validation")
 			}
 		})
+	}
+}
+
+// A real store restart reuses both URL and size-family records from one log without downloading again.
+func TestImageIndexLogSurvivesStoreRestart(t *testing.T) {
+	client, previous := httpClient, images.Load()
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 600, 600))); err != nil {
+		t.Fatal(err)
+	}
+	body := encoded.Bytes()
+	calls := 0
+	httpClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": []string{"max-age=3600"}}, Body: io.NopCloser(bytes.NewReader(body))}, nil
+	})}
+	dir := t.TempDir()
+	store := NewArtworkStore(dir, 1<<20)
+	t.Cleanup(func() { store.Close(); httpClient = client; images.Store(previous); SetOffline(false) })
+	UseImageCache(store, nil)
+	base := "https://p1.music.126.net/shared.jpg"
+	for _, query := range []string{"?param=600y600", "?param=600y600&v=2"} {
+		if _, err := Fetch(base + query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store.Close()
+	files, err := os.ReadDir(dir)
+	if err != nil || len(files) != 2 {
+		t.Fatal("one cover still creates per-request files", len(files), err)
+	}
+	persisted, err := os.ReadFile(filepath.Join(dir, diskcache.IndexFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(persisted, []byte(base)) {
+		t.Fatal("persisted raw request identity")
+	}
+	store = NewArtworkStore(dir, 1<<20)
+	UseImageCache(store, nil)
+	before := calls
+	SetOffline(true)
+	for _, query := range []string{"?param=600y600", "?param=600y600&v=2", "?param=80y80"} {
+		if b, err := Fetch(base + query); err != nil || !bytes.Equal(b, body) {
+			t.Fatal("lost persisted request or size-family index", err)
+		}
+	}
+	if before != 2 || calls != before {
+		t.Fatal("restart reached the network or merged unrelated request parameters")
 	}
 }

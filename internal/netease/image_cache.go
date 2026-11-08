@@ -47,6 +47,11 @@ type imageCache struct {
 
 var images atomic.Pointer[imageCache]
 
+// NewArtworkStore keeps content snapshots separate from a shared metadata log.
+func NewArtworkStore(dir string, limit int64) *diskcache.Store {
+	return diskcache.NewIndexed(dir, limit, "requests", "families")
+}
+
 // UseImageCache installs the shared byte cache for UI and system media covers.
 // Requests retain their complete URL and cookie identity; neither is persisted.
 func UseImageCache(store *diskcache.Store, changed func(string)) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/netease"
 )
 
 func seedOfflineCaches(t *testing.T, a *app) {
@@ -16,11 +17,12 @@ func seedOfflineCaches(t *testing.T, a *app) {
 		t.Fatal(err)
 	}
 	a.browseCache = diskcache.New(paths.Browse, 1<<20)
-	a.imageCache = diskcache.New(paths.Artwork, 1<<20)
+	a.imageCache = netease.NewArtworkStore(paths.Artwork, 1<<20)
 	t.Cleanup(func() { a.browseCache.Close(); a.imageCache.Close() })
 	a.browseCache.Put("7", "playlist/9", []byte("page"), 0)
 	a.browseCache.Put("7", "lyrics/1", []byte("lyrics"), 0)
 	a.imageCache.Put("content", "cover", []byte("image"), 0)
+	a.imageCache.Put("requests", "cover", []byte(`{"content":"cover"}`), 0)
 }
 
 // A live directory change moves all cache stores and rejects writes captured
@@ -46,6 +48,9 @@ func TestCacheDirectoryMovesOfflineResources(t *testing.T) {
 	}
 	if b, _ := images.Read("content", "cover"); string(b) != "image" {
 		t.Fatal("lost shared artwork")
+	}
+	if b, _ := images.Read("requests", "cover"); string(b) != `{"content":"cover"}` {
+		t.Fatal("lost shared artwork index")
 	}
 	browse.Put("7", "stale", []byte("old"), epoch)
 	browse.Put("7", "new", []byte("fresh"), browse.Epoch())
@@ -83,6 +88,9 @@ func TestCacheDirectoryOfflineRollback(t *testing.T) {
 	}
 	if b, _ := a.imageCache.Read("content", "cover"); string(b) != "image" {
 		t.Fatal("lost original image")
+	}
+	if b, _ := a.imageCache.Read("requests", "cover"); string(b) != `{"content":"cover"}` {
+		t.Fatal("rollback lost the original index")
 	}
 	a.browseCache.Put("7", "new", []byte("fresh"), a.browseCache.Epoch())
 	old := diskcache.New(filepath.Join(source, "browse-v1"), 1<<20)
@@ -182,6 +190,9 @@ func TestCacheDirectorySwitchOfflineResources(t *testing.T) {
 	}
 	if b, _ := a.imageCache.Read("content", "cover"); b != nil {
 		t.Fatal("switch unexpectedly migrated artwork")
+	}
+	if b, _ := a.imageCache.Read("requests", "cover"); b != nil {
+		t.Fatal("switch retained the old in-memory index")
 	}
 	old := diskcache.New(filepath.Join(source, "browse-v1"), 1<<20)
 	defer old.Close()

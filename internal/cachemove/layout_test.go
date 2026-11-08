@@ -11,7 +11,7 @@ import (
 )
 
 func layout(root string) Layout {
-	return Layout{root, filepath.Join(root, "songs"), filepath.Join(root, "browse-v1"), filepath.Join(root, "artwork-v1")}
+	return Layout{root, filepath.Join(root, "songs"), filepath.Join(root, "browse-v1"), filepath.Join(root, "artwork-v2")}
 }
 
 func snapshot(t *testing.T, dir string) {

@@ -50,7 +50,7 @@ func (r cacheRequest) keep(b []byte) {
 func (a *app) initOffline() {
 	if paths, err := cachePaths(a.settings); err == nil {
 		a.browseCache = diskcache.New(paths.Browse, 64<<20)
-		a.imageCache = diskcache.New(paths.Artwork, 256<<20)
+		a.imageCache = netease.NewArtworkStore(paths.Artwork, 256<<20)
 		netease.UseImageCache(a.imageCache, func(url string) { a.post(func() { a.art.invalidate(url) }) })
 	}
 	if root, err := mygo.App.Path(mygo.PathUserData); err == nil {

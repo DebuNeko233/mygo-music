@@ -26,7 +26,7 @@ func cachePaths(s settings) (cachemove.Layout, error) {
 	if err != nil {
 		return cachemove.Layout{}, err
 	}
-	paths := cachemove.Layout{Root: root, Songs: filepath.Join(root, "songs"), Browse: filepath.Join(root, "browse-v1"), Artwork: filepath.Join(root, "artwork-v1")}
+	paths := cachemove.Layout{Root: root, Songs: filepath.Join(root, "songs"), Browse: filepath.Join(root, "browse-v1"), Artwork: filepath.Join(root, cachemove.ArtworkDir)}
 	if s.CacheLayout == 0 {
 		if s.CacheDir != "" {
 			paths.Songs = s.CacheDir
@@ -35,7 +35,7 @@ func cachePaths(s settings) (cachemove.Layout, error) {
 		if err != nil {
 			return cachemove.Layout{}, err
 		}
-		paths.Browse, paths.Artwork = filepath.Join(system, "browse-v1"), filepath.Join(system, "artwork-v1")
+		paths.Browse, paths.Artwork = filepath.Join(system, "browse-v1"), filepath.Join(system, cachemove.ArtworkDir)
 	}
 	return paths, nil
 }

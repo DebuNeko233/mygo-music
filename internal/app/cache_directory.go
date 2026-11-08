@@ -78,7 +78,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 			resumeImages("")
 		} else {
 			resumeBrowse(filepath.Join(target, "browse-v1"))
-			resumeImages(filepath.Join(target, "artwork-v1"))
+			resumeImages(filepath.Join(target, cachemove.ArtworkDir))
 		}
 		postCacheDirectory(a, func() {
 			a.cacheMoving, a.cacheTarget = false, ""
