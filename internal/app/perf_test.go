@@ -131,3 +131,33 @@ func TestStaticBackdropStopsFog(t *testing.T) {
 		}
 	}
 }
+
+// A paused playlist must stop scheduling frames with its glass locate
+// button visible, after locating hides it, and after its header changes.
+func TestPlaylistLocateFrameBudget(t *testing.T) {
+	_, pl, tt := locateFixture(t, 199, false)
+	for _, stage := range []string{"offscreen", "visible", "header changed"} {
+		switch stage {
+		case "visible":
+			clickLocate(t, tt)
+		case "header changed":
+			pl.Description = "A refreshed playlist description."
+			tt.Frame()
+		}
+		tt.Move(100, 100)
+		tt.Advance(time.Second)
+		tt.Frame()
+		tt.Frame()
+		asked := 0
+		for range 30 {
+			tt.Advance(time.Second / 60)
+			if tt.FramePending() {
+				asked++
+				tt.Frame()
+			}
+		}
+		if asked > 1 {
+			t.Fatalf("%s idle locate requested %d frames", stage, asked)
+		}
+	}
+}

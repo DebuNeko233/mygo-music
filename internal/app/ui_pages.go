@@ -249,7 +249,10 @@ func (a *app) playlistPage(c *ui.Context) {
 		a.trackSkeleton(c, s, true, func(c *ui.Context) { a.playlistHeaderSkeleton(c, s) })
 		return
 	}
-	a.trackRows(c, pl.Tracks, true, func(c *ui.Context) { a.playlistHeader(c, pl) })
+	at := a.playlistCurrentIndex(pl.Tracks)
+	a.syncPlaylistViewport(c, pl, at)
+	visible := a.trackRows(c, pl.Tracks, true, func(c *ui.Context) { a.playlistHeader(c, pl) })
+	a.playlistLocateButton(c, at, visible)
 }
 
 func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
@@ -330,7 +333,7 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 
 // trackRows lists tracks under a header, which scrolls with them; a click
 // plays the list from the track clicked.
-func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, header func(c *ui.Context), footer ...func(c *ui.Context)) {
+func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, header func(c *ui.Context), footer ...func(c *ui.Context)) (playingVisible bool) {
 	p := a.pal
 	cur := a.pl.Current()
 	// A song's menu can take it out of the playlist it is listed in.
@@ -346,7 +349,7 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 	// scrolled away from its start or end has content under the bars.
 	a.underTop, a.underBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
-	ui.List(c.Key(a.route), &a.trackList, rows, func(i int) {
+	list := ui.List(c.Key(a.route), &a.trackList, rows, func(i int) {
 		if i == 0 {
 			ui.Column(c).Children(func() {
 				a.startMark(c)
@@ -366,6 +369,11 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 		playing := cur != nil && cur.ID == tr.ID
 		row := ui.ButtonBase(c.Key(tr.ID)).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
 			ContextMenu(a.songItems(tr, pid))
+		if playing {
+			// The bars overlay the list. Even a partially visible row counts,
+			// but rows wholly covered by either bar do not.
+			playingVisible = playingVisible || row.InViewMargin(-top, 0, -bottom, 0)
+		}
 		hovered := row.Hovered()
 		bg := ui.Transparent
 		switch {
@@ -434,6 +442,10 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 			a.pl.PlayQueue(tracks, i)
 		}
 	}).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).ScrollbarInsets(top, 0, bottom, 0)
+	if a.route.page == pagePlaylist {
+		list.TrackScroll(&a.pageScroll)
+	}
+	return playingVisible
 }
 
 // nowPlayingBars dance in the row of the track playing.

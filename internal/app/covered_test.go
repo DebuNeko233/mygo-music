@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 // The page under Now Playing is not built while Now Playing covers it, and
 // shows again where it was scrolled once Now Playing closes.
 func TestCoveredPageKeepsItsPlace(t *testing.T) {
+	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
 	tracks := make([]netease.Track, 200)
@@ -29,10 +31,31 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 	for _, r := range []route{{page: pagePlaylist, id: 42}, {page: pageCharts}} {
 		a.open(r)
 		tt.Frame()
+		var names []string
+		if r.page == pagePlaylist {
+			for _, tr := range tracks {
+				names = append(names, tr.Name)
+			}
+		} else {
+			for _, chart := range a.charts {
+				names = append(names, chart.Name)
+			}
+		}
+		anchor := func() (string, ui.Rect) {
+			t.Helper()
+			for _, name := range names {
+				if item, ok := tt.AccessByRole(ui.RoleButton, name); ok && !item.Offscreen && item.Bounds.Y >= buttonsHeight && item.Bounds.Y+item.Bounds.H <= 800-playerBarHeight {
+					return name, item.Bounds
+				}
+			}
+			t.Fatal("no fully visible content item")
+			return "", ui.Rect{}
+		}
+		startName, start := anchor()
 		tt.Wheel(700, 400, 0, 2400)
 		tt.Advance(time.Second)
 		tt.Frame()
-		before := shown(tt)
+		name, before := anchor()
 
 		a.nowPlaying = true
 		tt.Frame()
@@ -46,31 +69,21 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 		tt.Frame()
 		tt.Advance(time.Second)
 		tt.Frame()
-		if after := shown(tt); after != before {
-			t.Errorf("%+v: shows\n%s\nafter Now Playing, was\n%s", r, after, before)
+		// Compare the content item itself. A decorative heart can remount
+		// with a ~0.00003 DIP change on amd64; integer text snapshots rounded
+		// that to a whole pixel and failed despite the list keeping its place.
+		after, ok := tt.AccessByRole(ui.RoleButton, name)
+		if !ok || after.Offscreen {
+			t.Fatalf("%+v: content anchor disappeared", r)
 		}
-		if before == firstShown(a) {
-			t.Errorf("%+v: the wheel did not scroll it", r)
+		for _, d := range []float32{after.Bounds.X - before.X, after.Bounds.Y - before.Y, after.Bounds.W - before.W, after.Bounds.H - before.H} {
+			if math.Abs(float64(d)) > 0.01 {
+				t.Errorf("%+v: content moved after Now Playing: %+v -> %+v", r, before, after.Bounds)
+				break
+			}
+		}
+		if name == startName && math.Abs(float64(before.Y-start.Y)) < 1 {
+			t.Errorf("%+v: the wheel did not scroll the content", r)
 		}
 	}
-}
-
-// shown returns the texts the window shows, each where it is.
-func shown(tt *ui.Tester) string {
-	var s string
-	for _, text := range tt.Texts() {
-		if r, ok := tt.Find(text); ok {
-			s += fmt.Sprintf("%s@%.0f,%.0f ", text, r.X, r.Y)
-		}
-	}
-	return s
-}
-
-// firstShown returns what a's page shows unscrolled.
-func firstShown(a *app) string {
-	b := *a
-	b.trackList, b.pageScroll = ui.ListState{}, ui.ScrollState{}
-	tt := ui.NewTester(b.view, 1200, 800)
-	tt.Frame()
-	return shown(tt)
 }
