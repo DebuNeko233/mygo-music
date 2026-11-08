@@ -225,7 +225,7 @@ func LikedIDs(uid int64) ([]int64, error) {
 		return nil, err
 	}
 	if res.Code != 200 {
-		return nil, fmt.Errorf("netease: liked songs: code %d", res.Code)
+		return nil, (apiError{Code: res.Code}).codeError("liked songs")
 	}
 	return res.IDs, nil
 }

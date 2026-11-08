@@ -56,7 +56,7 @@ func TestOfflinePlaylistRecoversWithoutRestart(t *testing.T) {
 	a, posts := offlineFixture(t)
 	a.browseCache.Put("7", "playlist/9", cacheBytes(&netease.Playlist{ID: 9, Name: "Cached", Tracks: []netease.Track{{ID: 1}}}), 0)
 	release := make(chan struct{})
-	playlistDetail = func(id int64) (*netease.Playlist, error) { <-release; return nil, errors.New("offline") }
+	playlistDetail = func(id int64) (*netease.Playlist, error) { <-release; return nil, netease.ErrOffline }
 	a.route = route{page: pagePlaylist, id: 9}
 	a.loadPlaylist(9, false)
 	refreshPost(t, posts)
@@ -101,8 +101,8 @@ func TestOfflineHomePartialFailure(t *testing.T) {
 	a.featured = []netease.Playlist{{ID: 1, Name: "Keep"}}
 	a.daily = []netease.Track{{ID: 2}}
 	chartsCalls, recCalls := 0, 0
-	featuredPlaylists = func() ([]netease.Playlist, error) { return nil, errors.New("offline") }
-	dailySongs = func() ([]netease.Track, error) { return nil, errors.New("offline") }
+	featuredPlaylists = func() ([]netease.Playlist, error) { return nil, netease.ErrOffline }
+	dailySongs = func() ([]netease.Track, error) { return nil, netease.ErrOffline }
 	homeCharts = func() ([]netease.Playlist, error) { chartsCalls++; return []netease.Playlist{{ID: 3}}, nil }
 	recommendedPlaylists = func() ([]netease.Playlist, error) { recCalls++; return []netease.Playlist{}, nil }
 	a.recPlaylists = []netease.Playlist{{ID: 4}}
@@ -194,7 +194,7 @@ func TestOfflineLyricsFromDisk(t *testing.T) {
 	t.Cleanup(func() { lyricsRequest = old })
 	lyricsRequest = func(int64) (string, string, string, error) {
 		t.Error("requested cached lyrics")
-		return "", "", "", errors.New("offline")
+		return "", "", "", netease.ErrOffline
 	}
 	a.browseCache.Put("7", "lyrics/1", cacheBytes(keptLyrics{"[00:01]Cached", "translation", "words"}), 0)
 	l, tr, w, err := a.cachedLyricsFor("7")(1)
@@ -207,9 +207,9 @@ func fakeOfflineHome(t *testing.T) {
 	t.Helper()
 	f, c, d, r := featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists
 	t.Cleanup(func() { featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists = f, c, d, r })
-	fail := func() ([]netease.Playlist, error) { return nil, errors.New("offline") }
+	fail := func() ([]netease.Playlist, error) { return nil, netease.ErrOffline }
 	featuredPlaylists, homeCharts, recommendedPlaylists = fail, fail, fail
-	dailySongs = func() ([]netease.Track, error) { return nil, errors.New("offline") }
+	dailySongs = func() ([]netease.Track, error) { return nil, netease.ErrOffline }
 }
 
 // Offline boot restores only the account bound to the actual saved session,
@@ -229,9 +229,9 @@ func TestOfflineBootUsesBoundIdentity(t *testing.T) {
 				return "other"
 			}
 			release := make(chan struct{})
-			accountAsk = func() (*netease.Profile, error) { <-release; return nil, errors.New("offline") }
-			userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return nil, nil, errors.New("offline") }
-			likedIDs = func(int64) ([]int64, error) { return nil, errors.New("offline") }
+			accountAsk = func() (*netease.Profile, error) { <-release; return nil, netease.ErrOffline }
+			userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return nil, nil, netease.ErrOffline }
+			likedIDs = func(int64) ([]int64, error) { return nil, netease.ErrOffline }
 			a.identityCache.Put("bound", "profile", cacheBytes(a.profile), 0)
 			a.browseCache.Put("7", "mine", cacheBytes(keptLists{Mine: []netease.Playlist{{ID: 9, Name: "Offline list"}}}), 0)
 			a.profile = nil
@@ -288,6 +288,7 @@ func TestOfflineRecoveryBackoffAndHiddenWindow(t *testing.T) {
 	a.route = route{page: pagePlaylist, id: 9}
 	a.playlists[9] = &netease.Playlist{ID: 9}
 	a.playlistRequest(9).failed = true
+	a.playlistRequest(9).failure = netease.ErrOffline
 	a.recovery.active = true
 	after := recoveryAfter
 	var callbacks []func()
@@ -306,7 +307,7 @@ func TestOfflineRecoveryBackoffAndHiddenWindow(t *testing.T) {
 			timer.Stop()
 		}
 	})
-	playlistDetail = func(id int64) (*netease.Playlist, error) { return nil, errors.New("offline") }
+	playlistDetail = func(id int64) (*netease.Playlist, error) { return nil, netease.ErrOffline }
 	a.recoveryFrame(true)
 	if len(gaps) != 1 || gaps[0] != 2*time.Second {
 		t.Fatal("wrong initial retry")
@@ -337,7 +338,7 @@ func TestOfflineArtistRestoresCachedPages(t *testing.T) {
 	t.Cleanup(func() { albumsBy = old })
 	a.browseCache.Put("7", "artist-albums/1/0", cacheBytes(keptAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
 	a.browseCache.Put("7", "artist-albums/1/1", cacheBytes(keptAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
-	albumsBy = func(int64, int, int) ([]netease.AlbumProfile, bool, error) { return nil, false, errors.New("offline") }
+	albumsBy = func(int64, int, int) ([]netease.AlbumProfile, bool, error) { return nil, false, netease.ErrOffline }
 	a.loadAlbums(1)
 	refreshPost(t, posts)
 	refreshPost(t, posts)

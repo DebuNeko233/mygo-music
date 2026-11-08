@@ -95,6 +95,7 @@ type Player struct {
 	lyricsLoaded                      bool
 	lyricRevision                     uint64
 	lyricBusy, coverBusy, coverLoaded bool
+	lyricFailure, coverFailure        error
 
 	// pending holds a seek asked for while the track loads.
 	pending time.Duration
@@ -679,6 +680,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.awaiting = false
 	p.lyrics, p.lyricsLoaded = nil, false
 	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
+	p.lyricFailure, p.coverFailure = nil, nil
 	p.pending = from
 	p.announce(&t, nil)
 	if p.cacheChanging {

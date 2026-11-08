@@ -339,6 +339,7 @@ type paged struct {
 	loading bool
 	more    bool   // whether there is a page after those loaded
 	err     string // why the last page didn't load
+	failure error  // retained for automatic recovery, independently of wording
 }
 
 // pageFoot ends a list loaded a page at a time, asking next for the next

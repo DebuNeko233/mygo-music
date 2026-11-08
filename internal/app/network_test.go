@@ -44,6 +44,7 @@ func TestNetworkReconnectionRecoversCurrentPage(t *testing.T) {
 	a.route = route{page: pagePlaylist, id: 9}
 	a.playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.playlistRequest(9).failed = true
+	a.playlistRequest(9).failure = netease.ErrOffline
 	a.network = networkState{known: true, offline: true}
 	a.recovery.active, a.recovery.attempts = true, 4
 	var calls atomic.Int32

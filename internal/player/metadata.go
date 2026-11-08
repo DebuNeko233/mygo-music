@@ -10,14 +10,20 @@ import (
 // MetadataPending excludes an in-flight request: recovery never starts a
 // second copy, and it never restarts audio or changes pause/seek state.
 func (p *Player) MetadataPending() bool {
-	return p.track != nil && !p.cacheChanging && (!p.lyricsLoaded && !p.lyricBusy || !p.coverLoaded && !p.coverBusy && p.track.Album.PicURL != "")
+	return p.track != nil && !p.cacheChanging && (!p.lyricsLoaded && !p.lyricBusy && metadataRecoverable(p.lyricFailure) || !p.coverLoaded && !p.coverBusy && p.track.Album.PicURL != "" && metadataRecoverable(p.coverFailure))
 }
-func (p *Player) RetryMetadata() {
+func metadataRecoverable(err error) bool { return err == nil || netease.RetryableError(err) }
+
+// RetryMetadata is also the explicit lyric refresh action; RecoverMetadata
+// is used by background recovery and leaves permanent failures alone.
+func (p *Player) RetryMetadata()   { p.retryMetadata(true) }
+func (p *Player) RecoverMetadata() { p.retryMetadata(false) }
+func (p *Player) retryMetadata(manual bool) {
 	if p.track == nil || p.cacheChanging {
 		return
 	}
 	t, gen := *p.track, p.gen
-	if !p.coverLoaded && !p.coverBusy && t.Album.PicURL != "" {
+	if !p.coverLoaded && !p.coverBusy && t.Album.PicURL != "" && (manual || metadataRecoverable(p.coverFailure)) {
 		p.coverBusy = true
 		go func() {
 			cover, err := netease.Fetch(netease.Sized(t.Album.PicURL, 600))
@@ -26,6 +32,7 @@ func (p *Player) RetryMetadata() {
 					return
 				}
 				p.coverBusy = false
+				p.coverFailure = err
 				if err == nil {
 					p.coverLoaded = true
 					p.announce(&t, cover)
@@ -33,7 +40,7 @@ func (p *Player) RetryMetadata() {
 			})
 		}()
 	}
-	if p.lyricsLoaded || p.lyricBusy {
+	if p.lyricsLoaded || p.lyricBusy || !manual && !metadataRecoverable(p.lyricFailure) {
 		return
 	}
 	p.lyricBusy = true
@@ -54,7 +61,7 @@ func (p *Player) RetryMetadata() {
 				break
 			}
 			failure = err
-			if errors.Is(err, netease.ErrOffline) {
+			if !netease.RetryableError(err) || errors.Is(err, netease.ErrOffline) {
 				break
 			}
 			if try < lyricTries {
@@ -66,6 +73,7 @@ func (p *Player) RetryMetadata() {
 				return
 			}
 			p.lyricBusy = false
+			p.lyricFailure = failure
 			if success && p.lyricRevision == revision {
 				p.lyrics, p.lyricsLoaded = lines, true
 				p.lyricsErr = ""
@@ -89,6 +97,7 @@ func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
 	}
 	p.lyricsErr = ""
 	p.offlineLyricsError = false
+	p.lyricFailure = nil
 	p.lyricRevision++
 	p.lyrics, p.lyricsLoaded = lyrics.Build(original, translation, words), true
 }

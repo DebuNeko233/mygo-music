@@ -81,10 +81,12 @@ func (a *app) moreResults(r route, d *searchData) {
 	}
 	d.page.loading, d.page.err = true, ""
 	offset := d.res.Len()
+	fetch := searchResults
 	go func() {
-		res, err := searchResults(r.query, r.kind, searchLimit, offset)
+		res, err := fetch(r.query, r.kind, searchLimit, offset)
 		a.post(func() {
 			d.page.loading = false
+			d.page.failure = err
 			if err != nil {
 				d.page.err = "搜索失败，请稍后再试"
 				return

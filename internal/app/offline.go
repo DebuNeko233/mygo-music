@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -31,7 +32,15 @@ func (r cacheRequest) read(value any) time.Time {
 	}
 	return at
 }
-func cacheBytes(v any) []byte { b, _ := json.Marshal(v); return b }
+func cacheBytes(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		// Types identify a broken encoder without logging a session or payload.
+		log.Printf("cache: cannot encode %T (%T)", v, err)
+		return nil
+	}
+	return b
+}
 func (r cacheRequest) keep(b []byte) {
 	if b != nil {
 		r.store.Queue(r.scope, r.key, b, r.epoch)
@@ -97,6 +106,7 @@ type recoveryState struct {
 	attempts                    int
 	active                      bool
 	accountBusy, accountPending bool
+	accountFailure              error
 }
 
 var recoveryAfter = time.AfterFunc
@@ -153,84 +163,102 @@ func (a *app) recoveryFrame(active bool) {
 	})
 	a.recovery.timer = timer
 }
-func (a *app) needsRecovery() bool {
-	if a.recovery.accountPending && !a.recovery.accountBusy || !a.homeLoading && (a.homeErr != "" || a.homeFailed) {
+func (a *app) needsRecovery() bool { return a.failedLoads(false) }
+
+// Manual refresh includes permanent failures, while timers and reconnection
+// retry only temporary ones. The presentation string never controls scheduling.
+func (a *app) failedLoads(manual bool) bool {
+	retry := func(err error) bool { return manual || netease.RetryableError(err) }
+	if a.recovery.accountPending && !a.recovery.accountBusy && (a.recovery.accountFailure == nil || retry(a.recovery.accountFailure)) {
 		return true
 	}
-	if a.listRefresh.mine.failed || a.listRefresh.likes.failed {
+	if !a.homeLoading {
+		for _, err := range a.homeFailures {
+			if retry(err) {
+				return true
+			}
+		}
+	}
+	if a.listRefresh.mine.failed && retry(a.listRefresh.mine.failure) || a.listRefresh.likes.failed && retry(a.listRefresh.likes.failure) {
 		return true
 	}
 	switch a.route.page {
 	case pagePlaylist:
-		if r := a.listRefresh.playlists[a.route.id]; r != nil && r.failed {
+		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
 			return true
 		}
 	case pageAlbum:
-		if d := a.albums[a.route.id]; d != nil && d.err != "" {
+		if d := a.albums[a.route.id]; d != nil && !d.loading && d.err != "" && retry(d.failure) {
 			return true
 		}
 	case pageArtist:
-		if d := a.artists[a.route.id]; d != nil && (d.err != "" || d.latestErr != "" || d.albumsPage.err != "") {
+		if d := a.artists[a.route.id]; d != nil && (!d.loading && d.err != "" && retry(d.failure) || a.artistTab == artistLatest && !d.latestLoading && d.latestErr != "" && retry(d.latestFailure) || a.artistTab == artistAlbums && !d.albumsPage.loading && d.albumsPage.err != "" && retry(d.albumsPage.failure)) {
 			return true
 		}
 	case pageSearch:
-		if d := a.searches[a.route]; d != nil && d.page.err != "" {
+		if d := a.searches[a.route]; d != nil && !d.page.loading && d.page.err != "" && retry(d.page.failure) {
 			return true
 		}
 	}
 	return a.art.hasFailed() || a.pl.MetadataPending()
 }
-func (a *app) recoverLoads() {
+func (a *app) recoverLoads() { a.retryLoads(false) }
+func (a *app) retryLoads(manual bool) {
 	if a.network.offline {
 		return
 	}
-	if a.recovery.accountPending {
+	retry := func(err error) bool { return manual || netease.RetryableError(err) }
+	if a.recovery.accountPending && (a.recovery.accountFailure == nil || retry(a.recovery.accountFailure)) {
 		a.confirmAccount()
 	}
-	if (a.homeErr != "" || a.homeFailed) && !a.homeLoading {
-		a.retryHome()
+	if !a.homeLoading && len(a.homeFailures) > 0 {
+		a.loadHomeModules(true, manual)
 	}
 	if a.profile != nil && a.listRefresh.edits == 0 {
-		if a.listRefresh.mine.failed {
+		if a.listRefresh.mine.failed && retry(a.listRefresh.mine.failure) {
 			a.loadMine(a.profile.UserID)
 		}
-		if a.listRefresh.likes.failed {
+		if a.listRefresh.likes.failed && retry(a.listRefresh.likes.failure) {
 			a.loadLiked(a.profile.UserID)
 		}
 	}
 	switch a.route.page {
 	case pagePlaylist:
-		if r := a.listRefresh.playlists[a.route.id]; r != nil && r.failed && !r.busy {
+		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) && !r.busy {
 			r.at = time.Time{}
 			a.loadPlaylist(a.route.id, false)
 		}
 	case pageAlbum:
-		if d := a.albums[a.route.id]; d != nil && d.err != "" {
+		if d := a.albums[a.route.id]; d != nil && !d.loading && d.err != "" && retry(d.failure) {
 			a.loadAlbum(a.route.id)
 		}
 	case pageArtist:
 		if d := a.artists[a.route.id]; d != nil {
-			if d.err != "" {
-				a.loadArtist(a.route.id)
+			if d.err != "" && retry(d.failure) {
+				a.loadArtistProfile(a.route.id)
 			}
-			if d.latestErr != "" {
+			if a.artistTab == artistLatest && d.latestErr != "" && retry(d.latestFailure) {
 				a.loadLatest(a.route.id)
 			}
-			if d.albumsPage.err != "" && a.artistTab == artistAlbums {
+			if d.albumsPage.err != "" && a.artistTab == artistAlbums && retry(d.albumsPage.failure) {
 				a.loadAlbums(a.route.id)
 			}
 		}
 	case pageSearch:
-		if d := a.searches[a.route]; d != nil && d.page.err != "" {
+		if d := a.searches[a.route]; d != nil && !d.page.loading && d.page.err != "" && retry(d.page.failure) {
 			a.moreResults(a.route, d)
 		}
 	}
 	a.art.retryFailed()
-	a.pl.RetryMetadata()
+	if manual {
+		a.pl.RetryMetadata()
+	} else {
+		a.pl.RecoverMetadata()
+	}
 }
 
 func (a *app) offlineNotice(c *ui.Context) {
-	pending := a.needsRecovery()
+	pending := a.failedLoads(true)
 	a.network.recovering = pending || a.network.recovering && a.recoveryBusy()
 	if !a.network.offline && !a.network.recovering {
 		return

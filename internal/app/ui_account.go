@@ -87,6 +87,7 @@ func (a *app) confirmAccount() {
 				return
 			}
 			a.recovery.accountBusy = false
+			a.recovery.accountFailure = err
 			if err != nil && !errors.Is(err, netease.ErrNotLoggedIn) {
 				a.recovery.accountPending = true
 				return
@@ -129,6 +130,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.recovery.accountBusy = false
 	a.recovery.accountPending = false
+	a.recovery.accountFailure = nil
 	a.profile = prof
 	a.bindOfflineLyrics()
 	if identity := loginIdentity(); identity != "" && prof != nil {

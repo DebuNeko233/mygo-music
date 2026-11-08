@@ -52,3 +52,24 @@ func TestMetadataRevalidationWinsOverCache(t *testing.T) {
 		t.Fatal("old cache overwrote fresh lyrics")
 	}
 }
+
+// A permanent lyric failure must settle once, while the explicit refresh can still succeed.
+func TestMetadataPermanentFailureStopsRecovery(t *testing.T) {
+	posts := make(chan func(), 4)
+	p := New(func(f func()) { posts <- f })
+	p.track = &netease.Track{ID: 7}
+	calls := 0
+	p.FetchLyrics = func(int64) (string, string, string, error) { calls++; return "", "", "", netease.ErrNotLoggedIn }
+	p.RetryMetadata()
+	(<-posts)()
+	p.RecoverMetadata()
+	if calls != 1 || p.MetadataPending() || p.MetadataLoading() || !p.LyricsRetryable() {
+		t.Fatal("permanent lyrics failure repeated or lost its refresh action")
+	}
+	p.FetchLyrics = func(int64) (string, string, string, error) { calls++; return "[00:01]Refreshed", "", "", nil }
+	p.RetryMetadata()
+	(<-posts)()
+	if calls != 2 || !p.lyricsLoaded || p.LyricsError() != "" {
+		t.Fatal("explicit lyric refresh did not recover")
+	}
+}

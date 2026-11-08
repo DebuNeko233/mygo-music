@@ -12,7 +12,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -136,7 +135,7 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNotModified {
-		f.err = coverHTTPError{response.StatusCode, response.Status}
+		f.err = responseError{response.StatusCode, response.Status}
 		switch response.StatusCode {
 		case 401, 403, 404, 410:
 			if c.store.Epoch() != epoch {
@@ -286,19 +285,5 @@ func imageFamily(req *http.Request) (string, int, bool) {
 	return base.String(), n, true
 }
 
-type coverHTTPError struct {
-	code   int
-	status string
-}
-
-func (e coverHTTPError) Error() string { return e.status }
-
-// RetryableCoverError separates missing/bad images from a lost connection.
-func RetryableCoverError(err error) bool {
-	var status coverHTTPError
-	if errors.As(err, &status) {
-		return status.code >= 500 || status.code == 408 || status.code == 429
-	}
-	var network net.Error
-	return errors.Is(err, ErrOffline) || errors.As(err, &network) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
-}
+// RetryableCoverError keeps the cover loader's existing classification API.
+func RetryableCoverError(err error) bool { return RetryableError(err) }

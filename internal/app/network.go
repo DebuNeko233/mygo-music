@@ -50,5 +50,5 @@ func (a *app) networkChanged(status mygo.NetworkStatus) {
 func (a *app) refreshConnection() {
 	a.networkChanged(readNetworkStatus())
 	a.recovery.attempts = 0
-	a.recoverLoads() // existing in-flight requests are coalesced
+	a.retryLoads(true) // explicit refresh also retries permanent failures
 }

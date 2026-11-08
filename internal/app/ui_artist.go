@@ -84,9 +84,11 @@ type artistData struct {
 	profile       *netease.ArtistProfile
 	loading       bool
 	err           string
+	failure       error
 	latest        []netease.Track
 	latestLoading bool
 	latestErr     string
+	latestFailure error
 	albums        []netease.AlbumProfile
 	albumsPage    paged
 	albumsRetry   int
@@ -134,6 +136,11 @@ func (a *app) loadArtist(id int64) {
 			a.loadAlbums(id)
 		}
 	}
+	a.loadArtistProfile(id)
+}
+
+func (a *app) loadArtistProfile(id int64) {
+	d := a.artist(id)
 	if d.profile != nil && d.err == "" || d.loading {
 		if a.artistTab == artistEvents && !d.eventsPage.loaded {
 			a.loadEvents(id)
@@ -142,6 +149,7 @@ func (a *app) loadArtist(id int64) {
 	}
 	d.loading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("artist/%d", id)), a.homeGen
+	fetch := artistDetail
 	go func() {
 		var kept *netease.ArtistProfile
 		if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
@@ -152,13 +160,14 @@ func (a *app) loadArtist(id int64) {
 				}
 			})
 		}
-		ar, err := artistDetail(id)
+		ar, err := fetch(id)
 		bytes := cacheBytes(ar)
 		a.post(func() {
 			if a.homeGen != gen || a.artists[id] != d {
 				return
 			}
 			d.loading = false
+			d.failure = err
 			if err != nil {
 				d.err = "歌手加载失败"
 				return
@@ -184,6 +193,7 @@ func (a *app) loadLatest(id int64) {
 	}
 	d.latestLoading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("artist-latest/%d", id)), a.homeGen
+	fetch := artistLatestSongs
 	go func() {
 		var kept []netease.Track
 		if at := req.read(&kept); !at.IsZero() {
@@ -194,13 +204,14 @@ func (a *app) loadLatest(id int64) {
 				}
 			})
 		}
-		songs, err := artistLatestSongs(id, latestCount)
+		songs, err := fetch(id, latestCount)
 		bytes := cacheBytes(songs)
 		a.post(func() {
 			if a.homeGen != gen || a.artists[id] != d {
 				return
 			}
 			d.latestLoading = false
+			d.latestFailure = err
 			if err != nil {
 				d.latestErr = "歌曲加载失败"
 				return
@@ -229,6 +240,7 @@ func (a *app) loadAlbums(id int64) {
 		offset = d.albumsRetry
 	}
 	req, gen := a.cacheRequest(fmt.Sprintf("artist-albums/%d/%d", id, offset)), a.homeGen
+	fetch := albumsBy
 	go func() {
 		// Restore already visited pages together, so an offline failure of
 		// page zero does not prevent browsing the cached pages after it.
@@ -262,13 +274,14 @@ func (a *app) loadAlbums(id int64) {
 				}
 			})
 		}
-		albums, more, err := albumsBy(id, albumsPage, offset)
+		albums, more, err := fetch(id, albumsPage, offset)
 		bytes := cacheBytes(keptAlbums{albums, more})
 		a.post(func() {
 			if a.homeGen != gen || a.artists[id] != d {
 				return
 			}
 			d.albumsPage.loading = false
+			d.albumsPage.failure = err
 			if err != nil {
 				d.albumsPage.err = "专辑加载失败"
 				d.albumsFailed, d.albumsRetry = true, offset

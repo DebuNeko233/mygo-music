@@ -18,6 +18,7 @@ type albumData struct {
 	album   *netease.AlbumProfile
 	loading bool
 	err     string
+	failure error
 }
 
 // AlbumProfile omits Songs from JSON because API responses carry them beside
@@ -38,6 +39,7 @@ func (a *app) loadAlbum(id int64) {
 	}
 	d.loading = true
 	req, gen := a.cacheRequest(fmt.Sprintf("album/%d", id)), a.homeGen
+	fetch := albumDetail
 	go func() {
 		var kept keptAlbum
 		if at := req.read(&kept); !at.IsZero() && kept.Album != nil && kept.Album.ID == id {
@@ -49,7 +51,7 @@ func (a *app) loadAlbum(id int64) {
 				}
 			})
 		}
-		al, err := albumDetail(id)
+		al, err := fetch(id)
 		var bytes []byte
 		if err == nil && al != nil {
 			bytes = cacheBytes(keptAlbum{al, al.Songs})
@@ -59,6 +61,7 @@ func (a *app) loadAlbum(id int64) {
 				return
 			}
 			d.loading = false
+			d.failure = err
 			if err != nil {
 				d.err = "专辑加载失败"
 				return

@@ -14,19 +14,18 @@ var recommendedPlaylists = netease.RecommendedPlaylists
 
 // Home modules finish independently: a missing daily response must not erase
 // yesterday's recommendations, nor delay charts behind a series of timeouts.
-func (a *app) loadHome()  { a.loadHomeModules(false) }
-func (a *app) retryHome() { a.loadHomeModules(len(a.homeFailures) > 0) }
-func (a *app) loadHomeModules(failedOnly bool) {
+func (a *app) loadHome() { a.loadHomeModules(false, false) }
+func (a *app) loadHomeModules(failedOnly, manual bool) {
 	if a.homeLoading {
 		return
 	}
 	if !failedOnly {
-		a.homeFailures = map[string]bool{}
+		a.homeFailures = map[string]error{}
 	}
 	a.homeLoading = true
 	a.homePending = 0
 	run := func(key string) bool {
-		if failedOnly && !a.homeFailures[key] {
+		if err := a.homeFailures[key]; failedOnly && (err == nil || !manual && !netease.RetryableError(err)) {
 			return false
 		}
 		a.homePending++
@@ -90,7 +89,7 @@ func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T
 				req.keep(bytes)
 				delete(a.homeFailures, key)
 			} else {
-				a.homeFailures[key] = true
+				a.homeFailures[key] = err
 			}
 			a.homeFailed = len(a.homeFailures) > 0
 			a.homePending--

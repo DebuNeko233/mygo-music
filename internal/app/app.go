@@ -42,7 +42,7 @@ type route struct {
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
 	network                                networkState
-	homeFailures                           map[string]bool
+	homeFailures                           map[string]error
 	dirtySnapshots                         map[int64]bool
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState
