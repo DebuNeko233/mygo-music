@@ -19,8 +19,11 @@ import (
 const headerSize = 48 // magic, timestamp and checksum, followed by the payload
 const maxEntry = 24 << 20
 
+// The I/O lock precedes mu whenever both are needed. Acceptance uses mu alone:
+// the latest per-entry operation wins, while Clear and Suspend invalidate the
+// whole epoch. Clearing stays a barrier until every accepted clear finishes.
 type Store struct {
-	forgotten map[string]bool
+	forgotten map[string]uint64
 	dir       string
 	limit     int64
 	io        sync.Mutex
@@ -31,11 +34,13 @@ type Store struct {
 	clearing  atomic.Bool
 	closed    atomic.Bool
 	moving    atomic.Bool
-	workers   sync.WaitGroup
+	workers   sync.WaitGroup // writes drained before a directory move
+	cleaners  sync.WaitGroup // removals may also be accepted during a move
+	clears    int            // protected by mu
 }
 
 func New(dir string, limit int64) *Store {
-	return &Store{dir: dir, limit: limit, pending: map[string]uint64{}, forgotten: map[string]bool{}}
+	return &Store{dir: dir, limit: limit, pending: map[string]uint64{}, forgotten: map[string]uint64{}}
 }
 func (s *Store) Epoch() uint64 {
 	if s == nil {
@@ -56,9 +61,9 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 	defer s.io.Unlock()
 	file := name(scope, key)
 	s.mu.Lock()
-	forgotten := s.forgotten[file]
+	unavailable := s.closed.Load() || s.clearing.Load() || s.forgotten[file] != 0
 	s.mu.Unlock()
-	if forgotten {
+	if unavailable {
 		return nil, time.Time{}
 	}
 	path := filepath.Join(s.dir, file)
@@ -96,7 +101,7 @@ func (s *Store) Prepare(scope, key string, epoch uint64) func([]byte) {
 	}
 	file := name(scope, key)
 	s.mu.Lock()
-	if s.closed.Load() || s.moving.Load() || len(s.pending) >= 32 && s.pending[file] == 0 {
+	if s.closed.Load() || s.moving.Load() || s.clearing.Load() || s.Epoch() != epoch || len(s.pending) >= 32 && s.pending[file] == 0 {
 		s.mu.Unlock()
 		return nil
 	}
@@ -115,23 +120,41 @@ func (s *Store) Put(scope, key string, b []byte, epoch uint64) {
 	}
 }
 
+// Forget invalidates only this entry. A later successful write cancels its
+// tombstone, so a delayed removal cannot delete the replacement.
 func (s *Store) Forget(scope, key string) {
-	if s == nil || s.closed.Load() {
-		return
+	if remove := s.prepareForget(scope, key); remove != nil {
+		go remove()
 	}
-	s.epoch.Add(1)
+}
+
+func (s *Store) prepareForget(scope, key string) func() {
+	if s == nil {
+		return nil
+	}
 	file := name(scope, key)
 	s.mu.Lock()
-	s.forgotten[file] = true
-	s.mu.Unlock()
-	go func() {
-		s.io.Lock()
-		os.Remove(filepath.Join(s.dir, file))
-		s.mu.Lock()
-		delete(s.forgotten, file)
+	if s.closed.Load() {
 		s.mu.Unlock()
-		s.io.Unlock()
-	}()
+		return nil
+	}
+	s.serial++
+	seq := s.serial
+	s.forgotten[file] = seq
+	delete(s.pending, file)
+	s.cleaners.Add(1)
+	s.mu.Unlock()
+	return func() {
+		defer s.cleaners.Done()
+		s.io.Lock()
+		defer s.io.Unlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.forgotten[file] == seq {
+			os.Remove(filepath.Join(s.dir, file))
+			delete(s.forgotten, file)
+		}
+	}
 }
 
 func (s *Store) write(file string, b []byte, epoch, seq uint64) {
@@ -150,7 +173,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 		defer s.mu.Unlock()
 		return s.pending[file] == seq && s.Epoch() == epoch && !s.clearing.Load()
 	}
-	if !current() || s.limit <= 0 || len(b) > maxEntry {
+	if b == nil || !current() || s.limit <= 0 || len(b) > maxEntry {
 		return
 	}
 	if os.MkdirAll(s.dir, 0700) != nil {
@@ -173,7 +196,15 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 	if e1 != nil || e2 != nil || e3 != nil || !current() {
 		return
 	}
-	if os.Rename(path, filepath.Join(s.dir, file)) == nil {
+	// Commit under mu as well: Forget cannot be accepted between the final
+	// order check and the rename that makes the entry readable again.
+	s.mu.Lock()
+	committed := s.pending[file] == seq && s.Epoch() == epoch && !s.clearing.Load() && os.Rename(path, filepath.Join(s.dir, file)) == nil
+	if committed {
+		delete(s.forgotten, file)
+	}
+	s.mu.Unlock()
+	if committed {
 		s.prune()
 	}
 }
@@ -181,28 +212,50 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 // Clear invalidates requests immediately; deletion and accounting stay off
 // the UI thread. Empty scope clears everything, otherwise just that account.
 func (s *Store) Clear(scope string, done func()) {
-	if s == nil {
+	remove := s.prepareClear(scope)
+	if remove == nil {
 		if done != nil {
 			done()
 		}
 		return
 	}
-	s.epoch.Add(1)
-	s.clearing.Store(true)
 	go func() {
+		remove()
+		if done != nil {
+			done()
+		}
+	}()
+}
+
+func (s *Store) prepareClear(scope string) func() {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	if s.closed.Load() {
+		s.mu.Unlock()
+		return nil
+	}
+	s.epoch.Add(1)
+	s.clears++
+	s.clearing.Store(true)
+	s.cleaners.Add(1)
+	s.mu.Unlock()
+	return func() {
+		defer s.cleaners.Done()
 		s.io.Lock()
+		defer s.io.Unlock()
 		entries, _ := os.ReadDir(s.dir)
 		for _, e := range entries {
 			if !e.IsDir() && (scope == "" || strings.HasPrefix(e.Name(), digest(scope)+"-")) {
 				os.Remove(filepath.Join(s.dir, e.Name()))
 			}
 		}
-		s.clearing.Store(false)
-		s.io.Unlock()
-		if done != nil {
-			done()
-		}
-	}()
+		s.mu.Lock()
+		s.clears--
+		s.clearing.Store(s.clears != 0)
+		s.mu.Unlock()
+	}
 }
 
 func (s *Store) Size() int64 {
@@ -260,6 +313,7 @@ func (s *Store) Close() {
 	s.closed.Store(true)
 	s.mu.Unlock()
 	s.workers.Wait()
+	s.cleaners.Wait()
 }
 
 // Suspend holds file access while its directory moves. It invalidates writes
