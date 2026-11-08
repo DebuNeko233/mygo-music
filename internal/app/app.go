@@ -40,6 +40,7 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
+	network                                networkState
 	homeFailures                           map[string]bool
 	dirtySnapshots                         map[int64]bool
 	browseCache, imageCache, identityCache *diskcache.Store
@@ -306,6 +307,7 @@ func Run() error {
 		// before there was a window to read them back into.
 		a.flushKept()
 		a.setMenu()
+		a.watchNetwork()
 		a.boot()
 		// The notch player is macOS's, over its menu bar: elsewhere it would
 		// hang at the top of the screen as a black box.
@@ -320,6 +322,7 @@ func Run() error {
 		a.syncDock()
 		a.win.OnShow(a.syncDock)
 		a.win.OnHide(a.syncDock)
+		a.win.OnHide(func() { a.recoveryFrame(false) })
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(a.freshenHome)
 		a.applyTray()
@@ -370,6 +373,9 @@ func Run() error {
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
 	err := mygo.App.Run()
+	if a.network.stop != nil {
+		a.network.stop()
+	}
 	a.browseCache.Close()
 	a.imageCache.Close()
 	a.identityCache.Close()

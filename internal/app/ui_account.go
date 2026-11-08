@@ -65,6 +65,10 @@ func (a *app) boot() {
 // confirmAccount changes identity only after a definite answer. A transport
 // error keeps the offline account and can recover without clearing its pages.
 func (a *app) confirmAccount() {
+	if a.network.offline {
+		a.recovery.accountPending = true
+		return
+	}
 	if a.recovery.accountBusy {
 		return
 	}

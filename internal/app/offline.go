@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
@@ -108,12 +109,12 @@ func recoveryGap(attempt int) time.Duration {
 // Recovery sleeps without asking for animation frames. Only failures needed
 // by the visible page are retried; healthy idle views have no timer.
 func (a *app) recoveryFrame(active bool) {
-	if a.browseCache == nil {
+	if a.browseCache == nil && !a.network.known {
 		return
-	} // tests and builds with no writable cache
+	}
 	was := a.recovery.active
 	a.recovery.active = active
-	if !active {
+	if !active || a.network.offline {
 		if a.recovery.timer != nil {
 			a.recovery.timer.Stop()
 			a.recovery.timer = nil
@@ -180,6 +181,9 @@ func (a *app) needsRecovery() bool {
 	return a.art.hasFailed() || a.pl.MetadataPending()
 }
 func (a *app) recoverLoads() {
+	if a.network.offline {
+		return
+	}
 	if a.recovery.accountPending {
 		a.confirmAccount()
 	}
@@ -226,26 +230,26 @@ func (a *app) recoverLoads() {
 }
 
 func (a *app) offlineNotice(c *ui.Context) {
-	if a.browseCache == nil {
+	pending := a.needsRecovery()
+	a.network.recovering = pending || a.network.recovering && a.recoveryBusy()
+	if !a.network.offline && !a.network.recovering {
 		return
 	}
-	message := ""
-	if a.recovery.accountPending {
-		message = "登录状态待确认；可继续浏览已缓存内容"
-	} else if a.needsRecovery() {
-		message = "部分内容未能更新，联网后将重试"
-		if !a.cacheShownAt.IsZero() {
-			message = "正在显示 " + a.cacheShownAt.Format("01-02 15:04") + " 的缓存；联网后将重试"
-		}
-	}
-	if message == "" {
+	// Pending account verification alone is not evidence of being offline.
+	if a.browseCache == nil && !a.network.known {
 		return
 	}
-	ui.Row(c.Key("offline-status")).Absolute().Top(topBar(c)+4).Right(24).Gap(10).Padding(6, 10).Radius(8).Background(a.pal.bg.Alpha(.94)).Children(func() {
-		ui.Text(c, message).FontSize(11).TextColor(a.pal.muted)
-		if ui.Button(c, "重试加载").Clicked() {
-			a.recovery.attempts = 0
-			a.recoverLoads()
+	description := "部分内容暂时无法加载，点击刷新重试"
+	if a.network.offline {
+		description = "当前离线；可继续浏览已缓存内容"
+	}
+	ui.Row(c.Key("offline-status")).Absolute().Top(topBar(c) + 4).Right(24).
+		Gap(2).Padding(3).Radius(999).AlignItems(ui.Center).Material(glass.Glass{}).Children(func() {
+		ui.Box(c.Key("offline-icon")).Size(30, 30).Center().Label("网络连接状态").Tooltip(description).Children(func() {
+			ui.Icon(c, iconOffline).Size(18, 18).TextColor(a.pal.muted)
+		})
+		if iconButton(c.Key("refresh-connection"), iconReload, 18, a.pal.muted, "刷新网络与内容").Size(30, 30).Tooltip("刷新网络与内容").Clicked() {
+			a.refreshConnection()
 		}
 	})
 }

@@ -22,6 +22,7 @@ func TestOfflineFrames(t *testing.T) {
 		a.route = route{page: pagePlaylist, id: 9}
 		a.playlists[9] = &netease.Playlist{ID: 9, Name: "离线歌单", Tracks: []netease.Track{{ID: 1, Name: "已缓存的音乐", Artists: []netease.Artist{{Name: "歌手"}}, Duration: 180000}}}
 		a.recovery.active, a.recovery.accountPending, a.recovery.accountBusy = true, true, true
+		a.network = networkState{known: true, offline: true}
 		a.settingsPage = "cache"
 		suffix := "light"
 		if dark {
