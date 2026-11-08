@@ -12,6 +12,25 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// A maintenance task scheduled before a move cannot prune its source once
+// the cache is quiesced; normal eviction resumes after a failed migration.
+func TestCacheQuiesceMaintenance(t *testing.T) {
+	c := NewCache(t.TempDir(), 1<<20)
+	seedCache(t, c, 1, []byte("music"))
+	unblock := c.Quiesce()
+	c.SetLimit(0)
+	c.prune("")
+	c.Clear()
+	if _, err := os.Stat(filepath.Join(c.dir, "1-exhigh.mp3")); err != nil {
+		t.Fatal("maintenance removed migration source", err)
+	}
+	unblock()
+	c.SetLimit(0)
+	if _, err := os.Stat(filepath.Join(c.dir, "1-exhigh.mp3")); !os.IsNotExist(err) {
+		t.Fatal("failed migration did not resume maintenance", err)
+	}
+}
+
 // Quiescing stops a song coming in, and keeps what comes late out of the old
 // folder.
 func TestCacheQuiesceWriter(t *testing.T) {

@@ -279,7 +279,7 @@ func Run() error {
 		a.initOffline()
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
-		a.pl.Cache = newSongCache(a.settings.CacheMB, a.settings.CacheDir)
+		a.pl.Cache = newSongCache(a.settings)
 		a.pl.Changed = func() {
 			a.keepSession()
 			a.syncCaptions()
@@ -308,6 +308,7 @@ func Run() error {
 		a.flushKept()
 		a.setMenu()
 		a.watchNetwork()
+		a.upgradeCacheDirectory()
 		a.boot()
 		// The notch player is macOS's, over its menu bar: elsewhere it would
 		// hang at the top of the screen as a black box.

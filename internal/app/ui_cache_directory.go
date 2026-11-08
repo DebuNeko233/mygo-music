@@ -3,7 +3,7 @@ package app
 import "github.com/egoist/mygo/ui"
 
 // cacheDirectoryConfirmation is the dialog that asks about a new folder for
-// the songs: the one chosen, empty for the system's own, what it goes to, and
+// all caches: the one chosen, empty for the system's own, what it goes to, and
 // what went wrong with the last try.
 type cacheDirectoryConfirmation struct {
 	open      bool
@@ -12,8 +12,7 @@ type cacheDirectoryConfirmation struct {
 	err       string
 }
 
-// cacheDirectoryDialog asks whether the songs kept move to the folder chosen,
-// or only the ones after them. It shows in the settings window's own theme.
+// cacheDirectoryDialog asks whether existing caches move to the chosen root. It shows in the settings window's own theme.
 func (a *app) cacheDirectoryDialog(c *ui.Context, p palette) {
 	d := &a.cacheConfirm
 	ui.DialogBase(c.Key("cache-directory-confirm"), &d.open, func(backdrop, panel ui.Element) {
@@ -29,14 +28,14 @@ func (a *app) cacheDirectoryDialog(c *ui.Context, p palette) {
 			details -= 48
 		}
 		ui.Scroll(c.Key("details")).MaxHeight(details).Gap(12).Children(func() {
-			ui.Text(c, "更改歌曲缓存目录").FontSize(17).FontWeight(700).TextColor(p.text)
+			ui.Text(c, "更改缓存目录").FontSize(17).FontWeight(700).TextColor(p.text)
 			ui.Text(c, "确认后立即生效，无需重启。").FontSize(13).TextColor(p.muted)
 			ui.Column(c).Padding(12).Radius(10).Gap(5).Background(p.sidebar).Children(func() {
 				ui.Text(c, "新目录").FontSize(11).FontWeight(600).TextColor(p.muted)
 				ui.Text(c, d.target).FontSize(12.5).TextColor(p.text).LineHeight(1.45)
 			})
-			ui.Text(c, "迁移并更改：搬移已有的完整歌曲缓存。\n仅更改目录：保留旧文件，之后使用新目录。").FontSize(13).TextColor(p.text).LineHeight(1.5)
-			ui.Text(c, "请选择空目录。更改期间暂时停止播放，完成后恢复进度；请勿同时运行其他应用实例。").FontSize(12).TextColor(p.muted).LineHeight(1.45)
+			ui.Text(c, "迁移并更改：搬移已有的歌曲、图片、页面与歌词缓存。\n仅更改目录：保留旧文件，之后使用新目录。").FontSize(13).TextColor(p.text).LineHeight(1.5)
+			ui.Text(c, "自定义目录需为空。更改期间暂时停止播放，完成后恢复进度；请勿同时运行其他应用实例。").FontSize(12).TextColor(p.muted).LineHeight(1.45)
 		})
 		if d.err != "" {
 			ui.Text(c, d.err).FontSize(12).TextColor(p.accent).LineHeight(1.45).MaxLines(2).Tooltip(d.err)

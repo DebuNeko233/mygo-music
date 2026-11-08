@@ -30,6 +30,7 @@ type Store struct {
 	epoch     atomic.Uint64
 	clearing  atomic.Bool
 	closed    atomic.Bool
+	moving    atomic.Bool
 	workers   sync.WaitGroup
 }
 
@@ -90,12 +91,12 @@ func (s *Store) Queue(scope, key string, b []byte, epoch uint64) {
 // Prepare reserves acceptance order before a background serialization. A
 // slower old encoder cannot replace a more recently accepted snapshot.
 func (s *Store) Prepare(scope, key string, epoch uint64) func([]byte) {
-	if s == nil || s.closed.Load() || s.clearing.Load() || s.Epoch() != epoch {
+	if s == nil || s.closed.Load() || s.moving.Load() || s.clearing.Load() || s.Epoch() != epoch {
 		return nil
 	}
 	file := name(scope, key)
 	s.mu.Lock()
-	if s.closed.Load() || len(s.pending) >= 32 && s.pending[file] == 0 {
+	if s.closed.Load() || s.moving.Load() || len(s.pending) >= 32 && s.pending[file] == 0 {
 		s.mu.Unlock()
 		return nil
 	}
@@ -259,4 +260,28 @@ func (s *Store) Close() {
 	s.closed.Store(true)
 	s.mu.Unlock()
 	s.workers.Wait()
+}
+
+// Suspend holds file access while its directory moves. It invalidates writes
+// captured before the move; requests still reading wait for the final path.
+// Call and resume off the UI thread. An empty path resumes the original store.
+func (s *Store) Suspend() func(string) {
+	if s == nil {
+		return func(string) {}
+	}
+	s.mu.Lock()
+	s.moving.Store(true)
+	s.mu.Unlock()
+	// Prepare checks moving under the same lock, so no worker can be added
+	// after this wait begins. Accepted snapshots are included in the copy.
+	s.workers.Wait()
+	s.epoch.Add(1)
+	s.io.Lock()
+	return func(dir string) {
+		if dir != "" {
+			s.dir = dir
+		}
+		s.moving.Store(false)
+		s.io.Unlock()
+	}
 }

@@ -6,30 +6,48 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"netease-music-mygo/internal/cachemove"
 	"netease-music-mygo/internal/player"
 )
 
-// songCacheDirectory is where the songs played are kept: the directory the
-// settings name, or the app's own cache directory without one.
-func songCacheDirectory(configured string) (string, error) {
+// cacheDirectory is the shared root; only the managed subdirectories move.
+// Other files in the system cache (such as downloaded models) stay put.
+func cacheDirectory(configured string) (string, error) {
 	if configured != "" {
 		return configured, nil
 	}
-	dir, err := mygo.App.Path(mygo.PathCache)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "songs"), nil
+	return mygo.App.Path(mygo.PathCache)
 }
 
-// newSongCache returns the cache of songs played, in the directory the
-// settings name, or nil without one.
-func newSongCache(mb int, configured string) *player.Cache {
-	dir, err := songCacheDirectory(configured)
+// Until a legacy conversion commits, continue reading the old song folder
+// and the system's artwork/browsing folders, including after a failed move.
+func cachePaths(s settings) (cachemove.Layout, error) {
+	root, err := cacheDirectory(s.CacheDir)
+	if err != nil {
+		return cachemove.Layout{}, err
+	}
+	paths := cachemove.Layout{Root: root, Songs: filepath.Join(root, "songs"), Browse: filepath.Join(root, "browse-v1"), Artwork: filepath.Join(root, "artwork-v1")}
+	if s.CacheLayout == 0 {
+		if s.CacheDir != "" {
+			paths.Songs = s.CacheDir
+		}
+		system, err := cacheDirectory("")
+		if err != nil {
+			return cachemove.Layout{}, err
+		}
+		paths.Browse, paths.Artwork = filepath.Join(system, "browse-v1"), filepath.Join(system, "artwork-v1")
+	}
+	return paths, nil
+}
+
+// newSongCache follows the committed layout, including a failed legacy
+// conversion whose files still live at their original paths.
+func newSongCache(s settings) *player.Cache {
+	paths, err := cachePaths(s)
 	if err != nil {
 		return nil
 	}
-	return player.NewCache(dir, int64(mb)<<20)
+	return player.NewCache(paths.Songs, int64(s.CacheMB)<<20)
 }
 
 // applyCacheLimit gives the cache the limit the settings say.

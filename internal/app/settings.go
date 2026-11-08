@@ -61,9 +61,10 @@ type settings struct {
 	// CacheMB is how many megabytes the songs kept on disk may take; 0
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
-	// CacheDir is where those songs are kept; empty for the app's own
-	// cache directory, as the system gives it.
-	CacheDir string `json:"cacheDir,omitempty"`
+	// CacheDir contains songs, artwork and browsing data; empty uses the
+	// system cache. Layout zero is the older, song-only directory setting.
+	CacheDir    string `json:"cacheDir,omitempty"`
+	CacheLayout int    `json:"cacheLayout,omitempty"`
 	// Accent is the colour the app takes, from accents; empty for the one
 	// its appearance gives.
 	Accent string `json:"accent,omitempty"`
@@ -120,7 +121,7 @@ type settings struct {
 func defaultSettings() settings {
 	return settings{
 		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
-		AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, BackdropOpacity: 0.4,
+		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true, BackdropOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
 		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
@@ -184,6 +185,9 @@ func loadSettings() settings {
 	if err != nil {
 		return s
 	}
+	// Older settings have no layout version. Keep their paths until the
+	// background conversion has copied every cache and saved the new layout.
+	s.CacheLayout = 0
 	if err := json.Unmarshal(b, &s); err != nil {
 		// On parse error, return defaults with path set for saving
 		return s

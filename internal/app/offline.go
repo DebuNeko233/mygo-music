@@ -39,9 +39,9 @@ func (r cacheRequest) keep(b []byte) {
 }
 
 func (a *app) initOffline() {
-	if root, err := mygo.App.Path(mygo.PathCache); err == nil {
-		a.browseCache = diskcache.New(filepath.Join(root, "browse-v1"), 64<<20)
-		a.imageCache = diskcache.New(filepath.Join(root, "artwork-v1"), 256<<20)
+	if paths, err := cachePaths(a.settings); err == nil {
+		a.browseCache = diskcache.New(paths.Browse, 64<<20)
+		a.imageCache = diskcache.New(paths.Artwork, 256<<20)
 		netease.UseImageCache(a.imageCache, func(url string) { a.post(func() { a.art.invalidate(url) }) })
 	}
 	if root, err := mygo.App.Path(mygo.PathUserData); err == nil {
@@ -255,19 +255,29 @@ func (a *app) offlineNotice(c *ui.Context) {
 }
 
 func (a *app) clearBrowseCache() {
+	if a.cacheMoving {
+		return
+	}
 	a.browseCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
 }
 func (a *app) clearImageCache() {
+	if a.cacheMoving {
+		return
+	}
 	a.imageCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
 }
 func (a *app) measureOfflineCache() {
 	browse, images := a.browseCache, a.imageCache
+	browseEpoch, imageEpoch := browse.Epoch(), images.Epoch()
 	if browse == nil && images == nil {
 		return
 	}
 	go func() {
 		b, i := browse.Size(), images.Size()
 		a.post(func() {
+			if a.cacheMoving || a.browseCache != browse || a.imageCache != images || browse.Epoch() != browseEpoch || images.Epoch() != imageEpoch {
+				return
+			}
 			a.browseUsed, a.imagesUsed = b, i
 			if a.settingsWin != nil {
 				a.settingsWin.Invalidate()

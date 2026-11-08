@@ -579,19 +579,19 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	add("cache", "缓存", iconDatabase, func(row settingsRow, block settingsBlock) {
 
-		row("歌曲缓存目录", a.cacheDirectoryDescription(), func() {
-			if ui.Button(c.Key("cache-directory"), "更改…").Label("更改歌曲缓存目录").Disabled(a.cacheMoving).Clicked() {
+		row("缓存目录", a.cacheDirectoryDescription(), func() {
+			if ui.Button(c.Key("cache-directory"), "更改…").Label("更改缓存目录").Disabled(a.cacheMoving).Clicked() {
 				a.chooseCacheDirectory()
 			}
 		})
 		if s.CacheDir != "" {
 			row("默认缓存目录", "恢复到系统默认位置，立即生效", func() {
-				if ui.Button(c.Key("reset-cache-directory"), "恢复默认").Label("恢复默认歌曲缓存目录").Disabled(a.cacheMoving).Clicked() {
+				if ui.Button(c.Key("reset-cache-directory"), "恢复默认").Label("恢复默认缓存目录").Disabled(a.cacheMoving).Clicked() {
 					a.confirmCacheDirectory("")
 				}
 			})
 		}
-		row("歌曲缓存", "听过的歌曲保存在本机，再次播放无需等待，也不耗流量；"+a.cacheUsage(), func() {
+		row("歌曲缓存大小", "设置歌曲缓存的空间上限", func() {
 			labels := make([]string, len(cacheLimits))
 			chosen := cacheLimits[2].label
 			for i, l := range cacheLimits {
@@ -600,7 +600,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					chosen = l.label
 				}
 			}
-			if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存").Width(150).Disabled(a.cacheMoving).Changed() {
+			if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存大小").Width(150).Disabled(a.cacheMoving).Changed() {
 				for _, l := range cacheLimits {
 					if l.label == chosen {
 						s.CacheMB = l.mb
@@ -610,19 +610,19 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.applyCacheLimit()
 			}
 		})
-		row("清除缓存", "删除保存在本机的全部歌曲", func() {
-			if ui.Button(c.Key("clear-cache"), "清除").Disabled(a.cacheUsed <= 0 || a.cacheMoving).Clicked() {
+		row("歌曲缓存", "听过的歌曲可离线播放；"+a.cacheUsage(), func() {
+			if ui.Button(c.Key("clear-cache"), "清除歌曲缓存").Disabled(a.cacheUsed <= 0 || a.cacheMoving).Clicked() {
 				a.clearCache()
 			}
 		})
 
 		row("浏览数据与歌词", fmt.Sprintf("已浏览页面和歌词可离线读取；上限 64 MiB，已用 %.1f MiB", float64(a.browseUsed)/(1<<20)), func() {
-			if ui.Button(c.Key("clear-browse-cache"), "清除浏览缓存").Clicked() {
+			if ui.Button(c.Key("clear-browse-cache"), "清除浏览缓存").Disabled(a.cacheMoving).Clicked() {
 				a.clearBrowseCache()
 			}
 		})
 		row("图片缓存", fmt.Sprintf("所有页面共用封面缓存；上限 256 MiB，已用 %.1f MiB", float64(a.imagesUsed)/(1<<20)), func() {
-			if ui.Button(c.Key("clear-image-cache"), "清除图片缓存").Clicked() {
+			if ui.Button(c.Key("clear-image-cache"), "清除图片缓存").Disabled(a.cacheMoving).Clicked() {
 				a.clearImageCache()
 			}
 		})
