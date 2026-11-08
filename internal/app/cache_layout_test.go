@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -29,7 +30,7 @@ func seedOfflineCaches(t *testing.T, a *app) {
 // before the move, retaining shared store handles used by artwork and lyrics.
 func TestCacheDirectoryMovesOfflineResources(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	seedOfflineCaches(t, a)
 	browse, images := a.browseCache, a.imageCache
@@ -73,7 +74,7 @@ func TestCacheDirectoryMovesOfflineResources(t *testing.T) {
 // and subsequent cache writes still target the original directory.
 func TestCacheDirectoryOfflineRollback(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	seedOfflineCaches(t, a)
 	a.settings.path = source
 	if err := a.changeCacheDirectory(target, true); err != nil {
@@ -109,7 +110,7 @@ func TestCacheDirectoryLegacyConversion(t *testing.T) {
 	for _, custom := range []bool{false, true} {
 		t.Run(map[bool]string{false: "default", true: "custom"}[custom], func(t *testing.T) {
 			a, source, _ := cacheTestApp(t)
-			posts := cachePosts(t)
+			posts := testPosts(a)
 			system := t.TempDir()
 			previous, _ := mygo.App.Path(mygo.PathCache)
 			mygo.App.SetPath(mygo.PathCache, system)
@@ -128,7 +129,11 @@ func TestCacheDirectoryLegacyConversion(t *testing.T) {
 			if err != nil || a.settings.CacheLayout != 0 {
 				t.Fatal("legacy setting was not detected", err)
 			}
-			writeCachedSongIn(t, paths.Songs)
+			legacySongs := filepath.Join(system, "songs")
+			if custom {
+				legacySongs = source
+			}
+			writeCachedSongIn(t, legacySongs)
 			a.pl.Cache = newSongCache(a.settings)
 			seedOfflineCaches(t, a)
 			identity := diskcache.New(filepath.Join(t.TempDir(), "identity"), 1<<20)
@@ -175,11 +180,42 @@ func TestCacheDirectoryLegacyConversion(t *testing.T) {
 	}
 }
 
+// Partially decoded invalid settings must not trigger migration from a rejected cache path.
+func TestCacheDirectoryInvalidSettingsDoNotMigrate(t *testing.T) {
+	a, source, _ := cacheTestApp(t)
+	posts := testPosts(a)
+	writeCachedSongIn(t, source)
+	path, err := settingsPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(map[string]any{"cacheDir": source, "volume": "invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.settings = loadSettings()
+	a.pl.Cache = newSongCache(a.settings)
+	a.upgradeCacheDirectory()
+	started := a.cacheMoving
+	if started {
+		finishCacheChange(t, a, posts)
+	}
+	if started {
+		t.Fatal("invalid settings triggered a cache migration")
+	}
+	if _, err := os.Stat(filepath.Join(source, "123-exhigh.mp3")); err != nil {
+		t.Fatal("invalid settings moved the original song", err)
+	}
+}
+
 // Switching without migration gives all three resources a new store while
 // leaving existing offline content intact at the old location.
 func TestCacheDirectorySwitchOfflineResources(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	seedOfflineCaches(t, a)
 	if err := a.changeCacheDirectory(target, false); err != nil {
 		t.Fatal(err)
@@ -205,7 +241,7 @@ func TestCacheDirectorySwitchOfflineResources(t *testing.T) {
 // and other application files already kept beside them in the default root.
 func TestCacheDirectoryRestoreDefault(t *testing.T) {
 	a, source, _ := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	system := t.TempDir()
 	previous, _ := mygo.App.Path(mygo.PathCache)
 	mygo.App.SetPath(mygo.PathCache, system)
@@ -234,7 +270,7 @@ func TestCacheDirectoryRestoreDefault(t *testing.T) {
 // A failed index flush must abort the directory change and resume the original song and browsing stores.
 func TestCacheDirectoryIndexFlushFailure(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	seedOfflineCaches(t, a)
 	paths, err := cachePaths(a.settings)

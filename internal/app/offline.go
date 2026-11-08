@@ -192,15 +192,27 @@ func (a *app) failedLoads(manual bool) bool {
 			return true
 		}
 	case pageArtist:
-		if d := a.artists[a.route.id]; d != nil && (!d.loading && d.err != "" && retry(d.failure) || a.artistTab == artistLatest && !d.latestLoading && d.latestErr != "" && retry(d.latestFailure) || a.artistTab == artistAlbums && !d.albumsPage.loading && d.albumsPage.err != "" && retry(d.albumsPage.failure)) {
-			return true
+		if d := a.artists[a.route.id]; d != nil {
+			if !d.loading && d.err != "" && retry(d.failure) {
+				return true
+			}
+			switch a.artistTab {
+			case artistLatest:
+				if !d.latestLoading && d.latestErr != "" && retry(d.latestFailure) {
+					return true
+				}
+			case artistAlbums:
+				if !d.albumsPage.loading && d.albumsPage.err != "" && retry(d.albumsPage.failure) {
+					return true
+				}
+			}
 		}
 	case pageSearch:
 		if d := a.searches[a.route]; d != nil && !d.page.loading && d.page.err != "" && retry(d.page.failure) {
 			return true
 		}
 	}
-	return a.art.hasFailed() || a.pl.MetadataPending()
+	return a.art.hasFailed(manual) || a.pl.MetadataPending()
 }
 func (a *app) recoverLoads() { a.retryLoads(false) }
 func (a *app) retryLoads(manual bool) {
@@ -224,7 +236,7 @@ func (a *app) retryLoads(manual bool) {
 	}
 	switch a.route.page {
 	case pagePlaylist:
-		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) && !r.busy {
+		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
 			r.at = time.Time{}
 			a.loadPlaylist(a.route.id, false)
 		}
@@ -249,7 +261,7 @@ func (a *app) retryLoads(manual bool) {
 			a.moreResults(a.route, d)
 		}
 	}
-	a.art.retryFailed()
+	a.art.retryFailed(manual)
 	if manual {
 		a.pl.RetryMetadata()
 	} else {
@@ -372,7 +384,7 @@ func (a *app) recoveryBusy() bool {
 		return d != nil && d.loading
 	case pageArtist:
 		d := a.artists[a.route.id]
-		return d != nil && (d.loading || d.latestLoading || d.albumsPage.loading)
+		return d != nil && (d.loading || a.artistTab == artistLatest && d.latestLoading || a.artistTab == artistAlbums && d.albumsPage.loading)
 	case pageSearch:
 		d := a.searches[a.route]
 		return d != nil && d.page.loading

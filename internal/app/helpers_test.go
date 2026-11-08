@@ -29,3 +29,12 @@ func newTestApp() *app {
 	a.pl.SetVolume(0.5)
 	return a
 }
+
+// testPosts gives each app its own UI queue; install it before starting work.
+func testPosts(a *app) chan func() {
+	posts := make(chan func(), 64)
+	a.postMu.Lock()
+	a.postTo = func(fn func()) { posts <- fn }
+	a.postMu.Unlock()
+	return posts
+}

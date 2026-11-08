@@ -156,7 +156,6 @@ func (a *app) loadArtistProfile(id int64) {
 			a.post(func() {
 				if a.homeGen == gen && a.artists[id] == d && d.profile == nil {
 					d.profile = kept
-					a.cacheShownAt = at
 				}
 			})
 		}
@@ -200,7 +199,6 @@ func (a *app) loadLatest(id int64) {
 			a.post(func() {
 				if a.homeGen == gen && a.artists[id] == d && d.latest == nil {
 					d.latest = kept
-					a.cacheShownAt = at
 				}
 			})
 		}
@@ -270,7 +268,6 @@ func (a *app) loadAlbums(id int64) {
 				if a.homeGen == gen && a.artists[id] == d && len(d.albums) == offset {
 					d.albums = append(d.albums, cached...)
 					d.albumsPage.loaded, d.albumsPage.more = true, cachedMore
-					a.cacheShownAt = cachedAt
 				}
 			})
 		}

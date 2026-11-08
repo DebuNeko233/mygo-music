@@ -110,7 +110,7 @@ func TestOfflineHomePartialFailure(t *testing.T) {
 	for a.homeLoading {
 		refreshPost(t, posts)
 	}
-	if len(a.featured) != 1 || len(a.daily) != 1 || a.charts[0].ID != 3 || len(a.recPlaylists) != 0 || !a.homeFailed {
+	if len(a.featured) != 1 || len(a.daily) != 1 || a.charts[0].ID != 3 || len(a.recPlaylists) != 0 || len(a.homeFailures) == 0 {
 		t.Fatal("partial response cleared old content or hid a successful empty result")
 	}
 	featuredPlaylists = func() ([]netease.Playlist, error) { return []netease.Playlist{{ID: 5}}, nil }
@@ -119,7 +119,7 @@ func TestOfflineHomePartialFailure(t *testing.T) {
 	for a.homeLoading {
 		refreshPost(t, posts)
 	}
-	if a.homeFailed || chartsCalls != 1 || recCalls != 1 || a.daily[0].ID != 6 {
+	if len(a.homeFailures) > 0 || chartsCalls != 1 || recCalls != 1 || a.daily[0].ID != 6 {
 		t.Fatal("recovery retried healthy modules or failed to restore missing ones")
 	}
 }
@@ -159,15 +159,15 @@ func TestOfflineArtworkRetryTracksVisibleRows(t *testing.T) {
 	c.add("hidden", &artwork{failed: true, retryable: true})
 	c.beginFrame()
 	c.get("shown", false)
-	if !c.hasFailed() {
+	if !c.hasFailed(false) {
 		t.Fatal("visible failure was forgotten")
 	}
-	c.retryFailed()
+	c.retryFailed(false)
 	if c.art["shown"] != nil || c.art["hidden"] == nil {
 		t.Fatal("retried hidden covers or retained visible failure")
 	}
 	c.beginFrame()
-	if c.hasFailed() {
+	if c.hasFailed(false) {
 		t.Fatal("offscreen failures keep recovery alive")
 	}
 }

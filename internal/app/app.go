@@ -47,8 +47,6 @@ type app struct {
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState
 	browseUsed, imagesUsed                 int64
-	cacheShownAt                           time.Time
-	homeFailed                             bool
 	homePending                            int
 
 	listRefresh libraryRefreshState
@@ -183,34 +181,26 @@ type app struct {
 	savedSession string // the session as last kept
 	sessionDue   bool   // a save of the session is due
 
-	// Workers may finish together before NewWindow returns. Protect their
-	// queued callbacks and the publication of win; callbacks run unlocked.
+	// Workers can finish before NewWindow returns. Protect their early queue
+	// and dispatcher publication; callbacks always run unlocked.
 	postMu sync.Mutex
+	postTo func(func()) // main-thread dispatcher, published with the window
 	kept   []func()
 }
 
-// post runs fn on the main thread and redraws both windows. Before the
-// window is made there is none to run it in: what the window asks for while
-// it is made, a backdrop being read, is kept until there is one, so that the
-// read still lands. Tests have no window at all, so testPost takes it.
+// post queues early results until a dispatcher exists. Native windows and
+// headless tests each own their queue; a late worker cannot use another app's
+// dispatcher. Never invoke callbacks while holding postMu.
 func (a *app) post(fn func()) {
 	a.postMu.Lock()
-	win := a.win
-	if win == nil {
-		if send := testPost; send != nil {
-			a.postMu.Unlock()
-			send(fn)
-			return
-		}
+	send := a.postTo
+	if send == nil {
 		a.kept = append(a.kept, fn)
 		a.postMu.Unlock()
 		return
 	}
 	a.postMu.Unlock()
-	win.Update(func() {
-		fn()
-		a.redraw()
-	})
+	send(fn)
 }
 
 // flushKept runs what post kept while the window was being made.
@@ -226,10 +216,6 @@ func (a *app) flushKept() {
 		a.redraw()
 	}
 }
-
-// testPost, when set, takes what post hands the main thread: tests run with
-// no window to hand it to.
-var testPost func(fn func())
 
 func (a *app) redraw() {
 	if a.win != nil {
@@ -314,6 +300,7 @@ func Run() error {
 		})
 		a.postMu.Lock()
 		a.win = win
+		a.postTo = func(fn func()) { win.Update(func() { fn(); a.redraw() }) }
 		a.postMu.Unlock()
 		// The view the window laid out as it was made asked for pictures
 		// before there was a window to read them back into.

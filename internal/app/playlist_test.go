@@ -21,11 +21,8 @@ func TestPlaylistPlaysWhenItLands(t *testing.T) {
 		}}, nil
 	}
 	defer func() { playlistDetail = netease.PlaylistDetail }()
-	posts := make(chan func(), 4)
-	testPost = func(fn func()) { posts <- fn }
-	defer func() { testPost = nil }()
-
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.loadPlaylist(7, false) // the page, loading
 	select {

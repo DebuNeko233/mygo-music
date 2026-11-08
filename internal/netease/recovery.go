@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/url"
 )
 
 // responseError preserves a status code without parsing user-facing messages.
@@ -26,6 +27,12 @@ func RetryableError(err error) bool {
 	var status responseError
 	if errors.As(err, &status) {
 		return status.code >= 500 && status.code < 600 || status.code == 408 || status.code == 429
+	}
+	// url.Error implements net.Error even when its cause is a permanent
+	// certificate or URL error. Classify that cause, not the wrapper.
+	var request *url.Error
+	if errors.As(err, &request) {
+		return RetryableError(request.Err)
 	}
 	var network net.Error
 	return errors.Is(err, ErrOffline) || errors.As(err, &network) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)

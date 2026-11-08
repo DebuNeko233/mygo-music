@@ -421,17 +421,17 @@ func (c *artCache) beginFrame() {
 	}
 	clear(c.seen)
 }
-func (c *artCache) hasFailed() bool {
+func (c *artCache) hasFailed(manual bool) bool {
 	for key := range c.seen {
-		if a := c.art[key]; a != nil && a.failed && a.retryable {
+		if a := c.art[key]; a != nil && a.failed && (manual || a.retryable) {
 			return true
 		}
 	}
 	return false
 }
-func (c *artCache) retryFailed() {
+func (c *artCache) retryFailed(manual bool) {
 	for key := range c.seen {
-		if a := c.art[key]; a != nil && a.failed && a.retryable {
+		if a := c.art[key]; a != nil && a.failed && (manual || a.retryable) {
 			delete(c.art, key)
 		}
 	}

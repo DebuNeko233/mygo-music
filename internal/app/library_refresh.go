@@ -143,7 +143,6 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 						a.playlists[id] = kept
 						was = kept
 						before = copyPlaylist(*kept)
-						a.cacheShownAt = at
 						delete(a.loadingPl, id)
 						if thenPlay || a.plPlay[id] {
 							a.pl.PlayQueue(kept.Tracks, firstPlayable(kept.Tracks))
@@ -214,7 +213,6 @@ func (a *app) loadMine(uid int64) {
 				if a.homeGen == gen && a.listRefresh.edits == 0 && a.listRefresh.revision == revision && a.mine == nil && a.saved == nil {
 					a.mine, a.saved = kept.Mine, kept.Saved
 					beforeMine, beforeSaved = copyPlaylists(a.mine), copyPlaylists(a.saved)
-					a.cacheShownAt = at
 				}
 			})
 		}
@@ -262,7 +260,6 @@ func (a *app) loadLiked(uid int64) {
 						a.liked[id] = true
 					}
 					before = maps.Clone(a.liked)
-					a.cacheShownAt = at
 				}
 			})
 		}

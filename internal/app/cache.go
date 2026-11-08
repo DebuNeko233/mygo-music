@@ -60,7 +60,7 @@ func (a *app) applyCacheLimit() {
 		limit := int64(a.settings.CacheMB) << 20
 		go func() {
 			cache.SetLimit(limit)
-			a.measureCache()
+			a.measureSongCache(cache)
 		}()
 	}
 }
@@ -72,12 +72,14 @@ func (a *app) measureCache() {
 	if cache == nil {
 		return
 	}
-	go func() {
-		n := cache.Size()
-		a.post(func() {
-			a.cacheMeasured(cache, n)
-		})
-	}()
+	go a.measureSongCache(cache)
+}
+
+// Workers keep the cache captured on the UI thread. Reading a.pl.Cache here
+// could race with relocation and measure a replacement instead of this cache.
+func (a *app) measureSongCache(cache *player.Cache) {
+	n := cache.Size()
+	a.post(func() { a.cacheMeasured(cache, n) })
 }
 
 // cacheMeasured takes a count of what cache takes, unless it is of a cache
@@ -100,7 +102,7 @@ func (a *app) clearCache() {
 		a.cacheUsed = 0
 		go func() {
 			cache.Clear()
-			a.measureCache()
+			a.measureSongCache(cache)
 		}()
 	}
 }

@@ -17,24 +17,14 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// Like tests consume their own callbacks before restoring shared request mocks.
-func likePosts(t *testing.T) chan func() {
-	t.Helper()
-	posts := make(chan func(), 32)
-	old := testPost
-	testPost = func(f func()) { posts <- f }
-	t.Cleanup(func() { testPost = old })
-	return posts
-}
-
 // Clicking the player heart immediately changes the like and sends it to NetEase.
 func TestLikeFromPlayerBar(t *testing.T) {
-	posts := likePosts(t)
 	calls := make(chan bool, 4)
 	likeSong = func(id int64, like bool) error { calls <- like; return nil }
 	defer func() { likeSong = netease.Like }()
 
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
@@ -70,7 +60,6 @@ func TestLikeFromPlayerBar(t *testing.T) {
 // The heart of an episode playing likes the episode, not its audio, once
 // NetEase was asked, once, whether the listener likes it already.
 func TestLikeEpisode(t *testing.T) {
-	posts := likePosts(t)
 	asked := make(chan []int64, 4)
 	programsLiked = func(ids []int64) (map[int64]bool, error) { asked <- ids; return nil, nil }
 	type call struct {
@@ -85,6 +74,7 @@ func TestLikeEpisode(t *testing.T) {
 	}()
 
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1}
 	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3, PodcastID: 5, Duration: 600000}})
@@ -122,7 +112,6 @@ func TestLikeEpisode(t *testing.T) {
 // the episode keeps what the click made it; an answer for a listener
 // signed out since is dropped.
 func TestEpisodeLikeClickBeatsAnswer(t *testing.T) {
-	posts := likePosts(t)
 	isolateUserData(t)
 	fakeOfflineHome(t)
 	asked := make(chan []int64, 2)
@@ -134,6 +123,7 @@ func TestEpisodeLikeClickBeatsAnswer(t *testing.T) {
 	likeProgram = func(int64, bool) error { return nil }
 	defer func() { programsLiked, likeProgram = netease.ProgramsLiked, netease.LikeProgram }()
 	a := newTestApp()
+	posts := testPosts(a)
 	a.profile = &netease.Profile{UserID: 1}
 	a.askProgramLikes([]int64{3, 4})
 	wait(t, asked, "the first answer request")
@@ -161,12 +151,12 @@ func TestEpisodeLikeClickBeatsAnswer(t *testing.T) {
 // On a podcast's page, a liked episode's heart shows, and another's as the
 // pointer is on it, which likes that one.
 func TestLikeEpisodeRow(t *testing.T) {
-	posts := likePosts(t)
 	programsLiked = func([]int64) (map[int64]bool, error) { return nil, nil }
 	liked := make(chan int64, 4)
 	likeProgram = func(id int64, like bool) error { liked <- id; return nil }
 	defer func() { programsLiked, likeProgram = netease.ProgramsLiked, netease.LikeProgram }()
 	a := catalogApp()
+	posts := testPosts(a)
 	a.profile = &netease.Profile{UserID: 1}
 	a.setProgramLiked(40, true)
 	a.open(route{page: pagePodcast, id: 5})
@@ -206,8 +196,8 @@ func TestLikeBurstFrames(t *testing.T) {
 	}
 	likeSong = func(int64, bool) error { return nil }
 	defer func() { likeSong = netease.Like }()
-	posts := likePosts(t)
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1}
 	tr := netease.Track{ID: 7, Name: "宝船", Duration: 200000}
@@ -508,10 +498,10 @@ func TestSegmentedFrames(t *testing.T) {
 
 // ⌘D likes the song playing, and again unlikes it, saying so in a toast.
 func TestLikeCurrent(t *testing.T) {
-	posts := likePosts(t)
 	likeSong = func(int64, bool) error { return nil }
 	defer func() { likeSong = netease.Like }()
 	a := newTestApp()
+	posts := testPosts(a)
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船"}})
 	a.profile = &netease.Profile{UserID: 1}
 	a.likeCurrent()

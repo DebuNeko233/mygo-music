@@ -48,19 +48,6 @@ func readCacheSettings(t *testing.T, path string) settings {
 	return s
 }
 
-// cachePosts takes what the change posts for the main thread, for the test
-// to run when it wants.
-func cachePosts(t *testing.T) chan func() {
-	t.Helper()
-	old := postCacheDirectory
-	oldPost := testPost
-	posts := make(chan func(), 16)
-	postCacheDirectory = func(_ *app, fn func()) { posts <- fn }
-	testPost = func(fn func()) { posts <- fn }
-	t.Cleanup(func() { postCacheDirectory, testPost = old, oldPost })
-	return posts
-}
-
 func finishCacheChange(t *testing.T, a *app, posts chan func()) {
 	t.Helper()
 	// Complete the follow-up measurements as well, before restoring the
@@ -102,7 +89,7 @@ func writeCachedSongIn(t *testing.T, source string) {
 // Choosing a directory asks first, then starts one change in the background.
 func TestCacheDirectoryControls(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	oldOpen := openCacheDirectory
 	defer func() { openCacheDirectory = oldOpen }()
 	opens := 0
@@ -201,7 +188,7 @@ func TestCacheDirectoryDialogCancel(t *testing.T) {
 // is kept.
 func TestCacheDirectoryImmediate(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	if err := a.settings.save(); err != nil {
 		t.Fatal(err)
@@ -232,7 +219,7 @@ func TestCacheDirectoryImmediate(t *testing.T) {
 // and leaves the old ones where they are.
 func TestCacheDirectoryWithoutMigration(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	a.confirmCacheDirectory(target)
 	tt := ui.NewTester(a.settingsView, 780, 640)
@@ -252,7 +239,7 @@ func TestCacheDirectoryWithoutMigration(t *testing.T) {
 // cache that was playing.
 func TestCacheDirectorySaveFailure(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	cache := a.pl.Cache
 	a.settings.path = source // a directory: no settings may be written there
@@ -319,6 +306,7 @@ func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 // usage.
 func TestCacheDirectoryStaleMeasurement(t *testing.T) {
 	a, _, target := cacheTestApp(t)
+	posts := testPosts(a)
 	old := a.pl.Cache
 	a.cacheUsed = 123
 	a.cacheMoving = true
@@ -330,7 +318,8 @@ func TestCacheDirectoryStaleMeasurement(t *testing.T) {
 	next := a.settings
 	next.CacheDir = target
 	a.pl.Cache = newSongCache(next)
-	a.cacheMeasured(old, 456)
+	go a.measureSongCache(old)
+	refreshPost(t, posts)
 	if a.cacheUsed != 123 {
 		t.Fatal("stale cache measurement overwrote usage")
 	}

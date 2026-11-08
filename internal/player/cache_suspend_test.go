@@ -218,3 +218,22 @@ func TestSuspendCacheDefersControls(t *testing.T) {
 		t.Fatal("deferred controls were lost")
 	}
 }
+
+// Suspending invalidates metadata callbacks even when a radio wait prevents an audio reload.
+func TestSuspendCacheSettlesMetadataWhileAwaiting(t *testing.T) {
+	posts := make(chan func(), 1)
+	p := New(func(fn func()) { posts <- fn })
+	p.Cue([]netease.Track{{ID: 1}})
+	p.FetchLyrics = func(int64) (string, string, string, error) {
+		return "[00:01]Old", "", "", nil
+	}
+	p.RetryMetadata()
+	complete := <-posts
+	p.awaiting = true
+	resume := p.SuspendCache()
+	complete()
+	resume()
+	if p.MetadataLoading() || p.loading || p.lyricsLoaded || !p.awaiting {
+		t.Fatal("invalidated metadata remained busy or applied after suspension")
+	}
+}

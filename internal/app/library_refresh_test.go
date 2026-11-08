@@ -12,11 +12,10 @@ import (
 func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {
 	t.Helper()
 	isolateUserData(t)
-	posts := make(chan func(), 32)
-	oldPost, oldDetail, oldMine, oldLikes := testPost, playlistDetail, userPlaylists, likedIDs
-	testPost = func(f func()) { posts <- f }
-	t.Cleanup(func() { testPost, playlistDetail, userPlaylists, likedIDs = oldPost, oldDetail, oldMine, oldLikes })
+	oldDetail, oldMine, oldLikes := playlistDetail, userPlaylists, likedIDs
+	t.Cleanup(func() { playlistDetail, userPlaylists, likedIDs = oldDetail, oldMine, oldLikes })
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	a.listRefresh.now = func() time.Time { return now }

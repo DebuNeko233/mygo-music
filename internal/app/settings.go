@@ -187,14 +187,16 @@ func loadSettings() settings {
 	}
 	// Older settings have no layout version. Keep their paths until the
 	// background conversion has copied every cache and saved the new layout.
-	s.CacheLayout = 0
-	if err := json.Unmarshal(b, &s); err != nil {
-		// On parse error, return defaults with path set for saving
+	decoded := s
+	decoded.CacheLayout = 0
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		// Unmarshal may partially fill decoded before failing. Never use its
+		// cache path or layout to start a migration from rejected settings.
 		return s
 	}
 	// Clamp values to valid ranges
-	s.clamp()
-	return s
+	decoded.clamp()
+	return decoded
 }
 
 // clamp ensures all settings values are within valid ranges.

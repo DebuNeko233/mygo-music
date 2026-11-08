@@ -35,3 +35,24 @@ func TestEarlyPostsAreNotLost(t *testing.T) {
 		}
 	}
 }
+
+// A late result from one headless app must not enter a newer app's dispatcher.
+func TestPostDispatchBelongsToApp(t *testing.T) {
+	a, b := newTestApp(), newTestApp()
+	first := testPosts(a)
+	release, done := make(chan struct{}), make(chan struct{})
+	seen := ""
+	go func() { <-release; a.post(func() { seen += "a" }); close(done) }()
+	second := testPosts(b)
+	b.post(func() { seen += "b" })
+	close(release)
+	<-done
+	refreshPost(t, second)
+	if seen != "b" {
+		t.Fatal("old app entered the new dispatcher", seen)
+	}
+	refreshPost(t, first)
+	if seen != "ba" {
+		t.Fatal("old app lost its own result", seen)
+	}
+}

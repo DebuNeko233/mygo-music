@@ -15,11 +15,8 @@ func TestReopenedPlaylistRefreshes(t *testing.T) {
 		return &netease.Playlist{ID: id, Name: "Updated", Tracks: []netease.Track{{ID: 2}}}, nil
 	}
 	defer func() { playlistDetail = original }()
-	posts := make(chan func(), 8)
-	previous := testPost
-	testPost = func(f func()) { posts <- f }
-	defer func() { testPost = previous }()
 	a := newTestApp()
+	posts := testPosts(a)
 	old := &netease.Playlist{ID: 7, Name: "Old", Tracks: []netease.Track{{ID: 1}}}
 	a.playlists[7] = old
 	a.pl.Cue([]netease.Track{{ID: 9}})

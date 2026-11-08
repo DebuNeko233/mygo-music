@@ -21,7 +21,11 @@ func (a *app) loadHomeModules(failedOnly, manual bool) {
 	}
 	if !failedOnly {
 		a.homeFailures = map[string]error{}
+		// Freshness tracks a full attempt, including partial failures. Focus
+		// must not keep reloading healthy modules while failures back off.
+		a.homeAt = time.Now()
 	}
+	a.homeErr = ""
 	a.homeLoading = true
 	a.homePending = 0
 	run := func(key string) bool {
@@ -74,7 +78,6 @@ func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T
 			a.post(func() {
 				if a.homeGen == gen {
 					apply(kept, true)
-					a.cacheShownAt = at
 				}
 			})
 		}
@@ -91,15 +94,10 @@ func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T
 			} else {
 				a.homeFailures[key] = err
 			}
-			a.homeFailed = len(a.homeFailures) > 0
 			a.homePending--
 			if a.homePending == 0 {
 				a.homeLoading = false
-				if !a.homeFailed {
-					a.homeAt = time.Now()
-					a.homeErr = ""
-				}
-				if a.homeFailed && len(a.featured) == 0 && len(a.charts) == 0 {
+				if len(a.homeFailures) > 0 && len(a.featured) == 0 && len(a.charts) == 0 {
 					a.homeErr = "内容加载失败"
 				}
 			}

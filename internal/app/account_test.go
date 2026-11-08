@@ -57,12 +57,14 @@ func TestAccountMenu(t *testing.T) {
 // 我的主页 in the account menu opens the page of who is signed in and puts
 // the menu away.
 func TestAccountMenuOpensOwnPage(t *testing.T) {
+	fakeSubscriptions(t)
 	detail, playlists := userDetail, userPlaylists
 	defer func() { userDetail, userPlaylists = detail, playlists }()
 	userDetail = func(id int64) (*netease.User, error) { return &netease.User{UserID: id, Nickname: "小明"}, nil }
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return nil, nil, nil }
 
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 42, Nickname: "小明"}
 	tt := ui.NewTester(a.view, 1000, 700)
@@ -78,6 +80,9 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 	}
 	if a.accountOpen {
 		t.Fatal("the menu stayed open")
+	}
+	for d := a.users[42]; d.loading > 0 || d.subsLoading > 0; {
+		refreshPost(t, posts)
 	}
 }
 
@@ -116,7 +121,13 @@ func ownPageApp() *app {
 // opens their page.
 func TestOwnPageFollows(t *testing.T) {
 	asked := fakeSubscriptions(t)
+	artist := artistDetail
+	t.Cleanup(func() { artistDetail = artist })
+	artistDetail = func(id int64) (*netease.ArtistProfile, error) {
+		return &netease.ArtistProfile{Artist: netease.Artist{ID: id}}, nil
+	}
 	a := ownPageApp()
+	posts := testPosts(a)
 	a.open(route{page: pageUser, id: 9})
 	wait(t, asked, "the artists followed")
 	tt := ui.NewTester(a.view, 1200, 1200)
@@ -127,9 +138,14 @@ func TestOwnPageFollows(t *testing.T) {
 	if a.route.page != pageArtist || a.route.id != 10 {
 		t.Fatalf("route = %+v, want the page of artist 10", a.route)
 	}
-	a.users[9].subsLoading = 0 // what was asked for has landed
+	for a.users[9].subsLoading > 0 || a.artists[10].loading {
+		refreshPost(t, posts)
+	}
 	a.back()
 	wait(t, asked, "the artists followed, again")
+	for a.users[9].subsLoading > 0 {
+		refreshPost(t, posts)
+	}
 }
 
 // Someone else's page doesn't ask for what the listener follows, nor shows
@@ -153,7 +169,11 @@ func TestOthersPageHidesFollows(t *testing.T) {
 func TestOwnPageFrameBudget(t *testing.T) {
 	fakeSubscriptions(t)
 	a := ownPageApp()
+	posts := testPosts(a)
 	a.open(route{page: pageUser, id: 9})
+	for a.users[9].subsLoading > 0 {
+		refreshPost(t, posts)
+	}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
 	tt.Frame()

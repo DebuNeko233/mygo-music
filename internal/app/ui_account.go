@@ -38,12 +38,13 @@ var loginIdentity = netease.SessionIdentity
 func (a *app) boot() {
 	a.homeLoading = true
 	gen := a.homeGen
+	store, restore, identityOf := a.identityCache, restoreLoginSession, loginIdentity
 	go func() {
-		restored := restoreLoginSession()
+		restored := restore()
 		var kept *netease.Profile
-		identity := loginIdentity()
+		identity := identityOf()
 		if restored && identity != "" {
-			b, _ := a.identityCache.Read(identity, "profile")
+			b, _ := store.Read(identity, "profile")
 			json.Unmarshal(b, &kept)
 			if kept != nil && kept.UserID <= 0 {
 				kept = nil
@@ -74,14 +75,14 @@ func (a *app) confirmAccount() {
 	}
 	a.recovery.accountBusy = true
 	gen := a.homeGen
-	ask := accountAsk
+	ask, identityOf := accountAsk, loginIdentity
 	go func() {
 		prof, err := ask()
 		if prof != nil && prof.UserID <= 0 {
 			prof = nil
 		}
 
-		identity := loginIdentity()
+		identity := identityOf()
 		a.post(func() {
 			if a.homeGen != gen {
 				return
@@ -137,7 +138,6 @@ func (a *app) signedIn(prof *netease.Profile) {
 		a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
 	}
 	a.homeLoading = false
-	a.homeFailed = false
 	a.homeErr = ""
 	a.homeFailures = nil
 	a.dirtySnapshots = nil

@@ -12,16 +12,9 @@ import (
 // openCacheDirectory asks for a folder, as the system's own picker does.
 var openCacheDirectory = mygo.Dialog.Open
 
-// postCacheDirectory runs fn on the main thread: tests swap it out, having no
-// window to post to.
-var postCacheDirectory = func(a *app, fn func()) { a.post(fn) }
-
-// changeCacheDirectory keeps every resource under directory, migrating all
-// managed caches together when requested: what plays is let go of first, so
-// that no file of the folder is open as it moves, and plays again from where
-// it was once it has. Nothing waits for the copy: it runs on a goroutine,
-// with the songs counted, and the queue still taking a next track, a seek or
-// a toggle, which apply when playback comes back.
+// changeCacheDirectory suspends all stores before moving them off the UI
+// thread. Settings commit only after a successful copy; failure resumes the
+// original stores. Playback resumes with any controls changed during the move.
 func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 	if a.cacheMoving {
 		return errors.New("正在更改缓存目录，请稍候")
@@ -62,11 +55,10 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 		var warning error
 		if err == nil {
 			warning, err = cachemove.MoveLayout(source, target, migrate, shared, func() error {
-				// The settings are saved where they are read and changed: on
-				// the main thread, from the ones there then, so that what the
-				// listener changed as the songs copied is kept.
+				// Merge on the main thread so settings changed during the
+				// copy are preserved. MoveLayout rolls back if saving fails.
 				saved := make(chan error, 1)
-				postCacheDirectory(a, func() {
+				a.post(func() {
 					next := a.settings
 					next.CacheDir = directory
 					next.CacheLayout = 1
@@ -87,7 +79,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 			resumeBrowse(filepath.Join(target, "browse-v1"))
 			resumeImages(filepath.Join(target, cachemove.ArtworkDir))
 		}
-		postCacheDirectory(a, func() {
+		a.post(func() {
 			a.cacheMoving, a.cacheTarget = false, ""
 			if err != nil {
 				a.cacheError = "更改缓存目录失败，仍使用原目录：" + err.Error()

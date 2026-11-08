@@ -47,7 +47,6 @@ func (a *app) loadAlbum(id int64) {
 			a.post(func() {
 				if a.homeGen == gen && a.albums[id] == d && d.album == nil {
 					d.album = kept.Album
-					a.cacheShownAt = at
 				}
 			})
 		}

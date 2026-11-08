@@ -2,6 +2,7 @@ package netease
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
@@ -62,5 +63,20 @@ func TestRecoveryClassifiesGatewayFailures(t *testing.T) {
 	}
 	if RetryableError(nil) || RetryableError(&url.Error{Op: "Get", Err: context.Canceled}) {
 		t.Fatal("success or cancellation became an automatic retry")
+	}
+}
+
+// URL wrappers must not turn invalid URLs or certificate refusals into transient network failures.
+func TestRecoveryRejectsPermanentURLFailures(t *testing.T) {
+	for _, err := range []error{
+		&url.Error{Op: "Get", URL: "file:///cover", Err: fmt.Errorf("unsupported protocol scheme")},
+		&url.Error{Op: "Get", URL: "https://example.test", Err: x509.UnknownAuthorityError{}},
+	} {
+		if RetryableError(err) {
+			t.Errorf("permanent request error became retryable: %v", err)
+		}
+	}
+	if !RetryableError(&url.Error{Op: "Get", Err: &net.DNSError{IsTimeout: true}}) {
+		t.Fatal("URL timeout lost automatic recovery")
 	}
 }
