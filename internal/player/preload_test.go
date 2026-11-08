@@ -216,8 +216,9 @@ func TestRiskControlUsesLongerRetryGaps(t *testing.T) {
 	}
 }
 
-// Risk control keeps asking for the next song until the one playing ends.
-func TestRiskControlPrefetchIsNotLimited(t *testing.T) {
+// Risk control retries a prefetch once, rather than keeping an account-level
+// refusal active with requests until the song ends.
+func TestRiskControlPrefetchIsLimited(t *testing.T) {
 	var asks atomic.Int64
 	ch := make(chan func(), 64)
 	p := New(func(fn func()) { ch <- fn })
@@ -228,9 +229,10 @@ func TestRiskControlPrefetchIsNotLimited(t *testing.T) {
 		return nil, netease.ErrRiskControl
 	}
 	p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
-	for i := 0; i < prefetchTries+2; i++ {
-		before := asks.Load()
-		pumpFor(t, ch, "another prefetch while the song still plays", 12*time.Second, func() bool { return asks.Load() > before })
+	pumpFor(t, ch, "one more prefetch after a risk refusal", 12*time.Second, func() bool { return asks.Load() == 2 })
+	time.Sleep(50 * time.Millisecond)
+	if got := asks.Load(); got != 2 {
+		t.Fatalf("risk control kept requesting: %d requests", got)
 	}
 }
 
@@ -264,7 +266,7 @@ func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 		v, _ := asks.LoadOrStore(id, new(int))
 		n := v.(*int)
 		*n++
-		if *n < 3 {
+		if *n == 1 {
 			return nil, netease.ErrRiskControl
 		}
 		return &netease.Stream{URL: fmt.Sprintf("%s/%d", srv.URL, id), Size: int64(len(b)), Level: level, Type: "mp3"}, nil
@@ -273,11 +275,11 @@ func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 	c := NewCache(t.TempDir(), 1<<30)
 	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5 * 60 * 1000}, {ID: 2, Duration: 5 * 60 * 1000}}, 0)
-	pumpFor(t, ch, "the first song after a temporary refusal", 45*time.Second, func() bool { return p.out != nil })
+	pumpFor(t, ch, "the first song after a temporary refusal", 15*time.Second, func() bool { return p.out != nil })
 	if p.err != "" || p.Current().ID != 1 {
 		t.Fatalf("did not recover: %s", p.Err())
 	}
-	pumpFor(t, ch, "the next song after the same refusal", 60*time.Second, func() bool { return p.ahead != nil && p.ahead.dl.Err() == nil && p.ahead.dl.Progress() == 1 })
+	pumpFor(t, ch, "the next song after the same refusal", 15*time.Second, func() bool { return p.ahead != nil && p.ahead.dl.Err() == nil && p.ahead.dl.Progress() == 1 })
 	if p.ahead == nil {
 		t.Fatalf("next song had no prefetch: error=%q", p.Err())
 	}

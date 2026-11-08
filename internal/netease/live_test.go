@@ -1,7 +1,6 @@
 package netease
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -30,13 +29,10 @@ func TestSongURLEapiLive(t *testing.T) {
 		t.Skip()
 	}
 	deviceOnce.Do(func() { deviceID = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123" })
-	var res map[string]any
-	err := eapiPost("/api/song/enhance/player/url/v1", map[string]any{"ids": "[2652820720]", "level": "exhigh", "encodeType": "mp3"}, &res)
-	if err != nil {
-		t.Fatal(err)
+	st, err := SongURL(2652820720, "exhigh")
+	if err != nil || st == nil || st.URL == "" {
+		t.Fatalf("stream %+v: %v", st, err)
 	}
-	b, _ := json.Marshal(res)
-	t.Log(string(b)[:min(400, len(b))])
 }
 
 func TestPrivilegesLive(t *testing.T) {
