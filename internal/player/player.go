@@ -184,11 +184,25 @@ func (p *Player) ended() {
 
 // PlayQueue replaces the queue with tracks and plays the one at start.
 func (p *Player) PlayQueue(tracks []netease.Track, start int) {
+	p.playQueue(tracks, max(start, 0))
+}
+
+// PlayShuffled starts a whole list with any song at its head. Explicitly
+// choosing a song through PlayQueue still keeps that song first.
+func (p *Player) PlayShuffled(tracks []netease.Track) {
+	if len(tracks) == 0 {
+		return
+	}
+	p.shuffle = true
+	p.playQueue(tracks, -1)
+}
+
+func (p *Player) playQueue(tracks []netease.Track, start int) {
 	if len(tracks) == 0 {
 		return
 	}
 	p.endRadio()
-	start = min(max(start, 0), len(tracks)-1)
+	start = min(start, len(tracks)-1)
 	p.queue = append([]netease.Track(nil), tracks...)
 	p.order = make([]int, len(p.queue))
 	for i := range p.order {
@@ -199,7 +213,7 @@ func (p *Player) PlayQueue(tracks []netease.Track, start int) {
 		p.load(0)
 		return
 	}
-	p.load(start)
+	p.load(max(start, 0))
 }
 
 // PlayRadio plays tracks in their order, then goes on with those feed
@@ -322,7 +336,7 @@ func (p *Player) appendTracks(tracks []netease.Track) {
 	}
 }
 
-// shuffleOrder shuffles the order, with first first.
+// shuffleOrder keeps first at the head, or allows any head when first is -1.
 func (p *Player) shuffleOrder(first int) {
 	rand.Shuffle(len(p.order), func(i, j int) { p.order[i], p.order[j] = p.order[j], p.order[i] })
 	for i, v := range p.order {
