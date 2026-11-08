@@ -248,20 +248,54 @@ func (a *app) nativeVolumeSlider(c *ui.Context, pop popover) {
 	})
 }
 
+// A wheel's notch is a whole step, while a touchpad's many small pixel
+// moves gather until they make one.
+const (
+	volumeScrollNotch    = 100 // DIPs, about one notch of a mouse wheel
+	volumeScrollMaxSteps = 3   // steps one scroll event may take at most
+)
+
 // scrollVolume turns the volume up as the wheel or the fingers scroll up.
-// Each notch or scroll gesture is ten percent, rather than a quarter of the
-// range whose size depends on how the platform reports wheel deltas.
+// Each notch or gathered scroll gesture is ten percent, rather than a
+// quarter of the range whose size depends on how the platform reports
+// wheel deltas.
 func (a *app) scrollVolume(ev ui.InputEvent) bool {
 	if ev.Kind != ui.InputScroll || ev.DY == 0 {
 		return false
 	}
+	down := ev.DY > 0
+	if !ev.Precise {
+		// A mouse wheel reports one discrete notch: step once, and don't
+		// let a touchpad's leftover pixels change where the next one lands.
+		a.volumeScroll, a.volumeScrollDown = 0, down
+		a.stepVolume(down)
+		return true
+	}
+	// A touchpad reports many small pixel moves. Gather them in one
+	// direction until they add up to a notch, then step no more than a
+	// few times so one fast gesture can't jump the whole range.
+	if down != a.volumeScrollDown {
+		a.volumeScroll, a.volumeScrollDown = 0, down
+	}
+	a.volumeScroll += math.Abs(float64(ev.DY))
+	for s := 0; s < volumeScrollMaxSteps && a.volumeScroll >= volumeScrollNotch; s++ {
+		a.volumeScroll -= volumeScrollNotch
+		a.stepVolume(down)
+	}
+	if a.volumeScroll >= volumeScrollNotch {
+		a.volumeScroll = 0 // one event was a burst, not a held gesture
+	}
+	return true
+}
+
+// stepVolume takes one ten-percent step of the volume, clamped to its range.
+func (a *app) stepVolume(down bool) {
 	step := 0.1
-	if ev.DY > 0 {
+	if down {
 		step = -step
 	}
 	a.volume = math.Round(min(1, max(0, a.volume+step))*100) / 100
 	a.pl.SetVolume(a.volume)
-	return true
 }
 
 // volumeIcon is the speaker for volume v: silent, or with one or two waves.
