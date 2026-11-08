@@ -16,7 +16,10 @@ func TestSuspendRelocatesStore(t *testing.T) {
 	epoch := s.Epoch()
 	write := s.Prepare("7", "accepted", epoch)
 	go write([]byte("kept"))
-	resume := s.Suspend()
+	resume, suspendErr := s.Suspend()
+	if suspendErr != nil {
+		t.Fatal(suspendErr)
+	}
 	s.Put("7", "during", []byte("skip"), s.Epoch())
 	if err := os.Rename(source, target); err != nil {
 		resume("")
@@ -44,7 +47,10 @@ func TestSuspendPreservesAccountClear(t *testing.T) {
 	defer s.Close()
 	s.Put("7", "page", []byte("private"), 0)
 	s.Put("8", "page", []byte("other"), 0)
-	resume := s.Suspend()
+	resume, suspendErr := s.Suspend()
+	if suspendErr != nil {
+		t.Fatal(suspendErr)
+	}
 	done := make(chan struct{})
 	s.Clear("7", func() { close(done) })
 	if err := os.Rename(source, target); err != nil {

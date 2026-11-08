@@ -252,7 +252,10 @@ func TestIndexSuspendRelocateOrSwitch(t *testing.T) {
 			source, target := filepath.Join(root, "old"), filepath.Join(root, "new")
 			s := indexed(source)
 			s.Put("requests", "old", []byte(`{"v":1}`), 0)
-			resume := s.Suspend()
+			resume, suspendErr := s.Suspend()
+			if suspendErr != nil {
+				t.Fatal(suspendErr)
+			}
 			if _, err := os.Stat(filepath.Join(source, IndexFile)); err != nil {
 				resume("")
 				t.Fatal("suspend did not flush", err)
@@ -360,5 +363,40 @@ func TestIndexWriteFailureKeepsMemoryBounded(t *testing.T) {
 	}
 	if b, _ := cold.Read("requests", "199"); !bytes.Equal(b, value) {
 		t.Fatal("repair lost the latest in-memory data")
+	}
+}
+
+// Migration must stop on a failed index flush and leave the original store writable for recovery.
+func TestIndexSuspendRejectsFlushFailure(t *testing.T) {
+	root := t.TempDir()
+	blocked := filepath.Join(root, "blocked")
+	if err := os.WriteFile(blocked, []byte("blocked"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writer := log.Writer()
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(writer)
+	dir := filepath.Join(blocked, "artwork")
+	s := indexed(dir)
+	defer s.Close()
+	s.Put("requests", "first", []byte(`{"v":1}`), 0)
+	s.Put("requests", "pending", []byte(`{"v":2}`), 0)
+	resume, err := s.Suspend()
+	if err == nil {
+		resume("")
+		t.Fatal("migration accepted unflushed metadata")
+	}
+	if s.moving.Load() {
+		t.Fatal("failed suspend left store blocked")
+	}
+	if err := os.Remove(blocked); err != nil {
+		t.Fatal(err)
+	}
+	s.Put("requests", "new", []byte(`{"v":3}`), s.Epoch())
+	s.Close()
+	cold := indexed(dir)
+	defer cold.Close()
+	if b, _ := cold.Read("requests", "new"); string(b) != `{"v":3}` {
+		t.Fatal("failed suspend prevented recovery")
 	}
 }

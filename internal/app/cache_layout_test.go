@@ -230,3 +230,38 @@ func TestCacheDirectoryRestoreDefault(t *testing.T) {
 		t.Fatal("changed unrelated model")
 	}
 }
+
+// A failed index flush must abort the directory change and resume the original song and browsing stores.
+func TestCacheDirectoryIndexFlushFailure(t *testing.T) {
+	a, source, target := cacheTestApp(t)
+	posts := cachePosts(t)
+	writeCachedSong(t, source)
+	seedOfflineCaches(t, a)
+	paths, err := cachePaths(a.settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.imageCache.Close()
+	if err := os.RemoveAll(paths.Artwork); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.Artwork, []byte("unavailable directory"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	a.imageCache = netease.NewArtworkStore(paths.Artwork, 1<<20)
+	a.imageCache.Put("requests", "first", []byte(`{"content":"cover"}`), 0)
+	a.imageCache.Put("requests", "pending", []byte(`{"content":"cover"}`), 0)
+	if err := a.changeCacheDirectory(target, true); err != nil {
+		t.Fatal(err)
+	}
+	finishCacheChange(t, a, posts)
+	if a.cacheError == "" || a.settings.CacheDir != source || a.pl.Cache.Size() != 5 {
+		t.Fatal("failed flush changed directory or lost songs", a.cacheError)
+	}
+	if b, _ := a.browseCache.Read("7", "playlist/9"); string(b) != "page" {
+		t.Fatal("failed flush left browsing suspended")
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatal("published target despite failed index flush", err)
+	}
+}

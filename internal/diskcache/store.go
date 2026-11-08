@@ -369,9 +369,11 @@ func (s *Store) Close() {
 // Suspend holds file access while its directory moves. It invalidates writes
 // captured before the move; requests still reading wait for the final path.
 // Call and resume off the UI thread. An empty path resumes the original store.
-func (s *Store) Suspend() func(string) {
+// A failed index flush leaves the store usable and prevents moving incomplete metadata.
+// The returned resume function is safe to call even when suspension fails.
+func (s *Store) Suspend() (func(string), error) {
 	if s == nil {
-		return func(string) {}
+		return func(string) {}, nil
 	}
 	s.mu.Lock()
 	s.moving.Store(true)
@@ -382,7 +384,11 @@ func (s *Store) Suspend() func(string) {
 	s.epoch.Add(1)
 	s.io.Lock()
 	if s.index != nil {
-		s.indexError(s.index.flush(s.dir))
+		if err := s.index.flush(s.dir); err != nil {
+			s.moving.Store(false)
+			s.io.Unlock()
+			return func(string) {}, err
+		}
 	}
 	return func(dir string) {
 		if dir != "" {
@@ -393,7 +399,7 @@ func (s *Store) Suspend() func(string) {
 		}
 		s.moving.Store(false)
 		s.io.Unlock()
-	}
+	}, nil
 }
 
 func (s *Store) indexError(err error) {

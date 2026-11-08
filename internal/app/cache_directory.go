@@ -54,24 +54,31 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 	resume := a.pl.SuspendCache()
 	go func() {
 		unblock := cache.Quiesce()
-		resumeBrowse, resumeImages := browse.Suspend(), images.Suspend()
-		warning, err := cachemove.MoveLayout(source, target, migrate, shared, func() error {
-			// The settings are saved where they are read and changed: on
-			// the main thread, from the ones there then, so that what the
-			// listener changed as the songs copied is kept.
-			saved := make(chan error, 1)
-			postCacheDirectory(a, func() {
-				next := a.settings
-				next.CacheDir = directory
-				next.CacheLayout = 1
-				err := next.save()
-				if err == nil {
-					a.settings = next
-				}
-				saved <- err
+		resumeBrowse, err := browse.Suspend()
+		resumeImages := func(string) {}
+		if err == nil {
+			resumeImages, err = images.Suspend()
+		}
+		var warning error
+		if err == nil {
+			warning, err = cachemove.MoveLayout(source, target, migrate, shared, func() error {
+				// The settings are saved where they are read and changed: on
+				// the main thread, from the ones there then, so that what the
+				// listener changed as the songs copied is kept.
+				saved := make(chan error, 1)
+				postCacheDirectory(a, func() {
+					next := a.settings
+					next.CacheDir = directory
+					next.CacheLayout = 1
+					err := next.save()
+					if err == nil {
+						a.settings = next
+					}
+					saved <- err
+				})
+				return <-saved
 			})
-			return <-saved
-		})
+		}
 		if err != nil {
 			unblock()
 			resumeBrowse("")
