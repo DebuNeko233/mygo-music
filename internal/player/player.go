@@ -757,6 +757,16 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		p.sync()
 		return
 	}
+	if errors.Is(err, netease.ErrRiskControl) {
+		if p.tries < riskTries {
+			p.retry(at, skipped, from, err)
+			return
+		}
+		p.err = "网易云正在校验网络，请稍后重试"
+		p.playing = false
+		p.sync()
+		return
+	}
 	if !errors.Is(err, netease.ErrUnavailable) {
 		// What did not come now may come again: a stream URL gone stale,
 		// or a connection dropped, is asked for again a moment later.
@@ -793,6 +803,11 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 // where two tries a second apart left the listener with a song that would
 // have played had it been asked for once more.
 const loadTries = 5
+
+// riskTries keeps a prolonged account or network refusal from becoming a
+// continuous stream of requests. The other gateway was already tried by
+// SongURL before this retry.
+const riskTries = 1
 
 // lyricTries is how many times the words of a song are asked for before they
 // are given up on: a request that fails is not a song without words.
@@ -888,9 +903,9 @@ func (p *Player) prefetch(at int) {
 }
 
 // prefetchTries is how many times the track after this one is fetched ahead
-// before it is left for when it is due, except while NetEase checks the
-// network: a risk check retries every ten seconds for as long as this song
-// plays. An ordinary network that is out for a moment
+// before it is left for when it is due. Risk checks are limited too: an
+// account-level refusal can last hours, so retrying until the song ends
+// would only keep it active. An ordinary network that is out for a moment
 // is back within them, where one fetch that came in badly left the listener
 // waiting on the next song for what one more ask would have fetched.
 const prefetchTries = 3
@@ -947,13 +962,10 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 // says: what came in badly is let go of first, so that the fetch that
 // follows is the one the player keeps.
 func prefetchLater(p *Player, gen int, t netease.Track, level string, ask asker, failed *download, try int, err error) {
-	if try >= prefetchTries && !errors.Is(err, netease.ErrRiskControl) {
+	if try >= prefetchTries || (errors.Is(err, netease.ErrRiskControl) && try >= riskTries) {
 		return
 	}
-	gap := retryGap(max(try, 1))
-	if errors.Is(err, netease.ErrRiskControl) {
-		gap = 10 * time.Second
-	}
+	gap := prefetchGap(max(try, 1), err)
 	time.AfterFunc(gap, func() {
 		p.post(func() {
 			if gen != p.gen {

@@ -159,6 +159,23 @@ type apiError struct {
 	Msg     string `json:"msg"`
 }
 
+// codeError preserves a risk-check refusal whichever gateway returned it.
+func (e apiError) codeError(path string) error {
+	msg := e.Message
+	if msg == "" {
+		msg = e.Msg
+	}
+	err := fmt.Errorf("netease: %s: code %d %s", path, e.Code, msg)
+	switch e.Code {
+	case -460:
+		return fmt.Errorf("%w: %w", ErrRiskControl, err)
+	case 301:
+		return fmt.Errorf("%w: %w", ErrNotLoggedIn, err)
+	default:
+		return err
+	}
+}
+
 func get(path string, query url.Values, out any) error {
 	u := apiBase + path
 	if len(query) > 0 {
@@ -200,11 +217,7 @@ func do(req *http.Request, out any) error {
 		return fmt.Errorf("netease: %s: %w", req.URL.Path, err)
 	}
 	if status.Code != 200 {
-		msg := status.Message
-		if msg == "" {
-			msg = status.Msg
-		}
-		return fmt.Errorf("netease: %s: code %d %s", req.URL.Path, status.Code, msg)
+		return status.codeError(req.URL.Path)
 	}
 	return json.Unmarshal(body, out)
 }
@@ -423,51 +436,59 @@ var Levels = []string{"standard", "higher", "exhigh", "lossless", "hires"}
 func Lossless(level string) bool { return level == "lossless" || level == "hires" }
 
 // SongURL returns where to stream a track, MP3 or FLAC, at level (one of
-// Levels) or the best below it the listener may play. It goes through
-// the eapi, which carries the session, so VIP songs play for subscribers.
+// Levels) or the best below it the listener may play. The desktop gateway
+// carries the session, so VIP songs play for subscribers; its web counterpart
+// is a fallback when that gateway refuses or loses the request.
 func SongURL(id int64, level string) (*Stream, error) {
-	var res struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Msg     string `json:"msg"`
-		Data    []struct {
-			Stream
-			URL           string          `json:"url"`
-			Peak          *float64        `json:"peak"`
-			FreeTrialInfo json.RawMessage `json:"freeTrialInfo"`
-		} `json:"data"`
-	}
+	const path = "/api/song/enhance/player/url/v1"
 	encode := "mp3"
 	if Lossless(level) {
 		encode = "flac"
 	}
-	data := map[string]any{"ids": fmt.Sprintf("[%d]", id), "level": level, "encodeType": encode}
-	if err := eapiPost("/api/song/enhance/player/url/v1", data, &res); err != nil {
-		return nil, err
+	ids := fmt.Sprintf("[%d]", id)
+	var res songURLAnswer
+	desktopErr := eapiPost(path, map[string]any{"ids": ids, "level": level, "encodeType": encode}, &res)
+	if desktopErr == nil {
+		if st, err := res.stream(path, level); err == nil {
+			return st, nil
+		} else if errors.Is(err, ErrUnavailable) || errors.Is(err, ErrNotLoggedIn) {
+			return nil, err
+		} else {
+			desktopErr = err
+		}
 	}
-	// NetEase answers 200 with a URL, and something else — 301 when the
-	// session has gone, -460 when it wants the account checked — when it
-	// serves none. Taken for a song that cannot play, those said it
-	// needed VIP and skipped the whole queue.
-	switch res.Code {
-	case 200:
-	case 301:
-		return nil, ErrNotLoggedIn
-	case -460:
-		msg := res.Message
-		if msg == "" {
-			msg = res.Msg
+	var fallback songURLAnswer
+	if err := post(path, url.Values{"ids": {ids}, "level": {level}, "encodeType": {encode}}, &fallback); err == nil {
+		if st, err := fallback.stream(path, level); err == nil {
+			return st, nil
+		} else if errors.Is(err, ErrUnavailable) {
+			// The other gateway offered only a preview: keep the refusal,
+			// rather than mistaking a VIP song for a whole track.
+			return nil, desktopErr
 		}
-		return nil, fmt.Errorf("%w: netease: song url: code %d %s", ErrRiskControl, res.Code, msg)
-	default:
-		msg := res.Message
-		if msg == "" {
-			msg = res.Msg
-		}
-		return nil, fmt.Errorf("netease: song url: code %d %s", res.Code, msg)
+	}
+	return nil, desktopErr
+}
+
+type songURLAnswer struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Msg     string `json:"msg"`
+	Data    []struct {
+		Stream
+		URL           string          `json:"url"`
+		Peak          *float64        `json:"peak"`
+		FreeTrialInfo json.RawMessage `json:"freeTrialInfo"`
+	} `json:"data"`
+}
+
+func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
+	// An expired session or a risk check is not a song restriction: taking
+	// it for one would skip a queue of otherwise playable tracks.
+	if res.Code != 200 {
+		return nil, apiError{Code: res.Code, Message: res.Message, Msg: res.Msg}.codeError(path)
 	}
 	if len(res.Data) == 0 || res.Data[0].URL == "" {
-		// A missing URL alone does not establish a restriction on the song.
 		return nil, errors.New("netease: no playback URL returned")
 	}
 	d := res.Data[0]

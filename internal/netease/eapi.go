@@ -29,7 +29,9 @@ import (
 const (
 	eapiDomain = "https://interfacepc.music.163.com"
 	eapiKey    = "e82ckenh8dichen8"
-	eapiUA     = "NeteaseMusic 9.0.90/5038 (iPhone; iOS 16.2; zh_CN)"
+	eapiUA     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+		"(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 " +
+		"NeteaseMusicDesktop/3.1.17.204416"
 )
 
 // The desktop client this app speaks as.
@@ -150,11 +152,7 @@ func eapiOK(path string, data map[string]any) error {
 		return err
 	}
 	if res.Code != 200 {
-		msg := res.Message
-		if msg == "" {
-			msg = res.Msg
-		}
-		return fmt.Errorf("netease: %s: code %d %s", path, res.Code, msg)
+		return res.codeError(path)
 	}
 	return nil
 }
