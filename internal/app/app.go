@@ -2,6 +2,7 @@ package app
 
 import (
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -180,11 +181,10 @@ type app struct {
 	savedSession string // the session as last kept
 	sessionDue   bool   // a save of the session is due
 
-	// kept is what post took before the window was made, run once it is.
-	// Only post and flushKept touch it: post is called from background
-	// goroutines, but they all block on the window being made, and
-	// flushKept runs on the main thread right after NewWindow returns.
-	kept []func()
+	// Workers may finish together before NewWindow returns. Protect their
+	// queued callbacks and the publication of win; callbacks run unlocked.
+	postMu sync.Mutex
+	kept   []func()
 }
 
 // post runs fn on the main thread and redraws both windows. Before the
@@ -192,15 +192,20 @@ type app struct {
 // it is made, a backdrop being read, is kept until there is one, so that the
 // read still lands. Tests have no window at all, so testPost takes it.
 func (a *app) post(fn func()) {
-	if a.win == nil {
-		if testPost != nil {
-			testPost(fn)
+	a.postMu.Lock()
+	win := a.win
+	if win == nil {
+		if send := testPost; send != nil {
+			a.postMu.Unlock()
+			send(fn)
 			return
 		}
 		a.kept = append(a.kept, fn)
+		a.postMu.Unlock()
 		return
 	}
-	a.win.Update(func() {
+	a.postMu.Unlock()
+	win.Update(func() {
 		fn()
 		a.redraw()
 	})
@@ -208,8 +213,10 @@ func (a *app) post(fn func()) {
 
 // flushKept runs what post kept while the window was being made.
 func (a *app) flushKept() {
+	a.postMu.Lock()
 	kept := a.kept
 	a.kept = nil
+	a.postMu.Unlock()
 	for _, fn := range kept {
 		fn()
 	}
@@ -286,7 +293,7 @@ func Run() error {
 		}
 		a.volume = a.settings.Volume
 		a.pl.SetVolume(a.volume)
-		a.win = mygo.NewWindow(mygo.WindowOptions{
+		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:         mygo.App.Name(),
 			Width:         1180,
 			Height:        780,
@@ -303,6 +310,9 @@ func Run() error {
 			BackgroundColor:      "light-dark(#ffffff, #141416)",
 			Content:              ui.View(a.view),
 		})
+		a.postMu.Lock()
+		a.win = win
+		a.postMu.Unlock()
 		// The view the window laid out as it was made asked for pictures
 		// before there was a window to read them back into.
 		a.flushKept()

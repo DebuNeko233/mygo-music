@@ -203,7 +203,13 @@ func TestHomeBackdropLandsAfterTheWindowIsMade(t *testing.T) {
 	// The window is still being made here: the page asks for the picture and
 	// it is read off the main thread.
 	tt.Frame()
-	for waited := time.Duration(0); len(a.kept) == 0; waited += 2 * time.Millisecond {
+	for waited := time.Duration(0); ; waited += 2 * time.Millisecond {
+		a.postMu.Lock()
+		ready := len(a.kept) > 0
+		a.postMu.Unlock()
+		if ready {
+			break
+		}
 		if waited > 5*time.Second {
 			t.Fatal("the picture was read and what it landed in was dropped")
 		}
