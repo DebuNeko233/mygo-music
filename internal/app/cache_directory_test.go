@@ -28,6 +28,7 @@ func cacheTestApp(t *testing.T) (*app, string, string) {
 	}
 	a := newTestApp()
 	a.settings = defaultSettings()
+	a.settingsPage = "cache"
 	a.settings.CacheDir = source
 	a.settings.path = filepath.Join(root, "settings.json")
 	a.pl.Cache = newSongCache(a.settings.CacheMB, source)
@@ -220,7 +221,7 @@ func TestCacheDirectoryWithoutMigration(t *testing.T) {
 	posts := cachePosts(t)
 	writeCachedSong(t, source)
 	a.confirmCacheDirectory(target)
-	tt := ui.NewTester(a.settingsView, 560, 720)
+	tt := ui.NewTester(a.settingsView, 780, 640)
 	if err := tt.Click("仅更改目录"); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +283,7 @@ func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.confirmCacheDirectory(target)
-	tt := ui.NewTester(a.settingsView, 480, 420)
+	tt := ui.NewTester(a.settingsView, 640, 420)
 	if err := tt.Click("迁移并更改"); err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +332,7 @@ func TestCacheDirectoryFrames(t *testing.T) {
 	}
 	a, _, target := cacheTestApp(t)
 	a.cacheMoving, a.cacheTarget = true, target
-	tt := ui.NewTester(a.settingsView, 560, 1000)
+	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()
 	f, err := os.Create(filepath.Join(dir, "cache-directory.png"))
 	if err != nil {
