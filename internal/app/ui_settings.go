@@ -15,6 +15,9 @@ import (
 
 // openSettings shows the settings window, opening it the first time.
 func (a *app) openSettings() {
+	// A key the settings were recording before they closed is not being
+	// recorded now.
+	a.recording, a.recordingNote = "", ""
 	if a.settingsWin != nil {
 		a.settingsWin.Show()
 		a.settingsWin.Focus()
@@ -47,6 +50,9 @@ func (a *app) openSettings() {
 		a.settingsWin = nil
 		// The dialog asking about the folder goes with the window.
 		a.cacheConfirm.open = false
+		// So does a key the settings were recording: one left recording
+		// would keep the app's own keys from working.
+		a.recording, a.recordingNote = "", ""
 		a.syncDock()
 	})
 	a.syncDock()
@@ -79,6 +85,85 @@ func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string)
 			ui.Text(c, pictureList(*paths)).FontSize(12).TextColor(p.muted)
 		})
 	})
+}
+
+// keyField is the control of a shortcut: the key an action has, which the
+// listener changes by clicking it and pressing the key they want, and a
+// button giving the action its own key back once it has another.
+func (a *app) keyField(c *ui.Context, p palette, kind keyKind, name string) {
+	recording := a.recording == string(kind)+"/"+name
+	label := hotkeyLabel(a.binding(kind, name))
+	if recording {
+		label = "按下按键…"
+	}
+	// The default is not a button: only a key the listener changed can be
+	// given back.
+	changed := a.changedBinding(kind, name)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		// The default is not a button: only a key the listener changed can
+		// be given back. It sits before the key, which keeps the keys in one
+		// column whether or not they were changed.
+		if changed && !recording {
+			if iconButton(c.Key("default-"+string(kind)+"-"+name), iconReload, 16, p.muted, "恢复默认").Clicked() {
+				a.restoreBinding(kind, name)
+			}
+		} else {
+			// A key with its own needs no button, and the room the button
+			// would take keeps every key in one column.
+			ui.Box(c).Size(16, 16)
+		}
+		field := ui.Button(c.Key("key-"+string(kind)+"-"+name), label).Width(150)
+		switch {
+		case recording:
+			field.Focusable().Focus().HandleInput(func(ev ui.InputEvent) bool {
+				return a.recordKey(kind, name, ev)
+			})
+			if a.recordingNote != "" {
+				ui.Text(c, a.recordingNote).FontSize(12).TextColor(p.muted)
+			}
+		case field.Clicked():
+			a.recording, a.recordingNote = string(kind)+"/"+name, ""
+		default:
+			// The system keeps the key for another app, or another action
+			// of the app asked for it first.
+			if err := a.hotkeyErrs[name]; kind == kindGlobal && err != "" {
+				ui.Text(c, err).FontSize(12).TextColor(p.warn)
+			}
+		}
+	})
+}
+
+// recordKey takes the key pressed for the binding being recorded, and gives
+// the action that key. It reports false for an event it leaves alone.
+func (a *app) recordKey(kind keyKind, name string, ev ui.InputEvent) bool {
+	if ev.Kind != ui.InputKeyDown {
+		return false
+	}
+	switch ev.Key {
+	case ui.KeyEscape:
+		a.recording, a.recordingNote = "", ""
+		return true
+	case ui.KeyBackspace, ui.KeyDelete:
+		a.setBinding(kind, name, "")
+		a.recording, a.recordingNote = "", ""
+		return true
+	}
+	acc, ok := acceleratorFor(ev.Mods, ev.Key)
+	if !ok {
+		// A modifier on its own: the key it goes with is still to come.
+		return true
+	}
+	if kind == kindGlobal && !validGlobal(acc) {
+		a.recordingNote = "全局快捷键要带 Ctrl、⌘ 或 Alt"
+		return true
+	}
+	if other, dup := a.taken(kind, name, acc); dup {
+		a.recordingNote = other + "已经是" + hotkeyLabel(acc)
+		return true
+	}
+	a.setBinding(kind, name, acc)
+	a.recording, a.recordingNote = "", ""
+	return true
 }
 
 // changed applies the settings everywhere and keeps them.
@@ -395,6 +480,34 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
+
+	})
+
+	add("keys", "快捷键", iconKeyboard, func(row settingsRow, block settingsBlock) {
+
+		block("键盘 快捷键 按键", func() {
+			ui.Column(c).Padding(12, 16).Children(func() {
+				ui.Text(c, "这些键在应用内按下即生效。点一下右边的键，再按下想要的按键；Backspace 清除，Esc 取消。改动过的键旁边有一个按钮，点了就收回默认的键。").
+					FontSize(12.5).TextColor(p.muted).LineHeight(1.4).Wrap()
+			})
+		})
+		for _, h := range hotkeys {
+			row(h.label, "", func() { a.keyField(c, p, kindInApp, h.name) })
+		}
+
+	})
+
+	add("globalkeys", "全局快捷键", iconKeyboard, func(row settingsRow, block settingsBlock) {
+
+		block("键盘 全局快捷键 系统 后台", func() {
+			ui.Column(c).Padding(12, 16).Children(func() {
+				ui.Text(c, "应用在后台时也能用的键。系统的键由所有应用共用，所以都要带 Ctrl、⌘ 或 Alt，或者用多媒体键；多媒体键在应用内录不到，换掉之后点旁边的按钮就回到它。").
+					FontSize(12.5).TextColor(p.muted).LineHeight(1.4).Wrap()
+			})
+		})
+		for _, h := range hotkeys {
+			row(h.label, "", func() { a.keyField(c, p, kindGlobal, h.name) })
+		}
 
 	})
 

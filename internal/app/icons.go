@@ -72,4 +72,5 @@ var (
 	iconDatabase = strokeIcon(`<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0"/>`)
 	iconFlask    = strokeIcon(`<path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3M7.5 15h9"/>`)
 	iconPalette  = strokeIcon(`<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 1.4-4.6 1 1 0 0 1 .6-1.8H18a3 3 0 0 0 3-3A8.6 8.6 0 0 0 12 3Z"/>`)
+	iconKeyboard = strokeIcon(`<rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01"/><path d="M9 14h6"/>`)
 )
