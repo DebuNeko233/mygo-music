@@ -11,25 +11,56 @@ remote to sync with.
    go test ./internal/...
    ```
 
-2. Bump `version` in `mygo.json`, and add a `## <version>` section at the top of
-   `CHANGELOG.md` saying, in Chinese, what changed for people using the app
-   since the last release (`git log v0.1.24..HEAD`). Commit both in a commit
-   titled just the version, e.g. `0.2.0`. MyGo's updater shows that section in
-   the app's update window, and the release page takes it as its notes;
-   `mygo build` fails without one.
-
-3. Push main:
+2. Bump `version` in `mygo.json`, commit that alone, titled just the version,
+   e.g. `0.2.6`, and push main. The version's changelog section comes in step 4;
+   `mygo build` refuses to sign an update without one.
 
    ```bash
    git push origin main
    ```
 
-4. Build and upload. `mygo build` makes the installers, `SHA256SUMS` and the
-   install scripts, and `-upload` puts them in a draft release of the version's
-   tag, with the changelog's section as its notes. `GH_TOKEN` is a token of this
-   repository with `contents: write`. `MYGO_UPDATER_PRIVATE_KEY` is the key of
-   `mygo keygen`, matching the public key in `mygo.json`; `-upload` requires it
-   to sign the automatic-update archives.
+3. Generate the notes in a draft release, on the repository's Releases page:
+   "Draft a new release", the version's tag in "Choose a tag" (`v0.2.6`, which
+   GitHub creates on publish, not before), the previous release as the tag to
+   compare against (`v0.2.5`), then "Generate release notes", and save the
+   draft. Nothing builds yet, because the tag does not exist.
+
+   GitHub writes that body from the pull requests merged since that release, so
+   changes pushed straight to main are not in it, and it reads as the pull
+   requests were titled.
+
+   Make this draft on the Releases page, not with `gh release create`: it
+   creates the missing tag as it runs, which starts the workflow before
+   `CHANGELOG.md` has the section.
+
+4. Copy the draft's notes into `CHANGELOG.md`, under a new `## 0.2.6` heading at
+   the top, unchanged except for the headings: `## What's Changed`, and any
+   other `##` heading GitHub writes, become `###`. MyGo takes a version's
+   section up to the next `## ` heading, and so does the release workflow; a
+   `##` inside the section leaves it empty, and `mygo build` fails on it.
+   Commit it, titled just the version, and push main.
+
+   Do not reword it: that body is what the release page, the app's update
+   window and `CHANGELOG.md` all show.
+
+5. Push the version's tag. This builds and uploads:
+
+   ```bash
+   git tag v0.2.6
+   git push origin v0.2.6
+   ```
+
+   `.github/workflows/release.yml` replaces the draft's body with the
+   changelog's section, the same text, and uploads macOS, Windows and Linux to
+   that draft. It needs `MYGO_UPDATER_PRIVATE_KEY` for updates, not Apple
+   credentials.
+
+   To build and upload from this machine instead, `mygo build` makes the
+   installers, `SHA256SUMS` and the install scripts, and `-upload` puts them in
+   the same draft, with the changelog's section as its notes. `GH_TOKEN` is a
+   token of this repository with `contents: write`. `MYGO_UPDATER_PRIVATE_KEY`
+   is the key of `mygo keygen`, matching the public key in `mygo.json`;
+   `-upload` requires it to sign the automatic-update archives.
 
    ```bash
    GH_TOKEN=... go tool mygo build \
@@ -44,18 +75,16 @@ remote to sync with.
    ```
 
    These DMGs are not Developer ID signed or notarized, so macOS may ask the
-   user to allow the app in Privacy & Security. Pushing a tag builds all three
-   platforms in `.github/workflows/release.yml` and uploads them to the same
-   draft. It needs `MYGO_UPDATER_PRIVATE_KEY` for updates, not Apple credentials.
+   user to allow the app in Privacy & Security.
 
-5. Publish the draft, and mark it latest, so that `releases/latest/download/` of
+6. Publish the draft, and mark it latest, so that `releases/latest/download/` of
    the install scripts points at it:
 
    ```bash
-   gh release edit v0.2.0 --repo zhangnjsd/mygo-music --draft=false --latest
+   gh release edit v0.2.6 --repo zhangnjsd/mygo-music --draft=false --latest
    ```
 
-6. Check what the install script downloads:
+7. Check what the install script downloads:
 
    ```bash
    curl -sL https://github.com/zhangnjsd/mygo-music/releases/latest/download/SHA256SUMS

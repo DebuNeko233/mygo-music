@@ -22,8 +22,9 @@ jobs:
       - name: Check the version
         run: test "$GITHUB_REF_NAME" = "v$(jq -r .version mygo.json)"
       # mygo build puts the version's section of CHANGELOG.md in the update
-      # manifests, which the update window shows; the release page gets the
-      # same notes, in place of GitHub's from the pull requests.
+      # manifests, which the update window shows. That section is GitHub's own
+      # generated notes, copied out of the draft release; the release page gets
+      # the same text in place of the draft's.
       - name: Take the notes from the changelog
         run: |
           awk -v heading="## ${GITHUB_REF_NAME#v}" '
