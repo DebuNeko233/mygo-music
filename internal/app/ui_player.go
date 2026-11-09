@@ -409,7 +409,7 @@ func (a *app) playerBar(c *ui.Context) {
 	// The controls keep the middle, between sides that share what is left:
 	// narrower, the middle gives up to 140 DIPs, and what plays keeps room
 	// for its cover, some of its title and its heart.
-	const controls = 4*32 + 3*4 // desk-lyrics, lyrics, queue and the speaker
+	const controls = 4*32 + 3*4 // desk-lyrics, comments, queue and the speaker
 	ui.Row(c).Absolute().Left(0).Right(0).Bottom(0).Height(playerBarHeight).PaddingX(20).Gap(20).AlignItems(ui.Center).Children(func() {
 		// What plays.
 		ui.Row(c).Grow(1).Basis(0).MinWidth(150).Children(func() {
@@ -470,7 +470,7 @@ func (a *app) playerBar(c *ui.Context) {
 			})
 		})
 
-		// Lyrics and volume.
+		// Desktop lyrics, comments, queue and volume.
 		ui.Row(c).Grow(1).Basis(0).MinWidth(controls).Justify(ui.End).AlignItems(ui.Center).Gap(4).Children(func() {
 			// Desktop lyrics toggle
 			deskLyrColor := p.muted
@@ -480,16 +480,8 @@ func (a *app) playerBar(c *ui.Context) {
 			if iconButton(c.Key("desk-lyrics"), iconDeskLyrics, 16, deskLyrColor, "桌面歌词").Clicked() {
 				a.toggleDeskLyrics()
 			}
-			lyr := p.muted
-			if a.nowPlaying {
-				lyr = p.accent
-			}
-			label := "歌词"
-			if tr != nil && tr.ProgramID != 0 {
-				label = "节目简介"
-			}
-			if iconButton(c.Key("lyrics"), iconLyrics, 16, lyr, label).Clicked() && tr != nil {
-				a.nowPlaying, a.npPane = true, a.lyricsPaneChosen()
+			if iconButton(c.Key("comments"), iconComment, 16, p.muted, "评论").Clicked() && tr != nil {
+				a.nowPlaying, a.npPane = true, paneComments
 			}
 			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {
 				a.nowPlaying, a.npPane = true, paneQueue
