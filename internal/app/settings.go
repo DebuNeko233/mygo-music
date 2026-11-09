@@ -114,8 +114,41 @@ type settings struct {
 	LyricHeight int `json:"lyricHeight,omitempty"`
 	// SearchHistory keeps submitted keywords, most recent first.
 	SearchHistory []string `json:"searchHistory,omitempty"`
+	// Shortcuts are the keys the listener gave the actions of hotkeys, by
+	// action: those that work in the app, and those that work wherever it
+	// is. An action missing keeps its default, and one that is empty has no
+	// key at all.
+	Shortcuts shortcutKeys `json:"shortcuts,omitempty"`
 
 	path string // where they were loaded from, and are saved to
+}
+
+// shortcutKeys are the two sets of keys the settings keep, by action.
+type shortcutKeys struct {
+	InApp  map[string]string `json:"inApp,omitempty"`
+	Global map[string]string `json:"global,omitempty"`
+}
+
+// filled gives every action the key it has: the one the settings keep, when
+// it is a key that set takes, else its default. An action the settings keep
+// as empty has none.
+func (k shortcutKeys) filled() shortcutKeys {
+	filled := shortcutKeys{InApp: map[string]string{}, Global: map[string]string{}}
+	for _, h := range hotkeys {
+		filled.InApp[h.name] = h.inApp
+		filled.Global[h.name] = h.global
+		if acc, ok := k.InApp[h.name]; ok {
+			if _, _, parsed := parseAccelerator(acc); parsed || acc == "" {
+				filled.InApp[h.name] = acc
+			}
+		}
+		if acc, ok := k.Global[h.name]; ok {
+			if validGlobal(acc) || acc == "" {
+				filled.Global[h.name] = acc
+			}
+		}
+	}
+	return filled
 }
 
 func defaultSettings() settings {
@@ -214,6 +247,7 @@ func (s *settings) clamp() {
 	if s.LyricHeight < 0 {
 		s.LyricHeight = 0
 	}
+	s.Shortcuts = s.Shortcuts.filled()
 }
 
 // save keeps the settings where they were loaded from; defaults that were

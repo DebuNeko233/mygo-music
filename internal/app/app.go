@@ -154,6 +154,17 @@ type app struct {
 	// mixVolume is set while the mixer applies the volume, so that the app
 	// leaves it out of what the player mixes.
 	mixVolume bool
+	// globalKeys are the keys the system holds for the app, which they give
+	// back when the bindings change and when the app quits.
+	globalKeys []string
+	// hotkeyErrs says which of the global bindings the system refused, by
+	// action: another app holds them.
+	hotkeyErrs map[string]string
+	// recording is the binding the settings are recording a key for, as
+	// "kind/action", empty while they record none, and recordingNote is what
+	// the recording has to say about the last key pressed.
+	recording     string
+	recordingNote string
 
 	rowBars barState
 	// underTop and underBottom say whether the page has content under its
@@ -327,6 +338,10 @@ func Run() error {
 		a.watchNetwork()
 		a.recoverCacheDirectory()
 		a.boot()
+		// The system's keys are claimed once there is a window to say the
+		// app runs, and given back as it quits.
+		a.registerGlobals()
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.unregisterGlobals() })
 		// The notch player is macOS's, over its menu bar: elsewhere it would
 		// hang at the top of the screen as a black box.
 		if runtime.GOOS == "darwin" {

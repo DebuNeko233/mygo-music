@@ -34,16 +34,12 @@ func (a *app) view(c *ui.Context) {
 		c.Root().Background(ui.Transparent)
 	}
 	root := ui.Box(c).Fill()
-	if !c.Focused(a.searchBox) {
-		// Space plays and pauses wherever the focus is, as in Music. On
-		// the container around everything, it comes before a button the
-		// pointer focused, which would take Space as a click; on the
-		// window, it would come after.
-		root.OnShortcut(0, ui.KeySpace, a.pl.TogglePlay)
-		// And where nothing has the focus, as once Now Playing covers the
-		// button that had it.
-		c.OnShortcut(0, ui.KeySpace, a.pl.TogglePlay)
-	}
+	// The keys the listener gave the actions, Space for play and pause by
+	// default, work wherever the focus is: on the container around
+	// everything they come before a button the pointer focused, which would
+	// take Space as a click, and on the window where nothing has the focus,
+	// as once Now Playing covers the button that had it.
+	a.bindInApp(c, root)
 	npOpen, npSettled := a.npState(c)
 	// The pictures the listener chose for the home page, painted behind
 	// it: it stands on them, over its own colour, as deep as they asked.
