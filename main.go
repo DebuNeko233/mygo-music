@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-
 	"netease-music-mygo/internal/app"
 )
 
