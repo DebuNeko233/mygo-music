@@ -254,27 +254,38 @@ func npTabsAnchor(c *ui.Context, w, h float32) ui.Element {
 	return ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(max(size, 280), npTabsHeight)
 }
 
-// npTabsWidth reserves count space outside the visible pills. The attached
-// row can be wider than its slot without widening the cover and controls.
-func (a *app) npTabsWidth(c *ui.Context) float32 {
+// npTabsWidths measures the visible buttons and the space reserved for
+// count animations; neither changes the width of the cover column.
+func (a *app) npTabsWidths(c *ui.Context) (content, reserved float32) {
 	tabs := a.npTabs()
-	width := float32(len(tabs)-1) * 6
+	content = float32(len(tabs)-1) * 6
+	reserved = content
 	for _, tab := range tabs {
-		label := tab.label
+		text, _ := c.MeasureText(0, ui.Span{Text: tab.label, Size: 13, Weight: 600})
+		content += text + 28
+		reserved += text + 28
 		if tab.pane == paneComments {
-			label = "评论 10000万"
+			var counter string
+			if n := a.commentCount(); n > 0 {
+				counter = " " + count(n)
+			}
+			live := rollCountWidth(c, counter)
+			content += live
+			reserved += max(live, rollCountWidth(c, " 10000万"))
 		}
-		text, _ := c.MeasureText(0, ui.Span{Text: label, Size: 13, Weight: 600, Features: "tnum"})
-		width += text + 28
 	}
-	return width
+	return content, reserved
 }
 
 // npTabsRow centers the group in its column's slot, with a 6-DIP optical
 // shift to the right. Sharing this offset keeps every pane aligned.
 func (a *app) npTabsRow(c *ui.Context, anchor ui.Element) ui.Element {
-	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
-		Width(a.npTabsWidth(c)).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
+	content, width := a.npTabsWidths(c)
+	// Centered spare space is transparent: only visible buttons need the
+	// 12-DIP edge inset. Font-dependent reserve width must not shift them.
+	edge := 12 - (width-content)/2
+	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(edge).Left(6).
+		Width(width).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 }
 
 // reveal fades e in while the pointer is in the window, and out when it

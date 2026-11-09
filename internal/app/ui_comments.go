@@ -114,6 +114,17 @@ type rollState struct {
 // rollLine is how far a character rolls, about a line of the tab's text.
 const rollLine = 16
 
+// rollCountWidth measures the same character slots rollCount draws:
+// shaping a whole mixed-script string can choose different fallback fonts.
+func rollCountWidth(c *ui.Context, text string) float32 {
+	var width float32
+	for _, ch := range text {
+		w, _ := c.MeasureText(0, ui.Span{Text: string(ch), Size: 13, Weight: 600, Features: "tnum"})
+		width += w
+	}
+	return width
+}
+
 // rollCount shows n as text, each character in a slot of its own, as
 // the wheels of a counter: one that changes rolls out as the next rolls
 // in, upward as n grows and downward as it shrinks, the others staying.
