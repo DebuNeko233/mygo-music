@@ -16,6 +16,9 @@ import (
 // ArtworkDir separates the shared JSONL format from older development caches.
 const ArtworkDir = "artwork-v2"
 
+// ErrConflict preserves existing destination files instead of merging or overwriting them.
+var ErrConflict = errors.New("目标缓存已有不同内容")
+
 // Layout names all managed caches. Root can also hold unrelated files; they
 // are never copied or removed. Legacy layouts may keep these folders apart.
 type Layout struct {
@@ -31,9 +34,18 @@ var entryName = regexp.MustCompile(`^[a-f0-9]{64}-[a-f0-9]{64}\.entry$`)
 
 // MoveLayout publishes a new root. shared publishes only managed children,
 // for the system cache root or an in-place legacy conversion.
-// The caller suspends all stores first. A failed copy/save retains every old
-// file; only a saved layout may retire its old files, including across disks.
+// The caller freezes writers first. A failed copy/save retains every old file;
+// save rebinds snapshot readers before originals retire, including across disks.
 func MoveLayout(source Layout, target string, migrate, shared bool, save func() error) (error, error) {
+	return MoveLayoutWithOptions(source, target, migrate, shared, save, Options{})
+}
+
+// MoveLayoutWithOptions adds cancellation, progress and crash recovery to the
+// same transaction. Read-only stores may remain open until save commits.
+func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, save func() error, options Options) (error, error) {
+	if err := Recover(options.Journal); err != nil {
+		return nil, err
+	}
 	var err error
 	if shared {
 		target, err = resolve(target)
@@ -44,14 +56,11 @@ func MoveLayout(source Layout, target string, migrate, shared bool, save func() 
 		return nil, err
 	}
 	var files []cacheFile
-	publications := []string{""}
-	if shared {
-		publications = nil
-	}
+	var publications []string
 	groups := []struct{ name, source string }{{"songs", source.Songs}, {"browse-v1", source.Browse}, {ArtworkDir, source.Artwork}}
-	validate := func() error { return Validate(source.Root, target) }
+	validate := func(string) error { return Validate(source.Root, target) }
 	if shared {
-		validate = func() error { return nil }
+		validate = func(string) error { return nil }
 		same, err := SameDirectory(source.Root, target)
 		if err != nil {
 			return nil, err
@@ -100,19 +109,35 @@ func MoveLayout(source Layout, target string, migrate, shared bool, save func() 
 		if shared {
 			// A crash after publishing a folder but before saving settings can
 			// be resumed only when every file still matches its original.
-			reused, err = matches(group.source, destination, names)
+			if migrate {
+				reused, err = matches(group.source, destination, names)
+			} else {
+				// Switching adopts the destination as-is, including caches
+				// left there before a previous switch to a custom directory.
+				var info os.FileInfo
+				info, err = os.Lstat(destination)
+				if errors.Is(err, os.ErrNotExist) {
+					err = nil
+				} else if err == nil {
+					if !info.IsDir() {
+						err = fmt.Errorf("目标缓存路径不是独立目录：%s", destination)
+					} else {
+						reused = true
+					}
+				}
+			}
 			if err != nil {
 				return nil, err
 			}
-			if !reused {
-				publications = append(publications, group.name)
-			}
+		}
+		if !reused {
+			publications = append(publications, group.name)
 		}
 		for _, name := range names {
 			files = append(files, cacheFile{filepath.Join(group.source, name), filepath.Join(group.name, name), reused})
 		}
 	}
-	return transfer(target, files, publications, validate, save, copyFile)
+	return transferWithOptions(target, files, publications, validate, save, nil, options)
 }
 
 func entryFiles(dir string) ([]string, error) {
@@ -149,7 +174,7 @@ func matches(source, target string, names []string) (bool, error) {
 		return false, err
 	}
 	if !info.IsDir() {
-		return false, fmt.Errorf("目标缓存路径不是独立目录：%s", target)
+		return false, fmt.Errorf("%w：%s", ErrConflict, target)
 	}
 	entries, err := os.ReadDir(target)
 	if err != nil {
@@ -159,7 +184,7 @@ func matches(source, target string, names []string) (bool, error) {
 		return false, nil
 	}
 	if len(entries) != len(names) {
-		return false, fmt.Errorf("目标缓存目录已有其他文件：%s", target)
+		return false, fmt.Errorf("%w：%s", ErrConflict, target)
 	}
 	wanted := map[string]bool{}
 	for _, name := range names {
@@ -167,7 +192,7 @@ func matches(source, target string, names []string) (bool, error) {
 	}
 	for _, entry := range entries {
 		if !entry.Type().IsRegular() || !wanted[entry.Name()] {
-			return false, fmt.Errorf("目标缓存目录已有其他文件：%s", target)
+			return false, fmt.Errorf("%w：%s", ErrConflict, target)
 		}
 		var sums [][]byte
 		for _, dir := range []string{source, target} {
@@ -184,98 +209,8 @@ func matches(source, target string, names []string) (bool, error) {
 			sums = append(sums, h.Sum(nil))
 		}
 		if !bytes.Equal(sums[0], sums[1]) {
-			return false, fmt.Errorf("目标缓存与旧文件不同：%s", entry.Name())
+			return false, fmt.Errorf("%w：%s", ErrConflict, entry.Name())
 		}
 	}
 	return true, nil
-}
-
-// transfer stages files on the destination volume. Whole-root moves publish
-// once; legacy conversion publishes only managed child folders. Rollback
-// removes only files this transaction published, preserving unrelated data.
-func transfer(target string, files []cacheFile, publications []string, validate func() error, save func() error, copy func(string, string) error) (error, error) {
-	if err := validate(); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-		return nil, err
-	}
-	stage, err := os.MkdirTemp(filepath.Dir(target), ".song-cache-move-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(stage)
-	for _, name := range publications {
-		if err := os.MkdirAll(filepath.Join(stage, name), 0o700); err != nil {
-			return nil, err
-		}
-	}
-	for _, file := range files {
-		if file.reused {
-			continue
-		}
-		to := filepath.Join(stage, file.name)
-		if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
-			return nil, err
-		}
-		if err := copy(file.source, to); err != nil {
-			return nil, err
-		}
-	}
-	if err := validate(); err != nil {
-		return nil, err
-	}
-	var published []string
-	rollback := func() {
-		owned := func(name string) bool {
-			for _, root := range published {
-				if root == "" || filepath.Dir(name) == root || name == root {
-					return true
-				}
-			}
-			return false
-		}
-		for _, file := range files {
-			if !file.reused && owned(file.name) {
-				os.Remove(filepath.Join(target, file.name))
-			}
-		}
-		for _, name := range []string{"songs", "browse-v1", ArtworkDir} {
-			if owned(name) {
-				os.Remove(filepath.Join(target, name))
-			}
-		}
-		for _, name := range published {
-			os.Remove(filepath.Join(target, name))
-		}
-	}
-	for _, name := range publications {
-		to := filepath.Join(target, name)
-		if name != "" {
-			if err := os.MkdirAll(target, 0o700); err != nil {
-				rollback()
-				return nil, err
-			}
-		}
-		if err := os.Remove(to); err != nil && !errors.Is(err, os.ErrNotExist) {
-			rollback()
-			return nil, err
-		}
-		if err := os.Rename(filepath.Join(stage, name), to); err != nil {
-			rollback()
-			return nil, err
-		}
-		published = append(published, name)
-	}
-	if err := save(); err != nil {
-		rollback()
-		return nil, err
-	}
-	var warning error
-	for _, file := range files {
-		if err := os.Remove(file.source); err != nil {
-			warning = errors.Join(warning, err)
-		}
-	}
-	return warning, nil
 }

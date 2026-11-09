@@ -31,18 +31,28 @@ type imageRecord struct {
 	Width, Height           int
 }
 type imageFlight struct {
-	done  chan struct{}
-	body  []byte
-	err   error
-	epoch uint64
+	done   chan struct{}
+	ready  chan struct{} // cache lookup finished; cached bytes are immutable after this closes
+	cached []byte
+	body   []byte
+	err    error
+	epoch  uint64
 }
 type imageCache struct {
 	familyMu sync.Mutex
 	sem      chan struct{}
-	store    *diskcache.Store
+	store    imageStore
 	changed  func(string)
 	mu       sync.Mutex
 	flights  map[string]*imageFlight
+}
+
+// imageStore keeps request coalescing independent of the storage backend's locks.
+type imageStore interface {
+	Epoch() uint64
+	Read(string, string) ([]byte, time.Time)
+	Put(string, string, []byte, uint64)
+	Forget(string, string)
 }
 
 var images atomic.Pointer[imageCache]
@@ -72,9 +82,29 @@ func imageIdentity(req *http.Request) string {
 }
 
 func (c *imageCache) fetch(req *http.Request) ([]byte, error) {
-	epoch := c.store.Epoch()
 	key := imageIdentity(req)
-	c.mu.Lock() // Cache lookup and flight registration form one atomic decision.
+	c.mu.Lock()
+	f := c.flights[key]
+	if f == nil {
+		f = &imageFlight{done: make(chan struct{}), ready: make(chan struct{}), epoch: c.store.Epoch()}
+		c.flights[key] = f
+		go c.lookup(req, key, f)
+	}
+	c.mu.Unlock()
+	<-f.ready
+	if f.cached != nil {
+		return f.cached, nil
+	}
+	<-f.done
+	return f.body, f.err
+}
+
+// Register the flight before disk I/O, so both lookup and refresh coalesce.
+// The global lock protects only the flight map; a slow read cannot stall
+// another request's registration or completion. Stale bytes remain available
+// through ready while the same flight revalidates them in the background.
+func (c *imageCache) lookup(req *http.Request, key string, f *imageFlight) {
+	defer func() { c.mu.Lock(); delete(c.flights, key); close(f.done); c.mu.Unlock() }()
 	var record imageRecord
 	raw, _ := c.store.Read("requests", key)
 	var body []byte
@@ -94,37 +124,26 @@ func (c *imageCache) fetch(req *http.Request) ([]byte, error) {
 			}
 		}
 	}
+	if c.store.Epoch() != f.epoch {
+		body, record = nil, imageRecord{}
+	}
 	if body != nil && !record.NoCache && time.Now().Before(record.Expires) {
-		c.mu.Unlock()
-		return body, nil
+		f.cached = body
+		close(f.ready)
+		return
 	}
 	// Only public responses which permit stale reuse get the immediate fallback.
-
 	if body != nil && !record.Revalidate && public {
-		if c.flights[key] == nil {
-			f := &imageFlight{done: make(chan struct{}), epoch: epoch}
-			c.flights[key] = f
-			go c.refresh(req, key, record, body, f)
-		}
-		c.mu.Unlock()
-		return body, nil
+		f.cached = body
 	}
-	f := c.flights[key]
-	if f == nil {
-		f = &imageFlight{done: make(chan struct{}), epoch: epoch}
-		c.flights[key] = f
-		go c.refresh(req, key, record, body, f)
-	}
-	c.mu.Unlock()
-	<-f.done
-	return f.body, f.err
+	close(f.ready)
+	c.refresh(req, key, record, body, f)
 }
 
 func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, previous []byte, f *imageFlight) {
 	c.sem <- struct{}{}
 	defer func() { <-c.sem }()
 	epoch := f.epoch
-	defer func() { c.mu.Lock(); delete(c.flights, key); close(f.done); c.mu.Unlock() }()
 	if previous != nil {
 		if old.ETag != "" {
 			req.Header.Set("If-None-Match", old.ETag)

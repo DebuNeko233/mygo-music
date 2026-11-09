@@ -76,6 +76,25 @@ func TestMoveLayoutSaveFailure(t *testing.T) {
 	checkSnapshot(t, source.Artwork, "cached")
 }
 
+// Switching back to a shared root adopts its existing caches without deleting either directory's contents.
+func TestMoveLayoutAdoptsExistingSharedCaches(t *testing.T) {
+	root := t.TempDir()
+	source, target := layout(filepath.Join(root, "custom")), layout(filepath.Join(root, "default"))
+	song(t, source.Songs)
+	snapshot(t, source.Browse)
+	snapshot(t, target.Browse)
+	write(t, filepath.Join(target.Songs, "personal.txt"), []byte("keep"))
+	saved := false
+	warning, err := MoveLayout(source, target.Root, false, true, func() error { saved = true; return nil })
+	if err != nil || warning != nil || !saved {
+		t.Fatal("could not adopt previous default cache", warning, err)
+	}
+	checkSnapshot(t, source.Browse, "cached")
+	checkSnapshot(t, target.Browse, "cached")
+	exists(t, filepath.Join(source.Songs, "123-exhigh.mp3"), true)
+	exists(t, filepath.Join(target.Songs, "personal.txt"), true)
+}
+
 // Legacy custom song folders convert in place, including an identical child
 // folder published before a crash; a failed save is safe to retry.
 func TestMoveLayoutLegacyRestart(t *testing.T) {
@@ -143,13 +162,13 @@ func TestMoveLayoutPartialPublication(t *testing.T) {
 	write(t, second, []byte("page"))
 	files := []cacheFile{{source: first, name: "songs/item"}, {source: second, name: "browse-v1/item"}}
 	checks := 0
-	_, err := transfer(target, files, []string{"songs", "browse-v1"}, func() error {
+	_, err := transferWithOptions(target, files, []string{"songs", "browse-v1"}, func(string) error {
 		checks++
 		if checks == 2 {
 			write(t, filepath.Join(target, "browse-v1", "item"), []byte("personal"))
 		}
 		return nil
-	}, func() error { t.Fatal("saved conflicting publication"); return nil }, copyFile)
+	}, func() error { t.Fatal("saved conflicting publication"); return nil }, copyFile, Options{})
 	if err == nil {
 		t.Fatal("accepted occupied destination")
 	}

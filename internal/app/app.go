@@ -168,14 +168,18 @@ type app struct {
 	settingsSearchBox ui.Handle
 	settingsUnderTop  bool
 
-	settings     settings
-	settingsWin  *mygo.Window
-	cacheUsed    int64                      // the bytes the song cache takes, -1 until measured
-	cacheError   string                     // a move of the cache's folder failed, or left songs behind
-	cacheMoving  bool                       // the cache's folder moves
-	cacheTarget  string                     // where it moves to
-	cacheConfirm cacheDirectoryConfirmation // the folder it asks to move the songs to
-	updates      bool                       // the update plugin is used (useUpdater)
+	settings                   settings
+	settingsWin                *mygo.Window
+	cacheUsed                  int64  // the bytes the song cache takes, -1 until measured
+	cacheError                 string // a move of the cache's folder failed, or left songs behind
+	cacheMoving                bool   // the cache's folder moves
+	cacheTarget                string // where it moves to
+	cacheCancel                func()
+	cacheCancelling, cacheQuit bool
+	cacheCopied, cacheTotal    int64
+	cacheRun                   uint64                     // ignores queued progress from an earlier move
+	cacheConfirm               cacheDirectoryConfirmation // the folder it asks to move the songs to
+	updates                    bool                       // the update plugin is used (useUpdater)
 
 	restored     bool   // playback picked up where it was left
 	savedSession string // the session as last kept
@@ -307,7 +311,7 @@ func Run() error {
 		a.flushKept()
 		a.setMenu()
 		a.watchNetwork()
-		a.upgradeCacheDirectory()
+		a.recoverCacheDirectory()
 		a.boot()
 		// The notch player is macOS's, over its menu bar: elsewhere it would
 		// hang at the top of the screen as a black box.
@@ -345,9 +349,7 @@ func Run() error {
 		})
 	})
 	mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
-		if a.cacheMoving {
-			// The songs are on their way to the new folder: quitting now
-			// would leave them half there.
+		if a.deferCacheQuit() {
 			e.PreventDefault()
 			return
 		}

@@ -1,5 +1,5 @@
-// Package cachemove transfers managed caches after their readers and writers
-// have stopped, publishing copies before saving settings and retiring originals.
+// Package cachemove transfers managed caches with writers and audio handles
+// stopped, publishing copies before saving settings and retiring originals.
 package cachemove
 
 import (
@@ -96,10 +96,39 @@ func resolve(path string) (string, error) {
 	return filepath.Join(parent, filepath.Base(path)), nil
 }
 
-// Validate refuses a target that is not a directory of its own, empty: what
-// is in it is the listener's, and is never merged with, written over, or
-// removed, migrated or not.
+// Validate checks only the managed cache children. Other target files and
+// directories belong to the listener and are never part of a relocation.
 func Validate(source, target string) error {
+	_, target, err := Paths(source, target)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"songs", "browse-v1", ArtworkDir} {
+		child := filepath.Join(target, name)
+		info, err := os.Lstat(child)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("目标缓存路径不是独立目录：%s", child)
+		}
+		entries, err := os.ReadDir(child)
+		if err != nil {
+			return err
+		}
+		if len(entries) > 0 {
+			return fmt.Errorf("目标缓存文件夹需为空：%s", child)
+		}
+	}
+	return nil
+}
+
+// The older song-only Move API publishes flat files, so it still needs an
+// empty root. The app uses Validate and the three-child layout instead.
+func validateFlatTarget(source, target, stage string) error {
 	_, target, err := Paths(source, target)
 	if err != nil {
 		return err
@@ -111,8 +140,10 @@ func Validate(source, target string) error {
 	if err != nil {
 		return err
 	}
-	if len(entries) != 0 {
-		return fmt.Errorf("请选择空目录，目标目录中已有文件")
+	for _, entry := range entries {
+		if filepath.Join(target, entry.Name()) != stage {
+			return fmt.Errorf("请选择空目录，目标目录中已有文件")
+		}
 	}
 	return nil
 }

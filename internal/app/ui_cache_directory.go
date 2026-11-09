@@ -35,7 +35,7 @@ func (a *app) cacheDirectoryDialog(c *ui.Context, p palette) {
 				ui.Text(c, d.target).FontSize(12.5).TextColor(p.text).LineHeight(1.45)
 			})
 			ui.Text(c, "迁移并更改：搬移已有的歌曲、图片、页面与歌词缓存。\n仅更改目录：保留旧文件，之后使用新目录。").FontSize(13).TextColor(p.text).LineHeight(1.5)
-			ui.Text(c, "自定义目录需为空。更改期间暂时停止播放，完成后恢复进度；请勿同时运行其他应用实例。").FontSize(12).TextColor(p.muted).LineHeight(1.45)
+			ui.Text(c, "目标中的缓存文件夹需为空。更改期间暂时停止播放，完成后恢复进度；请勿同时运行其他应用实例。").FontSize(12).TextColor(p.muted).LineHeight(1.45)
 		})
 		if d.err != "" {
 			ui.Text(c, d.err).FontSize(12).TextColor(p.accent).LineHeight(1.45).MaxLines(2).Tooltip(d.err)

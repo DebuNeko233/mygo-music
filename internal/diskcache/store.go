@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -30,8 +31,10 @@ type Store struct {
 	forgotten map[string]uint64
 	dir       string
 	limit     int64
-	spare     int64 // conservative headroom; owned by io, reset after clear/move
-	io        sync.Mutex
+	spare     int64        // conservative headroom; owned by io, reset after clear/move
+	latest    string       // last content commit; its following index writes must not evict it
+	io        sync.RWMutex // content reads share this; index state and mutations own it exclusively
+	dirty     atomic.Bool  // a corrupt read invalidates spare without upgrading its read lock
 	mu        sync.Mutex
 	pending   map[string]uint64
 	serial    uint64
@@ -42,6 +45,7 @@ type Store struct {
 	workers   sync.WaitGroup // writes drained before a directory move
 	cleaners  sync.WaitGroup // removals may also be accepted during a move
 	clears    int            // protected by mu
+	resumed   chan struct{}  // protected by mu; removals wait while source files are copied
 }
 
 func New(dir string, limit int64) *Store {
@@ -62,16 +66,22 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 	if s == nil || s.closed.Load() || s.clearing.Load() {
 		return nil, time.Time{}
 	}
-	s.io.Lock()
-	defer s.io.Unlock()
 	file := name(scope, key)
+	indexed := s.index.accepts(file)
+	if indexed {
+		s.io.Lock()
+		defer s.io.Unlock()
+	} else {
+		s.io.RLock()
+		defer s.io.RUnlock()
+	}
 	s.mu.Lock()
 	unavailable := s.closed.Load() || s.clearing.Load() || s.forgotten[file] != 0
 	s.mu.Unlock()
 	if unavailable {
 		return nil, time.Time{}
 	}
-	if s.index.accepts(file) {
+	if indexed {
 		return s.index.read(s.dir, file)
 	}
 	path := filepath.Join(s.dir, file)
@@ -85,14 +95,18 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 	}
 	sum := sha256.Sum256(b[headerSize:])
 	if string(b[:8]) != "MYCACHE1" || !bytes.Equal(sum[:], b[16:48]) {
-		os.Remove(path)
+		if !s.moving.Load() {
+			os.Remove(path)
+		}
 		// Unexpected filesystem damage invalidates our last size estimate;
 		// the next write also removes any interrupted temporary files.
-		s.spare = 0
+		s.dirty.Store(true)
 		return nil, time.Time{}
 	}
 	now := time.Now()
-	os.Chtimes(path, now, now)
+	if !s.moving.Load() {
+		os.Chtimes(path, now, now)
+	}
 	return b[headerSize:], time.Unix(0, int64(binary.LittleEndian.Uint64(b[8:16])))
 }
 
@@ -157,7 +171,7 @@ func (s *Store) prepareForget(scope, key string) func() {
 	s.mu.Unlock()
 	return func() {
 		defer s.cleaners.Done()
-		s.io.Lock()
+		s.lockRemoval()
 		defer s.io.Unlock()
 		s.mu.Lock()
 		current := s.forgotten[file] == seq
@@ -168,7 +182,7 @@ func (s *Store) prepareForget(scope, key string) func() {
 		if s.index.accepts(file) {
 			before := s.index.size
 			s.indexError(s.index.forget(s.dir, file))
-			s.prune(max(0, s.index.size-before))
+			s.prune(max(0, s.index.size-before), s.latest)
 		} else {
 			os.Remove(filepath.Join(s.dir, file))
 		}
@@ -210,7 +224,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 			}
 			s.mu.Unlock()
 			s.scheduleIndex()
-			s.prune(max(0, s.index.size-before))
+			s.prune(max(0, s.index.size-before), s.latest)
 		}
 		return
 	}
@@ -243,7 +257,8 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 	}
 	s.mu.Unlock()
 	if committed {
-		s.prune(int64(headerSize + len(b)))
+		s.latest = file
+		s.prune(int64(headerSize+len(b)), file)
 	}
 }
 
@@ -281,7 +296,7 @@ func (s *Store) prepareClear(scope string) func() {
 	s.mu.Unlock()
 	return func() {
 		defer s.cleaners.Done()
-		s.io.Lock()
+		s.lockRemoval()
 		defer s.io.Unlock()
 		if s.index != nil {
 			if scope == "" {
@@ -297,6 +312,7 @@ func (s *Store) prepareClear(scope string) func() {
 			}
 		}
 		s.spare = 0
+		s.latest = ""
 		s.mu.Lock()
 		s.clears--
 		s.clearing.Store(s.clears != 0)
@@ -328,7 +344,10 @@ func (s *Store) Size() int64 {
 // but cannot exceed the limit. A full directory scan happens only when that
 // headroom runs out; eviction then frees a batch rather than one file at a time.
 // The caller holds io, so normal app writes cannot bypass this accounting.
-func (s *Store) prune(added int64) {
+func (s *Store) prune(added int64, keep string) {
+	if s.dirty.Swap(false) {
+		s.spare = 0
+	}
 	if s.spare > 0 && added <= s.spare {
 		s.spare -= added
 		return
@@ -336,8 +355,10 @@ func (s *Store) prune(added int64) {
 	entries, _ := os.ReadDir(s.dir)
 	var files []os.FileInfo
 	var size int64
+	var fixed int64 // the index cannot be evicted as an ordinary content file
 	if s.index != nil {
 		size = int64(len(s.index.pending))
+		fixed = size
 	}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), ".part-") {
@@ -347,6 +368,8 @@ func (s *Store) prune(added int64) {
 		if i, err := e.Info(); err == nil && !i.IsDir() {
 			if s.index == nil || e.Name() != IndexFile {
 				files = append(files, i)
+			} else {
+				fixed += i.Size()
 			}
 			size += i.Size()
 		}
@@ -355,10 +378,20 @@ func (s *Store) prune(added int64) {
 	if size <= s.limit {
 		return
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].ModTime().Before(files[j].ModTime()) })
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].ModTime().Equal(files[j].ModTime()) {
+			return files[i].Name() < files[j].Name()
+		}
+		return files[i].ModTime().Before(files[j].ModTime())
+	})
 	for _, f := range files {
 		if size <= s.limit*3/4 {
 			break
+		}
+		// Coarse filesystem timestamps cannot identify the latest commit.
+		// Protect it up to the hard limit, even above the batch target.
+		if f.Name() == keep && f.Size() <= s.limit-fixed {
+			continue
 		}
 		if os.Remove(filepath.Join(s.dir, f.Name())) == nil {
 			size -= f.Size()
@@ -384,8 +417,8 @@ func (s *Store) Close() {
 	s.io.Unlock()
 }
 
-// Suspend holds file access while its directory moves. It invalidates writes
-// captured before the move; requests still reading wait for the final path.
+// Suspend freezes writes and removals while leaving old snapshots readable.
+// It invalidates earlier requests; resume switches paths before originals go.
 // Call and resume off the UI thread. An empty path resumes the original store.
 // A failed index flush leaves the store usable and prevents moving incomplete metadata.
 // The returned resume function is safe to call even when suspension fails.
@@ -394,7 +427,12 @@ func (s *Store) Suspend() (func(string), error) {
 		return func(string) {}, nil
 	}
 	s.mu.Lock()
+	if s.moving.Load() {
+		s.mu.Unlock()
+		return func(string) {}, errors.New("cache already moving")
+	}
 	s.moving.Store(true)
+	s.resumed = make(chan struct{})
 	s.mu.Unlock()
 	// Prepare checks moving under the same lock, so no worker can be added
 	// after this wait begins. Accepted snapshots are included in the copy.
@@ -402,23 +440,60 @@ func (s *Store) Suspend() (func(string), error) {
 	s.epoch.Add(1)
 	s.io.Lock()
 	if s.index != nil {
-		if err := s.index.flush(s.dir); err != nil {
-			s.moving.Store(false)
+		// Replay/repair before copying, so later reads only touch memory.
+		err := s.index.load(s.dir)
+		if err == nil {
+			err = s.index.flush(s.dir)
+		}
+		if err != nil {
+			s.finishMove()
 			s.io.Unlock()
 			return func(string) {}, err
 		}
 	}
+	s.io.Unlock()
+	var once sync.Once
 	return func(dir string) {
-		if dir != "" {
-			s.dir = dir
-			s.spare = 0
-			if s.index != nil {
-				s.index.reset()
+		once.Do(func() {
+			s.io.Lock()
+			defer s.io.Unlock()
+			if dir != "" {
+				s.dir = dir
+				s.spare = 0
+				s.latest = ""
+				if s.index != nil {
+					s.index.reset()
+				}
 			}
-		}
-		s.moving.Store(false)
-		s.io.Unlock()
+			s.finishMove()
+		})
 	}, nil
+}
+
+func (s *Store) finishMove() {
+	s.mu.Lock()
+	s.moving.Store(false)
+	close(s.resumed)
+	s.resumed = nil
+	s.mu.Unlock()
+}
+
+// Deletion waits without holding io, keeping cache hits available during a
+// long copy. Recheck after taking io in case another move started meanwhile.
+func (s *Store) lockRemoval() {
+	for {
+		s.mu.Lock()
+		resumed := s.resumed
+		s.mu.Unlock()
+		if resumed != nil {
+			<-resumed
+		}
+		s.io.Lock()
+		if !s.moving.Load() {
+			return
+		}
+		s.io.Unlock()
+	}
 }
 
 func (s *Store) indexError(err error) {

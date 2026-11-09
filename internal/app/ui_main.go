@@ -95,6 +95,7 @@ func (a *app) view(c *ui.Context) {
 	// Keep network controls off the player, including its closing transition.
 	// Recovery still runs independently through network events and recoveryFrame.
 	if !npOpen && npSettled {
+		a.cacheMoveNotice(c)
 		a.offlineNotice(c)
 	}
 	a.syncWindows()
