@@ -96,6 +96,55 @@ func TestCapacityEvictsOlderSnapshots(t *testing.T) {
 	}
 }
 
+// A newly committed entry below the hard limit survives even when it exceeds the batch eviction target.
+func TestCapacityRetainsLargeNewSnapshot(t *testing.T) {
+	s := New(t.TempDir(), 400)
+	defer s.Close()
+	s.Put("a", "old", bytes.Repeat([]byte{1}, 100), 0)
+	s.Put("a", "new", bytes.Repeat([]byte{2}, 300), 0)
+	if b, _ := s.Read("a", "new"); len(b) != 300 || s.Size() > 400 {
+		t.Fatal("batch eviction discarded a new entry which fits the hard limit")
+	}
+}
+
+// Tied filesystem timestamps must not make a freshly committed small snapshot the first victim.
+func TestCapacityRetainsNewSnapshotWithEqualTimes(t *testing.T) {
+	s := New(t.TempDir(), 4000)
+	defer s.Close()
+	old, fresh := "old", "new"
+	if name("a", old) < name("a", fresh) {
+		old, fresh = fresh, old
+	}
+	s.Put("a", old, bytes.Repeat([]byte{1}, 230), 0)
+	s.Put("a", fresh, bytes.Repeat([]byte{2}, 100), 0)
+	for _, key := range []string{old, fresh} {
+		if err := os.Chtimes(filepath.Join(s.dir, name("a", key)), time.Unix(1, 0), time.Unix(1, 0)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.io.Lock()
+	s.limit, s.spare = 400, 0
+	s.prune(0, name("a", fresh))
+	s.io.Unlock()
+	if b, _ := s.Read("a", fresh); len(b) != 100 {
+		t.Fatal("tied timestamps evicted the new snapshot")
+	}
+	if s.Size() > 400 {
+		t.Fatal("cache exceeded limit")
+	}
+}
+
+// Protecting a large new image must still account for the non-evictable metadata index.
+func TestIndexedCapacityIncludesIndexWhenProtectingContent(t *testing.T) {
+	s := NewIndexed(t.TempDir(), 16<<10, "requests")
+	defer s.Close()
+	s.Put("requests", "cover", []byte(`{"content":"large"}`), 0)
+	s.Put("content", "large", make([]byte, 16000), 0)
+	if s.Size() > 16<<10 {
+		t.Fatal("protected image and index exceeded the hard limit", s.Size())
+	}
+}
+
 // Acceptance order wins even when an old snapshot takes longer to encode.
 func TestPreparedWritesKeepAcceptanceOrder(t *testing.T) {
 	s := New(t.TempDir(), 1<<20)

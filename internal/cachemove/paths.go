@@ -1,5 +1,5 @@
-// Package cachemove transfers managed caches after their readers and writers
-// have stopped, publishing copies before saving settings and retiring originals.
+// Package cachemove transfers managed caches with writers and audio handles
+// stopped, publishing copies before saving settings and retiring originals.
 package cachemove
 
 import (
@@ -100,6 +100,12 @@ func resolve(path string) (string, error) {
 // is in it is the listener's, and is never merged with, written over, or
 // removed, migrated or not.
 func Validate(source, target string) error {
+	return validateTarget(source, target, "")
+}
+
+// Only the stage created by this transaction may be ignored during the final
+// emptiness check; unrelated files appearing during a copy still stop it.
+func validateTarget(source, target, stage string) error {
 	_, target, err := Paths(source, target)
 	if err != nil {
 		return err
@@ -111,8 +117,10 @@ func Validate(source, target string) error {
 	if err != nil {
 		return err
 	}
-	if len(entries) != 0 {
-		return fmt.Errorf("请选择空目录，目标目录中已有文件")
+	for _, entry := range entries {
+		if filepath.Join(target, entry.Name()) != stage {
+			return fmt.Errorf("请选择空目录，目标目录中已有文件")
+		}
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Moving drains accepted snapshots, rejects old request writes, and directs
@@ -35,6 +36,57 @@ func TestSuspendRelocatesStore(t *testing.T) {
 	}
 	if _, err := os.Stat(source); !os.IsNotExist(err) {
 		t.Fatal("recreated old store", err)
+	}
+}
+
+// A long relocation must leave old snapshots readable instead of blocking startup behind song copies.
+func TestSuspendKeepsSnapshotsReadable(t *testing.T) {
+	s := New(t.TempDir(), 1<<20)
+	defer s.Close()
+	s.Put("7", "page", []byte("cached"), 0)
+	resume, err := s.Suspend()
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := make(chan string, 1)
+	go func() { b, _ := s.Read("7", "page"); read <- string(b) }()
+	finished := false
+	select {
+	case b := <-read:
+		finished = true
+		if b != "cached" {
+			t.Error("lost readable source", b)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("relocation blocked a cached page read")
+	}
+	resume("")
+	if !finished {
+		<-read
+	}
+}
+
+// Reading one ordinary snapshot must not exclude an independent content reader.
+func TestContentReadsShareIO(t *testing.T) {
+	s := New(t.TempDir(), 1<<20)
+	defer s.Close()
+	s.Put("content", "cover", []byte("cached"), 0)
+	s.io.RLock()
+	read := make(chan string, 1)
+	go func() { b, _ := s.Read("content", "cover"); read <- string(b) }()
+	finished := false
+	select {
+	case b := <-read:
+		finished = true
+		if b != "cached" {
+			t.Error("lost independent content", b)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("content read needed an exclusive I/O lock")
+	}
+	s.io.RUnlock()
+	if !finished {
+		<-read
 	}
 }
 

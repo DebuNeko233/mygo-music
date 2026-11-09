@@ -1,6 +1,7 @@
 package cachemove
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,8 +25,8 @@ import (
 // what it copied is removed. The error returned first is what the new cache
 // left behind, when some of the old songs could not be removed.
 //
-// Nothing must read or write either cache while it runs: the caller stops
-// them, which is what makes the removal of the source's songs possible.
+// Audio handles and all writers must stop first. Snapshot readers can use the
+// source until save rebinds them; originals are retired only after that commit.
 func Move(source, target string, migrate bool, save func() error) (warning error, err error) {
 	return move(source, target, migrate, save, copyFile)
 }
@@ -45,7 +46,7 @@ func move(source, target string, migrate bool, save func() error, copy func(stri
 			files = append(files, cacheFile{source: filepath.Join(source, name), name: name})
 		}
 	}
-	return transfer(target, files, []string{""}, func() error { return Validate(source, target) }, save, copy)
+	return transferWithOptions(target, files, []string{""}, func(stage string) error { return validateTarget(source, target, stage) }, save, copy, Options{})
 }
 
 // songFiles names the files of the songs dir keeps whole: a stream's .json
@@ -110,6 +111,10 @@ func songFiles(dir string) ([]string, error) {
 // copyFile copies a song, or what is said of it, and gives the copy the day
 // of the original: the cache plays what it has not played for longest first.
 func copyFile(source, target string) (err error) {
+	return copyProgress(context.Background(), source, target, nil)
+}
+
+func copyProgress(ctx context.Context, source, target string, progress func(int64)) (err error) {
 	in, err := os.Open(source)
 	if err != nil {
 		return err
@@ -124,7 +129,11 @@ func copyFile(source, target string) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, out.Close()) }()
-	n, err := io.Copy(out, in)
+	var destination io.Writer = out
+	if progress != nil {
+		destination = &copyWriter{writer: out, progress: progress}
+	}
+	n, err := io.Copy(destination, &copyReader{ctx: ctx, reader: in})
 	if err != nil {
 		return err
 	}
@@ -135,4 +144,29 @@ func copyFile(source, target string) (err error) {
 		return err
 	}
 	return os.Chtimes(target, info.ModTime(), info.ModTime())
+}
+
+type copyReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *copyReader) Read(b []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(b)
+}
+
+type copyWriter struct {
+	writer   io.Writer
+	progress func(int64)
+}
+
+func (w *copyWriter) Write(b []byte) (int, error) {
+	n, err := w.writer.Write(b)
+	if n > 0 {
+		w.progress(int64(n))
+	}
+	return n, err
 }
