@@ -458,11 +458,25 @@ func (d *download) readAt(b []byte, off int64) (int, error) {
 
 // peek returns up to n bytes from off, as far as they are in.
 func (d *download) peek(off int64, n int) []byte {
+	return d.peekInto(make([]byte, n), off)
+}
+
+// peekInto fills b with what is in from off, as much as fits, and returns the
+// part it filled: a scan looking for a frame reads into the same b for every
+// look rather than allocating another 32 KiB.
+func (d *download) peekInto(b []byte, off int64) []byte {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	b := make([]byte, n)
 	got, _ := d.readAt(b, off)
 	return b[:got]
+}
+
+// arrived returns where the bytes that are in start and end, and whether the
+// download has stopped.
+func (d *download) arrived() (first, last int64, stopped bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.base, d.base + d.n, d.done
 }
 
 // A window reads a download a piece at a time, for scanning it byte by
@@ -473,10 +487,21 @@ type window struct {
 	b   []byte
 }
 
-// at returns up to n bytes from off, as far as they are in.
+// windowPiece is how much of the song a window reads at a time: enough that a
+// scan locks the download once per piece rather than once per byte.
+const windowPiece = 32 << 10
+
+// at returns up to n bytes from off, as far as they are in. It keeps the piece
+// it read in b, and reads the next piece into that same b.
 func (w *window) at(off int64, n int) []byte {
 	if off < w.off || off+int64(n) > w.off+int64(len(w.b)) {
-		w.off, w.b = off, w.dl.peek(off, max(n, 32<<10))
+		piece := max(n, windowPiece)
+		if cap(w.b) < piece {
+			w.b = make([]byte, piece)
+		} else {
+			w.b = w.b[:piece]
+		}
+		w.off, w.b = off, w.dl.peekInto(w.b, off)
 	}
 	// Guard against out-of-bounds access when the download has not reached
 	// the requested offset yet (e.g., during rapid song switching).
