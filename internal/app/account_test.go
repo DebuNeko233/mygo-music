@@ -81,7 +81,7 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 	if a.accountOpen {
 		t.Fatal("the menu stayed open")
 	}
-	for d := a.users[42]; d.loading > 0 || d.subsLoading > 0; {
+	for d := a.users.get(42); d.loading > 0 || d.subsLoading > 0; {
 		refreshPost(t, posts)
 	}
 }
@@ -103,7 +103,7 @@ func ownPageApp() *app {
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 9, Nickname: "听歌的人"}
 	user := netease.User{UserID: 9, Nickname: "听歌的人", Signature: "在音乐里，寻找同路的人。", Follows: 12, Followeds: 24}
-	a.users[9] = &userData{
+	a.users.set(9, &userData{
 		user:      &user,
 		playlists: []netease.Playlist{{ID: 30, Name: "通勤路上", TrackCount: 40}},
 		artists:   []netease.ArtistProfile{{Artist: netease.Artist{ID: 7, Name: "MyGO!!!!!"}}, {Artist: netease.Artist{ID: 10, Name: "Ave Mujica"}}},
@@ -112,7 +112,7 @@ func ownPageApp() *app {
 			{ID: 6, Name: "通勤十分钟", ProgramCount: 48},
 		},
 		artistsShown: true, podcastsShown: true,
-	}
+	})
 	return a
 }
 
@@ -138,12 +138,12 @@ func TestOwnPageFollows(t *testing.T) {
 	if a.route.page != pageArtist || a.route.id != 10 {
 		t.Fatalf("route = %+v, want the page of artist 10", a.route)
 	}
-	for a.users[9].subsLoading > 0 || a.artists[10].loading {
+	for a.users.get(9).subsLoading > 0 || a.artists.get(10).loading {
 		refreshPost(t, posts)
 	}
 	a.back()
 	wait(t, asked, "the artists followed, again")
-	for a.users[9].subsLoading > 0 {
+	for a.users.get(9).subsLoading > 0 {
 		refreshPost(t, posts)
 	}
 }
@@ -171,7 +171,7 @@ func TestOwnPageFrameBudget(t *testing.T) {
 	a := ownPageApp()
 	posts := testPosts(a)
 	a.open(route{page: pageUser, id: 9})
-	for a.users[9].subsLoading > 0 {
+	for a.users.get(9).subsLoading > 0 {
 		refreshPost(t, posts)
 	}
 	tt := ui.NewTester(a.view, 1200, 800)

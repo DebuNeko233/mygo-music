@@ -24,7 +24,7 @@ func TestPermanentFailureStopsRetry(t *testing.T) {
 	a.recoveryFrame(true)
 	a.networkChanged(mygo.NetworkStatus{Online: false})
 	a.networkChanged(mygo.NetworkStatus{Online: true})
-	if a.needsRecovery() || a.recovery.timer != nil || a.albums[9].loading || calls != 1 {
+	if a.needsRecovery() || a.recovery.timer != nil || a.albums.get(9).loading || calls != 1 {
 		t.Fatal("permanent failure started an automatic request or timer")
 	}
 	if !a.failedLoads(true) {
@@ -36,7 +36,7 @@ func TestPermanentFailureStopsRetry(t *testing.T) {
 	}
 	a.retryLoads(true)
 	refreshPost(t, posts)
-	if calls != 2 || a.albums[9].album == nil || a.albums[9].err != "" {
+	if calls != 2 || a.albums.get(9).album == nil || a.albums.get(9).err != "" {
 		t.Fatal("explicit refresh could not recover a permanent failure")
 	}
 }

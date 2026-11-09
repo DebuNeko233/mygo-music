@@ -162,7 +162,7 @@ func TestLikeEpisodeRow(t *testing.T) {
 	a.open(route{page: pagePodcast, id: 5})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
-	episodes := a.podcasts[5].programs
+	episodes := a.podcasts.get(5).programs
 	if _, ok := tt.Find("取消喜欢 " + episodes[0].Name); !ok {
 		t.Fatal("the liked episode shows no heart")
 	}

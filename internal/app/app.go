@@ -97,11 +97,11 @@ type app struct {
 	loadingPl  map[int64]bool
 	plPlay     map[int64]bool // playlists asked to play once they are in
 	plErr      map[int64]string
-	artists    map[int64]*artistData
+	artists    pageCache[int64, *artistData]
 	artistTab  int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
-	albums     map[int64]*albumData
-	users      map[int64]*userData
-	podcasts   map[int64]*podcastData
+	albums     pageCache[int64, *albumData]
+	users      pageCache[int64, *userData]
+	podcasts   pageCache[int64, *podcastData]
 	podcastTab *podcastTab // the podcasts tab's lists
 	trackList  ui.ListState
 	// Where the page and the sidebar are scrolled, kept while Now Playing
@@ -116,9 +116,9 @@ type app struct {
 
 	query       string
 	searchBox   ui.Handle
-	searches    map[route]*searchData // the results of each search, by its page
-	searched    route                 // the search last shown, which the sidebar goes back to
-	suggestions suggestState          // what the search field's query may be after
+	searches    pageCache[route, *searchData] // the results of each search, by its page
+	searched    route                         // the search last shown, which the sidebar goes back to
+	suggestions suggestState                  // what the search field's query may be after
 
 	nowPlaying                     bool
 	npOpen                         bool      // Now Playing as it last showed: open or not
@@ -255,12 +255,12 @@ func Run() error {
 		loadingPl:  map[int64]bool{},
 		plPlay:     map[int64]bool{},
 		plErr:      map[int64]string{},
-		artists:    map[int64]*artistData{},
-		albums:     map[int64]*albumData{},
-		users:      map[int64]*userData{},
-		podcasts:   map[int64]*podcastData{},
+		artists:    newPageCache[int64, *artistData](artistBusy),
+		albums:     newPageCache[int64, *albumData](albumBusy),
+		users:      newPageCache[int64, *userData](userBusy),
+		podcasts:   newPageCache[int64, *podcastData](podcastBusy),
 		podcastTab: &podcastTab{},
-		searches:   map[route]*searchData{},
+		searches:   newPageCache[route, *searchData](searchBusy),
 		lyricAt:    -1,
 		queueAt:    -1,
 		cacheUsed:  -1,

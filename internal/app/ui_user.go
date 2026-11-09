@@ -36,10 +36,10 @@ type userData struct {
 }
 
 func (a *app) loadUser(id int64) {
-	d := a.users[id]
+	d := a.users.get(id)
 	if d == nil {
 		d = &userData{}
-		a.users[id] = d
+		a.users.set(id, d)
 	}
 	if a.profile != nil && a.profile.UserID == id {
 		a.loadSubscriptions(d)
@@ -117,7 +117,7 @@ func publicPlaylists(lists []netease.Playlist, uid int64) []netease.Playlist {
 func (a *app) userPage(c *ui.Context) {
 	p := a.pal
 	id := a.route.id
-	d := a.users[id]
+	d := a.users.get(id)
 	if d.user == nil {
 		if d.loading == 0 {
 			a.centered(c, d.err, func() { a.loadUser(id) })

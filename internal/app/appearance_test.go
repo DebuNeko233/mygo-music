@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
@@ -309,5 +310,48 @@ func writePicture(t *testing.T, path string, w, h int, fill color.RGBA) {
 	defer f.Close()
 	if err := png.Encode(f, img); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The pictures no page stands on anymore go, and past the limit those the
+// page drawn now does not show, so that choosing other pictures does not
+// keep every one ever chosen decoded; one still being read stays, as its
+// pixels land where the page looks for them.
+func TestBackdropPicturesKeepOnlyThoseChosen(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	pic := func() *backdropPicture { return &backdropPicture{w: 2, h: 2} }
+	a.pics = map[string]*backdropPicture{}
+	a.settings.BackdropHome = []string{"chosen.png"}
+	a.settings.BackdropPlaying = []string{"reading.png"}
+	a.pics["chosen.png"] = pic()
+	a.pics["reading.png"] = nil // on its way
+	for i := 0; i < backdropLimit+4; i++ {
+		a.pics[fmt.Sprintf("gone%d.png", i)] = pic()
+	}
+	a.pictures(a.settings.BackdropHome)
+	if len(a.pics) != 2 || a.pics["chosen.png"] == nil || a.pics["reading.png"] != nil {
+		t.Fatalf("kept %d pictures, want the two chosen", len(a.pics))
+	}
+	// Chosen by the dozen, the page drawn now keeps every picture it stands
+	// on, and the other page's go past the limit: they are read again when
+	// they show.
+	a.pics = map[string]*backdropPicture{}
+	var home []string
+	for i := 0; i < backdropLimit+4; i++ {
+		path := fmt.Sprintf("pick%d.png", i)
+		home = append(home, path)
+		a.pics[path] = pic()
+	}
+	a.pics["playing.png"] = pic()
+	a.settings.BackdropHome, a.settings.BackdropPlaying = home, []string{"playing.png"}
+	a.pictures(home)
+	for _, path := range home {
+		if a.pics[path] == nil {
+			t.Fatalf("dropped %q, which the page drawn now stands on", path)
+		}
+	}
+	if a.pics["playing.png"] != nil {
+		t.Error("kept the other page's pictures over the limit")
 	}
 }

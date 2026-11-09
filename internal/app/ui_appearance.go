@@ -1,14 +1,19 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/color"
+	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -66,6 +71,15 @@ type backdropPicture struct {
 // pixels: larger costs that many more bytes in the memory, and no display
 // shows more.
 const backdropSide = 2560
+
+// backdropLimit is how many pictures stay in the memory at a time: a
+// listener who chose many sees them all, reading one again when it comes
+// back after others pushed it out.
+const backdropLimit = 8
+
+// backdropRelease is how long a picture keeps its pixels once read: past
+// the frames that first show it.
+const backdropRelease = 5 * time.Second
 
 // pictureExts are the extensions of the pictures a page can stand on: the
 // ones the app's decoders read.
@@ -126,7 +140,34 @@ func (a *app) pictures(paths []string) []*backdropPicture {
 			out = append(out, pic)
 		}
 	}
+	a.forgetPictures(paths)
 	return out
+}
+
+// forgetPictures drops the pictures no page stands on anymore, and those
+// past backdropLimit that the page drawn now does not show: choosing other
+// pictures must not keep every one ever chosen in the memory.
+func (a *app) forgetPictures(showing []string) {
+	if len(a.pics) == 0 {
+		return
+	}
+	chosen := make(map[string]bool, len(showing))
+	for _, path := range showing {
+		chosen[path] = true
+	}
+	for _, path := range a.settings.BackdropHome {
+		chosen[path] = true
+	}
+	for _, path := range a.settings.BackdropPlaying {
+		chosen[path] = true
+	}
+	for path, pic := range a.pics {
+		// A picture still on its way stays: what it lands in is looked at
+		// again.
+		if !chosen[path] || pic != nil && len(a.pics) > backdropLimit && !slices.Contains(showing, path) {
+			delete(a.pics, path)
+		}
+	}
 }
 
 // readPicture reads and decodes the picture at path, off the main thread,
@@ -138,12 +179,20 @@ func (a *app) readPicture(path string) {
 			a.pics = map[string]*backdropPicture{}
 		}
 		a.pics[path] = pic
+		if pic != nil {
+			// Shown by the frames after it lands, the picture drops the
+			// pixels the GPU uploaded: its bytes decode them again if they
+			// are needed.
+			time.AfterFunc(backdropRelease, func() { mygo.RunOnMain(pic.bmp.ReleasePixels) })
+		}
 		a.redraw()
 	})
 }
 
-// decodePicture reads and decodes the picture at path, kept no larger than
-// a picture shows, or returns nil for one that cannot be read.
+// decodePicture reads and decodes the picture at path, kept no larger than a
+// picture shows, or returns nil for one that cannot be read. The bitmap
+// keeps the bytes its pixels decode from again, so that they can go once
+// the GPU has them: what stays costs a fraction of the pixels.
 func decodePicture(path string) *backdropPicture {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -155,7 +204,28 @@ func decodePicture(path string) *backdropPicture {
 	}
 	img = shrinkPicture(img, backdropSide)
 	bounds := img.Bounds()
-	return &backdropPicture{bmp: ui.NewBitmap(img), w: float32(bounds.Dx()), h: float32(bounds.Dy())}
+	bmp, err := ui.DecodeBitmap(encodePicture(img))
+	if err != nil {
+		bmp = ui.NewBitmap(img)
+	}
+	return &backdropPicture{bmp: bmp, w: float32(bounds.Dx()), h: float32(bounds.Dy())}
+}
+
+// encodePicture returns data a picture's pixels decode from again once it
+// drops them: JPEG for an opaque picture, which costs a tenth of what its
+// pixels do, and PNG for one with transparency, which JPEG cannot keep.
+func encodePicture(img image.Image) []byte {
+	var buf bytes.Buffer
+	if opaque, ok := img.(interface{ Opaque() bool }); ok && opaque.Opaque() {
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err == nil {
+			return buf.Bytes()
+		}
+		buf.Reset()
+	}
+	if err := png.Encode(&buf, img); err != nil {
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // shrinkPicture scales img down so that its longer side is at most side

@@ -154,9 +154,12 @@ func (a *app) signedIn(prof *netease.Profile) {
 	// again.
 	a.playlists = map[int64]*netease.Playlist{}
 	a.plErr = map[int64]string{}
-	a.artists, a.albums, a.users, a.podcasts = map[int64]*artistData{}, map[int64]*albumData{}, map[int64]*userData{}, map[int64]*podcastData{}
+	a.artists = newPageCache[int64, *artistData](artistBusy)
+	a.albums = newPageCache[int64, *albumData](albumBusy)
+	a.users = newPageCache[int64, *userData](userBusy)
+	a.podcasts = newPageCache[int64, *podcastData](podcastBusy)
 	a.podcastTab = &podcastTab{}
-	a.searches = map[route]*searchData{}
+	a.searches = newPageCache[route, *searchData](searchBusy)
 	a.load(a.route)
 	a.loadHome()
 	if prof == nil {
