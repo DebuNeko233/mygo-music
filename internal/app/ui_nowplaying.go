@@ -254,37 +254,30 @@ func npTabsAnchor(c *ui.Context, w, h float32) ui.Element {
 	return ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(max(size, 280), npTabsHeight)
 }
 
-// npTabsWidths measures the visible buttons and the space reserved for
-// count animations; neither changes the width of the cover column.
-func (a *app) npTabsWidths(c *ui.Context) (content, reserved float32) {
+// npTabsWidth measures the visible buttons without widening the cover column.
+func (a *app) npTabsWidth(c *ui.Context) float32 {
 	tabs := a.npTabs()
-	content = float32(len(tabs)-1) * 6
-	reserved = content
+	width := float32(len(tabs)-1) * 6
 	for _, tab := range tabs {
 		text, _ := c.MeasureText(0, ui.Span{Text: tab.label, Size: 13, Weight: 600})
-		content += text + 28
-		reserved += text + 28
+		width += text + 28
 		if tab.pane == paneComments {
 			var counter string
 			if n := a.commentCount(); n > 0 {
 				counter = " " + count(n)
 			}
-			live := rollCountWidth(c, counter)
-			content += live
-			reserved += max(live, rollCountWidth(c, " 10000万"))
+			width += rollCountWidth(c, counter)
 		}
 	}
-	return content, reserved
+	return width
 }
 
-// npTabsRow centers the group in its column's slot, with a 6-DIP optical
-// shift to the right. Sharing this offset keeps every pane aligned.
+// npTabsRow follows the cover's axis, with a 6-DIP optical shift right.
+// Clamp the visible buttons, without spare width for the count; that
+// transparent space can push the group inward with wider Linux fonts.
 func (a *app) npTabsRow(c *ui.Context, anchor ui.Element) ui.Element {
-	content, width := a.npTabsWidths(c)
-	// Centered spare space is transparent: only visible buttons need the
-	// 12-DIP edge inset. Font-dependent reserve width must not shift them.
-	edge := 12 - (width-content)/2
-	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(edge).Left(6).
+	width := a.npTabsWidth(c)
+	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
 		Width(width).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 }
 
