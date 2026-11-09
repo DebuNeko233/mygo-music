@@ -238,13 +238,13 @@ const npTabsHeight = 28
 // npTabsGap is the clear space between the tabs and the cover, in DIPs.
 const npTabsGap = 24
 
-// npCoverLayout leaves room for the navigation and playback controls,
-// then shares any height beyond the cover's maximum above and below it.
+// npCoverLayout leaves room for navigation and playback controls, then
+// puts 35% of the spare height above the group for an upper visual center.
 // All panes use it so switching panes cannot move the navigation.
 func npCoverLayout(w, h float32) (size, sunk float32) {
 	room := max(1, h-436)
 	size = min(w*0.36, 440, room)
-	return size, (room - size) / 2
+	return size, (room - size) * 0.35
 }
 
 // npTabsAnchor gives panes without a cover column its navigation position,
