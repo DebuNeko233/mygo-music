@@ -179,9 +179,8 @@ func TestMoveAcrossVolumes(t *testing.T) {
 		t.Skip("set CACHE_MOVE_TEST_TARGET to a temporary directory on a second disk")
 	}
 	source := t.TempDir()
-	if filepath.VolumeName(source) == filepath.VolumeName(parent) {
-		t.Skip("test needs distinct volumes")
-	}
+	// The caller chooses the second volume. VolumeName is empty for Unix
+	// mounts, so comparing it would skip every cross-volume macOS test.
 	target, err := os.MkdirTemp(parent, "cachemove-test-")
 	if err != nil {
 		t.Fatal(err)

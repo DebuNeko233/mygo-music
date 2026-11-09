@@ -48,8 +48,9 @@ func (a *app) loadUser(id int64) {
 		return
 	}
 	d.loading, d.err = 2, ""
+	detail, lists := userDetail, userPlaylists
 	go func() {
-		u, err := userDetail(id)
+		u, err := detail(id)
 		a.post(func() {
 			d.loading--
 			if err != nil {
@@ -60,7 +61,7 @@ func (a *app) loadUser(id int64) {
 		})
 	}()
 	go func() {
-		made, _, err := userPlaylists(id)
+		made, _, err := lists(id)
 		a.post(func() {
 			d.loading--
 			if err == nil {
@@ -79,8 +80,9 @@ func (a *app) loadSubscriptions(d *userData) {
 		return
 	}
 	d.subsLoading = 2
+	artists, podcasts := followedArtists, subscribedPodcasts
 	go func() {
-		ars, err := followedArtists()
+		ars, err := artists()
 		a.post(func() {
 			d.subsLoading--
 			if err == nil {
@@ -89,7 +91,7 @@ func (a *app) loadSubscriptions(d *userData) {
 		})
 	}()
 	go func() {
-		pods, err := subscribedPodcasts()
+		pods, err := podcasts()
 		a.post(func() {
 			d.subsLoading--
 			if err == nil {

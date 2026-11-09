@@ -35,7 +35,7 @@ func (a *app) section(c *ui.Context, title string) ui.Element {
 
 func (a *app) homePage(c *ui.Context) {
 	loading := len(a.featured) == 0 && len(a.charts) == 0
-	if loading && !a.homeLoading {
+	if loading && (!a.homeLoading || a.homeErr != "") {
 		a.centered(c, a.homeErr, a.loadHome)
 		return
 	}
@@ -88,7 +88,7 @@ func weekday(t time.Time) string {
 
 func (a *app) chartsPage(c *ui.Context) {
 	loading := len(a.charts) == 0
-	if loading && !a.homeLoading {
+	if loading && (!a.homeLoading || a.homeErr != "") {
 		a.centered(c, a.homeErr, a.loadHome)
 		return
 	}
@@ -241,7 +241,7 @@ func (a *app) playlistPage(c *ui.Context) {
 	id := a.route.id
 	pl := a.playlists[id]
 	if pl == nil {
-		if !a.loadingPl[id] {
+		if !a.loadingPl[id] || a.plErr[id] != "" {
 			a.centered(c, a.plErr[id], func() { a.loadPlaylist(id, false) })
 			return
 		}

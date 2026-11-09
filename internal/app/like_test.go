@@ -17,12 +17,14 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// Clicking the player heart immediately changes the like and sends it to NetEase.
 func TestLikeFromPlayerBar(t *testing.T) {
 	calls := make(chan bool, 4)
 	likeSong = func(id int64, like bool) error { calls <- like; return nil }
 	defer func() { likeSong = netease.Like }()
 
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
@@ -41,6 +43,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 	if like := <-calls; !like {
 		t.Error("asked NetEase to unlike")
 	}
+	refreshPost(t, posts)
 	tt.Frame()
 	if err := tt.Click("取消喜欢 宝船"); err != nil {
 		t.Fatal(err)
@@ -51,6 +54,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 	if like := <-calls; like {
 		t.Error("asked NetEase to like again")
 	}
+	refreshPost(t, posts)
 }
 
 // The heart of an episode playing likes the episode, not its audio, once
@@ -70,6 +74,7 @@ func TestLikeEpisode(t *testing.T) {
 	}()
 
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1}
 	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3, PodcastID: 5, Duration: 600000}})
@@ -79,6 +84,7 @@ func TestLikeEpisode(t *testing.T) {
 	if ids := wait(t, asked, "whether the episode is liked"); !slices.Equal(ids, []int64{3}) {
 		t.Fatalf("asked of %v", ids)
 	}
+	refreshPost(t, posts)
 	if err := tt.Click("喜欢 第一期"); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +94,7 @@ func TestLikeEpisode(t *testing.T) {
 	if c := wait(t, calls, "the like"); c != (call{3, true}) {
 		t.Errorf("asked NetEase for %+v", c)
 	}
+	refreshPost(t, posts)
 	tt.Frame()
 	if err := tt.Click("取消喜欢 第一期"); err != nil {
 		t.Fatal(err)
@@ -95,6 +102,7 @@ func TestLikeEpisode(t *testing.T) {
 	if c := wait(t, calls, "the unlike"); c != (call{3, false}) || a.likedPrograms[3] {
 		t.Errorf("asked NetEase for %+v, liked %v", c, a.likedPrograms[3])
 	}
+	refreshPost(t, posts)
 	if len(asked) > 0 {
 		t.Error("asked again whether the episode is liked")
 	}
@@ -104,21 +112,37 @@ func TestLikeEpisode(t *testing.T) {
 // the episode keeps what the click made it; an answer for a listener
 // signed out since is dropped.
 func TestEpisodeLikeClickBeatsAnswer(t *testing.T) {
-	programsLiked = func([]int64) (map[int64]bool, error) { return nil, nil }
+	isolateUserData(t)
+	fakeOfflineHome(t)
+	asked := make(chan []int64, 2)
+	answers := make(chan map[int64]bool, 1)
+	programsLiked = func(ids []int64) (map[int64]bool, error) {
+		asked <- ids
+		return <-answers, nil
+	}
 	likeProgram = func(int64, bool) error { return nil }
 	defer func() { programsLiked, likeProgram = netease.ProgramsLiked, netease.LikeProgram }()
 	a := newTestApp()
+	posts := testPosts(a)
 	a.profile = &netease.Profile{UserID: 1}
 	a.askProgramLikes([]int64{3, 4})
+	wait(t, asked, "the first answer request")
 	a.toggleLike(&netease.Track{ID: 13, ProgramID: 3})
-	a.programLikesAnswered(1, []int64{3, 4}, map[int64]bool{4: true})
+	refreshPost(t, posts)
+	answers <- map[int64]bool{4: true}
+	refreshPost(t, posts)
 	if !a.likedPrograms[3] || !a.likedPrograms[4] {
 		t.Fatalf("liked %v", a.likedPrograms)
 	}
+	a.askProgramLikes([]int64{5})
+	wait(t, asked, "the old account request")
 	a.signedIn(nil)
 	a.profile = &netease.Profile{UserID: 2}
-	a.askProgramLikes([]int64{5})
-	a.programLikesAnswered(1, []int64{5}, map[int64]bool{5: true})
+	answers <- map[int64]bool{5: true}
+	// Two guest home requests and the old account's answer all finish here.
+	for range 3 {
+		refreshPost(t, posts)
+	}
 	if a.likedPrograms[5] {
 		t.Error("took the last listener's answer")
 	}
@@ -132,6 +156,7 @@ func TestLikeEpisodeRow(t *testing.T) {
 	likeProgram = func(id int64, like bool) error { liked <- id; return nil }
 	defer func() { programsLiked, likeProgram = netease.ProgramsLiked, netease.LikeProgram }()
 	a := catalogApp()
+	posts := testPosts(a)
 	a.profile = &netease.Profile{UserID: 1}
 	a.setProgramLiked(40, true)
 	a.open(route{page: pagePodcast, id: 5})
@@ -149,12 +174,14 @@ func TestLikeEpisodeRow(t *testing.T) {
 	r, _ := tt.Find(episodes[2].Name)
 	tt.Move(r.X+r.W/2, r.Y+r.H/2)
 	tt.Frame()
+	refreshPost(t, posts)
 	if err := tt.Click("喜欢 " + episodes[2].Name); err != nil {
 		t.Fatal(err)
 	}
 	if id := wait(t, liked, "the like"); id != 42 || !a.likedPrograms[42] {
 		t.Errorf("liked %d", id)
 	}
+	refreshPost(t, posts)
 	if a.pl.Current() != nil {
 		t.Error("the heart played the episode")
 	}
@@ -170,6 +197,7 @@ func TestLikeBurstFrames(t *testing.T) {
 	likeSong = func(int64, bool) error { return nil }
 	defer func() { likeSong = netease.Like }()
 	a := newTestApp()
+	posts := testPosts(a)
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1}
 	tr := netease.Track{ID: 7, Name: "宝船", Duration: 200000}
@@ -183,6 +211,7 @@ func TestLikeBurstFrames(t *testing.T) {
 		t.Fatal("no heart")
 	}
 	tt.Click("喜欢 宝船")
+	refreshPost(t, posts)
 	moments := []time.Duration{0, 60, 120, 200, 300, 420, 600}
 	img := tt.Image()
 	scale := float32(img.Bounds().Dx()) / 1200
@@ -472,13 +501,16 @@ func TestLikeCurrent(t *testing.T) {
 	likeSong = func(int64, bool) error { return nil }
 	defer func() { likeSong = netease.Like }()
 	a := newTestApp()
+	posts := testPosts(a)
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船"}})
 	a.profile = &netease.Profile{UserID: 1}
 	a.likeCurrent()
+	refreshPost(t, posts)
 	if !a.liked[7] || a.toast != "已添加到我喜欢的音乐" {
 		t.Fatalf("liked %v, toast %q", a.liked[7], a.toast)
 	}
 	a.likeCurrent()
+	refreshPost(t, posts)
 	if a.liked[7] || a.toast != "已取消喜欢" {
 		t.Fatalf("unliked: liked %v, toast %q", a.liked[7], a.toast)
 	}
@@ -487,6 +519,7 @@ func TestLikeCurrent(t *testing.T) {
 	defer func() { likeProgram = netease.LikeProgram }()
 	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3}})
 	a.likeCurrent()
+	refreshPost(t, posts)
 	if !a.likedPrograms[3] || a.liked[13] {
 		t.Fatalf("episode liked %v, its audio %v", a.likedPrograms[3], a.liked[13])
 	}

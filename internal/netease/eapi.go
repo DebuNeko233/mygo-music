@@ -121,13 +121,13 @@ func eapiPost(path string, data map[string]any, out any) error {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	// Sent by hand: the jar would add the site's cookies to these. The
 	// transport is the client's, so that a test can answer these too.
-	res, err := (&http.Client{Timeout: httpClient.Timeout, Transport: httpClient.Transport}).Do(req)
+	res, err := DoRequest(&http.Client{Timeout: httpClient.Timeout, Transport: httpClient.Transport}, req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return fmt.Errorf("netease: %s: %s", path, res.Status)
+		return responseError{res.StatusCode, fmt.Sprintf("netease: %s: %s", path, res.Status)}
 	}
 	// Keep what it sets for the site, whichever host set it.
 	if set := res.Cookies(); len(set) > 0 {

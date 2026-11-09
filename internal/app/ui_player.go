@@ -363,7 +363,15 @@ func (a *app) transport(c *ui.Context, color, dim, on ui.Color, size float32) {
 		if iconButton(c.Key("prev"), iconPrev, size*0.85, color, "上一首").Clicked() {
 			pl.Prev()
 		}
-		if playButton(c.Key("play"), pl.Playing(), size*1.25, color).Clicked() {
+		// Reuse the primary control for recovery rather than adding another
+		// playback button beside the track or changing its selected position.
+		var play ui.Element
+		if pl.PlaybackRetryable() {
+			play = iconButton(c.Key("play"), iconReload, size*1.25, color, "重试播放").Tooltip("重试播放")
+		} else {
+			play = playButton(c.Key("play"), pl.Playing(), size*1.25, color)
+		}
+		if play.Clicked() {
 			pl.TogglePlay()
 		}
 		if iconButton(c.Key("next"), iconNext, size*0.85, color, "下一首").Clicked() {
@@ -436,7 +444,7 @@ func (a *app) playerBar(c *ui.Context) {
 						sub = a.picked.heard
 					case pl.Loading():
 						sub = "正在缓冲…"
-					case pl.Err() != "":
+					case pl.Err() != "" && !pl.PlaybackRetryable():
 						sub, color = pl.Err(), p.accent
 					}
 					if sub == "" {

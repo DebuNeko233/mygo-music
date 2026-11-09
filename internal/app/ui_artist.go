@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -83,11 +84,15 @@ type artistData struct {
 	profile       *netease.ArtistProfile
 	loading       bool
 	err           string
+	failure       error
 	latest        []netease.Track
 	latestLoading bool
 	latestErr     string
+	latestFailure error
 	albums        []netease.AlbumProfile
 	albumsPage    paged
+	albumsRetry   int
+	albumsFailed  bool
 	events        []netease.Event
 	eventsPage    paged
 	eventsBefore  int64 // the time of the last event loaded, the next page's start
@@ -131,22 +136,47 @@ func (a *app) loadArtist(id int64) {
 			a.loadAlbums(id)
 		}
 	}
-	if d.profile != nil || d.loading {
+	a.loadArtistProfile(id)
+}
+
+func (a *app) loadArtistProfile(id int64) {
+	d := a.artist(id)
+	if d.profile != nil && d.err == "" || d.loading {
 		if a.artistTab == artistEvents && !d.eventsPage.loaded {
 			a.loadEvents(id)
 		}
 		return
 	}
-	d.loading, d.err = true, ""
+	d.loading = true
+	req, gen := a.cacheRequest(fmt.Sprintf("artist/%d", id)), a.homeGen
+	fetch := artistDetail
 	go func() {
-		ar, err := artistDetail(id)
+		var kept *netease.ArtistProfile
+		if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
+			a.post(func() {
+				if a.homeGen == gen && a.artists[id] == d && d.profile == nil {
+					d.profile = kept
+				}
+			})
+		}
+		ar, err := fetch(id)
+		bytes := cacheBytes(ar)
 		a.post(func() {
+			if a.homeGen != gen || a.artists[id] != d {
+				return
+			}
 			d.loading = false
+			d.failure = err
 			if err != nil {
 				d.err = "歌手加载失败"
 				return
 			}
+			if d.following {
+				return
+			}
 			d.profile = ar
+			d.err = ""
+			req.keep(bytes)
 			// Their events are their account's, which their profile names.
 			if a.artistTab == artistEvents && a.route == (route{page: pageArtist, id: id}) {
 				a.loadEvents(id)
@@ -157,21 +187,43 @@ func (a *app) loadArtist(id int64) {
 
 func (a *app) loadLatest(id int64) {
 	d := a.artist(id)
-	if d.latest != nil || d.latestLoading {
+	if d.latest != nil && d.latestErr == "" || d.latestLoading {
 		return
 	}
-	d.latestLoading, d.latestErr = true, ""
+	d.latestLoading = true
+	req, gen := a.cacheRequest(fmt.Sprintf("artist-latest/%d", id)), a.homeGen
+	fetch := artistLatestSongs
 	go func() {
-		songs, err := artistLatestSongs(id, latestCount)
+		var kept []netease.Track
+		if at := req.read(&kept); !at.IsZero() {
+			a.post(func() {
+				if a.homeGen == gen && a.artists[id] == d && d.latest == nil {
+					d.latest = kept
+				}
+			})
+		}
+		songs, err := fetch(id, latestCount)
+		bytes := cacheBytes(songs)
 		a.post(func() {
+			if a.homeGen != gen || a.artists[id] != d {
+				return
+			}
 			d.latestLoading = false
+			d.latestFailure = err
 			if err != nil {
 				d.latestErr = "歌曲加载失败"
 				return
 			}
 			d.latest = songs
+			d.latestErr = ""
+			req.keep(bytes)
 		})
 	}()
+}
+
+type keptAlbums struct {
+	Albums []netease.AlbumProfile
+	More   bool
 }
 
 // loadAlbums loads the next page of an artist's albums.
@@ -182,15 +234,59 @@ func (a *app) loadAlbums(id int64) {
 	}
 	d.albumsPage.loading, d.albumsPage.err = true, ""
 	offset := len(d.albums)
+	if d.albumsFailed {
+		offset = d.albumsRetry
+	}
+	req, gen := a.cacheRequest(fmt.Sprintf("artist-albums/%d/%d", id, offset)), a.homeGen
+	fetch := albumsBy
 	go func() {
-		albums, more, err := albumsBy(id, albumsPage, offset)
+		// Restore already visited pages together, so an offline failure of
+		// page zero does not prevent browsing the cached pages after it.
+		var cached []netease.AlbumProfile
+		var cachedAt time.Time
+		cachedMore := false
+		for page, cursor := 0, offset; page < 128; page++ {
+			part := req
+			part.key = fmt.Sprintf("artist-albums/%d/%d", id, cursor)
+			var kept keptAlbums
+			at := part.read(&kept)
+			if at.IsZero() {
+				break
+			}
+			cached = append(cached, kept.Albums...)
+			cachedMore = kept.More
+			if cachedAt.IsZero() {
+				cachedAt = at
+			}
+			if !kept.More || len(kept.Albums) == 0 {
+				break
+			}
+			cursor += len(kept.Albums)
+		}
+		if !cachedAt.IsZero() {
+			a.post(func() {
+				if a.homeGen == gen && a.artists[id] == d && len(d.albums) == offset {
+					d.albums = append(d.albums, cached...)
+					d.albumsPage.loaded, d.albumsPage.more = true, cachedMore
+				}
+			})
+		}
+		albums, more, err := fetch(id, albumsPage, offset)
+		bytes := cacheBytes(keptAlbums{albums, more})
 		a.post(func() {
-			d.albumsPage.loading = false
-			if err != nil {
-				d.albumsPage.err = "专辑加载失败"
+			if a.homeGen != gen || a.artists[id] != d {
 				return
 			}
-			d.albums = append(d.albums, albums...)
+			d.albumsPage.loading = false
+			d.albumsPage.failure = err
+			if err != nil {
+				d.albumsPage.err = "专辑加载失败"
+				d.albumsFailed, d.albumsRetry = true, offset
+				return
+			}
+			d.albums = append(d.albums[:offset], albums...)
+			d.albumsFailed = false
+			req.keep(bytes)
 			d.albumsPage.loaded, d.albumsPage.more = true, more && len(albums) > 0
 		})
 	}()
@@ -262,7 +358,7 @@ func (a *app) artistPage(c *ui.Context) {
 	id := a.route.id
 	d := a.artist(id)
 	if d.profile == nil {
-		if !d.loading {
+		if !d.loading || d.err != "" {
 			a.centered(c, d.err, func() { a.loadArtist(id) })
 			return
 		}
@@ -294,7 +390,7 @@ func (a *app) artistPage(c *ui.Context) {
 		switch {
 		case d.latest != nil:
 			songs = d.latest
-		case d.latestLoading:
+		case d.latestLoading && d.latestErr == "":
 			a.trackSkeleton(c, a.pageShimmer(c), true, header)
 			return
 		default:
@@ -303,7 +399,7 @@ func (a *app) artistPage(c *ui.Context) {
 				a.artistHeader(c, d)
 				ui.Column(c).Padding(40, 0).Gap(12).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, d.latestErr).TextColor(a.pal.muted).FontSize(13)
-					if ui.Button(c.Key("retry"), "重试").Clicked() {
+					if iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载歌曲").Tooltip("重新加载歌曲").Clicked() {
 						a.loadLatest(d.profile.ID)
 					}
 				})

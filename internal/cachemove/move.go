@@ -35,55 +35,17 @@ func move(source, target string, migrate bool, save func() error, copy func(stri
 	if err != nil {
 		return nil, err
 	}
-	if err := Validate(source, target); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
-		return nil, err
-	}
-	stage, err := os.MkdirTemp(filepath.Dir(target), ".song-cache-move-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(stage)
-	var names []string
+	var files []cacheFile
 	if migrate {
-		names, err = songFiles(source)
+		names, err := songFiles(source)
 		if err != nil {
 			return nil, err
 		}
 		for _, name := range names {
-			if err := copy(filepath.Join(source, name), filepath.Join(stage, name)); err != nil {
-				return nil, err
-			}
+			files = append(files, cacheFile{source: filepath.Join(source, name), name: name})
 		}
 	}
-	// Look once more: the listener may have put something in the target while
-	// the songs came over. Only an empty directory is removed below, and what
-	// is cleaned up from it is what this moved.
-	if err := Validate(source, target); err != nil {
-		return nil, err
-	}
-	if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	if err := os.Rename(stage, target); err != nil {
-		return nil, err
-	}
-	if err := save(); err != nil {
-		for _, name := range names {
-			os.Remove(filepath.Join(target, name))
-		}
-		os.Remove(target)
-		return nil, err
-	}
-	var cleanup error
-	for _, name := range names {
-		if err := os.Remove(filepath.Join(source, name)); err != nil {
-			cleanup = errors.Join(cleanup, err)
-		}
-	}
-	return cleanup, nil
+	return transfer(target, files, []string{""}, func() error { return Validate(source, target) }, save, copy)
 }
 
 // songFiles names the files of the songs dir keeps whole: a stream's .json
@@ -112,11 +74,24 @@ func songFiles(dir string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		var stream netease.Stream
+		var stream struct {
+			netease.Stream
+			File string `json:"file"`
+		}
 		if json.Unmarshal(data, &stream) != nil || (stream.Type != "mp3" && stream.Type != "flac") || stream.Size < 0 {
 			continue
 		}
 		audio := key + "." + stream.Type
+		if stream.File != "" {
+			suffix := strings.TrimSuffix(strings.TrimPrefix(stream.File, key+"-"), "."+stream.Type)
+			if !strings.HasPrefix(stream.File, key+"-") || !strings.HasSuffix(stream.File, "."+stream.Type) {
+				continue
+			}
+			if _, err := strconv.ParseInt(suffix, 10, 64); err != nil {
+				continue
+			}
+			audio = stream.File
+		}
 		info, err := os.Lstat(filepath.Join(dir, audio))
 		if errors.Is(err, os.ErrNotExist) {
 			continue

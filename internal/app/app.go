@@ -2,11 +2,13 @@ package app
 
 import (
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -39,6 +41,14 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
+	network                                networkState
+	homeFailures                           map[string]error
+	dirtySnapshots                         map[int64]bool
+	browseCache, imageCache, identityCache *diskcache.Store
+	recovery                               recoveryState
+	browseUsed, imagesUsed                 int64
+	homePending                            int
+
 	listRefresh libraryRefreshState
 	wasBehind   bool
 
@@ -171,36 +181,34 @@ type app struct {
 	savedSession string // the session as last kept
 	sessionDue   bool   // a save of the session is due
 
-	// kept is what post took before the window was made, run once it is.
-	// Only post and flushKept touch it: post is called from background
-	// goroutines, but they all block on the window being made, and
-	// flushKept runs on the main thread right after NewWindow returns.
-	kept []func()
+	// Workers can finish before NewWindow returns. Protect their early queue
+	// and dispatcher publication; callbacks always run unlocked.
+	postMu sync.Mutex
+	postTo func(func()) // main-thread dispatcher, published with the window
+	kept   []func()
 }
 
-// post runs fn on the main thread and redraws both windows. Before the
-// window is made there is none to run it in: what the window asks for while
-// it is made, a backdrop being read, is kept until there is one, so that the
-// read still lands. Tests have no window at all, so testPost takes it.
+// post queues early results until a dispatcher exists. Native windows and
+// headless tests each own their queue; a late worker cannot use another app's
+// dispatcher. Never invoke callbacks while holding postMu.
 func (a *app) post(fn func()) {
-	if a.win == nil {
-		if testPost != nil {
-			testPost(fn)
-			return
-		}
+	a.postMu.Lock()
+	send := a.postTo
+	if send == nil {
 		a.kept = append(a.kept, fn)
+		a.postMu.Unlock()
 		return
 	}
-	a.win.Update(func() {
-		fn()
-		a.redraw()
-	})
+	a.postMu.Unlock()
+	send(fn)
 }
 
 // flushKept runs what post kept while the window was being made.
 func (a *app) flushKept() {
+	a.postMu.Lock()
 	kept := a.kept
 	a.kept = nil
+	a.postMu.Unlock()
 	for _, fn := range kept {
 		fn()
 	}
@@ -208,10 +216,6 @@ func (a *app) flushKept() {
 		a.redraw()
 	}
 }
-
-// testPost, when set, takes what post hands the main thread: tests run with
-// no window to hand it to.
-var testPost func(fn func())
 
 func (a *app) redraw() {
 	if a.win != nil {
@@ -267,16 +271,17 @@ func Run() error {
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
 		a.pl = player.New(a.post)
+		a.initOffline()
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
-		a.pl.Cache = newSongCache(a.settings.CacheMB, a.settings.CacheDir)
+		a.pl.Cache = newSongCache(a.settings)
 		a.pl.Changed = func() {
 			a.keepSession()
 			a.syncCaptions()
 		}
 		a.volume = a.settings.Volume
 		a.pl.SetVolume(a.volume)
-		a.win = mygo.NewWindow(mygo.WindowOptions{
+		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:         mygo.App.Name(),
 			Width:         1180,
 			Height:        780,
@@ -293,10 +298,16 @@ func Run() error {
 			BackgroundColor:      "light-dark(#ffffff, #141416)",
 			Content:              ui.View(a.view),
 		})
+		a.postMu.Lock()
+		a.win = win
+		a.postTo = func(fn func()) { win.Update(func() { fn(); a.redraw() }) }
+		a.postMu.Unlock()
 		// The view the window laid out as it was made asked for pictures
 		// before there was a window to read them back into.
 		a.flushKept()
 		a.setMenu()
+		a.watchNetwork()
+		a.upgradeCacheDirectory()
 		a.boot()
 		// The notch player is macOS's, over its menu bar: elsewhere it would
 		// hang at the top of the screen as a black box.
@@ -311,6 +322,7 @@ func Run() error {
 		a.syncDock()
 		a.win.OnShow(a.syncDock)
 		a.win.OnHide(a.syncDock)
+		a.win.OnHide(func() { a.recoveryFrame(false) })
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(a.freshenHome)
 		a.applyTray()
@@ -360,5 +372,12 @@ func Run() error {
 	})
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
-	return mygo.App.Run()
+	err := mygo.App.Run()
+	if a.network.stop != nil {
+		a.network.stop()
+	}
+	a.browseCache.Close()
+	a.imageCache.Close()
+	a.identityCache.Close()
+	return err
 }

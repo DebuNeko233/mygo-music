@@ -31,7 +31,7 @@ func cacheTestApp(t *testing.T) (*app, string, string) {
 	a.settingsPage = "cache"
 	a.settings.CacheDir = source
 	a.settings.path = filepath.Join(root, "settings.json")
-	a.pl.Cache = newSongCache(a.settings.CacheMB, source)
+	a.pl.Cache = newSongCache(a.settings)
 	return a, source, target
 }
 
@@ -48,22 +48,14 @@ func readCacheSettings(t *testing.T, path string) settings {
 	return s
 }
 
-// cachePosts takes what the change posts for the main thread, for the test
-// to run when it wants.
-func cachePosts(t *testing.T) chan func() {
-	t.Helper()
-	old := postCacheDirectory
-	posts := make(chan func(), 16)
-	postCacheDirectory = func(_ *app, fn func()) { posts <- fn }
-	t.Cleanup(func() { postCacheDirectory = old })
-	return posts
-}
-
 func finishCacheChange(t *testing.T, a *app, posts chan func()) {
 	t.Helper()
+	// Complete the follow-up measurements as well, before restoring the
+	// test dispatcher or starting another conversion with the same stores.
+	a.cacheUsed, a.browseUsed, a.imagesUsed = -1, -1, -1
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
-	for a.cacheMoving {
+	for a.cacheMoving || a.cacheUsed < 0 || (a.browseCache != nil || a.imageCache != nil) && a.browseUsed < 0 {
 		select {
 		case fn := <-posts:
 			fn()
@@ -77,6 +69,15 @@ func finishCacheChange(t *testing.T, a *app, posts chan func()) {
 // would have.
 func writeCachedSong(t *testing.T, source string) {
 	t.Helper()
+	writeCachedSongIn(t, filepath.Join(source, "songs"))
+}
+
+func writeCachedSongIn(t *testing.T, source string) {
+	t.Helper()
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
 	meta, _ := json.Marshal(netease.Stream{Size: 5, Type: "mp3", Level: "exhigh"})
 	for name, data := range map[string][]byte{"123-exhigh.mp3": []byte("music"), "123-exhigh.json": meta} {
 		if err := os.WriteFile(filepath.Join(source, name), data, 0o600); err != nil {
@@ -88,13 +89,13 @@ func writeCachedSong(t *testing.T, source string) {
 // Choosing a directory asks first, then starts one change in the background.
 func TestCacheDirectoryControls(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	oldOpen := openCacheDirectory
 	defer func() { openCacheDirectory = oldOpen }()
 	opens := 0
 	openCacheDirectory = func(mygo.OpenDialogOptions) ([]string, error) { opens++; return []string{target}, nil }
 	tt := ui.NewTester(a.settingsView, 800, 1800)
-	if err := tt.Click("更改歌曲缓存目录"); err != nil {
+	if err := tt.Click("更改缓存目录"); err != nil {
 		t.Fatal(err)
 	}
 	if !a.cacheConfirm.open || a.cacheMoving || a.settings.CacheDir != source {
@@ -132,7 +133,7 @@ func TestCacheDirectorySameDirectory(t *testing.T) {
 	for _, target := range targets {
 		openCacheDirectory = func(mygo.OpenDialogOptions) ([]string, error) { return []string{target}, nil }
 		tt := ui.NewTester(a.settingsView, 800, 1800)
-		if err := tt.Click("更改歌曲缓存目录"); err != nil {
+		if err := tt.Click("更改缓存目录"); err != nil {
 			t.Fatal(err)
 		}
 		if a.cacheConfirm.open || a.cacheMoving || a.cacheError != "" || a.settings.CacheDir != source || a.pl.Cache != cache {
@@ -166,7 +167,7 @@ func TestCacheDirectoryDialogCancel(t *testing.T) {
 				return []string{target}, nil
 			}
 			tt := ui.NewTester(a.settingsView, 800, 1800)
-			if err := tt.Click("更改歌曲缓存目录"); err != nil {
+			if err := tt.Click("更改缓存目录"); err != nil {
 				t.Fatal(err)
 			}
 			if cancel == "button" {
@@ -187,7 +188,7 @@ func TestCacheDirectoryDialogCancel(t *testing.T) {
 // is kept.
 func TestCacheDirectoryImmediate(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	if err := a.settings.save(); err != nil {
 		t.Fatal(err)
@@ -209,7 +210,7 @@ func TestCacheDirectoryImmediate(t *testing.T) {
 	if a.pl.Cache == nil || a.pl.Cache.Size() != 5 {
 		t.Fatal("player did not use the migrated cache")
 	}
-	if _, err := os.Stat(filepath.Join(source, "123-exhigh.mp3")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(source, "songs", "123-exhigh.mp3")); !os.IsNotExist(err) {
 		t.Fatalf("old cache remains: %v", err)
 	}
 }
@@ -218,7 +219,7 @@ func TestCacheDirectoryImmediate(t *testing.T) {
 // and leaves the old ones where they are.
 func TestCacheDirectoryWithoutMigration(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	a.confirmCacheDirectory(target)
 	tt := ui.NewTester(a.settingsView, 780, 640)
@@ -229,7 +230,7 @@ func TestCacheDirectoryWithoutMigration(t *testing.T) {
 	if a.cacheError != "" || a.pl.Cache.Size() != 0 || a.settings.CacheDir != target {
 		t.Fatal("failed to switch cache")
 	}
-	if _, err := os.Stat(filepath.Join(source, "123-exhigh.mp3")); err != nil {
+	if _, err := os.Stat(filepath.Join(source, "songs", "123-exhigh.mp3")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -238,7 +239,7 @@ func TestCacheDirectoryWithoutMigration(t *testing.T) {
 // cache that was playing.
 func TestCacheDirectorySaveFailure(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	posts := cachePosts(t)
+	posts := testPosts(a)
 	writeCachedSong(t, source)
 	cache := a.pl.Cache
 	a.settings.path = source // a directory: no settings may be written there
@@ -305,6 +306,7 @@ func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 // usage.
 func TestCacheDirectoryStaleMeasurement(t *testing.T) {
 	a, _, target := cacheTestApp(t)
+	posts := testPosts(a)
 	old := a.pl.Cache
 	a.cacheUsed = 123
 	a.cacheMoving = true
@@ -313,8 +315,11 @@ func TestCacheDirectoryStaleMeasurement(t *testing.T) {
 		t.Fatal("measurement changed usage during migration")
 	}
 	a.cacheMoving = false
-	a.pl.Cache = newSongCache(a.settings.CacheMB, target)
-	a.cacheMeasured(old, 456)
+	next := a.settings
+	next.CacheDir = target
+	a.pl.Cache = newSongCache(next)
+	go a.measureSongCache(old)
+	refreshPost(t, posts)
 	if a.cacheUsed != 123 {
 		t.Fatal("stale cache measurement overwrote usage")
 	}

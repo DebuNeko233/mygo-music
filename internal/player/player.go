@@ -36,7 +36,11 @@ const (
 // Player plays a queue of tracks. Its methods run on the main thread;
 // loading happens on goroutines, whose results post brings back there.
 type Player struct {
-	post func(func())
+	// Failure causes survive a connection change; their display text does not.
+	offlineAudioError, offlineLyricsError bool
+	retrying                              bool
+	lyricsErr                             string
+	post                                  func(func())
 	// Quality returns the stream level to load, as the settings say.
 	Quality func() string
 	// Normalize reports whether to even out the loudness of tracks, as
@@ -44,6 +48,8 @@ type Player struct {
 	Normalize func() bool
 	// Cache keeps the songs played, if set.
 	Cache *Cache
+	// FetchLyrics optionally supplies persistent lyrics; captured per load.
+	FetchLyrics func(int64) (string, string, string, error)
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -85,8 +91,11 @@ type Player struct {
 	// track, so that a song that keeps breaking off is left where it is.
 	tries int
 
-	lyrics       []lyrics.Line
-	lyricsLoaded bool
+	lyrics                            []lyrics.Line
+	lyricsLoaded                      bool
+	lyricRevision                     uint64
+	lyricBusy, coverBusy, coverLoaded bool
+	lyricFailure, coverFailure        error
 
 	// pending holds a seek asked for while the track loads.
 	pending time.Duration
@@ -381,7 +390,18 @@ func (p *Player) Loading() bool { return p.loading || p.awaiting }
 func (p *Player) Ready() bool { return p.out != nil }
 
 // Err returns why the current track did not play, or "".
-func (p *Player) Err() string { return p.err }
+func (p *Player) Err() string {
+	if p.offlineAudioError && !netease.Offline() {
+		return "播放中断"
+	}
+	return p.err
+}
+
+// PlaybackRetryable offers an explicit restart after reconnecting; a system
+// event alone never starts audio or moves the listener's saved position.
+func (p *Player) PlaybackRetryable() bool {
+	return p.offlineAudioError && !netease.Offline() && !p.Loading() && !p.cacheChanging
+}
 
 // Stream returns what the current track streams, once loaded, or nil.
 func (p *Player) Stream() *netease.Stream { return p.info }
@@ -629,6 +649,8 @@ func (p *Player) stop() {
 	p.seeking = false
 	p.fade.attach(nil, 1)
 	p.gen++ // Invalidate all pending callbacks.
+	// Invalidated metadata callbacks cannot clear their own busy flags later.
+	p.lyricBusy, p.coverBusy = false, false
 }
 
 // load plays the track at order[at], skipping those that cannot play.
@@ -649,12 +671,16 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	level := p.level()
 	ahead := p.takeAhead(t.ID, level)
 	ask := songURL
-	words := lyricsOf
 	p.at = at
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
+	p.offlineAudioError, p.offlineLyricsError = false, false
+	p.retrying = false
+	p.lyricsErr = ""
 	p.awaiting = false
 	p.lyrics, p.lyricsLoaded = nil, false
+	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
+	p.lyricFailure, p.coverFailure = nil, nil
 	p.pending = from
 	p.announce(&t, nil)
 	if p.cacheChanging {
@@ -663,41 +689,8 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	}
 	p.refill()
 
-	go func() {
-		cover, err := netease.Fetch(netease.Sized(t.Album.PicURL, 600))
-		if err == nil {
-			p.post(func() {
-				if gen == p.gen {
-					p.announce(&t, cover)
-				}
-			})
-		}
-	}()
+	p.RetryMetadata()
 
-	go func() {
-		// A song whose words did not come is not a song without any: the
-		// request is asked again, and until one answers the words stay
-		// unloaded rather than empty, so that nothing says the song is
-		// instrumental when it only failed to be asked for.
-		var lines []lyrics.Line
-		for try := 1; ; try++ {
-			lrc, trans, yrc, err := words(t.ID)
-			if err == nil {
-				lines = lyrics.Build(lrc, trans, yrc)
-				break
-			}
-			if try >= lyricTries {
-				return
-			}
-			time.Sleep(retryGap(try))
-		}
-		p.post(func() {
-			if gen == p.gen {
-				p.lyrics = lines
-				p.lyricsLoaded = true
-			}
-		})
-	}()
 	go func() {
 		info, s, err := p.open(t, level, ahead, ask)
 		p.post(func() {
@@ -749,6 +742,13 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 // come now, skipped if it cannot play at all, and else left where it is
 // for the listener to play again.
 func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, err error) {
+	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
+	if errors.Is(err, netease.ErrOffline) {
+		p.loading, p.playing = false, false
+		p.err = "未缓存"
+		p.sync()
+		return
+	}
 	if errors.Is(err, netease.ErrNotLoggedIn) {
 		// Asked for again it would be turned down again, and the song
 		// plays once the listener is signed in: nothing is skipped.
@@ -818,6 +818,7 @@ const lyricTries = 3
 // more.
 func (p *Player) retry(at, skipped int, from time.Duration, err error) {
 	p.tries++
+	p.retrying = true
 	p.loading = true
 	gen, tries := p.gen, p.tries
 	time.AfterFunc(loadGap(tries, err), func() {
@@ -860,17 +861,21 @@ func (p *Player) cutOff() {
 		return
 	}
 	err := p.stream.cut()
+	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	dl, _ := p.stream.source()
 	dl.discard()
-	if p.tries < loadTries {
+	if p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
 		p.retry(p.at, 0, p.Position(), err)
 		return
 	}
 	// It cannot be had: stop where it stopped, for the listener to play
 	// again.
 	p.err = "播放中断，请重试"
+	if errors.Is(err, netease.ErrOffline) {
+		p.err = "播放中断"
+	}
 	var decoded *decodeError
-	if errors.As(err, &decoded) {
+	if errors.As(err, &decoded) && !p.offlineAudioError {
 		p.err = "音频解码失败，请重试或切换音质"
 	}
 	p.playing = false
@@ -915,6 +920,9 @@ const prefetchTries = 3
 // whole, so that what did not come is asked for again while this one still
 // plays, rather than when the next one is due.
 func (p *Player) prefetching(gen int, t netease.Track, level string, now stream, ask asker, cache *Cache, try int) {
+	if netease.Offline() {
+		return
+	}
 	if now != nil {
 		if playing, _ := now.source(); playing != nil {
 			playing.waitFor(playing.size)
@@ -927,7 +935,7 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 	}
 	info, err := ask(t.ID, level)
 	if err != nil {
-		if !errors.Is(err, netease.ErrUnavailable) && !errors.Is(err, netease.ErrNotLoggedIn) {
+		if !errors.Is(err, netease.ErrUnavailable) && !errors.Is(err, netease.ErrNotLoggedIn) && !errors.Is(err, netease.ErrOffline) {
 			// A URL gone stale, or a network down for a moment: asked for
 			// again in a moment, as it may be back by then.
 			prefetchLater(p, gen, t, level, ask, nil, try, err)
@@ -962,7 +970,7 @@ func (p *Player) prefetching(gen int, t netease.Track, level string, now stream,
 // says: what came in badly is let go of first, so that the fetch that
 // follows is the one the player keeps.
 func prefetchLater(p *Player, gen int, t netease.Track, level string, ask asker, failed *download, try int, err error) {
-	if try >= prefetchTries || (errors.Is(err, netease.ErrRiskControl) && try >= riskTries) {
+	if errors.Is(err, netease.ErrOffline) || try >= prefetchTries || (errors.Is(err, netease.ErrRiskControl) && try >= riskTries) {
 		return
 	}
 	gap := prefetchGap(max(try, 1), err)
@@ -1046,6 +1054,9 @@ func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker) (
 	dl, info, ok := p.Cache.lookup(t.ID, level)
 	if ok {
 		return dl, info, nil
+	}
+	if netease.Offline() {
+		return nil, nil, netease.ErrOffline
 	}
 	info, err := ask(t.ID, level)
 	if err != nil {

@@ -227,7 +227,12 @@ func (c *Cache) Size() int64 {
 
 // Clear drops every song kept.
 func (c *Cache) Clear() {
-	if c.stopped() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.blocked {
 		return
 	}
 	for _, f := range c.songs() {
@@ -285,6 +290,9 @@ func (c *Cache) remove(path string) {
 func (c *Cache) prune(keep string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.blocked {
+		return
+	}
 	c.dropParts()
 	songs := c.songs()
 	slices.SortFunc(songs, func(a, b cachedSong) int { return a.used.Compare(b.used) })

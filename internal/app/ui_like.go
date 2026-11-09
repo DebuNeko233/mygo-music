@@ -40,10 +40,12 @@ func (a *app) toggleLike(tr *netease.Track) {
 	uid := a.profile.UserID // Capture UID for validation
 	a.setLiked(id, like)
 	finishEdit := a.beginLibraryEdit()
+	ask := likeSong
 	go func() {
-		err := likeSong(id, like)
+		err := ask(id, like)
 		a.post(func() {
 			finishEdit()
+			defer a.persistLibrary()
 			// Validate that the user is still logged in with the same account
 			if a.profile == nil || a.profile.UserID != uid {
 				return
@@ -73,8 +75,9 @@ func (a *app) toggleProgramLike(id int64) {
 	like := !a.likedPrograms[id]
 	uid := a.profile.UserID // Capture UID for validation
 	a.setProgramLiked(id, like)
+	ask := likeProgram
 	go func() {
-		err := likeProgram(id, like)
+		err := ask(id, like)
 		a.post(func() {
 			// Validate that the user is still logged in with the same account
 			if a.profile == nil || a.profile.UserID != uid {
@@ -160,8 +163,9 @@ func (a *app) askProgramLikes(ids []int64) {
 		a.askedPrograms[id] = true
 	}
 	uid := a.profile.UserID
+	fetch := programsLiked
 	go func() {
-		liked, _ := programsLiked(ask)
+		liked, _ := fetch(ask)
 		a.post(func() { a.programLikesAnswered(uid, ask, liked) })
 	}()
 }

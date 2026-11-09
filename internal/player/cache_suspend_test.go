@@ -12,6 +12,25 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// A maintenance task scheduled before a move cannot prune its source once
+// the cache is quiesced; normal eviction resumes after a failed migration.
+func TestCacheQuiesceMaintenance(t *testing.T) {
+	c := NewCache(t.TempDir(), 1<<20)
+	seedCache(t, c, 1, []byte("music"))
+	unblock := c.Quiesce()
+	c.SetLimit(0)
+	c.prune("")
+	c.Clear()
+	if _, err := os.Stat(filepath.Join(c.dir, "1-exhigh.mp3")); err != nil {
+		t.Fatal("maintenance removed migration source", err)
+	}
+	unblock()
+	c.SetLimit(0)
+	if _, err := os.Stat(filepath.Join(c.dir, "1-exhigh.mp3")); !os.IsNotExist(err) {
+		t.Fatal("failed migration did not resume maintenance", err)
+	}
+}
+
 // Quiescing stops a song coming in, and keeps what comes late out of the old
 // folder.
 func TestCacheQuiesceWriter(t *testing.T) {
@@ -197,5 +216,24 @@ func TestSuspendCacheDefersControls(t *testing.T) {
 	defer p.out.Close()
 	if p.Playing() || p.Current().ID != 2 || p.Position() != 500*time.Millisecond {
 		t.Fatal("deferred controls were lost")
+	}
+}
+
+// Suspending invalidates metadata callbacks even when a radio wait prevents an audio reload.
+func TestSuspendCacheSettlesMetadataWhileAwaiting(t *testing.T) {
+	posts := make(chan func(), 1)
+	p := New(func(fn func()) { posts <- fn })
+	p.Cue([]netease.Track{{ID: 1}})
+	p.FetchLyrics = func(int64) (string, string, string, error) {
+		return "[00:01]Old", "", "", nil
+	}
+	p.RetryMetadata()
+	complete := <-posts
+	p.awaiting = true
+	resume := p.SuspendCache()
+	complete()
+	resume()
+	if p.MetadataLoading() || p.loading || p.lyricsLoaded || !p.awaiting {
+		t.Fatal("invalidated metadata remained busy or applied after suspension")
 	}
 }
