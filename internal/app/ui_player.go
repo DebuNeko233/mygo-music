@@ -328,9 +328,9 @@ func (a *app) muteButton(c *ui.Context, color ui.Color) {
 
 // volumeSlider is a slim slider with the speaker before it, which mutes.
 func (a *app) volumeSlider(c *ui.Context, color, track ui.Color, width float32) {
-	// Balance the speaker's 32 DIPs and its gap with trailing space so
-	// the slider itself shares its parent's center, rather than the row.
-	ui.Row(c).Gap(4).Padding(0, 36, 0, 0).AlignItems(ui.Center).Children(func() {
+	// Leave a little less space after the track than the speaker takes:
+	// its center sits 6 DIPs right of the column's axis for optical balance.
+	ui.Row(c).Gap(4).Padding(0, 24, 0, 0).AlignItems(ui.Center).Children(func() {
 		a.muteButton(c, color)
 		s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Width(width).Height(16).FocusRing(false).Label("音量")
 		if s.Changed() {
