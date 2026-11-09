@@ -271,12 +271,12 @@ func (a *app) npSideWidth(c *ui.Context, coverSize float32) float32 {
 	return max(coverSize, 280, width)
 }
 
-// npTabsRow centers the group in its column's navigation slot. AttachTo
-// keeps the group inside the window if the slot is near an edge.
+// npTabsRow centers the group in its column's slot, with a 6-DIP optical
+// shift to the right. Sharing this offset keeps every pane aligned.
 func (a *app) npTabsRow(c *ui.Context, anchor ui.Element) ui.Element {
 	w, h := c.Size()
 	size, _ := npCoverLayout(w, h)
-	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).
+	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
 		Width(a.npSideWidth(c, size)).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 }
 

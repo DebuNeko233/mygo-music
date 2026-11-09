@@ -10,7 +10,7 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// Resizing keeps navigation centered over the resting cover, 24 DIPs above it, with small windows keeping every button reachable.
+// Resizing keeps navigation optically aligned over the cover, 24 DIPs above it, with every button reachable.
 func TestNowPlayingTabsFollowCover(t *testing.T) {
 	for _, tr := range []netease.Track{
 		{ID: 1, Name: "歌曲", Duration: 200000},
@@ -52,7 +52,7 @@ func TestNowPlayingTabsFollowCover(t *testing.T) {
 				if !ok || math.Abs(float64(cover.X+cover.W/2+6-volume.Bounds.X-volume.Bounds.W/2)) > 1 {
 					t.Fatalf("at %v: volume track %v lost its optical offset under cover %v", size, volume.Bounds, cover)
 				}
-				want := max(12+groupW/2, min(cover.X+cover.W/2, float32(size[0])-12-groupW/2))
+				want := max(12+groupW/2, min(cover.X+cover.W/2, float32(size[0])-12-groupW/2)) + 6
 				if math.Abs(float64(center-want)) > 1 || math.Abs(float64(cover.Y-first.Y-first.H-24)) > 1 {
 					t.Fatalf("at %v: tabs center %v (want %v), cover gap %v", size, center, want, cover.Y-first.Y-first.H)
 				}
