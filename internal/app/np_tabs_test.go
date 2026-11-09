@@ -48,6 +48,9 @@ func TestNowPlayingTabsFollowCover(t *testing.T) {
 				if !ok || math.Abs(float64(cover.X+cover.W/2-scrub.X-scrub.W/2)) > 1 {
 					t.Fatalf("at %v: cover %v is not centered in its playback column %v", size, cover, scrub)
 				}
+				if math.Abs(float64(scrub.W-max(cover.W, 280))) > 1 {
+					t.Fatalf("at %v: navigation widened the playback column to %v for cover %v", size, scrub.W, cover.W)
+				}
 				volume, ok := tt.AccessByRole(ui.RoleSlider, "音量")
 				if !ok || math.Abs(float64(cover.X+cover.W/2+6-volume.Bounds.X-volume.Bounds.W/2)) > 1 {
 					t.Fatalf("at %v: volume track %v lost its optical offset under cover %v", size, volume.Bounds, cover)

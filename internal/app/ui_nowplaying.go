@@ -137,7 +137,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		if a.npPane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
-			reveal(a.npTabsRow(c, a.npTabsAnchor(c, w, h)), pointerIn).Children(func() { a.paneTabs(c) })
+			reveal(a.npTabsRow(c, npTabsAnchor(c, w, h)), pointerIn).Children(func() { a.paneTabs(c) })
 			_, sunk := npCoverLayout(w, h)
 			reveal(ui.Row(c.Key("stage-style-row")).Absolute().Top(topBar(c)+sunk).Right(npSideX(w)).Height(npTabsHeight), pointerIn).
 				Children(func() { a.stageStyleButton(c) })
@@ -153,7 +153,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		}
 
 		coverSize, coverSunk := npCoverLayout(w, h)
-		side := a.npSideWidth(c, coverSize)
+		side := max(coverSize, 280)
 		padX := npSideX(w)
 		ui.Row(c).Grow(1).Padding(0, padX, 44, padX).Gap(72).AlignItems(ui.Stretch).Children(func() {
 			// Navigation, cover and controls share one column. Keep its
@@ -249,15 +249,14 @@ func npCoverLayout(w, h float32) (size, sunk float32) {
 
 // npTabsAnchor gives panes without a cover column its navigation position,
 // so switching panes keeps the same shared column center and top.
-func (a *app) npTabsAnchor(c *ui.Context, w, h float32) ui.Element {
+func npTabsAnchor(c *ui.Context, w, h float32) ui.Element {
 	size, sunk := npCoverLayout(w, h)
-	return ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(a.npSideWidth(c, size), npTabsHeight)
+	return ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(max(size, 280), npTabsHeight)
 }
 
-// npSideWidth lets the column hold the whole navigation before centering
-// its smaller cover. Reserve count space here, outside the visible pills,
-// so their padding stays even and a new count cannot resize the column.
-func (a *app) npSideWidth(c *ui.Context, coverSize float32) float32 {
+// npTabsWidth reserves count space outside the visible pills. The attached
+// row can be wider than its slot without widening the cover and controls.
+func (a *app) npTabsWidth(c *ui.Context) float32 {
 	tabs := a.npTabs()
 	width := float32(len(tabs)-1) * 6
 	for _, tab := range tabs {
@@ -268,16 +267,14 @@ func (a *app) npSideWidth(c *ui.Context, coverSize float32) float32 {
 		text, _ := c.MeasureText(0, ui.Span{Text: label, Size: 13, Weight: 600, Features: "tnum"})
 		width += text + 28
 	}
-	return max(coverSize, 280, width)
+	return width
 }
 
 // npTabsRow centers the group in its column's slot, with a 6-DIP optical
 // shift to the right. Sharing this offset keeps every pane aligned.
 func (a *app) npTabsRow(c *ui.Context, anchor ui.Element) ui.Element {
-	w, h := c.Size()
-	size, _ := npCoverLayout(w, h)
 	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
-		Width(a.npSideWidth(c, size)).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
+		Width(a.npTabsWidth(c)).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 }
 
 // reveal fades e in while the pointer is in the window, and out when it
