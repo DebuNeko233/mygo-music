@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Path validation rejects overlap and directories of the listener's without
+// Path validation rejects overlap and occupied cache children without
 // creating or deleting anything.
 func TestValidate(t *testing.T) {
 	root := t.TempDir()
@@ -20,6 +20,12 @@ func TestValidate(t *testing.T) {
 	}
 	file := filepath.Join(occupied, "personal.txt")
 	if err := os.WriteFile(file, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(occupied, "songs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(occupied, "songs", "existing.mp3"), []byte("cached"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	for _, target := range []string{source, filepath.Join(source, "child"), root, occupied, file, filepath.Join(file, "child"), "relative"} {

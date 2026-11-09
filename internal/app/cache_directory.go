@@ -179,7 +179,7 @@ func (a *app) chooseCacheDirectory() {
 		return
 	}
 	paths, err := openCacheDirectory(mygo.OpenDialogOptions{
-		Parent: a.settingsWin, Title: "选择空文件夹作为缓存目录", Directory: true, CreateDirectories: true,
+		Parent: a.settingsWin, Title: "选择缓存目录", Directory: true, CreateDirectories: true,
 	})
 	if err != nil {
 		a.cacheError = err.Error()

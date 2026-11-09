@@ -56,12 +56,9 @@ func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, s
 		return nil, err
 	}
 	var files []cacheFile
-	publications := []string{""}
-	if shared {
-		publications = nil
-	}
+	var publications []string
 	groups := []struct{ name, source string }{{"songs", source.Songs}, {"browse-v1", source.Browse}, {ArtworkDir, source.Artwork}}
-	validate := func(stage string) error { return validateTarget(source.Root, target, stage) }
+	validate := func(string) error { return Validate(source.Root, target) }
 	if shared {
 		validate = func(string) error { return nil }
 		same, err := SameDirectory(source.Root, target)
@@ -132,9 +129,9 @@ func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, s
 			if err != nil {
 				return nil, err
 			}
-			if !reused {
-				publications = append(publications, group.name)
-			}
+		}
+		if !reused {
+			publications = append(publications, group.name)
 		}
 		for _, name := range names {
 			files = append(files, cacheFile{filepath.Join(group.source, name), filepath.Join(group.name, name), reused})

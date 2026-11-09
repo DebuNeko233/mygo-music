@@ -180,3 +180,39 @@ func TestCacheDirectoryNormalizesExplicitDefault(t *testing.T) {
 		t.Fatal("default preference was not persisted")
 	}
 }
+
+// Confirming migration must preserve unrelated target data instead of demanding an empty root.
+func TestCacheDirectoryAcceptsUnmanagedTargetContent(t *testing.T) {
+	a, source, target := cacheTestApp(t)
+	posts := testPosts(a)
+	writeCachedSong(t, source)
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	metadata := filepath.Join(target, ".DS_Store")
+	if err := os.WriteFile(metadata, []byte("Finder metadata"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	personal := filepath.Join(target, "notes.txt")
+	if err := os.WriteFile(personal, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.confirmCacheDirectory(target)
+	tt := ui.NewTester(a.settingsView, 800, 1100)
+	if err := tt.Click("迁移并更改"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.cacheMoving {
+		t.Fatal("unrelated target content prevented migration", a.cacheConfirm.err)
+	}
+	finishCacheChange(t, a, posts)
+	if a.cacheError != "" || a.settings.CacheDir != target || a.pl.Cache.Size() != 5 {
+		t.Fatal("could not adopt Finder folder", a.cacheError)
+	}
+	if b, err := os.ReadFile(metadata); err != nil || string(b) != "Finder metadata" {
+		t.Fatal("changed Finder metadata", err)
+	}
+	if b, err := os.ReadFile(personal); err != nil || string(b) != "keep" {
+		t.Fatal("changed unrelated file", err)
+	}
+}

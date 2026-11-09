@@ -255,13 +255,13 @@ func TestCacheDirectorySaveFailure(t *testing.T) {
 	}
 }
 
-// A directory that holds files is refused before anything stops playing.
+// An occupied cache child is refused before anything stops playing.
 func TestCacheDirectoryRejectsOccupied(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	if err := os.MkdirAll(target, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(target, "songs"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(target, "personal.txt"), []byte("keep"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(target, "songs", "personal.txt"), []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.changeCacheDirectory(target, true); err == nil {
@@ -272,14 +272,14 @@ func TestCacheDirectoryRejectsOccupied(t *testing.T) {
 	}
 }
 
-// A directory that turns out to hold files keeps the dialog open with what
+// A cache child that turns out to hold files keeps the dialog open with what
 // went wrong, and touches nothing.
 func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 	a, source, target := cacheTestApp(t)
-	if err := os.MkdirAll(target, 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(target, "songs"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	personal := filepath.Join(target, "personal.txt")
+	personal := filepath.Join(target, "songs", "personal.txt")
 	if err := os.WriteFile(personal, []byte("keep"), 0o600); err != nil {
 		t.Fatal(err)
 	}

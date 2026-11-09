@@ -96,16 +96,39 @@ func resolve(path string) (string, error) {
 	return filepath.Join(parent, filepath.Base(path)), nil
 }
 
-// Validate refuses a target that is not a directory of its own, empty: what
-// is in it is the listener's, and is never merged with, written over, or
-// removed, migrated or not.
+// Validate checks only the managed cache children. Other target files and
+// directories belong to the listener and are never part of a relocation.
 func Validate(source, target string) error {
-	return validateTarget(source, target, "")
+	_, target, err := Paths(source, target)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"songs", "browse-v1", ArtworkDir} {
+		child := filepath.Join(target, name)
+		info, err := os.Lstat(child)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("目标缓存路径不是独立目录：%s", child)
+		}
+		entries, err := os.ReadDir(child)
+		if err != nil {
+			return err
+		}
+		if len(entries) > 0 {
+			return fmt.Errorf("目标缓存文件夹需为空：%s", child)
+		}
+	}
+	return nil
 }
 
-// Only the stage created by this transaction may be ignored during the final
-// emptiness check; unrelated files appearing during a copy still stop it.
-func validateTarget(source, target, stage string) error {
+// The older song-only Move API publishes flat files, so it still needs an
+// empty root. The app uses Validate and the three-child layout instead.
+func validateFlatTarget(source, target, stage string) error {
 	_, target, err := Paths(source, target)
 	if err != nil {
 		return err

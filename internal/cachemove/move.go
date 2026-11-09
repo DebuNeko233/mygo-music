@@ -46,7 +46,7 @@ func move(source, target string, migrate bool, save func() error, copy func(stri
 			files = append(files, cacheFile{source: filepath.Join(source, name), name: name})
 		}
 	}
-	return transferWithOptions(target, files, []string{""}, func(stage string) error { return validateTarget(source, target, stage) }, save, copy, Options{})
+	return transferWithOptions(target, files, []string{""}, func(stage string) error { return validateFlatTarget(source, target, stage) }, save, copy, Options{})
 }
 
 // songFiles names the files of the songs dir keeps whole: a stream's .json
