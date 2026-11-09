@@ -328,7 +328,9 @@ func (a *app) muteButton(c *ui.Context, color ui.Color) {
 
 // volumeSlider is a slim slider with the speaker before it, which mutes.
 func (a *app) volumeSlider(c *ui.Context, color, track ui.Color, width float32) {
-	ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+	// Balance the speaker's 32 DIPs and its gap with trailing space so
+	// the slider itself shares its parent's center, rather than the row.
+	ui.Row(c).Gap(4).Padding(0, 36, 0, 0).AlignItems(ui.Center).Children(func() {
 		a.muteButton(c, color)
 		s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Width(width).Height(16).FocusRing(false).Label("音量")
 		if s.Changed() {
@@ -354,10 +356,14 @@ func (a *app) transport(c *ui.Context, color, dim, on ui.Color, size float32) {
 	pl := a.pl
 	ui.Row(c).Gap(size * 0.5).AlignItems(ui.Center).Justify(ui.Center).Children(func() {
 		shuffle := dim
-		if pl.Shuffle() {
+		shuffling := pl.Shuffle()
+		if shuffling {
 			shuffle = on
 		}
-		if iconButton(c.Key("shuffle"), iconShuffle, size*0.62, shuffle, "随机播放").Clicked() {
+		button := roundButton(c.Key("shuffle"), size*0.62, shuffle, "随机播放", shuffling).
+			Role(ui.RoleToggleButton).Checked(shuffling)
+		button.Children(func() { ui.Icon(c, iconShuffle).Size(size*0.62, size*0.62) })
+		if button.Clicked() {
 			pl.ToggleShuffle()
 		}
 		if iconButton(c.Key("prev"), iconPrev, size*0.85, color, "上一首").Clicked() {
