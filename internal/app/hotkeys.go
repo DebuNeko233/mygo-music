@@ -109,6 +109,38 @@ func (a *app) setBinding(kind keyKind, name, acc string) {
 	a.redraw()
 }
 
+// changedBinding reports whether the action has a key other than the one it
+// comes with, as the settings offer to give the default back.
+func (a *app) changedBinding(kind keyKind, name string) bool {
+	for _, h := range hotkeys {
+		if h.name != name {
+			continue
+		}
+		own := h.inApp
+		if kind == kindGlobal {
+			own = h.global
+		}
+		return canonicalAccelerator(a.binding(kind, name)) != canonicalAccelerator(own)
+	}
+	return false
+}
+
+// restoreBinding gives the action the key it comes with, forgetting the one
+// the settings kept for it.
+func (a *app) restoreBinding(kind keyKind, name string) {
+	keys := &a.settings.Shortcuts.InApp
+	if kind == kindGlobal {
+		keys = &a.settings.Shortcuts.Global
+	}
+	delete(*keys, name)
+	a.settings.save()
+	if kind == kindGlobal {
+		a.registerGlobals()
+	}
+	a.recording, a.recordingNote = "", ""
+	a.redraw()
+}
+
 // taken reports whether another action of the set already has acc, and whose.
 func (a *app) taken(kind keyKind, name, acc string) (string, bool) {
 	canonical := canonicalAccelerator(acc)
@@ -519,9 +551,9 @@ var keyLabels = map[string]string{
 	"enter": "Enter", "space": "Space", "tab": "Tab", "escape": "Esc",
 	"backspace": "Backspace", "delete": "Delete", "insert": "Insert",
 	"home": "Home", "end": "End", "pageup": "PageUp", "pagedown": "PageDown",
-	"mediaplaypause": "Media Play/Pause", "medianexttrack": "Media Next",
-	"mediaprevioustrack": "Media Previous", "mediastop": "Media Stop",
-	"volumeup": "Volume Up", "volumedown": "Volume Down", "volumemute": "Volume Mute",
+	"mediaplaypause": "媒体 播放/暂停", "medianexttrack": "媒体 下一首",
+	"mediaprevioustrack": "媒体 上一首", "mediastop": "媒体停止",
+	"volumeup": "系统 音量加", "volumedown": "系统 音量减", "volumemute": "系统 静音",
 }
 
 // keyLabel is the name the settings show a key by.

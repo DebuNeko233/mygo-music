@@ -271,3 +271,31 @@ func TestTheSettingsRecordAShortcut(t *testing.T) {
 		t.Errorf("the settings record a key still")
 	}
 }
+
+// An action that took another key gets its own back from the button beside
+// it, and the settings stop offering that button once it has.
+func TestTheDefaultKeyComesBack(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settingsPage = "keys"
+	a.setBinding(kindInApp, "volumeUp", "CmdOrCtrl+Alt+Up")
+	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt.Frame()
+	if !a.changedBinding(kindInApp, "volumeUp") {
+		t.Errorf("the settings do not know the key was changed")
+	}
+	if err := tt.Click("恢复默认"); err != nil {
+		t.Fatalf("clicking the button giving the default back: %v", err)
+	}
+	tt.Frame()
+	if got := a.binding(kindInApp, "volumeUp"); got != "CmdOrCtrl+Shift+Up" {
+		t.Fatalf("volumeUp has %q after the default came back, want CmdOrCtrl+Shift+Up", got)
+	}
+	if a.changedBinding(kindInApp, "volumeUp") {
+		t.Errorf("the settings still think the key was changed")
+	}
+	if err := tt.Click("恢复默认"); err == nil {
+		t.Errorf("the settings still offer a default to give back")
+	}
+}

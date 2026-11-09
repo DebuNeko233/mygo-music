@@ -23,6 +23,7 @@ type palette struct {
 	press     ui.Color
 	accent    ui.Color
 	onAccent  ui.Color
+	warn      ui.Color // what went wrong, and what the app refused to do
 	cardShade ui.Color
 }
 
@@ -38,6 +39,7 @@ func paletteFor(t *ui.Theme) palette {
 		press:     ui.RGBA(0, 0, 0, 0.08),
 		accent:    ui.Oklch(0.6, 0.21, 24),
 		onAccent:  ui.Hex("#ffffff"),
+		warn:      ui.Hex("#d70015"),
 		cardShade: ui.RGBA(0, 0, 0, 0.16),
 	}
 	if t.Dark {
@@ -53,6 +55,7 @@ func paletteFor(t *ui.Theme) palette {
 			press:     ui.RGBA(255, 255, 255, 0.1),
 			accent:    ui.Oklch(0.66, 0.2, 22),
 			onAccent:  ui.Hex("#ffffff"),
+			warn:      ui.Hex("#ff6961"),
 			cardShade: ui.RGBA(0, 0, 0, 0.45),
 		}
 	}
