@@ -137,7 +137,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		if a.npPane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
-			reveal(npTabsRow(c, w, h), pointerIn).Children(func() { a.paneTabs(c) })
+			reveal(a.npTabsRow(c, a.npTabsAnchor(c, w, h)), pointerIn).Children(func() { a.paneTabs(c) })
 			_, sunk := npCoverLayout(w, h)
 			reveal(ui.Row(c.Key("stage-style-row")).Absolute().Top(topBar(c)+sunk).Right(npSideX(w)).Height(npTabsHeight), pointerIn).
 				Children(func() { a.stageStyleButton(c) })
@@ -153,13 +153,15 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		}
 
 		coverSize, coverSunk := npCoverLayout(w, h)
-		side := max(coverSize, 280)
+		side := a.npSideWidth(c, coverSize)
 		padX := npSideX(w)
-		reveal(npTabsRow(c, w, h), pointerIn).Children(func() { a.paneTabs(c) })
 		ui.Row(c).Grow(1).Padding(0, padX, 44, padX).Gap(72).AlignItems(ui.Stretch).Children(func() {
-			// Reserve the navigation and its gap before the cover; the same
-			// geometry places the tabs even in panes without this column.
-			ui.Column(c).Width(side).Padding(coverSunk+npTabsHeight+npTabsGap, 0, 0, 0).Gap(0).Children(func() {
+			// Navigation, cover and controls share one column. Keep its
+			// center even when the cover shrinks below the controls' width.
+			ui.Column(c).Width(side).Padding(coverSunk, 0, 0, 0).Gap(0).Children(func() {
+				anchor := ui.Box(c.Key("tabs-anchor")).Height(npTabsHeight)
+				reveal(a.npTabsRow(c, anchor), pointerIn).Children(func() { a.paneTabs(c) })
+				ui.Box(c).Height(npTabsGap)
 				a.npCover(c, tr, art, coverSize)
 
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Margin(36, 0, 18, 0).Children(func() {
@@ -245,14 +247,37 @@ func npCoverLayout(w, h float32) (size, sunk float32) {
 	return size, (room - size) / 2
 }
 
-// npTabsRow is the row of Now Playing's tabs, in the same place for every
-// pane, centered on the cover's resting box rather than its animated tilt
-// or drag. AttachTo keeps the group inside the window when the cover is small.
-func npTabsRow(c *ui.Context, w, h float32) ui.Element {
+// npTabsAnchor gives panes without a cover column its navigation position,
+// so switching panes keeps the same shared column center and top.
+func (a *app) npTabsAnchor(c *ui.Context, w, h float32) ui.Element {
 	size, sunk := npCoverLayout(w, h)
-	anchor := ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(size, npTabsHeight)
+	return ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(a.npSideWidth(c, size), npTabsHeight)
+}
+
+// npSideWidth lets the column hold the whole navigation before centering
+// its smaller cover. Reserve count space here, outside the visible pills,
+// so their padding stays even and a new count cannot resize the column.
+func (a *app) npSideWidth(c *ui.Context, coverSize float32) float32 {
+	tabs := a.npTabs()
+	width := float32(len(tabs)-1) * 6
+	for _, tab := range tabs {
+		label := tab.label
+		if tab.pane == paneComments {
+			label = "评论 10000万"
+		}
+		text, _ := c.MeasureText(0, ui.Span{Text: label, Size: 13, Weight: 600, Features: "tnum"})
+		width += text + 28
+	}
+	return max(coverSize, 280, width)
+}
+
+// npTabsRow centers the group in its column's navigation slot. AttachTo
+// keeps the group inside the window if the slot is near an edge.
+func (a *app) npTabsRow(c *ui.Context, anchor ui.Element) ui.Element {
+	w, h := c.Size()
+	size, _ := npCoverLayout(w, h)
 	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).
-		Height(npTabsHeight).Gap(6).AlignItems(ui.Center)
+		Width(a.npSideWidth(c, size)).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 }
 
 // reveal fades e in while the pointer is in the window, and out when it
@@ -392,10 +417,6 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 
 func (a *app) paneTab(c *ui.Context, i int, label string) {
 	b := ui.ButtonBase(c.Key(i)).Padding(6, 14).Radius(999).FocusRing(false).Label(label)
-	if i == paneComments {
-		// Reserve the count's room so loading it cannot shift the group.
-		b.Width(112).Justify(ui.Center)
-	}
 	bg, fg := ui.Transparent, white.Alpha(0.55)
 	if a.npPane == i {
 		bg, fg = white.Alpha(0.14), white

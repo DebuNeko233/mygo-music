@@ -44,6 +44,10 @@ func TestNowPlayingTabsFollowCover(t *testing.T) {
 				}
 				groupW := last.X + last.W - first.X
 				center := first.X + groupW/2
+				scrub, ok := tt.Find("播放进度")
+				if !ok || math.Abs(float64(cover.X+cover.W/2-scrub.X-scrub.W/2)) > 1 {
+					t.Fatalf("at %v: cover %v is not centered in its playback column %v", size, cover, scrub)
+				}
 				want := max(12+groupW/2, min(cover.X+cover.W/2, float32(size[0])-12-groupW/2))
 				if math.Abs(float64(center-want)) > 1 || math.Abs(float64(cover.Y-first.Y-first.H-24)) > 1 {
 					t.Fatalf("at %v: tabs center %v (want %v), cover gap %v", size, center, want, cover.Y-first.Y-first.H)
@@ -60,8 +64,10 @@ func TestNowPlayingTabsFollowCover(t *testing.T) {
 				a.comments.total = 12345678
 				tt.Advance(time.Second)
 				tt.Frame()
-				if moved, _ := tt.Find(a.npTabs()[0].label); moved.X != first.X || moved.Y != first.Y {
-					t.Fatalf("at %v: the comment count moved the first tab from %v to %v", size, first, moved)
+				moved, _ := tt.Find(a.npTabs()[0].label)
+				end, _ := tt.Find(a.commentsTab())
+				if math.Abs(float64((moved.X+end.X+end.W)/2-center)) > 1 || moved.Y != first.Y {
+					t.Fatalf("at %v: the comment count moved the navigation's axis", size)
 				}
 				a.comments.total = 0
 				a.npPane = a.npTabs()[0].pane

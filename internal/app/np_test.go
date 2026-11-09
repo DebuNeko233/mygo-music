@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -162,10 +163,8 @@ func TestCmdNumberChoosesTab(t *testing.T) {
 	}
 }
 
-// Now Playing's tabs stay where they are going from one pane to another,
-// and as the comments' count changes: the lyrics, the queue and the
-// comments had them over the pane, and the stage and the wall at the top
-// on the right, where a longer count pushed the others along.
+// Now Playing keeps the navigation in place across panes and centered
+// on the same axis as comment counts change.
 func TestNowPlayingTabsStayPut(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
@@ -197,10 +196,15 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 		a.npPane = pane
 		a.comments.loaded, a.comments.total = true, 0
 		settle()
+		start, _ := tt.Find("歌词")
+		end, _ := tt.Find("评论")
+		axis := (start.X + end.X + end.W) / 2
 		a.comments.total = 12345678
 		settle()
-		if r, _ := tt.Find("歌词"); r.X != first.X || r.Y != first.Y {
-			t.Errorf("in pane %d, with the count, the 歌词 tab is at %v,%v, was at %v,%v", pane, r.X, r.Y, first.X, first.Y)
+		start, _ = tt.Find("歌词")
+		end, _ = tt.Find(a.commentsTab())
+		if got := (start.X + end.X + end.W) / 2; math.Abs(float64(got-axis)) > 1 || start.Y != first.Y {
+			t.Errorf("in pane %d, the comment count moved the navigation axis from %v to %v", pane, axis, got)
 		}
 	}
 }
