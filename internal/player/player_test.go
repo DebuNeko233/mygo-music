@@ -245,3 +245,27 @@ func TestEndRadio(t *testing.T) {
 		t.Error("asked the radio after leaving it")
 	}
 }
+
+// The player leaves the listener's volume to the system's mixer once the
+// mixer applies it, mixing only the track's gain then.
+func TestSystemVolumeLeavesTheVolumeOut(t *testing.T) {
+	p := &Player{at: -1, volume: 0.5, gain: 1}
+	p.applyGain()
+	if g := p.fade.gain; math.Abs(g-0.25) > 1e-9 {
+		t.Errorf("gain %v, want the volume squared", g)
+	}
+	p.SetSystemVolume(true)
+	if g := p.fade.gain; math.Abs(g-1) > 1e-9 {
+		t.Errorf("gain %v, want the track's alone", g)
+	}
+	// Turned down while the mixer holds the volume: it mixes the track all the same.
+	p.SetVolume(0.2)
+	if g := p.fade.gain; math.Abs(g-1) > 1e-9 {
+		t.Errorf("gain %v, want the track's alone while the mixer applies the volume", g)
+	}
+	// The mixer gone, the app applies the volume again.
+	p.SetSystemVolume(false)
+	if g := p.fade.gain; math.Abs(g-0.04) > 1e-9 {
+		t.Errorf("gain %v, want the volume squared again", g)
+	}
+}

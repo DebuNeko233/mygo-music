@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -146,6 +147,13 @@ type app struct {
 	mutedFrom        float64
 	volumeScroll     float64 // precise scroll DIPs saved toward the next ten-percent step
 	volumeScrollDown bool    // the direction those DIPs were going
+	// mix is the app's volume in the system's mixer, when the system keeps
+	// one: it applies the volume the app shows, and what it is set to there
+	// comes back to volume.
+	mix *mixvol.Mixer
+	// mixVolume is set while the mixer applies the volume, so that the app
+	// leaves it out of what the player mixes.
+	mixVolume bool
 
 	rowBars barState
 	// underTop and underBottom say whether the page has content under its
@@ -284,7 +292,13 @@ func Run() error {
 			a.syncCaptions()
 		}
 		a.volume = a.settings.Volume
-		a.pl.SetVolume(a.volume)
+		// The system's mixer applies the volume too, where it keeps one for
+		// the app, which is from the first sound on.
+		a.mix = mixvol.Open(func(s mixvol.State) {
+			a.post(func() { a.systemVolume(s) })
+		})
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.mix.Close() })
+		a.syncVolume()
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:         mygo.App.Name(),
 			Width:         1180,
