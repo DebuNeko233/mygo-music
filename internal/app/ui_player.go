@@ -224,7 +224,7 @@ func (a *app) nativeVolumeSlider(c *ui.Context, pop popover) {
 	s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Vertical().Size(knob+8, 124).PaddingY(knob / 2).
 		Step(0.01).AutoFocus().FocusRing(false).Label("音量")
 	if s.Changed() {
-		a.pl.SetVolume(a.volume)
+		a.syncVolume()
 	}
 	s.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
 	pressed := s.Pressed()
@@ -295,7 +295,7 @@ func (a *app) stepVolume(down bool) {
 		step = -step
 	}
 	a.volume = math.Round(min(1, max(0, a.volume+step))*100) / 100
-	a.pl.SetVolume(a.volume)
+	a.syncVolume()
 }
 
 // volumeIcon is the speaker for volume v: silent, or with one or two waves.
@@ -322,7 +322,7 @@ func (a *app) muteButton(c *ui.Context, color ui.Color) {
 		} else {
 			a.volume = max(a.mutedFrom, 0.5)
 		}
-		a.pl.SetVolume(a.volume)
+		a.syncVolume()
 	}
 }
 
@@ -332,7 +332,7 @@ func (a *app) volumeSlider(c *ui.Context, color, track ui.Color, width float32) 
 		a.muteButton(c, color)
 		s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Width(width).Height(16).FocusRing(false).Label("音量")
 		if s.Changed() {
-			a.pl.SetVolume(a.volume)
+			a.syncVolume()
 		}
 		hot := s.Hovered() || s.Pressed()
 		thick := float32(4)

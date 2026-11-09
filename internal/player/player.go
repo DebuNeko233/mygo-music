@@ -60,6 +60,10 @@ type Player struct {
 	shuffle bool
 	repeat  RepeatMode
 	volume  float64
+	// systemVolume is set while the system's mixer holds the listener's
+	// volume: what plays then carries only the track's gain and the fades,
+	// as the mixer applies the volume itself.
+	systemVolume bool
 
 	// A radio goes on with the tracks its feed gives, as the queue nears
 	// its end, for as long as nothing else is played.
@@ -584,10 +588,25 @@ func (p *Player) SetVolume(v float64) {
 	p.applyGain()
 }
 
-// applyGain sets the volume of what plays: the listener's, which the ear
-// hears in powers, and the track's gain, if normalizing.
+// SetSystemVolume tells the player whether the system's mixer applies the
+// listener's volume. It does once the system holds a volume for the app, as
+// the Windows mixer and PulseAudio do: the player then leaves the volume out
+// of what it mixes, keeping only the track's gain and the fades, so that it
+// plays as loud as the mixer shows rather than at both volumes together.
+func (p *Player) SetSystemVolume(on bool) {
+	p.systemVolume = on
+	p.applyGain()
+}
+
+// applyGain sets the volume of what plays: the listener's, and the track's
+// gain, if normalizing. The listener's volume is the amplitude itself, the
+// number the slider shows, which is the number the system's mixer shows for
+// the app as well.
 func (p *Player) applyGain() {
-	g := p.volume * p.volume
+	g := 1.0
+	if !p.systemVolume {
+		g = p.volume
+	}
 	if p.Normalize != nil && p.Normalize() {
 		g *= p.gain
 	}
