@@ -137,10 +137,11 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		if a.npPane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
-			reveal(npTabsRow(c, w), pointerIn).Children(func() {
-				a.paneTabs(c)
-				a.stageStyleButton(c)
-			})
+			reveal(npTabsRow(c, w, h), pointerIn).Children(func() { a.paneTabs(c) })
+			_, sunk := npCoverLayout(w, h)
+			reveal(ui.Row(c.Key("stage-style-row")).Absolute().Top(topBar(c)+sunk).Right(npSideX(w)).Height(npTabsHeight), pointerIn).
+				Children(func() { a.stageStyleButton(c) })
+			ui.Box(c).Height(sunk + npTabsHeight + npTabsGap)
 			a.stage(c, tr, accent)
 			a.stageBar(c, tr, art, accent)
 			return
@@ -151,24 +152,14 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 			return
 		}
 
-		side := float32(math.Min(float64(w)*0.36, 440))
-		// The cover leaves room above it for the tabs, starting as far
-		// under them as the wall's song does.
-		coverRoom := h - 436
-		coverSize := min(side, coverRoom)
-		// Once the cover stops growing, its centered column sinks by half
-		// the spare room. The adjacent pane must not inherit that offset.
-		coverSunk := (coverRoom - coverSize) / 2
-		// The column is as wide as the cover, for the cover, what plays
-		// and the tabs over it to start at one edge, but wide enough for
-		// the controls.
-		side = max(coverSize, 280)
+		coverSize, coverSunk := npCoverLayout(w, h)
+		side := max(coverSize, 280)
 		padX := npSideX(w)
-		reveal(npTabsRow(c, w), pointerIn).Children(func() { a.paneTabs(c) })
+		reveal(npTabsRow(c, w, h), pointerIn).Children(func() { a.paneTabs(c) })
 		ui.Row(c).Grow(1).Padding(0, padX, 44, padX).Gap(72).AlignItems(ui.Stretch).Children(func() {
-			var coverTop float32
-			ui.Column(c).Width(side).Justify(ui.Center).Gap(0).Children(func() {
-				coverTop = ui.Box(c.Key("cover-top")).Height(0).LayoutBounds().Y
+			// Reserve the navigation and its gap before the cover; the same
+			// geometry places the tabs even in panes without this column.
+			ui.Column(c).Width(side).Padding(coverSunk+npTabsHeight+npTabsGap, 0, 0, 0).Gap(0).Children(func() {
 				a.npCover(c, tr, art, coverSize)
 
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Margin(36, 0, 18, 0).Children(func() {
@@ -208,21 +199,9 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 
 			pane := ui.Column(c.Key("pane")).Grow(1).Basis(0).MinWidth(0)
 			pane.Children(func() {
-				// The pane starts level with the cover beside it, but below the
-				// tabs, which start level with the pane's top: they come and go
-				// with the pointer, so they sit out of the flow, never over it.
-				// Subtract the cover's sink in tall windows so lyrics, comments
-				// and the queue can use the space directly below the tabs.
-				b := pane.LayoutBounds()
-				if b.H > 0 && coverTop > 0 {
-					if top := max(coverTop-coverSunk-b.Y, npTabsHeight+8); top != a.npPaneTop {
-						a.npPaneTop = top
-						c.AnimationFrame()
-					}
-				} else {
-					c.AnimationFrame() // not laid out yet: the next frame places it
-				}
-				ui.Box(c).Height(a.npPaneTop)
+				// Only the cover column sinks in tall windows; this pane keeps
+				// the height above it for lyrics, comments and the queue.
+				ui.Box(c).Height(npTabsHeight + npTabsGap)
 				switch a.npPane {
 				case paneLyrics:
 					a.lyricsPane(c, tr, h)
@@ -254,12 +233,26 @@ func npSideX(w float32) float32 {
 // under it to start below it.
 const npTabsHeight = 28
 
+// npTabsGap is the clear space between the tabs and the cover, in DIPs.
+const npTabsGap = 24
+
+// npCoverLayout leaves room for the navigation and playback controls,
+// then shares any height beyond the cover's maximum above and below it.
+// All panes use it so switching panes cannot move the navigation.
+func npCoverLayout(w, h float32) (size, sunk float32) {
+	room := max(1, h-436)
+	size = min(w*0.36, 440, room)
+	return size, (room - size) / 2
+}
+
 // npTabsRow is the row of Now Playing's tabs, in the same place for every
-// pane, so that they stay put going from one to another: at the top, level
-// with the cover's left. They start from the left, so that only the last,
-// the comments, moves as its count changes.
-func npTabsRow(c *ui.Context, w float32) ui.Element {
-	return ui.Row(c.Key("tabs")).Absolute().Top(topBar(c)).Left(npSideX(w)).Height(npTabsHeight).Gap(6).AlignItems(ui.Center)
+// pane, centered on the cover's resting box rather than its animated tilt
+// or drag. AttachTo keeps the group inside the window when the cover is small.
+func npTabsRow(c *ui.Context, w, h float32) ui.Element {
+	size, sunk := npCoverLayout(w, h)
+	anchor := ui.Box(c.Key("tabs-anchor")).Absolute().Top(topBar(c)+sunk).Left(npSideX(w)).Size(size, npTabsHeight)
+	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).
+		Height(npTabsHeight).Gap(6).AlignItems(ui.Center)
 }
 
 // reveal fades e in while the pointer is in the window, and out when it
@@ -399,6 +392,10 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 
 func (a *app) paneTab(c *ui.Context, i int, label string) {
 	b := ui.ButtonBase(c.Key(i)).Padding(6, 14).Radius(999).FocusRing(false).Label(label)
+	if i == paneComments {
+		// Reserve the count's room so loading it cannot shift the group.
+		b.Width(112).Justify(ui.Center)
+	}
 	bg, fg := ui.Transparent, white.Alpha(0.55)
 	if a.npPane == i {
 		bg, fg = white.Alpha(0.14), white
