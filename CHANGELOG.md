@@ -1,5 +1,18 @@
 # 更新日志
 
+## 0.2.6
+
+### What's Changed
+* perf(cache): 为页面、封面与背景图加内存上限 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/25
+* fix(player): 截断的下载不再让 FLAC 寻址空转 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/28
+* feat: 应用内音量关联系统音量合成器 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/29
+* fix: 点击播放栏气泡按钮直接打开评论区 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/30
+* fix: 模型未就绪时关闭并禁用播客字幕开关 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/31
+* feat: 应用内 / 外快捷键绑定 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/32
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.5...v0.2.6
+
 ## 0.2.5
 
 - 支持离线浏览，断网后仍可打开已缓存的歌单与专辑，恢复联网后自动加载
