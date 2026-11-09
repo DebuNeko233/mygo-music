@@ -138,10 +138,14 @@ func (a *app) captionSettings(row func(label, desc string, control func()), c *u
 	m := &a.captions.model
 	s := &a.settings
 	row("播客字幕", "播放节目时在本机转写语音，生成可滚动的字幕；转写时会多用一些电量", func() {
-		if ui.Switch(c.Key("captions"), &s.Captions).Label("播客字幕").Disabled(!a.modelReady()).Changed() {
+		ready := a.modelReady()
+		// Show the effective state without discarding the saved preference when the model is absent.
+		on := ready && s.Captions
+		ui.Switch(c.Key("captions"), &on).Label("播客字幕").Disabled(!ready).OnClick(func() {
+			s.Captions = on
 			a.changed()
 			a.syncCaptions()
-		}
+		})
 	})
 	var desc string
 	switch {
