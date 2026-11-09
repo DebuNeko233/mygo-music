@@ -145,6 +145,34 @@ func TestIndexedCapacityIncludesIndexWhenProtectingContent(t *testing.T) {
 	}
 }
 
+// Appending an image's metadata must not evict that just-written image when filesystem timestamps tie.
+func TestIndexAppendRetainsLatestContent(t *testing.T) {
+	s := NewIndexed(t.TempDir(), 64<<10, "requests")
+	defer s.Close()
+	old, fresh := "old", "new"
+	if name("content", old) < name("content", fresh) {
+		old, fresh = fresh, old
+	}
+	s.Put("content", old, make([]byte, 500), 0)
+	s.Put("content", fresh, make([]byte, 1000), 0)
+	for _, key := range []string{old, fresh} {
+		if err := os.Chtimes(filepath.Join(s.dir, name("content", key)), time.Unix(1, 0), time.Unix(1, 0)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	limit := s.Size() + 1
+	s.io.Lock()
+	s.limit, s.spare = limit, 0
+	s.io.Unlock()
+	s.Put("requests", "cover", []byte(`{"content":"fresh"}`), 0)
+	if b, _ := s.Read("content", fresh); len(b) != 1000 {
+		t.Fatal("metadata append evicted its newly committed image")
+	}
+	if s.Size() > limit {
+		t.Fatal("protected content exceeded the hard limit")
+	}
+}
+
 // Acceptance order wins even when an old snapshot takes longer to encode.
 func TestPreparedWritesKeepAcceptanceOrder(t *testing.T) {
 	s := New(t.TempDir(), 1<<20)

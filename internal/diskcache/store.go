@@ -32,6 +32,7 @@ type Store struct {
 	dir       string
 	limit     int64
 	spare     int64        // conservative headroom; owned by io, reset after clear/move
+	latest    string       // last content commit; its following index writes must not evict it
 	io        sync.RWMutex // content reads share this; index state and mutations own it exclusively
 	dirty     atomic.Bool  // a corrupt read invalidates spare without upgrading its read lock
 	mu        sync.Mutex
@@ -181,7 +182,7 @@ func (s *Store) prepareForget(scope, key string) func() {
 		if s.index.accepts(file) {
 			before := s.index.size
 			s.indexError(s.index.forget(s.dir, file))
-			s.prune(max(0, s.index.size-before), "")
+			s.prune(max(0, s.index.size-before), s.latest)
 		} else {
 			os.Remove(filepath.Join(s.dir, file))
 		}
@@ -223,7 +224,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 			}
 			s.mu.Unlock()
 			s.scheduleIndex()
-			s.prune(max(0, s.index.size-before), "")
+			s.prune(max(0, s.index.size-before), s.latest)
 		}
 		return
 	}
@@ -256,6 +257,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 	}
 	s.mu.Unlock()
 	if committed {
+		s.latest = file
 		s.prune(int64(headerSize+len(b)), file)
 	}
 }
@@ -310,6 +312,7 @@ func (s *Store) prepareClear(scope string) func() {
 			}
 		}
 		s.spare = 0
+		s.latest = ""
 		s.mu.Lock()
 		s.clears--
 		s.clearing.Store(s.clears != 0)
@@ -457,6 +460,7 @@ func (s *Store) Suspend() (func(string), error) {
 			if dir != "" {
 				s.dir = dir
 				s.spare = 0
+				s.latest = ""
 				if s.index != nil {
 					s.index.reset()
 				}
