@@ -598,12 +598,14 @@ func (p *Player) SetSystemVolume(on bool) {
 	p.applyGain()
 }
 
-// applyGain sets the volume of what plays: the listener's, which the ear
-// hears in powers, and the track's gain, if normalizing.
+// applyGain sets the volume of what plays: the listener's, and the track's
+// gain, if normalizing. The listener's volume is the amplitude itself, the
+// number the slider shows, which is the number the system's mixer shows for
+// the app as well.
 func (p *Player) applyGain() {
 	g := 1.0
 	if !p.systemVolume {
-		g = p.volume * p.volume
+		g = p.volume
 	}
 	if p.Normalize != nil && p.Normalize() {
 		g *= p.gain

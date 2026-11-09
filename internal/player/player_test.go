@@ -251,8 +251,8 @@ func TestEndRadio(t *testing.T) {
 func TestSystemVolumeLeavesTheVolumeOut(t *testing.T) {
 	p := &Player{at: -1, volume: 0.5, gain: 1}
 	p.applyGain()
-	if g := p.fade.gain; math.Abs(g-0.25) > 1e-9 {
-		t.Errorf("gain %v, want the volume squared", g)
+	if g := p.fade.gain; math.Abs(g-0.5) > 1e-9 {
+		t.Errorf("gain %v, want the volume the slider shows", g)
 	}
 	p.SetSystemVolume(true)
 	if g := p.fade.gain; math.Abs(g-1) > 1e-9 {
@@ -265,7 +265,7 @@ func TestSystemVolumeLeavesTheVolumeOut(t *testing.T) {
 	}
 	// The mixer gone, the app applies the volume again.
 	p.SetSystemVolume(false)
-	if g := p.fade.gain; math.Abs(g-0.04) > 1e-9 {
-		t.Errorf("gain %v, want the volume squared again", g)
+	if g := p.fade.gain; math.Abs(g-0.2) > 1e-9 {
+		t.Errorf("gain %v, want the volume the slider shows again", g)
 	}
 }

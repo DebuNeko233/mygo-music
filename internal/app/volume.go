@@ -14,12 +14,11 @@ func (a *app) setVolume(v float64) {
 }
 
 // syncVolume tells the player, and the system's mixer, the volume the app
-// plays at. The mixer takes an amplitude, which the ear hears as its square,
-// so what the slider shows goes there squared: a slider at half plays at the
-// quarter the mixer shows.
+// plays at. Both take the amplitude itself, the number the slider shows, so
+// what the mixer shows for the app is what the app shows.
 func (a *app) syncVolume() {
 	a.pl.SetVolume(a.volume)
-	a.mix.SetVolume(a.volume * a.volume)
+	a.mix.SetVolume(a.volume)
 }
 
 // systemVolume follows what the system's mixer holds for the app. Once it
@@ -37,12 +36,12 @@ func (a *app) systemVolume(s mixvol.State) {
 		// The mixer is told the volume the app shows before the player stops
 		// applying it, so that what plays, which would otherwise play at the
 		// mixer's own volume and then at that one again, never jumps.
-		a.mix.SetVolume(a.volume * a.volume)
+		a.mix.SetVolume(a.volume)
 		a.mixVolume = true
 		a.pl.SetSystemVolume(true)
 		return
 	}
-	if v := math.Sqrt(s.Volume); math.Abs(v-a.volume) > 0.005 {
+	if v := s.Volume; math.Abs(v-a.volume) > 0.005 {
 		a.setVolume(v)
 	}
 }
