@@ -2,6 +2,8 @@ package player
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -121,6 +123,40 @@ func TestFLACSeek(t *testing.T) {
 		if d := maxDiff(buf[:n], ref[frame*2:]); d != 0 {
 			t.Errorf("seek to %d: off by up to %.4f", frame, d)
 		}
+	}
+}
+
+// A seek into a download cut short fails rather than claim a position whose
+// frame is not there. Claiming it made the decoder read on, fail at once and
+// seek again, so a truncated song repeated the seek for as long as it played:
+// 18.7 GB allocated and 886 collections in 16 seconds.
+func TestFLACSeekIntoCutShortDownload(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := downloaded(b[:len(b)*3/5])
+	d.size = int64(len(b))
+	d.err = io.ErrUnexpectedEOF
+	s, err := openStream(d, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	buf := make([]float32, 4096)
+	// The part that came in still plays, and still seeks.
+	if err := s.SetPosition(44100); err != nil {
+		t.Fatalf("seek into what came in: %v", err)
+	}
+	if n, err := s.Read(buf); n == 0 || err != nil {
+		t.Fatalf("read after the seek: %d samples, %v", n, err)
+	}
+	// Past it there is nothing: the seek says so, and the stream with it.
+	if err := s.SetPosition(4 * 44100); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("seek past what came in: %v", err)
+	}
+	if cut := s.cut(); !errors.Is(cut, io.ErrUnexpectedEOF) {
+		t.Fatalf("cut=%v", cut)
 	}
 }
 
