@@ -30,7 +30,7 @@ type artwork struct {
 	failed    bool
 	used      time.Time // when it was last asked for
 	loaded    time.Time
-	size      int // the bytes it keeps: its data, and the backdrop's pixels
+	size      int // the bytes it keeps: its data, the pixels those decode to, and the backdrop's pixels
 }
 
 // artCache loads covers on goroutines and keeps them, up to artLimit
@@ -146,7 +146,10 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 				c.add(key, &artwork{failed: true, retryable: netease.RetryableCoverError(err), loaded: c.now(), used: c.now()})
 				return
 			}
-			a := &artwork{loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size}
+			// The pixels count against the limit as well as the data: they
+			// come and go as the GPU needs them, and the limit has to bound
+			// both.
+			a := &artwork{loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size + pixelBytes(bmp)}
 			if blurred != nil {
 				a.backdrop = ui.NewBitmap(blurred)
 				a.size += len(blurred.Pix)
@@ -163,6 +166,17 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 // artRelease is how long a cover keeps its pixels once loaded: past the
 // frame that first shows it, and the smaller copies it shows from there.
 const artRelease = 2 * time.Second
+
+// pixelBytes is how many bytes a bitmap's pixels take, with those of the
+// smaller copies it shows from, about a third as many again.
+func pixelBytes(b *ui.Bitmap) int {
+	w, h := b.Size()
+	if w <= 0 || h <= 0 {
+		return 0
+	}
+	pixels := 4 * w * h
+	return pixels + pixels/3
+}
 
 // loadArt fetches the cover at url, as a bitmap to draw and an image to
 // measure, with the bytes of its data.

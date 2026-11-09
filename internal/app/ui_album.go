@@ -29,10 +29,10 @@ type keptAlbum struct {
 }
 
 func (a *app) loadAlbum(id int64) {
-	d := a.albums[id]
+	d := a.albums.get(id)
 	if d == nil {
 		d = &albumData{}
-		a.albums[id] = d
+		a.albums.set(id, d)
 	}
 	if d.album != nil && d.err == "" || d.loading {
 		return
@@ -45,7 +45,7 @@ func (a *app) loadAlbum(id int64) {
 		if at := req.read(&kept); !at.IsZero() && kept.Album != nil && kept.Album.ID == id {
 			kept.Album.Songs = kept.Songs
 			a.post(func() {
-				if a.homeGen == gen && a.albums[id] == d && d.album == nil {
+				if a.homeGen == gen && a.albums.peek(id) == d && d.album == nil {
 					d.album = kept.Album
 				}
 			})
@@ -56,7 +56,7 @@ func (a *app) loadAlbum(id int64) {
 			bytes = cacheBytes(keptAlbum{al, al.Songs})
 		}
 		a.post(func() {
-			if a.homeGen != gen || a.albums[id] != d {
+			if a.homeGen != gen || a.albums.peek(id) != d {
 				return
 			}
 			d.loading = false
@@ -74,7 +74,7 @@ func (a *app) loadAlbum(id int64) {
 
 func (a *app) albumPage(c *ui.Context) {
 	id := a.route.id
-	d := a.albums[id]
+	d := a.albums.get(id)
 	if d.album == nil {
 		if !d.loading || d.err != "" {
 			a.centered(c, d.err, func() { a.loadAlbum(id) })

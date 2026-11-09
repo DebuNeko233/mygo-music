@@ -1,10 +1,13 @@
 package app
 
 import (
+	"image"
 	"os"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // An animated WebP cover, as some playlists have, shows its first frame,
@@ -87,4 +90,33 @@ func TestArtCacheKeepsHeldCovers(t *testing.T) {
 		t.Error("loaded again a cover something still held")
 	}
 	runtime.KeepAlive(held)
+}
+
+// A cover's size counts the pixels its data decodes to, and the smaller
+// copies it shows from, not only its data: the limit has to bound the
+// memory they take as well.
+func TestArtCacheSizesCoversByTheirPixels(t *testing.T) {
+	b, err := os.ReadFile("testdata/animated.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := loadArt
+	defer func() { loadArt = old }()
+	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+		bmp, img, err := decodeArt(b)
+		return bmp, img, len(b), err
+	}
+	c := newArtCache(func(f func()) { f() })
+	c.now, c.limit = func() time.Time { return time.Unix(1e9, 0) }, 1<<30
+	c.get("cover", false)
+	for waited := time.Duration(0); c.size == 0; waited += time.Millisecond {
+		if waited > 5*time.Second {
+			t.Fatal("the cover never landed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// 24×24 pixels, and the smaller copies, about a third again.
+	if want := len(b) + 24*24*4*4/3; c.size != want {
+		t.Errorf("counted %d bytes of the cover, want %d", c.size, want)
+	}
 }

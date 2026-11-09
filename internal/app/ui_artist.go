@@ -117,10 +117,10 @@ const (
 )
 
 func (a *app) artist(id int64) *artistData {
-	d := a.artists[id]
+	d := a.artists.get(id)
 	if d == nil {
 		d = &artistData{}
-		a.artists[id] = d
+		a.artists.set(id, d)
 	}
 	return d
 }
@@ -154,7 +154,7 @@ func (a *app) loadArtistProfile(id int64) {
 		var kept *netease.ArtistProfile
 		if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
 			a.post(func() {
-				if a.homeGen == gen && a.artists[id] == d && d.profile == nil {
+				if a.homeGen == gen && a.artists.peek(id) == d && d.profile == nil {
 					d.profile = kept
 				}
 			})
@@ -162,7 +162,7 @@ func (a *app) loadArtistProfile(id int64) {
 		ar, err := fetch(id)
 		bytes := cacheBytes(ar)
 		a.post(func() {
-			if a.homeGen != gen || a.artists[id] != d {
+			if a.homeGen != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.loading = false
@@ -197,7 +197,7 @@ func (a *app) loadLatest(id int64) {
 		var kept []netease.Track
 		if at := req.read(&kept); !at.IsZero() {
 			a.post(func() {
-				if a.homeGen == gen && a.artists[id] == d && d.latest == nil {
+				if a.homeGen == gen && a.artists.peek(id) == d && d.latest == nil {
 					d.latest = kept
 				}
 			})
@@ -205,7 +205,7 @@ func (a *app) loadLatest(id int64) {
 		songs, err := fetch(id, latestCount)
 		bytes := cacheBytes(songs)
 		a.post(func() {
-			if a.homeGen != gen || a.artists[id] != d {
+			if a.homeGen != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.latestLoading = false
@@ -265,7 +265,7 @@ func (a *app) loadAlbums(id int64) {
 		}
 		if !cachedAt.IsZero() {
 			a.post(func() {
-				if a.homeGen == gen && a.artists[id] == d && len(d.albums) == offset {
+				if a.homeGen == gen && a.artists.peek(id) == d && len(d.albums) == offset {
 					d.albums = append(d.albums, cached...)
 					d.albumsPage.loaded, d.albumsPage.more = true, cachedMore
 				}
@@ -274,7 +274,7 @@ func (a *app) loadAlbums(id int64) {
 		albums, more, err := fetch(id, albumsPage, offset)
 		bytes := cacheBytes(keptAlbums{albums, more})
 		a.post(func() {
-			if a.homeGen != gen || a.artists[id] != d {
+			if a.homeGen != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.albumsPage.loading = false
@@ -312,7 +312,14 @@ func (a *app) loadEvents(id int64) {
 				d.eventsPage.err = "动态加载失败"
 				return
 			}
-			d.events = append(d.events, events...)
+			// The first page replaces what an earlier one kept, and the
+			// ones after it follow on: a page loaded again must not keep
+			// its events twice.
+			if before < 0 {
+				d.events = events
+			} else {
+				d.events = append(d.events, events...)
+			}
 			d.eventsPage.loaded = true
 			// A page that starts no earlier would load forever.
 			d.eventsPage.more = more && len(events) > 0 && (before == -1 || last < before)

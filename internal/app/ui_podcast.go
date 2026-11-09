@@ -38,10 +38,10 @@ type podcastData struct {
 }
 
 func (a *app) loadPodcast(id int64) {
-	d := a.podcasts[id]
+	d := a.podcasts.get(id)
 	if d == nil {
 		d = &podcastData{}
-		a.podcasts[id] = d
+		a.podcasts.set(id, d)
 	}
 	if !d.page.loaded {
 		a.loadPrograms(id)
@@ -66,7 +66,7 @@ func (a *app) loadPodcast(id int64) {
 
 // loadPrograms loads the next page of a podcast's episodes.
 func (a *app) loadPrograms(id int64) {
-	d := a.podcasts[id]
+	d := a.podcasts.get(id)
 	if d.page.loading {
 		return
 	}
@@ -116,7 +116,7 @@ func (a *app) playProgram(d *podcastData, i int) {
 // once it and they have loaded.
 func (a *app) playPodcast(id int64) {
 	a.loadPodcast(id)
-	d := a.podcasts[id]
+	d := a.podcasts.get(id)
 	d.thenPlay = true
 	a.playLoaded(d)
 }
@@ -176,7 +176,7 @@ func (a *app) toggleSubscribe(d *podcastData) {
 func (a *app) podcastPage(c *ui.Context) {
 	p := a.pal
 	id := a.route.id
-	d := a.podcasts[id]
+	d := a.podcasts.get(id)
 	if d.podcast == nil {
 		if !d.loading {
 			a.centered(c, d.err, func() { a.loadPodcast(id) })

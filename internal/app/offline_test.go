@@ -39,13 +39,13 @@ func TestOfflineAlbumRetainsSongsAcrossRestart(t *testing.T) {
 	refreshPost(t, posts)
 	a.browseCache.Close() // Accepted snapshots must reach disk before restart.
 	a.browseCache = diskcache.New(dir, 1<<20)
-	a.albums = map[int64]*albumData{}
+	a.albums = newPageCache[int64, *albumData](albumBusy)
 	albumDetail = func(int64) (*netease.AlbumProfile, error) { return nil, netease.ErrOffline }
 	a.loadAlbum(101)
-	for a.albums[101].loading {
+	for a.albums.get(101).loading {
 		refreshPost(t, posts)
 	}
-	got := a.albums[101].album
+	got := a.albums.get(101).album
 	if got == nil || got == al || len(got.Songs) != 2 || got.Songs[0].ID != 1 || got.Songs[1].ID != 2 || got.Size != 2 {
 		t.Fatalf("offline album lost tracks: %+v", got)
 	}

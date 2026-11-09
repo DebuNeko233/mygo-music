@@ -65,11 +65,11 @@ func (a *app) searchFor(r route) {
 
 // loadSearch loads the first page of a search, unless it has, or again.
 func (a *app) loadSearch(r route, again bool) {
-	if a.searches[r] != nil && !again {
+	if a.searches.get(r) != nil && !again {
 		return
 	}
 	d := &searchData{}
-	a.searches[r] = d
+	a.searches.set(r, d)
 	a.moreResults(r, d)
 }
 
@@ -120,7 +120,7 @@ func (a *app) clearSearchHistory() {
 
 func (a *app) searchPage(c *ui.Context) {
 	r := a.route
-	d := a.searches[r]
+	d := a.searches.get(r)
 	header := func(c *ui.Context) { a.searchHeader(c, d) }
 	more := func() { a.moreResults(r, d) }
 	if r.kind == netease.SearchSongs {
