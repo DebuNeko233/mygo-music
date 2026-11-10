@@ -131,7 +131,8 @@ type app struct {
 	searchBox   ui.Handle
 	searches    pageCache[route, *searchData] // the results of each search, by its page
 	searched    route                         // the search last shown, which the sidebar goes back to
-	suggestions suggestState                  // what the search field's query may be after
+	links       musicLinkState
+	suggestions suggestState // what the search field's query may be after
 
 	nowPlaying                     bool
 	npOpen                         bool      // Now Playing as it last showed: open or not
@@ -280,6 +281,9 @@ func (a *app) showMain() {
 
 // Run runs the app until it quits.
 func Run() error {
+	if !mygo.App.RequestSingleInstanceLock() {
+		return nil
+	}
 	a := &app{
 		playlists:  map[int64]*netease.Playlist{},
 		loadingPl:  map[int64]bool{},
@@ -295,6 +299,17 @@ func Run() error {
 		queueAt:    -1,
 		cacheUsed:  -1,
 	}
+	a.links.starting = true
+	offURL := mygo.App.OnOpenURL(func(raw string) {
+		a.showMain()
+		if a.openMusicInput(raw) {
+			a.redraw()
+		}
+	})
+	defer offURL()
+	offSecond := mygo.App.OnSecondInstance(func([]string, string) { a.showMain() })
+	defer offSecond()
+	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.cancelMusicLink() })
 	moveOldData()
 	a.useUpdater()
 	mygo.App.WhenReady(func() {

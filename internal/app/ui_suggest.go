@@ -103,11 +103,15 @@ func (a *app) searchField(c *ui.Context) {
 		ui.Icon(c, iconSearch).Size(14, 14).TextColor(p.muted)
 		cb := ui.ComboboxBase(c.Key("search"), &a.query)
 		in := cb.Input.Bind(&a.searchBox).Grow(1).MinWidth(0).
-			Placeholder("搜索歌曲、歌手、播客").FontSize(13).Label("搜索")
+			Placeholder("搜索/链接").FontSize(13).Label("搜索")
 		q := strings.TrimSpace(a.query)
 		s := &a.suggestions
+		_, link, _ := netease.ParseMusicLink(q)
+		if link {
+			cb.SetOpen(false)
+		}
 		switch {
-		case in.Focused() && cb.Open() && q != "":
+		case !link && in.Focused() && cb.Open() && q != "":
 			a.suggest(q)
 		case s.query != "":
 			a.dismissSuggestions()
