@@ -233,11 +233,6 @@ func TestPlaylistSuggestionRefreshes(t *testing.T) {
 	if got := a.playlistSuggestions("new"); len(got) != 1 || got[0].song != 3 {
 		t.Fatal("track replacement reused old results")
 	}
-	a.playlists[7].Tracks[0].Name = "renamed"
-	a.listRefresh.revision++
-	if len(a.playlistSuggestions("new")) != 0 {
-		t.Fatal("edit kept stale results")
-	}
 	a.playlists[8] = &netease.Playlist{ID: 8, Tracks: []netease.Track{{ID: 4, Name: "new"}}}
 	a.route.id = 8
 	if got := a.playlistSuggestions("new"); len(got) != 1 || got[0].song != 4 {
@@ -246,6 +241,125 @@ func TestPlaylistSuggestionRefreshes(t *testing.T) {
 	a.route.page = pageAlbum
 	if len(a.playlistSuggestions("new")) != 0 {
 		t.Fatal("album page searched a playlist with the same ID")
+	}
+}
+
+// Three unavailable matches used to hide a later playable song; playable
+// matches now take priority, keeping playlist order within each group.
+func TestPlaylistSuggestionPrioritizesPlayable(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fees []int
+		want []int64
+	}{
+		{"fourth playable", []int{1, 1, 1, 0}, []int64{4, 1, 2}},
+		{"enough playable", []int{1, 4, 1, 0, 0, 0}, []int64{4, 5, 6}},
+		{"all playable", []int{0, 0, 0, 0}, []int64{1, 2, 3}},
+		{"all unavailable", []int{1, 4, 1, 4}, []int64{1, 2, 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newTestApp()
+			a.route = route{page: pagePlaylist, id: 7}
+			pl := &netease.Playlist{ID: 7}
+			for i, fee := range tc.fees {
+				pl.Tracks = append(pl.Tracks, netease.Track{ID: int64(i + 1), Name: "match", Fee: fee})
+			}
+			a.playlists[7] = pl
+			got := a.playlistSuggestions("match")
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d suggestions, want %d", len(got), len(tc.want))
+			}
+			for i, sg := range got {
+				if sg.song != tc.want[i] || sg.playable != pl.Tracks[sg.song-1].Playable() {
+					t.Fatalf("suggestion %d: %+v, want song %d", i, sg, tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// The first current-playlist option must play the fourth matching song when
+// the preceding three songs are unavailable, through either mouse or keys.
+func TestPlaylistSuggestionPlaysPastUnavailable(t *testing.T) {
+	for _, keyboard := range []bool{false, true} {
+		t.Run(fmt.Sprint(keyboard), func(t *testing.T) {
+			a, pl, tt := playlistSearchFixture(t)
+			pl.Tracks = slices.Clone(pl.Tracks[:4])
+			for i := range 3 {
+				pl.Tracks[i].Fee = 1
+			}
+			typePlaylistSearch(t, tt, "测试歌曲")
+			if keyboard {
+				tt.Key(0, ui.KeyDown)
+				tt.Key(0, ui.KeyEnter)
+			} else if err := tt.Click("当前歌单：" + pl.Tracks[3].Name); err != nil {
+				t.Fatal(err)
+			}
+			tt.Frame()
+			if a.pl.Current().ID != 4 || !a.pl.Playing() || len(a.pl.Queue()) != 4 {
+				t.Fatal("later playable match could not be selected")
+			}
+			locatedRow(t, tt, pl.Tracks[3].Name, 760)
+		})
+	}
+}
+
+// Exercise real update entry points, not a manually incremented revision:
+// removal, failed-edit rollback, network refresh and forgetting a playlist
+// must all invalidate suggestions for the same query.
+func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
+	a, posts, _ := refreshFixture(t)
+	a.route = route{page: pagePlaylist, id: 7}
+	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}, {ID: 2, Name: "other"}}}
+	a.playlists[7] = pl
+	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != 1 {
+		t.Fatal("initial match missing")
+	}
+	before := removeFromPlaylist
+	removeFromPlaylist = func(int64, ...int64) error { return errors.New("offline") }
+	t.Cleanup(func() { removeFromPlaylist = before })
+	a.removeFrom(7, &pl.Tracks[0])
+	if len(a.playlistSuggestions("match")) != 0 {
+		t.Fatal("removed song remained in suggestions")
+	}
+	refreshPost(t, posts)
+	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != 1 {
+		t.Fatal("failed removal did not restore its suggestion")
+	}
+	playlistDetail = func(id int64) (*netease.Playlist, error) {
+		return &netease.Playlist{ID: id, Tracks: []netease.Track{{ID: 3, Name: "match refreshed"}}}, nil
+	}
+	a.loadPlaylist(7, false)
+	refreshPost(t, posts)
+	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != 3 {
+		t.Fatal("network refresh reused the old suggestion")
+	}
+	a.forgetPlaylist(7)
+	if len(a.playlistSuggestions("match")) != 0 {
+		t.Fatal("forgotten playlist kept its suggestions")
+	}
+}
+
+// The shared edit entry point must invalidate even same-address, same-length
+// track changes, including restoring an old value when an edit rolls back.
+func TestPlaylistSuggestionFollowsInPlaceEdit(t *testing.T) {
+	a := newTestApp()
+	a.route = route{page: pagePlaylist, id: 7}
+	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}}}
+	a.playlists[7] = pl
+	original := pl.Tracks[0]
+	if len(a.playlistSuggestions("match")) != 1 {
+		t.Fatal("initial match missing")
+	}
+	finishEdit := a.beginLibraryEdit()
+	pl.Tracks[0].Name = "renamed"
+	if len(a.playlistSuggestions("match")) != 0 {
+		t.Fatal("shared edit entry point kept stale results")
+	}
+	pl.Tracks[0] = original
+	finishEdit()
+	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != original.ID {
+		t.Fatal("edit rollback kept stale results")
 	}
 }
 

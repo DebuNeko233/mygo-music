@@ -18,6 +18,9 @@ type playlistSuggestion struct {
 	playable bool
 }
 
+// Loaders replace published playlists; removeFrom replaces the track slice.
+// In-place track edits must go through beginLibraryEdit, whose revision also
+// covers rollback. Don't mutate searchable fields outside those update paths.
 type playlistSuggestSource struct {
 	query    string
 	id       int64
@@ -51,11 +54,7 @@ func (a *app) playlistSuggestions(q string) []playlistSuggestion {
 	}
 	*s = playlistSuggestState{source: source}
 	terms := strings.Fields(strings.ToLower(q))
-	for i := range pl.Tracks {
-		tr := &pl.Tracks[i]
-		if !playlistTrackMatches(tr, terms) {
-			continue
-		}
+	add := func(tr *netease.Track) {
 		s.items = append(s.items, playlistSuggestion{
 			suggestion: suggestion{
 				key:  fmt.Sprintf("playlist-song:%d:%d", a.route.id, tr.ID),
@@ -63,9 +62,30 @@ func (a *app) playlistSuggestions(q string) []playlistSuggestion {
 			},
 			song: tr.ID, playable: tr.Playable(),
 		})
+	}
+	// Disabled matches may fill spare slots, but must never hide playable
+	// songs farther down the playlist. Only format entries that will show.
+	var unavailable [playlistSuggestLimit]*netease.Track
+	kept := 0
+	for i := range pl.Tracks {
+		tr := &pl.Tracks[i]
+		if !playlistTrackMatches(tr, terms) {
+			continue
+		}
+		if !tr.Playable() {
+			if kept < len(unavailable) {
+				unavailable[kept] = tr
+				kept++
+			}
+			continue
+		}
+		add(tr)
 		if len(s.items) == playlistSuggestLimit {
 			break
 		}
+	}
+	for _, tr := range unavailable[:min(kept, playlistSuggestLimit-len(s.items))] {
+		add(tr)
 	}
 	return s.items
 }
