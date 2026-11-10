@@ -61,6 +61,40 @@ func TestChoosingAccentColorsIt(t *testing.T) {
 	}
 }
 
+// The toast uses the app's palette in each appearance: it used the default
+// MyGo theme instead, so its dark-mode fill did not match the app.
+func TestToastUsesAppearancePalette(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		var theme ui.Theme
+		tt := ui.NewTesterWith(func(c *ui.Context) {
+			a := newTestApp()
+			a.settings = defaultSettings()
+			a.view(c)
+			theme = *c.Theme()
+			if ui.Button(c, "Save").Clicked() {
+				c.Toast("Saved")
+			}
+		}, 800, 600, ui.TesterOptions{Dark: dark})
+		if err := tt.Click("Save"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(time.Second)
+		tt.Frame()
+		r, ok := tt.Find("Saved")
+		if !ok || r.W == 0 || r.H == 0 {
+			t.Fatalf("dark %v: toast bounds %+v", dark, r)
+		}
+		px := tt.Image().RGBAAt(int(r.X)-3, int(r.Y+r.H/2))
+		got := ui.Color{R: px.R, G: px.G, B: px.B, A: px.A}
+		if want := paletteFor(&ui.Theme{Dark: dark}).text; got != want {
+			t.Errorf("dark %v: toast fill %v, want %v", dark, got, want)
+		}
+		if theme.Inverse != got || theme.InverseText != paletteFor(&ui.Theme{Dark: dark}).bg {
+			t.Errorf("dark %v: inverse colors %v on %v", dark, theme.InverseText, theme.Inverse)
+		}
+	}
+}
+
 // A page's pictures keep the ones chosen once each, in the order they were
 // chosen, and take no file that is not a picture.
 func TestAddingPicturesKeepsPicturesOnce(t *testing.T) {
