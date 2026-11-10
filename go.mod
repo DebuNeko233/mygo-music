@@ -21,3 +21,6 @@ require (
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
+
+// Performance backports on v0.8.3, pinned until they ship upstream.
+replace github.com/egoist/mygo => github.com/DebuNeko233/mygo v0.8.4-0.20261110131907-e516b112f37c
