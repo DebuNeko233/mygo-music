@@ -4,6 +4,7 @@
   "slug": "mygo-cloudmusic",
   "version": "0.2.6",
   "out": "build",
+  "urlSchemes": ["orpheus"],
   "updates": {
     "publicKey": "I4d3vfue5JdMTLh3Gar9BkwxhjhcvhOuEVTJ3lgJUA0=",
     "github": "zhangnjsd/mygo-music"

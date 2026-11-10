@@ -163,6 +163,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.searches = newPageCache[route, *searchData](searchBusy)
 	a.load(a.route)
 	a.loadHome()
+	a.openPendingMusicLink()
 	if prof == nil {
 		return
 	}

@@ -15,6 +15,7 @@ import (
 
 // openSettings shows the settings window, opening it the first time.
 func (a *app) openSettings() {
+	a.refreshMusicLinkHandler()
 	// A key the settings were recording before they closed is not being
 	// recorded now.
 	a.recording, a.recordingNote = "", ""
@@ -46,6 +47,7 @@ func (a *app) openSettings() {
 		BackgroundColor: "light-dark(#f4f4f6, #1c1c1f)",
 		Content:         ui.View(a.settingsView),
 	})
+	a.settingsWin.OnFocus(a.refreshMusicLinkHandler)
 	a.settingsWin.OnClosed(func() {
 		a.settingsWin = nil
 		// The dialog asking about the folder goes with the window.
@@ -387,6 +389,20 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 	}
 
 	add("general", "通用", iconSettings, func(row settingsRow, block settingsBlock) {
+		row("用本应用打开网易云链接", "", func() {
+			label := "设为默认打开"
+			if a.links.registered {
+				label = "已设为默认"
+			}
+			ui.Column(c).Gap(6).AlignItems(ui.End).Children(func() {
+				if ui.Button(c.Key("music-link-handler"), label).Label("设为网易云链接默认应用").Disabled(a.links.registered).Clicked() {
+					a.registerMusicLinkHandler()
+				}
+				if a.links.registrationError != "" {
+					ui.Text(c, a.links.registrationError).FontSize(12).TextColor(p.warn)
+				}
+			})
+		})
 		row("外观", "", func() {
 			modes := []string{"system", "light", "dark"}
 			i := 0
