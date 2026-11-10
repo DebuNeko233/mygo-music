@@ -215,6 +215,7 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 			a.myPlaylists(c, "我的歌单", a.mine, true, &a.mineCollapsed)
 			a.myPlaylists(c, "收藏的歌单", a.saved, false, &a.savedCollapsed)
+			a.myAlbums(c, a.subAlbums, &a.albumsCollapsed)
 		})
 
 		// What plays, as a card at the foot of the sidebar, over who listens.

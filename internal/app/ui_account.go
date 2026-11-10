@@ -148,6 +148,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.restoreSession()
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
 	a.likedPrograms, a.askedPrograms = nil, nil
+	a.subAlbums, a.subsShown, a.savingAlb = nil, false, nil
 	a.homeGen++ // Invalidate pending home page requests
 	a.resetLibraryFreshness()
 	// What the listener may play, and follows, changed: load the pages
@@ -167,6 +168,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.loadLiked(prof.UserID)
 	a.loadMine(prof.UserID)
+	a.loadSubscribedAlbums(prof.UserID)
 }
 
 func (a *app) openLogin() {
@@ -438,13 +440,10 @@ func (a *app) menuItem(c *ui.Context, icon *ui.SVG, label, shortcut string) ui.E
 	return b
 }
 
-// myPlaylists lists the listener's playlists under a header that opens
-// and closes them: those they made, if mine, with a button to make one
-// and a menu to rename them, or else with a menu to unsave them.
-func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist, mine bool, collapsed *bool) {
-	if len(lists) == 0 {
-		return
-	}
+// sidebarSection draws a heading in the sidebar that opens and closes what it
+// lists, with extra beside the arrow if not nil, and reports whether what it
+// lists shows.
+func (a *app) sidebarSection(c *ui.Context, title string, collapsed *bool, extra func()) bool {
 	p := a.pal
 	ui.Row(c.Key(title)).AlignItems(ui.Center).Margin(18, 4, 6, 6).Children(func() {
 		b := ui.ButtonBase(c.Key("toggle")).Grow(1).Height(26).PaddingX(4).Gap(6).Radius(6).
@@ -464,11 +463,30 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 			}
 			ui.Icon(c, arrow).Size(12, 12).TextColor(p.faint)
 		})
-		if mine && iconButton(c.Key("new"), iconPlus, 13, p.faint, "新建歌单").Size(26, 26).Radius(6).Clicked() {
-			a.newPlaylist(nil)
+		if extra != nil {
+			extra()
 		}
 	})
-	if *collapsed {
+	return !*collapsed
+}
+
+// myPlaylists lists the listener's playlists under a header that opens
+// and closes them: those they made, if mine, with a button to make one
+// and a menu to rename them, or else with a menu to unsave them.
+func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist, mine bool, collapsed *bool) {
+	if len(lists) == 0 {
+		return
+	}
+	p := a.pal
+	var new func()
+	if mine {
+		new = func() {
+			if iconButton(c.Key("new"), iconPlus, 13, p.faint, "新建歌单").Size(26, 26).Radius(6).Clicked() {
+				a.newPlaylist(nil)
+			}
+		}
+	}
+	if !a.sidebarSection(c, title, collapsed, new) {
 		return
 	}
 	for i := range lists {
@@ -505,6 +523,42 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 		}
 		if b.Clicked() {
 			a.open(route{page: pagePlaylist, id: pl.ID})
+		}
+	}
+}
+
+// myAlbums lists the albums the listener saved under a header that opens and
+// closes them, each opening its page, with a menu to unsave it.
+func (a *app) myAlbums(c *ui.Context, albums []netease.AlbumProfile, collapsed *bool) {
+	if len(albums) == 0 {
+		return
+	}
+	p := a.pal
+	if !a.sidebarSection(c, "收藏的专辑", collapsed, nil) {
+		return
+	}
+	for i := range albums {
+		al := &albums[i]
+		selected := a.route.page == pageAlbum && a.route.id == al.ID && !a.nowPlaying
+		b := ui.ButtonBase(c.Key(fmt.Sprintf("album/%d", al.ID))).Height(34).PaddingX(8).Gap(10).Radius(8).
+			AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(al.Name)
+		switch {
+		case selected:
+			b.Background(p.press)
+		case b.Hovered():
+			b.Background(p.hover)
+		}
+		b.Children(func() {
+			a.cover(c, al.PicURL, 80, 22, 5)
+			ui.Text(c, al.Name).FontSize(13).SingleLine().Shrink(1).MinWidth(0)
+		})
+		b.ContextMenu(func(m *ui.Menu) {
+			if m.Item("取消收藏").Chosen() {
+				a.toggleAlbumSaved(*al)
+			}
+		})
+		if b.Clicked() {
+			a.open(route{page: pageAlbum, id: al.ID})
 		}
 	}
 }

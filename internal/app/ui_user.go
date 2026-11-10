@@ -43,6 +43,7 @@ func (a *app) loadUser(id int64) {
 	}
 	if a.profile != nil && a.profile.UserID == id {
 		a.loadSubscriptions(d)
+		a.freshenAlbums()
 	}
 	if d.user != nil || d.loading > 0 {
 		return
@@ -158,6 +159,13 @@ func (a *app) userPage(c *ui.Context) {
 					a.playlistCard(c.Key(d.playlists[i].ID), &d.playlists[i])
 				}
 			})
+		}
+		if own && a.subsShown {
+			a.section(c, "收藏的专辑")
+			if len(a.subAlbums) == 0 {
+				a.empty(c, "还没有收藏专辑")
+			}
+			a.albumGrid(c, a.subAlbums)
 		}
 		if own && d.podcastsShown {
 			a.section(c, "订阅的播客")

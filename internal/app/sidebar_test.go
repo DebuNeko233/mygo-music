@@ -2,6 +2,7 @@ package app
 
 import (
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -50,6 +51,42 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 				t.Errorf("opened %+v, want playlist %d", a.route, tc.playlist)
 			}
 		})
+	}
+}
+
+// The albums the listener saved have their own header in the sidebar, each
+// opening its page, and the header hides them without losing one.
+func TestSidebarSavedAlbums(t *testing.T) {
+	a := editTestApp()
+	a.subAlbums = []netease.AlbumProfile{
+		{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}},
+		{Album: netease.Album{ID: 78, Name: "城市"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}},
+	}
+	a.subsShown = true
+	// The saved albums were just loaded, so nothing asks NetEase for them.
+	a.listRefresh.albums.at = time.Now()
+	a.albums.set(77, &albumData{album: &netease.AlbumProfile{
+		Album:   netease.Album{ID: 77, Name: "神的游戏"},
+		Artists: []netease.Artist{{ID: 3, Name: "张悬"}},
+	}})
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	if err := tt.Click("神的游戏"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.route != (route{page: pageAlbum, id: 77}) {
+		t.Fatalf("opened %+v, want album 77", a.route)
+	}
+	if err := tt.Click("收藏的专辑"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, ok := tt.Find("城市"); ok {
+		t.Error("the collapsed albums still show")
+	}
+	if !a.albumsCollapsed || len(a.subAlbums) != 2 {
+		t.Error("collapsing the albums changed which are saved")
 	}
 }
 

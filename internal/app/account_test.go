@@ -86,14 +86,16 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 	}
 }
 
-// fakeSubscriptions answers for the artists and podcasts the listener
-// follows, and tells on each time they are asked for.
+// fakeSubscriptions answers for the artists the listener follows, the
+// podcasts they subscribe to and the albums they saved, and tells on each
+// time the artists are asked for.
 func fakeSubscriptions(t *testing.T) chan struct{} {
 	asked := make(chan struct{}, 8)
-	ars, pods := followedArtists, subscribedPodcasts
-	t.Cleanup(func() { followedArtists, subscribedPodcasts = ars, pods })
+	ars, pods, als := followedArtists, subscribedPodcasts, subscribedAlbums
+	t.Cleanup(func() { followedArtists, subscribedPodcasts, subscribedAlbums = ars, pods, als })
 	followedArtists = func() ([]netease.ArtistProfile, error) { asked <- struct{}{}; return nil, nil }
 	subscribedPodcasts = func() ([]netease.Podcast, error) { return nil, nil }
+	subscribedAlbums = func() ([]netease.AlbumProfile, error) { return nil, nil }
 	return asked
 }
 
@@ -191,8 +193,17 @@ func TestOwnPageFrames(t *testing.T) {
 		t.Skip()
 	}
 	fakeSubscriptions(t)
+	day := time.Date(2012, 7, 1, 0, 0, 0, 0, time.Local).UnixMilli()
 	for _, dark := range []bool{false, true} {
 		a := ownPageApp()
+		// The albums they saved were just loaded, so the page does not ask
+		// for them again.
+		a.subAlbums = []netease.AlbumProfile{
+			{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, PublishTime: day},
+			{Album: netease.Album{ID: 78, Name: "城市"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, PublishTime: day + 86400000},
+		}
+		a.subsShown = true
+		a.listRefresh.albums.at = time.Now()
 		a.open(route{page: pageUser, id: 9})
 		tt := ui.NewTester(a.view, 1200, 1200)
 		tt.SetDark(dark)

@@ -196,6 +196,37 @@ func TestAlbumLive(t *testing.T) {
 	}
 }
 
+// The albums the listener saved come back as the album cards read them, and
+// are as many as NetEase counts, with the last page saying it is the last.
+func TestSavedAlbumsLive(t *testing.T) {
+	path := os.Getenv("NM_SESSION")
+	if os.Getenv("LIVE") == "" || path == "" {
+		t.Skip()
+	}
+	useSession(t, path)
+	als, err := SubscribedAlbums()
+	if err != nil || len(als) == 0 {
+		t.Fatalf("%d albums, %v", len(als), err)
+	}
+	for _, al := range als[:min(5, len(als))] {
+		if al.ID == 0 || al.Name == "" || al.PicURL == "" || len(al.Artists) == 0 {
+			t.Fatalf("album %+v", al)
+		}
+	}
+	var page struct {
+		Albums  []AlbumProfile `json:"data"`
+		Count   int            `json:"count"`
+		HasMore bool           `json:"hasMore"`
+	}
+	if err := get("/api/album/sublist", subQuery(0), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Count < len(als) || page.HasMore != (page.Count > len(page.Albums)) {
+		t.Fatalf("%d saved, page %d of %d, more %v", len(als), len(page.Albums), page.Count, page.HasMore)
+	}
+	t.Logf("%d albums saved, first %q by %s", len(als), als[0].Name, als[0].ArtistNames())
+}
+
 // An artist with an account of their own has its events, a page at a
 // time, and a podcast has its episodes, each with audio to play.
 func TestEventsAndPodcastLive(t *testing.T) {
