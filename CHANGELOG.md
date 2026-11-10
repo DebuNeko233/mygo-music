@@ -1,5 +1,19 @@
 # 更新日志
 
+## 0.2.7
+
+### What's Changed
+* fix: 调整正在播放页的自适应布局与控件状态 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/33
+* fix: 将可完整显示的短歌词垂直居中 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/34
+* feat(album): list the albums the listener saved, and save them by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/36
+* 修复快捷键复原图标显示缺陷 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/38
+* feat(recent): 同步歌曲、声音、歌单、专辑和播客的最近播放记录 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/39
+* feat: 支持网易云协议唤起和搜索框打开分享链接 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/40
+* style: 将搜索框占位文案精简为“搜索/链接” by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/41
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.6...v0.2.7
+
 ## 0.2.6
 
 ### What's Changed
