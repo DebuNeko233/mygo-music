@@ -147,8 +147,9 @@ func (a *app) albumSaved(id int64) bool {
 }
 
 // toggleAlbumSaved saves album al for the listener, or unsaves it, at once in
-// the app and then with NetEase, going back if NetEase refuses. Signed out, it
-// asks the listener to sign in.
+// the app and then with NetEase, going back if NetEase refuses: the button
+// reads how it went, so saving says nothing else. Signed out, it asks the
+// listener to sign in.
 func (a *app) toggleAlbumSaved(al netease.AlbumProfile) {
 	if a.profile == nil {
 		a.showMain()
@@ -173,17 +174,13 @@ func (a *app) toggleAlbumSaved(al netease.AlbumProfile) {
 			finishEdit()
 			defer a.persistLibrary()
 			delete(a.savingAlb, id)
-			switch {
-			case a.profile == nil || a.profile.UserID != uid:
-				// Signed out or in as someone else meanwhile.
-			case err != nil:
-				a.setAlbumSaved(al, !save, max(at, 0))
-				a.toast = "操作失败，请稍后再试"
-			case save:
-				a.toast = "已收藏"
-			default:
-				a.toast = "已取消收藏"
+			if err == nil || a.profile == nil || a.profile.UserID != uid {
+				// Saved, or signed out or in as someone else meanwhile, whose
+				// albums are what load now.
+				return
 			}
+			a.setAlbumSaved(al, !save, max(at, 0))
+			a.toast = "操作失败，请稍后再试"
 		})
 	}()
 }

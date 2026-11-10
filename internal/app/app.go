@@ -119,7 +119,7 @@ type app struct {
 
 	locateViewport playlistViewport
 
-	mineCollapsed, savedCollapsed bool
+	mineCollapsed, savedCollapsed, albumsCollapsed bool
 
 	query       string
 	searchBox   ui.Handle

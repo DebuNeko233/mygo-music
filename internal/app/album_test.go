@@ -53,7 +53,7 @@ func fakeAlbumSave(t *testing.T, fail bool) chan saveCall {
 }
 
 // Clicking 收藏 on an album's page saves it with NetEase, and the app knows
-// the listener saved it.
+// the listener saved it without saying so over what the button reads.
 func TestSaveAlbumFromItsPage(t *testing.T) {
 	calls := fakeAlbumSave(t, false)
 	a := albumTestApp(t)
@@ -68,8 +68,8 @@ func TestSaveAlbumFromItsPage(t *testing.T) {
 		t.Errorf("asked NetEase for %+v, want album 77 saved", got)
 	}
 	refreshPost(t, posts)
-	if !a.albumSaved(77) || a.toast != "已收藏" {
-		t.Errorf("album 77 saved %v, toast %q, want saved and 已收藏", a.albumSaved(77), a.toast)
+	if !a.albumSaved(77) || a.toast != "" {
+		t.Errorf("album 77 saved %v, toast %q, want saved and nothing said", a.albumSaved(77), a.toast)
 	}
 	if len(a.subAlbums) != 1 || a.subAlbums[0].Songs != nil {
 		t.Errorf("saved albums are %+v, want album 77 alone, without its songs", a.subAlbums)
@@ -93,8 +93,8 @@ func TestUnsaveAlbumFromItsPage(t *testing.T) {
 		t.Errorf("asked NetEase for %+v, want album 77 unsaved", got)
 	}
 	refreshPost(t, posts)
-	if a.albumSaved(77) || a.toast != "已取消收藏" {
-		t.Errorf("album 77 saved %v, toast %q, want unsaved and 已取消收藏", a.albumSaved(77), a.toast)
+	if a.albumSaved(77) || a.toast != "" {
+		t.Errorf("album 77 saved %v, toast %q, want unsaved and nothing said", a.albumSaved(77), a.toast)
 	}
 }
 
