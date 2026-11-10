@@ -334,6 +334,13 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 // trackRows lists tracks under a header, which scrolls with them; a click
 // plays the list from the track clicked.
 func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, header func(c *ui.Context), footer ...func(c *ui.Context)) (playingVisible bool) {
+	return a.trackRowsMeta(c, tracks, covers, nil, header, footer...)
+}
+
+// trackRowsMeta lists tracks as trackRows does, saying meta[i] of the track
+// at i where it would say how long it plays, as the recent plays say when and
+// where the listener played it.
+func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, meta []string, header func(c *ui.Context), footer ...func(c *ui.Context)) (playingVisible bool) {
 	p := a.pal
 	cur := a.pl.Current()
 	// A song's menu can take it out of the playlist it is listed in.
@@ -436,7 +443,11 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 					a.likeButton(c.Key("like"), tr, 15, p.muted)
 				}
 			})
-			ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
+			if i < len(meta) {
+				ui.Text(c, meta[i]).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).MinWidth(88).TextAlign(ui.End)
+			} else {
+				ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
+			}
 		})
 		if row.Clicked() && tr.Playable() {
 			a.pl.PlayQueue(tracks, i)

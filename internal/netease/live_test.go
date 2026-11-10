@@ -89,6 +89,46 @@ func TestRecentPlaysLive(t *testing.T) {
 	}
 }
 
+// The play records beside the songs come as NetEase keeps them: the
+// listener's playlists, albums and episodes, the latest first.
+func TestRecentRecordsLive(t *testing.T) {
+	path := os.Getenv("NM_SESSION")
+	if os.Getenv("LIVE") == "" || path == "" {
+		t.Skip()
+	}
+	useSession(t, path)
+	lists, err := RecentPlaylists(5)
+	if err != nil || len(lists) == 0 {
+		t.Fatalf("%d playlists, %v", len(lists), err)
+	}
+	for _, p := range lists[:min(3, len(lists))] {
+		if p.Item.ID == 0 || p.Item.Name == "" || p.Item.Creator.Nickname == "" {
+			t.Fatalf("playlist %+v", p)
+		}
+		t.Logf("playlist %s %q by %s", p.At.Format("01-02 15:04"), p.Item.Name, p.Item.Creator.Nickname)
+	}
+	albums, err := RecentAlbums(5)
+	if err != nil || len(albums) == 0 || albums[0].Item.ID == 0 || albums[0].Item.Name == "" {
+		t.Fatalf("%d albums, %v", len(albums), err)
+	}
+	voices, err := RecentVoices(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range voices[:min(3, len(voices))] {
+		tr := v.Item.Program.Track(&v.Item.Podcast)
+		if v.Item.Program.ID == 0 || tr.Name == "" || v.Item.Podcast.ID == 0 {
+			t.Fatalf("voice %+v as %+v", v, tr)
+		}
+		t.Logf("voice %q on %q", tr.Name, v.Item.Podcast.Name)
+	}
+	// The podcasts are the account's to have played, and it may have played
+	// none.
+	if _, err := RecentPodcasts(5); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // useSession signs in with the session kept at path.
 func useSession(t *testing.T, path string) {
 	deviceOnce.Do(func() { deviceID = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123" })

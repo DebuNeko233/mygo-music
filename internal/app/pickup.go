@@ -79,22 +79,24 @@ func lastStretch(plays []netease.Play, now time.Time) (songs []netease.Track, la
 
 // heardAt says when and where a song was played.
 func heardAt(p netease.Play, now time.Time) string {
-	d := now.Sub(p.At)
-	var when string
-	switch {
-	case d < 2*time.Minute:
-		when = "刚刚"
-	case d < time.Hour:
-		when = fmt.Sprintf("%d分钟前", int(d/time.Minute))
-	case d < 24*time.Hour:
-		when = fmt.Sprintf("%d小时前", int(d/time.Hour))
-	default:
-		when = fmt.Sprintf("%d天前", int(d/(24*time.Hour)))
-	}
+	when := agoLabel(now.Sub(p.At))
 	if where := deviceName(p.Device); where != "" {
 		return when + "在" + where + "上听过"
 	}
 	return when + "听过"
+}
+
+// agoLabel says how long ago d was, as the recent plays say it.
+func agoLabel(d time.Duration) string {
+	switch {
+	case d < 2*time.Minute:
+		return "刚刚"
+	case d < time.Hour:
+		return fmt.Sprintf("%d分钟前", int(d/time.Minute))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d小时前", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%d天前", int(d/(24*time.Hour)))
 }
 
 // deviceName names the kind of device NetEase calls os, or "".

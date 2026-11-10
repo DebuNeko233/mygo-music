@@ -19,6 +19,7 @@ type pageKind int
 const (
 	pageHome pageKind = iota
 	pageDaily
+	pageRecent
 	pageCharts
 	pagePlaylist
 	pageSearch
@@ -89,6 +90,11 @@ type app struct {
 	subAlbums []netease.AlbumProfile
 	subsShown bool // whether subAlbums has loaded once
 	savingAlb map[int64]bool
+
+	// What the listener played lately, on any of their devices, and what
+	// the page lists: see ui_recent.go.
+	recent    recentData
+	recentTab int
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
