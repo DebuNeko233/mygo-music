@@ -16,6 +16,8 @@ func (a *app) view(c *ui.Context) {
 	t := *c.Theme()
 	a.pal = paletteFor(&t)
 	p := a.pal
+	t.Background, t.Text = p.bg, p.text
+	t.Inverse, t.InverseText = p.text, p.bg
 	t.Accent, t.AccentText = p.accent, p.onAccent
 	t.Selection = p.accent.Alpha(0.3)
 	c.SetTheme(&t)
