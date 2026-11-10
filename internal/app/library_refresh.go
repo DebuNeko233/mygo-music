@@ -14,7 +14,10 @@ import (
 // a list checks once per interval, including after a failed request.
 const listsFresh = 30 * time.Second
 
-var likedIDs = netease.LikedIDs
+var (
+	likedIDs         = netease.LikedIDs
+	subscribedAlbums = netease.SubscribedAlbums
+)
 
 type listRequest struct {
 	at      time.Time
@@ -28,6 +31,7 @@ type libraryRefreshState struct {
 	revision    uint64
 	playlists   map[int64]*listRequest
 	mine, likes listRequest
+	albums      listRequest
 	now         func() time.Time // optional test clock; never a UI context
 }
 
@@ -286,9 +290,59 @@ func (a *app) loadLiked(uid int64) {
 		})
 	}()
 }
+
+// loadSubscribedAlbums refreshes the albums the listener saved. An
+// optimistic save or unsave made during the request takes priority.
+func (a *app) loadSubscribedAlbums(uid int64) {
+	if a.profile == nil || a.profile.UserID != uid || a.listRefresh.albums.busy {
+		return
+	}
+	r := &a.listRefresh.albums
+	r.at, r.busy, r.retry = a.listsNow(), true, false
+	r.failed, r.failure = false, nil
+	gen, revision := a.homeGen, a.listRefresh.revision
+	before := slices.Clone(a.subAlbums)
+	req := a.cacheRequest("albums")
+	fetch := subscribedAlbums
+	go func() {
+		var kept []netease.AlbumProfile
+		if at := req.read(&kept); !at.IsZero() {
+			a.post(func() {
+				if a.homeGen == gen && a.listRefresh.edits == 0 && a.listRefresh.revision == revision && !a.subsShown {
+					a.subAlbums, a.subsShown = kept, true
+					before = slices.Clone(a.subAlbums)
+				}
+			})
+		}
+		als, err := fetch()
+		bytes := cacheBytes(als)
+		a.post(func() {
+			if a.listenerID() != uid || a.homeGen != gen {
+				return
+			}
+			r.busy = false
+			if err != nil {
+				r.failed, r.failure = true, err
+				return
+			}
+			if a.listRefresh.edits != 0 || a.listRefresh.revision != revision || !reflect.DeepEqual(a.subAlbums, before) {
+				r.stale()
+				return
+			}
+			a.subAlbums, a.subsShown = als, true
+			req.keep(bytes)
+		})
+	}()
+}
+
 func (a *app) freshenLikes() {
 	if a.profile != nil && a.listRefresh.edits == 0 && listDue(a.listRefresh.likes.at, a.listsNow()) {
 		a.loadLiked(a.profile.UserID)
+	}
+}
+func (a *app) freshenAlbums() {
+	if a.profile != nil && a.listRefresh.edits == 0 && listDue(a.listRefresh.albums.at, a.listsNow()) {
+		a.loadSubscribedAlbums(a.profile.UserID)
 	}
 }
 func (a *app) freshenLibrary() {
@@ -297,6 +351,7 @@ func (a *app) freshenLibrary() {
 			a.loadMine(a.profile.UserID)
 		}
 		a.freshenLikes()
+		a.freshenAlbums()
 	}
 	if a.route.page == pagePlaylist {
 		a.loadPlaylist(a.route.id, false)
@@ -322,6 +377,9 @@ func (a *app) retryLibraryRefresh() {
 		}
 		if a.listRefresh.likes.retry {
 			a.loadLiked(a.profile.UserID)
+		}
+		if a.listRefresh.albums.retry {
+			a.loadSubscribedAlbums(a.profile.UserID)
 		}
 	}
 	if a.route.page == pagePlaylist {

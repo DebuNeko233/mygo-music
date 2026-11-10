@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -349,6 +350,9 @@ func (a *app) persistLibrary(ids ...int64) {
 	}
 	if a.mine != nil || a.saved != nil {
 		keep("mine", keptLists{copyPlaylists(a.mine), copyPlaylists(a.saved)})
+	}
+	if a.subsShown {
+		keep("albums", slices.Clone(a.subAlbums))
 	}
 	if a.liked != nil {
 		likes := make([]int64, 0, len(a.liked))

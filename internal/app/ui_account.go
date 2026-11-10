@@ -148,6 +148,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.restoreSession()
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
 	a.likedPrograms, a.askedPrograms = nil, nil
+	a.subAlbums, a.subsShown, a.savingAlb = nil, false, nil
 	a.homeGen++ // Invalidate pending home page requests
 	a.resetLibraryFreshness()
 	// What the listener may play, and follows, changed: load the pages
@@ -167,6 +168,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.loadLiked(prof.UserID)
 	a.loadMine(prof.UserID)
+	a.loadSubscribedAlbums(prof.UserID)
 }
 
 func (a *app) openLogin() {

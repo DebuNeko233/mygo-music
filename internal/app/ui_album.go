@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -10,8 +11,12 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// albumDetail loads an album from NetEase; tests replace it.
-var albumDetail = netease.AlbumDetail
+// albumDetail loads an album from NetEase, and subscribeAlbum saves one for
+// the listener or unsaves it; tests replace them.
+var (
+	albumDetail    = netease.AlbumDetail
+	subscribeAlbum = netease.SubscribeAlbum
+)
 
 // albumData is what the app has of an album.
 type albumData struct {
@@ -74,6 +79,9 @@ func (a *app) loadAlbum(id int64) {
 
 func (a *app) albumPage(c *ui.Context) {
 	id := a.route.id
+	// Whether the listener saved this album is whether the albums they saved
+	// list it: load that once, as the page may be the first thing opened.
+	a.freshenAlbums()
 	d := a.albums.get(id)
 	if d.album == nil {
 		if !d.loading || d.err != "" {
@@ -119,9 +127,82 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 					}
 					a.pl.PlayQueue(al.Songs, firstPlayable(al.Songs))
 				}
+				icon, label := iconPlus, "收藏"
+				if a.albumSaved(al.ID) {
+					icon, label = iconCheck, "已收藏"
+				}
+				if pillButton(c.Key("save"), icon, label, p.hover.Over(p.bg), p.text).Clicked() {
+					a.toggleAlbumSaved(*al)
+				}
 			})
 		})
 	})
+}
+
+// albumSaved reports whether the listener saved album id, as its page says.
+// NetEase does not say of an album whether it is saved, so this is what the
+// list of the albums they saved, loaded once, says.
+func (a *app) albumSaved(id int64) bool {
+	return slices.ContainsFunc(a.subAlbums, func(al netease.AlbumProfile) bool { return al.ID == id })
+}
+
+// toggleAlbumSaved saves album al for the listener, or unsaves it, at once in
+// the app and then with NetEase, going back if NetEase refuses. Signed out, it
+// asks the listener to sign in.
+func (a *app) toggleAlbumSaved(al netease.AlbumProfile) {
+	if a.profile == nil {
+		a.showMain()
+		a.openLogin()
+		return
+	}
+	id := al.ID
+	if a.savingAlb[id] {
+		return
+	}
+	if a.savingAlb == nil {
+		a.savingAlb = map[int64]bool{}
+	}
+	a.savingAlb[id] = true
+	save := !a.albumSaved(id)
+	at := a.setAlbumSaved(al, save, 0)
+	uid := a.profile.UserID
+	finishEdit := a.beginLibraryEdit()
+	go func() {
+		err := subscribeAlbum(id, save)
+		a.post(func() {
+			finishEdit()
+			defer a.persistLibrary()
+			delete(a.savingAlb, id)
+			switch {
+			case a.profile == nil || a.profile.UserID != uid:
+				// Signed out or in as someone else meanwhile.
+			case err != nil:
+				a.setAlbumSaved(al, !save, max(at, 0))
+				a.toast = "操作失败，请稍后再试"
+			case save:
+				a.toast = "已收藏"
+			default:
+				a.toast = "已取消收藏"
+			}
+		})
+	}()
+}
+
+// setAlbumSaved marks album al saved or not, where a saved one goes at index
+// at, and returns where it was, or -1.
+func (a *app) setAlbumSaved(al netease.AlbumProfile, save bool, at int) int {
+	// A new slice, not shifting the one the listener's page may be listing.
+	saved := slices.Clone(a.subAlbums)
+	was := slices.IndexFunc(saved, func(s netease.AlbumProfile) bool { return s.ID == al.ID })
+	if was >= 0 {
+		saved = slices.Delete(saved, was, was+1)
+	}
+	if save {
+		al.Songs = nil
+		saved = slices.Insert(saved, min(at, len(saved)), al)
+	}
+	a.subAlbums = saved
+	return was
 }
 
 // albumGrid shows albums as cards, each opening its page.

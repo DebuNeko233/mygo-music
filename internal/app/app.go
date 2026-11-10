@@ -84,6 +84,12 @@ type app struct {
 	// answered, and those asked about: see ui_like.go.
 	likedPrograms, askedPrograms map[int64]bool
 
+	// The albums the listener saved, those saved last first, and the ones
+	// whose saving or its end is on its way: see ui_album.go.
+	subAlbums []netease.AlbumProfile
+	subsShown bool // whether subAlbums has loaded once
+	savingAlb map[int64]bool
+
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
 	dailyBars   barState  // the bars on its play button
