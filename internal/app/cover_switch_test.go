@@ -183,6 +183,60 @@ func TestCoverDirectionAfterQueueReplacement(t *testing.T) {
 	}
 }
 
+// Looking up the outgoing song by ID chose the first A in A/B/C/A, even
+// when the last A was playing. Selection must use its actual queue position.
+func TestCoverDirectionWithDuplicateSongs(t *testing.T) {
+	for _, pick := range []struct {
+		from, to int
+		want     float32
+	}{{3, 2, -1}, {3, 1, -1}, {0, 2, 1}} {
+		t.Run(fmt.Sprintf("%d-to-%d", pick.from, pick.to), func(t *testing.T) {
+			a, tt, _ := paintedCoverApp(t, 3, false)
+			a.pl.SuspendCache()
+			original := a.pl.Queue()
+			q := append([]netease.Track(nil), original...)
+			q = append(q, original[0])
+			a.pl.PlayQueue(q, pick.from)
+			a.pl.SetLyrics(nil)
+			tt.Frame()
+			tt.Advance(time.Second)
+			rest, ok := tt.Find("专辑封面")
+			if !ok {
+				t.Fatal("no resting cover")
+			}
+			a.pl.Jump(pick.to)
+			a.pl.SetLyrics(nil)
+			tt.Frame()
+			if a.npCoverState.direction != pick.want {
+				t.Fatalf("direction %v, want %v", a.npCoverState.direction, pick.want)
+			}
+			tt.Advance(80 * time.Millisecond)
+			moving, ok := tt.Find("专辑封面")
+			if !ok || (moving.X-rest.X)*pick.want <= 1 {
+				t.Fatalf("cover did not enter from the selected direction: %v -> %v", rest, moving)
+			}
+		})
+	}
+}
+
+// A different queue has no shared positions with the old one, even when
+// it contains the old song ID at a later slot. Use a neutral entrance.
+func TestCoverDirectionDoesNotReuseOldQueuePositions(t *testing.T) {
+	a, tt, _ := paintedCoverApp(t, 3, false)
+	a.pl.SuspendCache()
+	a.pl.Next()
+	a.pl.SetLyrics(nil)
+	tt.Frame()
+	tt.Advance(time.Second)
+	q := a.pl.Queue()
+	a.pl.PlayQueue([]netease.Track{q[0], q[2], q[1]}, 1)
+	a.pl.SetLyrics(nil)
+	tt.Frame()
+	if a.npCoverState.direction != 1 {
+		t.Fatal("replacement inferred a backward move from the old song ID")
+	}
+}
+
 // A burst applies every click and gives each image its own entrance,
 // keeping only its immediate predecessor and releasing it after the slide.
 func TestRapidCoverChangesRestartTheEntrance(t *testing.T) {

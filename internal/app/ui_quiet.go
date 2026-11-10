@@ -97,6 +97,7 @@ func (a *app) quietShown(c *ui.Context, el ui.Element, tr *netease.Track, lines 
 	if cm != nil {
 		to = 1
 	}
+	// AnimateTo snaps to the target under ReduceMotion, including mid-fade.
 	dim := el.AnimateTo("quiet", to, ui.Animation{Duration: 600 * time.Millisecond})
 	if cm != nil {
 		a.quiet.cm = cm
@@ -146,6 +147,8 @@ func (a *app) hotCard(c *ui.Context, dim, size float32, place func(ui.Element)) 
 		Padding(16, 12).Gap(14).Radius(14).FocusRing(false).Label("查看评论")
 	place(card)
 	// Each comment rises in on its own as it takes the last one's place.
+	// AnimateTo also snaps this entrance under ReduceMotion, so in becomes 1
+	// at once: fully opaque, with no vertical offset or animation frames.
 	seen := ui.Local(card, "seen", func() int64 { return 0 })
 	if *seen != cm.ID {
 		*seen = cm.ID

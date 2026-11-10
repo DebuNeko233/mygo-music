@@ -1,6 +1,7 @@
 package player
 
 import (
+	"cmp"
 	"errors"
 	"math"
 	"math/rand/v2"
@@ -57,7 +58,7 @@ type Player struct {
 	queue   []netease.Track
 	order   []int // the queue's indices in play order: shuffled or not
 	at      int   // where in order the current track is, -1 for none
-	step    int   // the last explicit step: 1 next, -1 previous, 0 a selection
+	step    int   // the latest move in play order: 1 on, -1 back, 0 undirected
 	shuffle bool
 	repeat  RepeatMode
 	volume  float64
@@ -253,6 +254,7 @@ func (p *Player) RadioFrom(name string, tracks []netease.Track, feed func(got fu
 		return
 	}
 	p.queue, p.order, p.at = []netease.Track{*p.track}, []int{0}, 0
+	p.step = 0
 	p.appendTracks(tracks)
 	if p.shuffle {
 		// The current track stays first; the radio's order must agree
@@ -320,6 +322,7 @@ func (p *Player) refill() {
 		case !p.awaiting:
 		case p.at+1 < len(p.order):
 			p.awaiting = false
+			p.step = 1
 			p.load(p.at + 1)
 		default:
 			// The radio has nothing more: it stops at its end.
@@ -456,9 +459,10 @@ func (p *Player) OpenAudio() (Audio, error) {
 // current track is among them, -1 for none.
 func (p *Player) PlayOrder() ([]int, int) { return p.order, p.at }
 
-// StepDirection is the last queue step, 1 for Next and -1 for Prev, or 0
-// for a selection. Indices alone cannot tell the direction in a two-song
-// queue, where Next and Prev both reach the same song.
+// StepDirection is the latest move in play order: 1 forward, -1 backward,
+// or 0 for a replacement or reselecting the same entry. Record it before
+// loading, while the old position is known; song IDs can repeat, and
+// two-song steps are ambiguous.
 func (p *Player) StepDirection() int { return p.step }
 
 func (p *Player) Next() {
@@ -497,7 +501,7 @@ func (p *Player) Prev() {
 func (p *Player) Jump(i int) {
 	for k, v := range p.order {
 		if v == i {
-			p.step = 0
+			p.step = cmp.Compare(k, p.at)
 			p.load(k)
 			return
 		}
@@ -820,6 +824,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 			next = 0
 		}
 		p.tries = 0
+		p.step = 1
 		p.loadSkipping(next, skipped+1, p.playing, 0)
 		return
 	}
@@ -1136,6 +1141,7 @@ func (p *Player) Restore(s Session) {
 		seen[i] = true
 	}
 	p.queue, p.order = s.Queue, s.Order
+	p.step = 0
 	p.shuffle, p.repeat = s.Shuffle, s.Repeat%3
 	p.tries = 0
 	p.loadSkipping(s.At, 0, false, time.Duration(s.Position)*time.Millisecond)

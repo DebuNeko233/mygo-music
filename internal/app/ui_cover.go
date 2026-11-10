@@ -120,7 +120,7 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 	}
 	ready := art != nil || tr.Album.PicURL == ""
 	if ready && cs.shown != tr.ID {
-		dir := a.coverDirection(cs.shown)
+		dir := a.coverDirection()
 		if cs.shown != 0 && !entering {
 			cs.previous, cs.direction = cs.art, dir
 			cs.previousSlide = cs.slide
@@ -198,19 +198,12 @@ func npCoverLayer(c *ui.Context, slide int) (ui.Element, bool) {
 	return layer, born.Equal(now)
 }
 
-// coverDirection follows explicit Next/Prev commands even around a
-// two-song queue. A selection finds the old song in the current order,
-// which may have changed since shuffle was toggled or the queue replaced.
-func (a *app) coverDirection(from int64) float32 {
+// Playback records direction before moving, including direct selections,
+// radio continuations and skips. Never infer queue positions from song IDs:
+// duplicate songs and replacement queues make that lookup ambiguous.
+func (a *app) coverDirection() float32 {
 	if dir := a.pl.StepDirection(); dir != 0 {
 		return float32(dir)
-	}
-	order, at := a.pl.PlayOrder()
-	q := a.pl.Queue()
-	for i, k := range order {
-		if k >= 0 && k < len(q) && q[k].ID == from {
-			return float32(stepDir(i, at, len(order)))
-		}
 	}
 	return 1
 }
@@ -369,20 +362,6 @@ func (a *app) letSwipeGo(size float32, fling func(int)) {
 		cs.off = ui.Point{}
 	}
 	cs.swipe, cs.decided = 0, true
-}
-
-// stepDir tells which way the play order went from from to to, of n
-// songs: 1 on, -1 back, around its end as Next and Prev go.
-func stepDir(from, to, n int) int {
-	switch {
-	case n > 2 && from == n-1 && to == 0:
-		return 1
-	case n > 2 && from == 0 && to == n-1:
-		return -1
-	case to < from:
-		return -1
-	}
-	return 1
 }
 
 // rubber holds a swipe's travel back past where it would fling, as a

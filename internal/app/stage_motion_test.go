@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -9,6 +10,32 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
+
+// Enabling Reduce Motion during a hot comment's normal entrance must snap
+// the existing card into place and stop its animation without leaving Stage.
+func TestStageHotCommentPreferenceChange(t *testing.T) {
+	_, tt, builds := hotCommentStageClock("tilt", false, 5*time.Second)
+	first, ok := tt.Find("查看评论")
+	if !ok {
+		t.Fatal("no entering comment")
+	}
+	tt.Advance(80 * time.Millisecond)
+	moving, _ := tt.Find("查看评论")
+	if first.Y == moving.Y {
+		t.Fatal("normal comment entrance stopped animating")
+	}
+	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
+	tt.Frame()
+	still, ok := tt.Find("查看评论")
+	if !ok || math.Abs(float64(still.Y-(800-still.H)/2)) > 0.5 {
+		t.Fatal("preference change did not snap the card into place")
+	}
+	before := *builds
+	tt.Advance(200 * time.Millisecond)
+	if *builds != before {
+		t.Fatalf("reduced-motion comment kept rebuilding: %d", *builds-before)
+	}
+}
 
 // stageClock advances playback with the Tester's clock, counting actual
 // view builds, including those due to After rather than FramePending.
