@@ -69,7 +69,7 @@ func paletteFor(t *ui.Theme) palette {
 // iconButton is a borderless button showing an icon, which a soft circle
 // marks under the pointer and which gives a little as it is pressed.
 func iconButton(c *ui.Context, icon *ui.SVG, size float32, color ui.Color, label string) ui.Element {
-	b := roundButton(c, size, color, label)
+	b := roundButton(c, size, color, label, false)
 	b.Children(func() { ui.Icon(c, icon).Size(size, size) })
 	return b
 }
@@ -77,7 +77,7 @@ func iconButton(c *ui.Context, icon *ui.SVG, size float32, color ui.Color, label
 // playButton is the icon button that plays and pauses, its icon turning
 // from one into the other.
 func playButton(c *ui.Context, playing bool, size float32, color ui.Color) ui.Element {
-	b := roundButton(c, size, color, "播放/暂停")
+	b := roundButton(c, size, color, "播放/暂停", false)
 	b.Children(func() { playPause(c, b, playing, size) })
 	return b
 }
@@ -105,12 +105,19 @@ func playPause(c *ui.Context, b ui.Element, playing bool, size float32) {
 	})
 }
 
-// roundButton is the button of iconButton, without its icon.
-func roundButton(c *ui.Context, size float32, color ui.Color, label string) ui.Element {
+// roundButton is the button of iconButton, without its icon; selected
+// controls keep a translucent background even away from the pointer.
+func roundButton(c *ui.Context, size float32, color ui.Color, label string, selected bool) ui.Element {
 	b := ui.ButtonBase(c).Size(size+16, size+16).Center().Radius(999).Label(label).TextColor(color)
 	bg := ui.Transparent
+	if selected {
+		bg = color.Alpha(0.18)
+	}
 	if b.Hovered() {
 		bg = ui.RGBA(128, 128, 128, 0.14)
+		if selected {
+			bg = color.Alpha(0.26)
+		}
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
 	pose := ui.Pose{}
