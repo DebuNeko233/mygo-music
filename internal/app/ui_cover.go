@@ -32,11 +32,20 @@ type coverState struct {
 	swipe   float32
 	swipeAt time.Time
 	decided bool
-	// The song the cover shows, where it is in the play order, and where
-	// its cover goes as another comes (exit).
-	track int64
-	at    int
-	exit  *ui.Motion
+	// The requested song and the artwork actually shown. While a cover
+	// loads, keep the last one; a rapid run replaces the incoming artwork
+	// without retaining a copy of every intermediate song.
+	track, shown  int64
+	art, previous *artwork
+	slide         int
+	direction     float32
+	changedAt     time.Time
+	switching     bool
+}
+
+type coverLayerKey struct {
+	slide    int
+	previous bool
 }
 
 type coverKey struct {
@@ -79,16 +88,113 @@ var glareShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompi
 // coverSwing is how the cover goes to rest, or off.
 var coverSwing = ui.Animation{Spring: ui.SpringOptions{Duration: 480 * time.Millisecond, Bounce: 0.18}}
 
-// coverSlide is how a cover slides in, or off, as the song changes.
-var coverSlide = ui.Animation{Spring: ui.SpringOptions{Duration: 520 * time.Millisecond, Bounce: 0.12}}
+// coverSlideFor bounds the outgoing layer's lifetime.
+const coverSlideFor = 520 * time.Millisecond
+
+// coverSlide moves both layers together as the song changes.
+var coverSlide = ui.Animation{Spring: ui.SpringOptions{Duration: coverSlideFor, Bounce: 0.12}}
 
 // swipeRest is how long a swipe is still before it is let go, for a
 // trackpad that sends no momentum after it.
 const swipeRest = 140 * time.Millisecond
 
-// npCover shows the cover of tr, size across, which the pointer tilts,
-// drags and flings.
+// npCover keeps at most two cover layers. A normal switch starts a pair;
+// another switch on the way replaces its incoming picture, preserving the
+// motion already on screen. Every switch still reaches the player.
 func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float32) {
+	cs := &a.npCoverState
+	if cs.switching && c.Now().Sub(cs.changedAt) >= coverSlideFor {
+		cs.previous, cs.switching = nil, false
+	}
+	entering := cs.enter != 0
+	if cs.track != tr.ID {
+		cs.track = tr.ID
+		cs.swipe, cs.decided = 0, false
+		if !entering {
+			cs.off, cs.flung = ui.Point{}, 0
+		}
+	}
+	ready := art != nil || tr.Album.PicURL == ""
+	if ready && cs.shown != tr.ID {
+		dir := a.coverDirection(cs.shown)
+		if cs.shown != 0 && !entering {
+			if !cs.switching || dir != cs.direction {
+				cs.previous, cs.direction = cs.art, dir
+				cs.switching = true
+				cs.slide++
+				cs.changedAt = c.Now()
+			}
+		} else {
+			cs.previous = nil
+			cs.switching = false
+		}
+		cs.art, cs.shown = art, tr.ID
+	} else if ready {
+		cs.art = art
+	}
+	// A fling has already taken the old picture away. Its incoming card
+	// uses Draggable's motion, even when its new image is not ready yet.
+	if entering {
+		cs.previous, cs.shown = nil, tr.ID
+		cs.switching = false
+	}
+	// A view can build more than once in its first frame. Keep the seed
+	// pose for that whole timestamp, then head to rest at the next refresh.
+	started := cs.switching && cs.changedAt.Equal(c.Now())
+	slot := ui.Box(c.Key("cover-slot")).Size(size, size).AlignSelf(ui.Center)
+	if cs.switching {
+		// Slides stay inside the cover's slot, away from lyrics and controls.
+		slot.Clip()
+		c.After(coverSlideFor - c.Now().Sub(cs.changedAt))
+	}
+	slot.Children(func() {
+		if cs.switching {
+			old := ui.Box(c.Key(coverLayerKey{cs.slide, true})).Absolute().Fill().PassThrough()
+			pose := ui.Pose{X: -cs.direction * size * 0.5, Scale: 0.92, Fade: 1}
+			if started {
+				pose = ui.Pose{}
+			}
+			old.AnimatePose(pose, coverSlide).Children(func() {
+				scale := float32(1)
+				if !a.pl.Playing() {
+					scale = 0.88
+				}
+				ui.Box(c).Fill().Scale(scale, scale).Radius(16).Background(white.Alpha(0.08)).
+					Children(func() { artImage(c, bitmap(cs.previous), 16, 1) })
+			})
+		}
+		incoming := ui.Box(c.Key(coverLayerKey{cs.slide, false})).Absolute().Fill()
+		pose := ui.Pose{}
+		if started {
+			pose = ui.Pose{X: cs.direction * size * 0.5, Scale: 0.92, Fade: 1}
+			// Seed both poses once, then let the painter move them without
+			// rebuilding the view at the display's refresh rate.
+			c.AnimationFrame()
+		}
+		incoming.AnimatePose(pose, coverSlide).Children(func() { a.npCoverCard(c, tr, cs.art, size) })
+	})
+}
+
+// coverDirection follows explicit Next/Prev commands even around a
+// two-song queue. A selection finds the old song in the current order,
+// which may have changed since shuffle was toggled or the queue replaced.
+func (a *app) coverDirection(from int64) float32 {
+	if dir := a.pl.StepDirection(); dir != 0 {
+		return float32(dir)
+	}
+	order, at := a.pl.PlayOrder()
+	q := a.pl.Queue()
+	for i, k := range order {
+		if k >= 0 && k < len(q) && q[k].ID == from {
+			return float32(stepDir(i, at, len(order)))
+		}
+	}
+	return 1
+}
+
+// npCoverCard is the current cover's tilt, glare and drag gestures. Its
+// switch animation belongs to the pair above, never to an exit snapshot.
+func (a *app) npCoverCard(c *ui.Context, tr *netease.Track, art *artwork, size float32) {
 	cs, pl := &a.npCoverState, a.pl
 	far := size * 1.5 // where a cover flies off to
 	fling := func(dir int) {
@@ -101,24 +207,6 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 		// A new cover's first frame: it shows where it comes in from.
 		cs.off, cs.enter = ui.Point{X: cs.enter}, 0
 	}
-	// Another song, not flung to, comes in from the side it is on in the
-	// play order, and the cover before goes off the other way.
-	var enter *ui.Motion
-	if order, at := pl.PlayOrder(); cs.track != tr.ID {
-		if cs.exit != nil && !entering {
-			dir := float32(stepDir(cs.at, at, len(order)))
-			// Its copy leaves from this frame on, which first knows the way.
-			cs.exit.X = -dir * size * 0.5
-			enter = &ui.Motion{X: dir * size * 0.5, Scale: 0.92}
-		}
-		cs.track, cs.at, cs.exit = tr.ID, at, &ui.Motion{Scale: 0.92}
-	}
-	exit := cs.exit
-	if cs.flung != 0 {
-		// Flown off already.
-		exit = nil
-	}
-	wrap.Transition(ui.ElementTransition{Animation: &coverSlide, Colors: true, Enter: enter, Exit: exit})
 	wrap.Draggable(&cs.off, ui.DraggableOptions{
 		Axis: ui.Horizontal,
 		Snap: func(p ui.Point) ui.Point {
@@ -197,8 +285,13 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 		shine = 1
 	}
 	shine = wrap.AnimateTo("shine", shine, ui.Animation{Duration: 300 * time.Millisecond})
-	gx := wrap.AnimateTo("gx", px, tilt)
-	gy := wrap.AnimateTo("gy", py, tilt)
+	gx, gy := px, py
+	if over || shine > 0.01 {
+		// An invisible glare need not chase pointer coordinates while its
+		// parent slides: that kept rebuilding after the cover had settled.
+		gx = wrap.AnimateTo("gx", px, tilt)
+		gy = wrap.AnimateTo("gy", py, tilt)
+	}
 	if over || wrap.Dragging() {
 		wrap.Cursor(ui.CursorGrab)
 	}

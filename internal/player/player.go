@@ -57,6 +57,7 @@ type Player struct {
 	queue   []netease.Track
 	order   []int // the queue's indices in play order: shuffled or not
 	at      int   // where in order the current track is, -1 for none
+	step    int   // the last explicit step: 1 next, -1 previous, 0 a selection
 	shuffle bool
 	repeat  RepeatMode
 	volume  float64
@@ -215,6 +216,7 @@ func (p *Player) playQueue(tracks []netease.Track, start int) {
 		return
 	}
 	p.endRadio()
+	p.step = 0
 	start = min(start, len(tracks)-1)
 	p.queue = append([]netease.Track(nil), tracks...)
 	p.order = make([]int, len(p.queue))
@@ -454,6 +456,11 @@ func (p *Player) OpenAudio() (Audio, error) {
 // current track is among them, -1 for none.
 func (p *Player) PlayOrder() ([]int, int) { return p.order, p.at }
 
+// StepDirection is the last queue step, 1 for Next and -1 for Prev, or 0
+// for a selection. Indices alone cannot tell the direction in a two-song
+// queue, where Next and Prev both reach the same song.
+func (p *Player) StepDirection() int { return p.step }
+
 func (p *Player) Next() {
 	if len(p.order) == 0 {
 		return
@@ -467,6 +474,7 @@ func (p *Player) Next() {
 		}
 		at = 0
 	}
+	p.step = 1
 	p.load(at)
 }
 
@@ -481,6 +489,7 @@ func (p *Player) Prev() {
 	if at < 0 {
 		at = len(p.order) - 1
 	}
+	p.step = -1
 	p.load(at)
 }
 
@@ -488,6 +497,7 @@ func (p *Player) Prev() {
 func (p *Player) Jump(i int) {
 	for k, v := range p.order {
 		if v == i {
+			p.step = 0
 			p.load(k)
 			return
 		}

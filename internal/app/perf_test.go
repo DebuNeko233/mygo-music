@@ -10,6 +10,31 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// A cover slide moves through painter poses, then releases its outgoing
+// layer and stops rebuilding. Count After wakeups as well as display frames.
+func TestCoverSlideFrameBudget(t *testing.T) {
+	for _, reduced := range []bool{false, true} {
+		a := newTestApp()
+		a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+		builds := 0
+		tt := ui.NewTesterWith(func(c *ui.Context) {
+			builds++
+			ui.Column(c).Fill().Center().Children(func() { a.npCover(c, a.pl.Current(), nil, 220) })
+		}, 320, 320, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
+		a.pl.Next()
+		tt.Frame()
+		tt.Advance(time.Second)
+		if a.npCoverState.switching || a.npCoverState.previous != nil {
+			t.Fatal("the outgoing cover outlived its animation")
+		}
+		before := builds
+		tt.Advance(time.Second)
+		if n := builds - before; n != 0 {
+			t.Errorf("reduced=%v: a resting cover rebuilt %d times", reduced, n)
+		}
+	}
+}
+
 // playingApp is an app playing a track with lyrics, at a position the test
 // sets with pl.Seek, and the number of times its view was built.
 func playingApp() (*app, *ui.Tester, *int) {
