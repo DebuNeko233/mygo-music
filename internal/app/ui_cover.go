@@ -141,10 +141,9 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 	// A view can build more than once in its first frame. Keep the seed
 	// pose for that whole timestamp, then head to rest at the next refresh.
 	started := cs.switching && cs.changedAt.Equal(c.Now())
+	// Keep the full cards and their shadows visible throughout the slide.
 	slot := ui.Box(c.Key("cover-slot")).Size(size, size).AlignSelf(ui.Center)
 	if cs.switching {
-		// Slides stay inside the cover's slot, away from lyrics and controls.
-		slot.Clip()
 		c.After(coverSlideFor - c.Now().Sub(cs.changedAt))
 	}
 	slot.Children(func() {
@@ -159,8 +158,12 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 				if !a.pl.Playing() {
 					scale = 0.88
 				}
-				ui.Box(c).Fill().Scale(scale, scale).Radius(16).Background(white.Alpha(0.08)).
-					Children(func() { artImage(c, bitmap(cs.previous), 16, 1) })
+				card := ui.Box(c).Fill().Scale(scale, scale).Radius(16).
+					Shadow(0, 30, 60, -12, ui.RGBA(0, 0, 0, 0.55))
+				if bitmap(cs.previous) == nil {
+					card.Background(white.Alpha(0.08))
+				}
+				card.Children(func() { artImage(c, bitmap(cs.previous), 16, 1) })
 			})
 		}
 		incoming := ui.Box(c.Key(coverLayerKey{cs.slide, false})).Absolute().Fill()

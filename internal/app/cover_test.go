@@ -113,10 +113,8 @@ func TestCoverSlidesWithTheSong(t *testing.T) {
 		if id := a.pl.Current().ID; id != step.id {
 			t.Fatalf("%s: playing %d", step.name, id)
 		}
-		// The slot clips the image: compare visible centers, so a cover
-		// coming from the left is not mistaken for one already at rest.
-		if r2, _ := tt.Find("专辑封面"); (r2.X+r2.W/2-r.X-r.W/2)*step.dir < r.W*0.05 {
-			t.Errorf("%s: the cover comes in at %v, from %v", step.name, r2, r)
+		if r2, _ := tt.Find("专辑封面"); (r2.X-r.X)*step.dir < r.W*0.1 {
+			t.Errorf("%s: the cover comes in at %v, from %v", step.name, r2.X, r.X)
 		}
 		tt.Advance(time.Second)
 		tt.Frame()
