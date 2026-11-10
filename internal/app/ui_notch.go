@@ -533,8 +533,11 @@ func (a *app) syncWindows() {
 	if sig != a.sig {
 		a.sig = sig
 		a.redraw()
-		if sig.playing && !sig.loading && a.notch != nil {
-			a.notch.greet()
+		if sig.playing && !sig.loading {
+			if a.notch != nil {
+				a.notch.greet()
+			}
+			a.notePlay()
 		}
 	}
 }
