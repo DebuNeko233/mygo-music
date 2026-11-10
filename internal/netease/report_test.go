@@ -12,36 +12,40 @@ import (
 	"time"
 )
 
-// A song the listener leaves is reported to the weblog NetEase's players
-// report to, with the position it reached and how it ended: NetEase files
-// songs there under what the listener played lately, with how long they
-// heard them, and the app reported nothing.
-func TestReportPlaySendsAPlayLog(t *testing.T) {
-	var path string
-	var sealed string
+// sentLog is a request to the weblog: where it went, and what it sealed.
+type sentLog struct {
+	path   string
+	sealed string
+}
+
+// captureLog answers the next weblog request with code 200, and keeps it.
+func captureLog(t *testing.T) *sentLog {
+	t.Helper()
+	sent := &sentLog{}
 	answer(t, func(req *http.Request) string {
-		path = req.URL.Path
+		sent.path = req.URL.Path
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Fatalf("read body: %v", err)
 		}
 		if form, err := url.ParseQuery(string(body)); err == nil {
-			sealed = form.Get("params")
+			sent.sealed = form.Get("params")
 		}
 		return `{"code":200}`
 	})
+	return sent
+}
 
-	const id = 3448738711
-	if err := ReportPlay(id, 92*time.Second, MovedOn); err != nil {
-		t.Fatal(err)
-	}
-	if want := "/eapi/feedback/weblog"; path != want {
-		t.Fatalf("posted to %q, want %q", path, want)
+// log unseals the one log the request carried.
+func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
+	t.Helper()
+	if want := "/eapi/feedback/weblog"; s.path != want {
+		t.Fatalf("posted to %q, want %q", s.path, want)
 	}
 	var data struct {
 		Logs string `json:"logs"`
 	}
-	if err := json.Unmarshal([]byte(unseal(t, sealed)), &data); err != nil {
+	if err := json.Unmarshal([]byte(unseal(t, s.sealed)), &data); err != nil {
 		t.Fatalf("logs: %v", err)
 	}
 	var logs []struct {
@@ -52,19 +56,56 @@ func TestReportPlaySendsAPlayLog(t *testing.T) {
 		t.Fatalf("logs %q: %v", data.Logs, err)
 	}
 	if len(logs) != 1 {
-		t.Fatalf("%d logs, want one play", len(logs))
+		t.Fatalf("%d logs, want one", len(logs))
 	}
-	play := logs[0]
-	if play.Action != "play" || play.JSON["type"] != "song" || play.JSON["end"] != MovedOn {
-		t.Fatalf("log %+v, want a song the listener moved on from", play)
+	return logs[0].Action, logs[0].JSON
+}
+
+// A song that begins playing is announced as it starts, which NetEase's
+// players do as one song gives way to another, before what becomes of that
+// play is known. The app announced nothing.
+func TestReportPlayStartSendsAStartLog(t *testing.T) {
+	sent := captureLog(t)
+	const id = 3448738711
+	if err := ReportPlayStart(id); err != nil {
+		t.Fatal(err)
 	}
-	if got := play.JSON["id"]; got != float64(id) {
+	action, fields := sent.log(t)
+	if action != "startplay" {
+		t.Fatalf("logged %q, want a startplay", action)
+	}
+	if got := fields["id"]; got != float64(id) {
+		t.Errorf("announces song %v, want %d", got, id)
+	}
+	if fields["type"] != "song" {
+		t.Errorf("type is %v, want song", fields["type"])
+	}
+	if _, ok := fields["time"]; ok {
+		t.Errorf("a startplay carries no time, sent %v", fields["time"])
+	}
+}
+
+// A song the listener leaves is reported to the weblog NetEase's players
+// report to, with the position it reached and how it ended: NetEase files
+// songs there under what they played lately, with how long they heard them,
+// and the app reported nothing.
+func TestReportPlaySendsAPlayLog(t *testing.T) {
+	sent := captureLog(t)
+	const id = 3448738711
+	if err := ReportPlay(id, 92*time.Second, MovedOn); err != nil {
+		t.Fatal(err)
+	}
+	action, fields := sent.log(t)
+	if action != "play" || fields["type"] != "song" || fields["end"] != MovedOn {
+		t.Fatalf("logged %q %+v, want a song the listener moved on from", action, fields)
+	}
+	if got := fields["id"]; got != float64(id) {
 		t.Errorf("log is of song %v, want %d", got, id)
 	}
-	if got := play.JSON["time"]; got != float64(92) {
+	if got := fields["time"]; got != float64(92) {
 		t.Errorf("log plays 92 seconds of the song, sent %v", got)
 	}
-	if got := play.JSON["mainsite"]; got != "1" {
+	if got := fields["mainsite"]; got != "1" {
 		t.Errorf("mainsite is %#v, want the string \"1\"", got)
 	}
 }
