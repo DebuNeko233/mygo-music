@@ -1,6 +1,7 @@
 package netease
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,11 +178,15 @@ func (e apiError) codeError(path string) error {
 }
 
 func get(path string, query url.Values, out any) error {
+	return getContext(context.Background(), path, query, out)
+}
+
+func getContext(ctx context.Context, path string, query url.Values, out any) error {
 	u := apiBase + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	req, err := http.NewRequest("GET", u, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return err
 	}
@@ -322,6 +327,10 @@ func PlaylistDetail(id int64) (*Playlist, error) {
 // the eapi: the web API's privileges call some VIP songs taken down for
 // subscribers, whom the eapi streams them to.
 func SongDetails(ids []int64) ([]Track, error) {
+	return songDetails(context.Background(), ids)
+}
+
+func songDetails(ctx context.Context, ids []int64) ([]Track, error) {
 	var out []Track
 	for len(ids) > 0 {
 		batch := ids[:min(len(ids), 400)]
@@ -336,7 +345,7 @@ func SongDetails(ids []int64) ([]Track, error) {
 			Songs      []Track     `json:"songs"`
 			Privileges []Privilege `json:"privileges"`
 		}
-		if err := eapiPost("/api/v3/song/detail", map[string]any{"c": string(b)}, &res); err != nil {
+		if err := eapiPostContext(ctx, "/api/v3/song/detail", map[string]any{"c": string(b)}, &res); err != nil {
 			return out, err
 		}
 		if res.Code != 200 {

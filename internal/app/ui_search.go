@@ -43,6 +43,10 @@ func (a *app) search(q string) {
 	if q == "" {
 		return
 	}
+	if a.openMusicInput(q) {
+		return
+	}
+	a.cancelMusicLink()
 	kind := a.searched.kind
 	if kind == 0 {
 		kind = netease.SearchSongs
