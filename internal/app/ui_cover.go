@@ -33,19 +33,20 @@ type coverState struct {
 	swipeAt time.Time
 	decided bool
 	// The requested song and the artwork actually shown. While a cover
-	// loads, keep the last one; a rapid run replaces the incoming artwork
-	// without retaining a copy of every intermediate song.
+	// loads, keep the last one. Each ready image gets an incoming layer;
+	// its predecessor keeps its identity and motion while leaving.
 	track, shown  int64
 	art, previous *artwork
 	slide         int
+	previousSlide int
+	previousCard  coverKey
 	direction     float32
 	changedAt     time.Time
 	switching     bool
 }
 
 type coverLayerKey struct {
-	slide    int
-	previous bool
+	slide int
 }
 
 type coverKey struct {
@@ -88,6 +89,8 @@ var glareShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompi
 // coverSwing is how the cover goes to rest, or off.
 var coverSwing = ui.Animation{Spring: ui.SpringOptions{Duration: 480 * time.Millisecond, Bounce: 0.18}}
 
+var coverBreath = ui.Animation{Spring: ui.SpringOptions{Duration: 600 * time.Millisecond, Bounce: 0.25}}
+
 // coverSlideFor bounds the outgoing layer's lifetime.
 const coverSlideFor = 520 * time.Millisecond
 
@@ -98,11 +101,12 @@ var coverSlide = ui.Animation{Spring: ui.SpringOptions{Duration: coverSlideFor, 
 // trackpad that sends no momentum after it.
 const swipeRest = 140 * time.Millisecond
 
-// npCover keeps at most two cover layers. A normal switch starts a pair;
-// another switch on the way replaces its incoming picture, preserving the
-// motion already on screen. Every switch still reaches the player.
+// npCover keeps at most two cover layers. Every ready selection starts a
+// fresh entrance; the preceding incoming layer becomes the outgoing one
+// with the same identity, so AnimatePose retains its position and velocity.
 func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float32) {
 	cs := &a.npCoverState
+	lastTrack := cs.track
 	if cs.switching && c.Now().Sub(cs.changedAt) >= coverSlideFor {
 		cs.previous, cs.switching = nil, false
 	}
@@ -118,12 +122,12 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 	if ready && cs.shown != tr.ID {
 		dir := a.coverDirection(cs.shown)
 		if cs.shown != 0 && !entering {
-			if !cs.switching || dir != cs.direction {
-				cs.previous, cs.direction = cs.art, dir
-				cs.switching = true
-				cs.slide++
-				cs.changedAt = c.Now()
-			}
+			cs.previous, cs.direction = cs.art, dir
+			cs.previousSlide = cs.slide
+			cs.previousCard = coverKey{lastTrack, cs.gen}
+			cs.switching = true
+			cs.slide++
+			cs.changedAt = c.Now()
 		} else {
 			cs.previous = nil
 			cs.switching = false
@@ -148,9 +152,12 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 	}
 	slot.Children(func() {
 		if cs.switching {
-			old := ui.Box(c.Key(coverLayerKey{cs.slide, true})).Absolute().Fill().PassThrough()
+			old, first := npCoverLayer(c, cs.previousSlide)
+			old.PassThrough()
 			pose := ui.Pose{X: -cs.direction * size * 0.5, Scale: 0.92, Fade: 1}
-			if started {
+			if first {
+				// Returning from a pane without covers has no live pose to
+				// inherit; seed the held picture visibly before it leaves.
 				pose = ui.Pose{}
 			}
 			old.AnimatePose(pose, coverSlide).Children(func() {
@@ -158,15 +165,19 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 				if !a.pl.Playing() {
 					scale = 0.88
 				}
-				card := ui.Box(c).Fill().Scale(scale, scale).Radius(16).
-					Shadow(0, 30, 60, -12, ui.RGBA(0, 0, 0, 0.55))
-				if bitmap(cs.previous) == nil {
-					card.Background(white.Alpha(0.08))
-				}
-				card.Children(func() { artImage(c, bitmap(cs.previous), 16, 1) })
+				// Keep the card's inner pose too, including its paused scale.
+				ui.Box(c.Key(cs.previousCard)).Size(size, size).AlignSelf(ui.Center).Children(func() {
+					card := ui.Box(c).Fill().Radius(16).
+						Shadow(0, 30, 60, -12, ui.RGBA(0, 0, 0, 0.55))
+					card.AnimatePose(ui.Pose{Scale: scale}, coverBreath)
+					if bitmap(cs.previous) == nil {
+						card.Background(white.Alpha(0.08))
+					}
+					card.Children(func() { artImage(c, bitmap(cs.previous), 16, 1) })
+				})
 			})
 		}
-		incoming := ui.Box(c.Key(coverLayerKey{cs.slide, false})).Absolute().Fill()
+		incoming, _ := npCoverLayer(c, cs.slide)
 		pose := ui.Pose{}
 		if started {
 			pose = ui.Pose{X: cs.direction * size * 0.5, Scale: 0.92, Fade: 1}
@@ -176,6 +187,15 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 		}
 		incoming.AnimatePose(pose, coverSlide).Children(func() { a.npCoverCard(c, tr, cs.art, size) })
 	})
+}
+
+// npCoverLayer keeps identity and first appearance independent of whether
+// the picture is arriving or leaving. Hidden panes drop the element's Local.
+func npCoverLayer(c *ui.Context, slide int) (ui.Element, bool) {
+	layer := ui.Box(c.Key(coverLayerKey{slide})).Absolute().Fill()
+	now := c.Now()
+	born := ui.Local(layer, "born", func() time.Time { return now })
+	return layer, born.Equal(now)
 }
 
 // coverDirection follows explicit Next/Prev commands even around a
@@ -318,7 +338,7 @@ func (a *app) npCoverCard(c *ui.Context, tr *netease.Track, art *artwork, size f
 			// In depth only while tilted: flat, it draws as an image does.
 			box.RotateX(rx).RotateY(ry).Perspective(900)
 		}
-		box.AnimatePose(ui.Pose{Scale: scale}, ui.Animation{Spring: ui.SpringOptions{Duration: 600 * time.Millisecond, Bounce: 0.25}})
+		box.AnimatePose(ui.Pose{Scale: scale}, coverBreath)
 		in := artIn(box, bitmap(art))
 		if in < 1 {
 			box.Background(white.Alpha(0.08))

@@ -183,9 +183,9 @@ func TestCoverDirectionAfterQueueReplacement(t *testing.T) {
 	}
 }
 
-// A burst of Next clicks still plays every requested song, replacing the
-// incoming image in one pair instead of retaining all intermediate covers.
-func TestRapidCoverChangesReuseThePair(t *testing.T) {
+// A burst applies every click and gives each image its own entrance,
+// keeping only its immediate predecessor and releasing it after the slide.
+func TestRapidCoverChangesRestartTheEntrance(t *testing.T) {
 	for _, reduced := range []bool{false, true} {
 		t.Run(fmt.Sprint(reduced), func(t *testing.T) {
 			a, tt, arts := paintedCoverApp(t, 5, reduced)
@@ -196,8 +196,8 @@ func TestRapidCoverChangesReuseThePair(t *testing.T) {
 				a.pl.SetLyrics(nil)
 				tt.Frame()
 				cs := &a.npCoverState
-				if a.pl.Current().ID != int64(i+1) || cs.art != arts[i] || cs.previous != arts[0] || cs.slide != 1 {
-					t.Fatalf("step %d: playing %d, shown %d, slide %d; pair was not reused", i, a.pl.Current().ID, cs.shown, cs.slide)
+				if a.pl.Current().ID != int64(i+1) || cs.art != arts[i] || cs.previous != arts[i-1] || cs.slide != i || cs.previousSlide != i-1 {
+					t.Fatalf("step %d: playing %d, shown %d, slide %d; entrance was not restarted", i, a.pl.Current().ID, cs.shown, cs.slide)
 				}
 				tt.Advance(80 * time.Millisecond)
 				if dir := os.Getenv("NM_FRAMES"); dir != "" {
@@ -217,6 +217,83 @@ func TestRapidCoverChangesReuseThePair(t *testing.T) {
 				t.Fatal("kept the outgoing artwork after the slide")
 			}
 		})
+	}
+}
+
+// Same-direction and alternating bursts used to replace a picture in the
+// tail of an old animation. Every ready target must now move in anew.
+func TestRapidCoverChangesAlwaysMove(t *testing.T) {
+	for _, gap := range []time.Duration{50 * time.Millisecond, 80 * time.Millisecond, 150 * time.Millisecond} {
+		for _, pattern := range []string{"next", "previous", "alternate"} {
+			t.Run(fmt.Sprintf("%s/%v", pattern, gap), func(t *testing.T) {
+				a, tt, _ := paintedCoverApp(t, 8, false)
+				if pattern == "previous" {
+					a.pl.Jump(7)
+					a.pl.SetLyrics(nil)
+					tt.Frame()
+					tt.Advance(time.Second)
+				}
+				rest, ok := tt.Find("专辑封面")
+				if !ok {
+					t.Fatal("no resting cover")
+				}
+				for i := range 4 {
+					label, dir := "下一首", float32(1)
+					if pattern == "previous" || pattern == "alternate" && i%2 != 0 {
+						label, dir = "上一首", -1
+					}
+					before := a.npCoverState.slide
+					previous := a.npCoverState.art
+					if err := tt.Click(label); err != nil {
+						t.Fatal(err)
+					}
+					a.pl.SetLyrics(nil)
+					tt.Frame()
+					cs := &a.npCoverState
+					if cs.slide != before+1 || cs.previousSlide != before || cs.previous != previous {
+						t.Fatalf("step %d did not hand the current layer to a fresh entrance", i)
+					}
+					// Observe motion, rather than only checking a generation counter.
+					tt.Advance(gap / 2)
+					moving, ok := tt.Find("专辑封面")
+					if !ok || (moving.X-rest.X)*dir < rest.W*0.05 {
+						t.Fatalf("step %d: cover at %+v did not enter from direction %v", i, moving, dir)
+					}
+					tt.Advance(gap - gap/2)
+				}
+				tt.Advance(time.Second)
+				settled, ok := tt.Find("专辑封面")
+				if !ok || abs32(settled.X-rest.X) > 2 || a.npCoverState.switching || a.npCoverState.previous != nil {
+					t.Fatal("the latest cover did not settle and release its predecessor")
+				}
+			})
+		}
+	}
+}
+
+// Returning after a track changed on another pane must still cover the
+// first frame while the new image is transparent and has no live predecessor.
+func TestCoverSwitchAfterHiddenPane(t *testing.T) {
+	a, tt, _ := paintedCoverApp(t, 3, false)
+	r, ok := tt.Find("专辑封面")
+	if !ok {
+		t.Fatal("no cover")
+	}
+	x, y := int(r.X+r.W/2), int(r.Y+r.H/2)
+	covered := tt.Image().RGBAAt(x, y)
+	a.npPane = paneStage
+	tt.Frame()
+	a.pl.Next()
+	a.pl.SetLyrics(nil)
+	tt.Frame()
+	a.npPane = paneLyrics
+	tt.Frame()
+	if got := tt.Image().RGBAAt(x, y); got != covered {
+		t.Fatalf("first frame showed %v, want the held cover %v", got, covered)
+	}
+	tt.Advance(time.Second)
+	if a.npCoverState.switching || a.npCoverState.shown != 2 {
+		t.Fatal("the new cover did not settle after returning")
 	}
 }
 
