@@ -184,6 +184,10 @@ func (a *app) failedLoads(manual bool) bool {
 		return true
 	}
 	switch a.route.page {
+	case pageRecent:
+		if d := &a.recent; !d.loading && d.err != "" && retry(d.failure) {
+			return true
+		}
 	case pagePlaylist:
 		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
 			return true
@@ -236,6 +240,10 @@ func (a *app) retryLoads(manual bool) {
 		}
 	}
 	switch a.route.page {
+	case pageRecent:
+		if d := &a.recent; d.err != "" && retry(d.failure) {
+			a.loadRecent()
+		}
 	case pagePlaylist:
 		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
 			r.at = time.Time{}
