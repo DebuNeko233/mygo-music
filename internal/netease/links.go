@@ -77,7 +77,7 @@ func ParseMusicLink(text string) (MusicLink, bool, error) {
 
 func parseOrpheus(raw string) (MusicLink, error) {
 	// The desktop website sends Base64(JSON), not just song/ID paths.
-	payload, err := url.PathUnescape(raw)
+	payload, err := url.PathUnescape(strings.TrimRight(raw, "/"))
 	if err != nil {
 		return MusicLink{}, ErrInvalidLink
 	}

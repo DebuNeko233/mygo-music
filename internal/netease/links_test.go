@@ -32,6 +32,8 @@ func TestParseMusicLinks(t *testing.T) {
 		{"orpheus://playlist?id=34", "playlist", 34},
 		{"orpheus://artist/56/", "artist", 56},
 		{encoded(`{"type":"song","id":1859245776,"cmd":"play","channel":"webset"}`), "song", 1859245776},
+		// Windows appends a slash to the website's Base64 song link.
+		{"orpheus://eyJ0eXBlIjoic29uZyIsImlkIjoiMzQ0ODczODcxMSIsImNtZCI6InBsYXkifQ==/", "song", 3448738711},
 		{encoded(`{"type":"playlist","id":"34","cmd":"play"}`), "playlist", 34},
 		{encoded(`{"type":"album","id":"56","cmd":"open"}`), "album", 56},
 		{encoded(`{"type":"program","id":78,"cmd":"play"}`), "program", 78},
