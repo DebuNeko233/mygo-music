@@ -9,11 +9,13 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
-// A song that starts playing is reported as a play of it, to the weblog the
-// desktop client reports to: NetEase files songs there under what the
-// listener played lately, and the app reported nothing.
+// A song the listener leaves is reported to the weblog NetEase's players
+// report to, with the position it reached and how it ended: NetEase files
+// songs there under what the listener played lately, with how long they
+// heard them, and the app reported nothing.
 func TestReportPlaySendsAPlayLog(t *testing.T) {
 	var path string
 	var sealed string
@@ -30,7 +32,7 @@ func TestReportPlaySendsAPlayLog(t *testing.T) {
 	})
 
 	const id = 3448738711
-	if err := ReportPlay(id); err != nil {
+	if err := ReportPlay(id, 92*time.Second, MovedOn); err != nil {
 		t.Fatal(err)
 	}
 	if want := "/eapi/feedback/weblog"; path != want {
@@ -52,11 +54,18 @@ func TestReportPlaySendsAPlayLog(t *testing.T) {
 	if len(logs) != 1 {
 		t.Fatalf("%d logs, want one play", len(logs))
 	}
-	if logs[0].Action != "play" || logs[0].JSON["type"] != "song" || logs[0].JSON["end"] != "playend" {
-		t.Fatalf("log %+v, want a finished song play", logs[0])
+	play := logs[0]
+	if play.Action != "play" || play.JSON["type"] != "song" || play.JSON["end"] != MovedOn {
+		t.Fatalf("log %+v, want a song the listener moved on from", play)
 	}
-	if got := logs[0].JSON["id"]; got != float64(id) {
+	if got := play.JSON["id"]; got != float64(id) {
 		t.Errorf("log is of song %v, want %d", got, id)
+	}
+	if got := play.JSON["time"]; got != float64(92) {
+		t.Errorf("log plays 92 seconds of the song, sent %v", got)
+	}
+	if got := play.JSON["mainsite"]; got != "1" {
+		t.Errorf("mainsite is %#v, want the string \"1\"", got)
 	}
 }
 

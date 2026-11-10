@@ -96,9 +96,9 @@ type app struct {
 	recent    recentData
 	recentTab int
 
-	// reportedTrack is the song NetEase was last told the listener played,
-	// so that one play is reported once: see play_report.go.
-	reportedTrack int64
+	// heard is the song playing and the position it reached, reported to
+	// NetEase once it stops playing: see play_report.go.
+	heard heardPlay
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card

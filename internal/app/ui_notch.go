@@ -525,6 +525,7 @@ func (n *notch) idle(c *ui.Context, open, left float32) {
 // them, so the other shows it too.
 func (a *app) syncWindows() {
 	pl := a.pl
+	a.notePlay()
 	var id int64
 	if tr := pl.Current(); tr != nil {
 		id = tr.ID
@@ -533,11 +534,8 @@ func (a *app) syncWindows() {
 	if sig != a.sig {
 		a.sig = sig
 		a.redraw()
-		if sig.playing && !sig.loading {
-			if a.notch != nil {
-				a.notch.greet()
-			}
-			a.notePlay()
+		if sig.playing && !sig.loading && a.notch != nil {
+			a.notch.greet()
 		}
 	}
 }
