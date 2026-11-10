@@ -161,3 +161,17 @@ func TestPlaylistLocateFrameBudget(t *testing.T) {
 		}
 	}
 }
+
+// Centering short lyrics must settle after layout, rather than asking for
+// another measurement frame throughout playback or after a resize.
+func TestShortLyricsFrameBudget(t *testing.T) {
+	lines := []lyrics.Line{{Text: "纯音乐，请欣赏"}}
+	a, tt := shortLyricsApp(lines, 420, 600)
+	tt.SetPreferences(ui.Preferences{})
+	for _, size := range [][2]int{{420, 600}, {280, 350}, {420, 600}} {
+		tt.SetSize(size[0], size[1])
+		if n := framesAt(a, tt, 30*time.Second); n > 3 {
+			t.Fatalf("%v: short lyrics requested %d idle frames", size, n)
+		}
+	}
+}

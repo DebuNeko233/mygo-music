@@ -447,10 +447,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 	pl := a.pl
 	lines, loaded := pl.Lyrics()
 	if len(lines) == 0 {
-		col := ui.Column(c).Grow(1)
-		if loaded || pl.LyricsError() != "" {
-			col.Center()
-		}
+		col := ui.Column(c).Grow(1).Center()
 		dim, _ := a.quietShown(c, col, tr, lines, loaded)
 		quietUnder(col, dim)
 		col.Children(func() {
@@ -480,14 +477,14 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 	scrollY := a.lyricScroll.Y // offset matching the previous frame
 	lag := a.lyricGlide.step(c, &a.lyricScroll)
 
-	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, h*0.5, 0)
+	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, 0, 0)
 	dim, quiet := a.quietShown(c, scroll, tr, lines, loaded)
 	if dim > 0.98 {
 		// Under the hot comment, gone, not drawn faint.
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, pos, cur, lag, scrollY, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
+	a.timedLines(c, scroll, lines, pos, cur, lag, scrollY, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true}, nil)
 }
 
 // Both lyric layouts share the same recovery action and settled error state.
@@ -504,15 +501,16 @@ func (a *app) lyricsNotice(c *ui.Context, size float32) {
 // linesStyle is how timedLines sets its lines: the size, weight and
 // leading of their type; quiet nearly hides them, under a hot comment.
 type linesStyle struct {
-	size       float32
-	weight     int
-	lineHeight float32
-	quiet      bool
+	size        float32
+	weight      int
+	lineHeight  float32
+	quiet       bool
+	centerShort bool // center a whole lyric block that fits; captions keep their growing list
 }
 
-// timedLines fills scroll with lines that follow the track playing at
-// pos: the line at cur lit, brought to a third of the way down when it or
-// the viewport size changes; none with cur -1 before the first. A click seeks
+// timedLines lights cur at pos, centering short lyrics when requested.
+// Overflowing lines follow playback at the upper third when cur or the
+// viewport changes; cur -1 precedes the first line. Clicking a line seeks
 // to it. The lines are held back by lag, how far the glide to the line
 // lit has still to go (lyricGlide). foot, if set, follows the lines.
 func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, pos time.Duration, cur int, lag, scrollY float32, st linesStyle, foot func()) {
@@ -525,10 +523,16 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		a.lyricWindowW, a.lyricWindowH = w, h
 		c.AnimationFrame()
 	}
-	var active ui.Element
+	var active, content, body ui.Element
 	lang := lyrics.Lang(lines)
-	scroll.Children(func() {
-		ui.Column(c).Gap(6).Translate(0, -lag).Children(func() {
+	draw := func() {
+		key := c
+		if st.centerShort {
+			// New lyrics need a fresh measurement, even at the same line index.
+			key = c.Key(&lines[0])
+		}
+		content = ui.Column(key).Gap(6).Shrink(0).Translate(0, -lag)
+		content.Children(func() {
 			for i, l := range lines {
 				line := ui.ButtonBase(c.Key(i)).Column().AlignItems(ui.Start).Padding(10, 12).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
 				on := i == cur
@@ -587,10 +591,44 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		if foot != nil {
 			foot()
 		}
+	}
+	scroll.Children(func() {
+		if st.centerShort {
+			body = ui.Column(c).MinHeight(scroll.LayoutBounds().H).Justify(ui.Center)
+			body.Children(draw)
+		} else {
+			draw()
+		}
 	})
+	box := scroll.LayoutBounds()
+	if st.centerShort {
+		// Layout includes wrapping, translations and per-word text. Measure
+		// only the lines, so long lyrics' trailing scroll space cannot make
+		// a short block look too tall to center.
+		textH := content.LayoutBounds().H
+		if box.H <= 0 || textH <= 0 {
+			c.AnimationFrame()
+			return
+		}
+		if textH <= box.H {
+			a.lyricAt = cur
+			a.lyricViewportW, a.lyricViewportH = box.W, box.H
+			a.lyricScroll.Y, a.lyricGlide = 0, lyricGlide{}
+			content.Translate(0, 0)
+			return
+		}
+		// Only overflowing lyrics need room to bring the last line up.
+		body.Padding(0, 0, h*0.5, 0)
+		if math.Abs(float64(body.LayoutBounds().H-textH-h*0.5)) > 1 {
+			// Bounds are from the previous layout. Follow after the new
+			// padding or wrapping has settled, using matching geometry.
+			a.lyricAt = -2
+			c.AnimationFrame()
+			return
+		}
+	}
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
-	box := scroll.LayoutBounds()
 	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
 	if cur != a.lyricAt || resized {
 		target := float32(0)
