@@ -1,5 +1,19 @@
 # 更新日志
 
+## 0.2.8
+
+### What's Changed
+* fix: 修复 Toast 深浅主题配色 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/43
+* fix: 修复 Windows 网页打开歌曲提示不支持链接 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/44
+* feat: 修复歌单只加载前 1000 首的问题 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/47
+* perf: 降低播放与绘制开销，优化律动及连续切歌 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/49
+* feat: 搜索建议支持查找并播放当前歌单歌曲 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/50
+* feat: 记录播放曲目、播放时长与结束原因 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/48
+* test: 修正封面缓存测试的线程模型 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/51
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.7...v0.2.8
+
 ## 0.2.7
 
 ### What's Changed
