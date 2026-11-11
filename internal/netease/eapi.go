@@ -93,16 +93,23 @@ func eapiPostDomain(ctx context.Context, domain, path string, data map[string]an
 }
 
 func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[string]any, out any) error {
+	client := eapiClient
+	ua := eapiUA
+	if strings.Contains(endpoint, "://clientlog.music.163.com/") {
+		client = playLogClient
+		ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+			"(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 NeteaseMusicDesktop/3.1.10.5100"
+	}
 	header := map[string]string{
-		"osver":       eapiClient["osver"],
+		"osver":       client["osver"],
 		"deviceId":    device(),
-		"os":          eapiClient["os"],
-		"appver":      eapiClient["appver"],
+		"os":          client["os"],
+		"appver":      client["appver"],
 		"versioncode": "140",
 		"mobilename":  "",
 		"buildver":    fmt.Sprint(time.Now().Unix()),
 		"resolution":  "1920x1080",
-		"channel":     eapiClient["channel"],
+		"channel":     client["channel"],
 		"requestId":   fmt.Sprintf("%d_%04d", time.Now().UnixMilli(), time.Now().Nanosecond()%1000),
 		"__csrf":      "",
 	}
@@ -130,9 +137,9 @@ func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[strin
 		cookie = append(cookie, url.QueryEscape(k)+"="+url.QueryEscape(v))
 	}
 	req.Header.Set("Cookie", strings.Join(cookie, "; "))
-	req.Header.Set("User-Agent", eapiUA)
+	req.Header.Set("User-Agent", ua)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if strings.Contains(endpoint, "://clientlogdep.music.163.com/") {
+	if strings.Contains(endpoint, "://clientlog.music.163.com/") {
 		req.Header.Set("MG-Product-Name", "music")
 	}
 	// Sent by hand: the jar would add the site's cookies to these. The

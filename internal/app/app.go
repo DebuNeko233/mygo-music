@@ -100,6 +100,7 @@ type app struct {
 	heard       heardPlay
 	reportOnce  sync.Once
 	reportQueue chan func()
+	reportDone  chan struct{}
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
@@ -334,7 +335,7 @@ func Run() error {
 			a.syncCaptions()
 		}
 		a.pl.Playback = a.playback
-		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.reportPlayStopped() })
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.flushPlayReports() })
 		a.volume = a.settings.Volume
 		// The system's mixer applies the volume too, where it keeps one for
 		// the app, which is from the first sound on.

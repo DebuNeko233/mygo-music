@@ -39,6 +39,34 @@ func TestPlaybackEventsDistinguishPauseSeekAndRepeat(t *testing.T) {
 	}
 }
 
+// Resuming audio that Restore loaded paused starts the session it deliberately
+// deferred; otherwise its entire play was absent from NetEase's reports.
+func TestRestoredAudioBeginsItsSessionWhenPlayed(t *testing.T) {
+	defer noSongSources(t)()
+	data, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts := make(chan func(), 16)
+	p := New(func(fn func()) { posts <- fn })
+	p.Cache = NewCache(t.TempDir(), 1<<20)
+	seedCache(t, p.Cache, 1, data)
+	p.Cue([]netease.Track{{ID: 1, Duration: 10000}})
+	p.loadSkipping(0, 0, false, 250*time.Millisecond)
+	waitCachePlayer(t, p, posts)
+	defer p.out.Close()
+	var events []PlaybackEvent
+	p.Playback = func(event PlaybackEvent) { events = append(events, event) }
+	p.TogglePlay()
+	if len(events) != 1 || !events[0].Started {
+		t.Fatalf("resumed audio reported %+v, want one start", events)
+	}
+	p.TogglePlay()
+	if len(events) != 1 {
+		t.Fatalf("pausing and resuming created another session: %+v", events)
+	}
+}
+
 func TestPlayEmptyQueue(t *testing.T) {
 	p := &Player{at: -1}
 	p.PlayQueue(nil, 0) // an empty playlist's play button

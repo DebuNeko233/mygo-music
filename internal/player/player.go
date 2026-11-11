@@ -596,6 +596,8 @@ func (p *Player) TogglePlay() {
 			out.Seek(0)
 		}
 		out.Play()
+		// Restore deliberately loads paused and therefore has no session yet.
+		p.begin()
 	}
 	p.fade.fade(1, fadeIn, nil)
 	// A session picked up again was loaded paused: its next track may

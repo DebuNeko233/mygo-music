@@ -16,6 +16,7 @@ import (
 type sentLog struct {
 	host   string
 	path   string
+	cookie string
 	sealed string
 }
 
@@ -30,6 +31,7 @@ func captureLog(t *testing.T) *sentLog {
 		}
 		sent.host = req.URL.Host
 		sent.path = req.URL.Path
+		sent.cookie = req.Header.Get("Cookie")
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
 			t.Fatalf("read body: %v", err)
@@ -45,7 +47,7 @@ func captureLog(t *testing.T) *sentLog {
 // log unseals the one log the request carried.
 func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 	t.Helper()
-	if want := "clientlogdep.music.163.com"; s.host != want {
+	if want := "clientlog.music.163.com"; s.host != want {
 		t.Fatalf("posted to host %q, want %q", s.host, want)
 	}
 	if want := "/api/feedback/weblog"; s.path != want {
@@ -115,10 +117,9 @@ func TestReportPlayStartOmitsUnknownSource(t *testing.T) {
 	}
 }
 
-// A song the listener leaves is reported to the weblog NetEase's players
-// report to, with the position it reached and how it ended: NetEase files
-// songs there under what they played lately, with how long they heard them,
-// and the app reported nothing.
+// A song the listener leaves is reported with its listening time and how it
+// ended. The weblog currently requires its own host and macOS eapi identity;
+// the previous desktop-pc request returned 200 but was not counted.
 func TestReportPlaySendsAPlayLog(t *testing.T) {
 	sent := captureLog(t)
 	const id = 3448738711
@@ -137,6 +138,11 @@ func TestReportPlaySendsAPlayLog(t *testing.T) {
 	}
 	if got := fields["mainsite"]; got != "1" {
 		t.Errorf("mainsite is %#v, want the string \"1\"", got)
+	}
+	for _, want := range []string{"os=osx", "appver=3.1.10.5100", "osver=15.5", "channel=netease"} {
+		if !strings.Contains(sent.cookie, want) {
+			t.Errorf("weblog identity misses %q in %q", want, sent.cookie)
+		}
 	}
 }
 

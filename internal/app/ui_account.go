@@ -125,7 +125,7 @@ func (a *app) discardAccount() {
 
 // signedIn shows what is personal to prof, or to nobody.
 func (a *app) signedIn(prof *netease.Profile) {
-	a.reportPlayStopped()
+	a.flushPlayReports()
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()
 		a.recovery.timer = nil
@@ -265,6 +265,7 @@ func (a *app) closeLoginSoon(gen int) {
 }
 
 func (a *app) signOut() {
+	a.flushPlayReports()
 	a.login.gen++
 	a.recovery.accountPending = false
 	a.identityCache.Clear("", nil)

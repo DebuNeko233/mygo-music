@@ -2,6 +2,7 @@ package app
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"netease-music-mygo/internal/netease"
@@ -58,10 +59,12 @@ func (a *app) playback(event player.PlaybackEvent) {
 func (a *app) enqueueReport(send func()) {
 	a.reportOnce.Do(func() {
 		a.reportQueue = make(chan func(), 64)
+		a.reportDone = make(chan struct{})
 		go func() {
 			for send := range a.reportQueue {
 				send()
 			}
+			close(a.reportDone)
 		}()
 	})
 	a.reportQueue <- send
@@ -69,3 +72,16 @@ func (a *app) enqueueReport(send func()) {
 
 // reportPlayStopped closes a session on account changes and application exit.
 func (a *app) reportPlayStopped() { a.pl.Finish() }
+
+// flushPlayReports finishes the ordered start/end requests before the process
+// exits or the account changes. A later login creates a fresh queue.
+func (a *app) flushPlayReports() {
+	a.reportPlayStopped()
+	if a.reportQueue != nil {
+		close(a.reportQueue)
+		<-a.reportDone
+		a.reportQueue = nil
+		a.reportDone = nil
+		a.reportOnce = sync.Once{}
+	}
+}

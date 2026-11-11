@@ -57,6 +57,17 @@ func playFields(id int64, source PlaySource) map[string]any {
 }
 
 // sendLog posts to the dedicated weblog host, not the ordinary eapi gateway.
+const playLogDomain = "https://clientlog.music.163.com"
+
+// The play-count weblog currently accepts the macOS eapi identity. Keep it
+// scoped to this endpoint: other desktop requests must retain their own identity.
+var playLogClient = map[string]string{
+	"os":      "osx",
+	"appver":  "3.1.10.5100",
+	"osver":   "15.5",
+	"channel": "netease",
+}
+
 func sendLog(action string, data map[string]any) error {
 	// Every desktop log entry carries its own creation time in milliseconds.
 	data["logtime"] = time.Now().UnixMilli()
@@ -65,5 +76,5 @@ func sendLog(action string, data map[string]any) error {
 		return err
 	}
 	const path = "/api/feedback/weblog"
-	return eapiOKEndpoint("https://clientlogdep.music.163.com"+path, path, map[string]any{"logs": string(logs)})
+	return eapiOKEndpoint(playLogDomain+path, path, map[string]any{"logs": string(logs)})
 }

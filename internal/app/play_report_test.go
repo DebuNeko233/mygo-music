@@ -105,6 +105,38 @@ func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 	}
 }
 
+// Quitting waits for the final play request instead of abandoning it in the
+// asynchronous reporting queue during process teardown.
+func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
+	a := newTestApp()
+	a.profile = &netease.Profile{}
+	done := make(chan struct{})
+	reportPlayStart = func(id int64, source netease.PlaySource) error { return nil }
+	reportPlay = func(id int64, played time.Duration, end string, source netease.PlaySource) error {
+		close(done)
+		return nil
+	}
+	t.Cleanup(func() { reportPlayStart = netease.ReportPlayStart; reportPlay = netease.ReportPlay })
+	track := netease.Track{ID: 7}
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	a.playback(player.PlaybackEvent{Track: track, End: player.Playthrough, Position: 30 * time.Second})
+	finished := make(chan struct{})
+	go func() { a.flushPlayReports(); close(finished) }()
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("quit did not finish the play report")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("final play report was dropped")
+	}
+	// A new login starts a fresh queue after the previous identity drained.
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	a.flushPlayReports()
+}
+
 func reportFixture(t *testing.T) (*app, chan reportedPlay) {
 	t.Helper()
 	a := newTestApp()
