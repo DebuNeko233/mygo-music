@@ -60,6 +60,9 @@ type PlaybackEvent struct {
 	Started  bool
 	End      PlayEnd
 	Position time.Duration
+	Played   time.Duration
+	Bitrate  int // kilobits per second, zero if unknown
+	Level    string
 }
 
 // Player plays a queue of tracks. Its methods run on the main thread;
@@ -106,18 +109,21 @@ type Player struct {
 	feeding  bool // the feed is asked
 	awaiting bool // at the queue's end, for what the feed gives
 
-	track   *netease.Track
-	source  PlaySource
-	active  bool
-	out     *audio.Player
-	stream  stream
-	info    *netease.Stream // what the current track streams
-	fade    fader
-	gain    float64 // the current track's normalizing gain
-	loading bool
-	playing bool // what the listener wants: false while paused
-	err     string
-	gen     int // counts loads, to drop the results of stale ones
+	track      *netease.Track
+	source     PlaySource
+	active     bool
+	heardSince time.Time
+	played     time.Duration
+	now        func() time.Time
+	out        *audio.Player
+	stream     stream
+	info       *netease.Stream // what the current track streams
+	fade       fader
+	gain       float64 // the current track's normalizing gain
+	loading    bool
+	playing    bool // what the listener wants: false while paused
+	err        string
+	gen        int // counts loads, to drop the results of stale ones
 	// cacheChanging is set while the song cache's folder moves: nothing
 	// loads meanwhile, and what plays is let go of.
 	cacheChanging bool
@@ -578,6 +584,7 @@ func (p *Player) TogglePlay() {
 	}
 	out := p.out
 	if p.playing {
+		p.pause()
 		p.playing = false
 		p.fade.fade(0, fadeOut, func() {
 			p.post(func() {
@@ -594,6 +601,7 @@ func (p *Player) TogglePlay() {
 	if !p.seeking && !out.Playing() {
 		if out.Position() >= out.Duration()-time.Second {
 			out.Seek(0)
+			p.pause()
 		}
 		out.Play()
 		// Restore deliberately loads paused and therefore has no session yet.
@@ -629,6 +637,7 @@ func (p *Player) Seek(t time.Duration) {
 	}
 	p.seekGen++
 	gen := p.seekGen
+	p.pause()
 	p.seeking, p.seekTo = true, t
 	out.Pause()
 	time.AfterFunc(seekGap, func() {
@@ -640,6 +649,7 @@ func (p *Player) Seek(t time.Duration) {
 			out.Seek(t)
 			if p.playing || !p.fade.silent() {
 				out.Play()
+				p.resume()
 			}
 			p.sync()
 		})
@@ -736,12 +746,17 @@ func (p *Player) stop() {
 	p.lyricBusy, p.coverBusy = false, false
 }
 
-// begin starts a play session only after audio is ready to be heard.
+// begin starts or resumes a play session only after audio is ready to be heard.
 func (p *Player) begin() {
-	if p.track == nil || p.active {
+	if p.track == nil {
+		return
+	}
+	p.resume()
+	if p.active {
 		return
 	}
 	p.active = true
+	p.played = 0
 	source := p.source
 	if source.Alg == "" {
 		source.Alg = p.track.Alg
@@ -749,17 +764,51 @@ func (p *Player) begin() {
 	p.emit(PlaybackEvent{Track: *p.track, Source: source, Started: true})
 }
 
+// heardTime excludes pauses, seeks and loading from the reported listening time.
+func (p *Player) heardTime() time.Duration {
+	heard := p.played
+	if !p.heardSince.IsZero() {
+		heard += p.time().Sub(p.heardSince)
+	}
+	return heard
+}
+
+func (p *Player) time() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
+}
+
+func (p *Player) resume() {
+	p.heardSince = p.time()
+}
+
+func (p *Player) pause() {
+	if !p.active {
+		return
+	}
+	p.played = p.heardTime()
+	p.heardSince = time.Time{}
+}
+
 // finish closes the current session with the transition's actual cause.
 func (p *Player) finish(end PlayEnd) {
 	if !p.active || p.track == nil {
 		return
 	}
+	p.pause()
 	p.active = false
 	source := p.source
 	if source.Alg == "" {
 		source.Alg = p.track.Alg
 	}
-	p.emit(PlaybackEvent{Track: *p.track, Source: source, End: end, Position: p.Position()})
+	bitrate, level := 0, ""
+	if p.info != nil {
+		bitrate, level = p.info.Bitrate/1000, p.info.Level
+	}
+	p.emit(PlaybackEvent{Track: *p.track, Source: source, End: end,
+		Position: p.Position(), Played: p.played, Bitrate: bitrate, Level: level})
 }
 
 func (p *Player) emit(event PlaybackEvent) {

@@ -480,6 +480,8 @@ type Stream struct {
 	Type string `json:"type"`
 	// Level is the level served, which may be below the one asked for.
 	Level string `json:"level"`
+	// Bitrate is the stream's actual bit rate in bits per second.
+	Bitrate int `json:"br"`
 	// Gain is how many dB to change the track by to sound as loud as
 	// others, and Peak its loudest sample, 1 at full scale, or 0 if
 	// unknown.

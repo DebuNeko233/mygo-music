@@ -9,11 +9,12 @@ import (
 	"netease-music-mygo/internal/player"
 )
 
-// playWorth is how long a song must be heard before NetEase counts it as played.
-const playWorth = 3 * time.Second
+// playWorth is how long a song must be heard before NetEase's desktop count.
+const playWorth = 30 * time.Second
 
 var reportPlayStart func(int64, netease.PlaySource) error = netease.ReportPlayStart
-var reportPlay func(int64, time.Duration, string, netease.PlaySource) error = netease.ReportPlay
+var reportDawnStart = netease.ReportDawnStart
+var reportDawnEnd = netease.ReportDawnEnd
 
 // heardPlay is the one actual audio session waiting for its final play log.
 type heardPlay struct {
@@ -30,10 +31,15 @@ func (a *app) playback(event player.PlaybackEvent) {
 			return
 		}
 		source := netease.PlaySource{Source: event.Source.Source, ID: event.Source.ID, Alg: event.Source.Alg}
-		a.heard = heardPlay{id: event.Track.ID, active: true}
+		track := event.Track
+		bitrate, level := event.Bitrate, event.Level
+		a.heard = heardPlay{id: track.ID, active: true}
 		a.enqueueReport(func() {
-			if err := reportPlayStart(event.Track.ID, source); err != nil {
-				log.Printf("play report: start %d: %v", event.Track.ID, err)
+			if err := reportPlayStart(track.ID, source); err != nil {
+				log.Printf("play report: recent play %d: %v", track.ID, err)
+			}
+			if err := reportDawnStart(track, bitrate, level, source); err != nil {
+				log.Printf("play report: start %d: %v", track.ID, err)
 			}
 		})
 		return
@@ -42,13 +48,15 @@ func (a *app) playback(event player.PlaybackEvent) {
 		return
 	}
 	a.heard.active = false
-	if event.Position < playWorth {
+	if event.Played < playWorth {
 		return
 	}
+	track := event.Track
 	source := netease.PlaySource{Source: event.Source.Source, ID: event.Source.ID, Alg: event.Source.Alg}
 	end := string(event.End)
+	played, bitrate, level := event.Played, event.Bitrate, event.Level
 	a.enqueueReport(func() {
-		if err := reportPlay(event.Track.ID, event.Position, end, source); err != nil {
+		if err := reportDawnEnd(track, played, end, bitrate, level, source); err != nil {
 			log.Printf("play report: end %d: %v", event.Track.ID, err)
 		}
 	})

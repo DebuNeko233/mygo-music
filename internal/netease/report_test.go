@@ -50,7 +50,7 @@ func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 	if want := "clientlog.music.163.com"; s.host != want {
 		t.Fatalf("posted to host %q, want %q", s.host, want)
 	}
-	if want := "/api/feedback/weblog"; s.path != want {
+	if want := "/eapi/feedback/weblog"; s.path != want {
 		t.Fatalf("posted to %q, want %q", s.path, want)
 	}
 	var data struct {

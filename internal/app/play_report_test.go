@@ -36,7 +36,7 @@ func TestPlayReportsFollowPlaybackSessions(t *testing.T) {
 			[]reportedPlay{{id: 7, start: true}, {id: 7, played: 30 * time.Second, end: "interrupt"}}},
 		{"decode failure", netease.Track{ID: 7}, 30 * time.Second, player.Exception,
 			[]reportedPlay{{id: 7, start: true}, {id: 7, played: 30 * time.Second, end: "exception"}}},
-		{"too short", netease.Track{ID: 7}, 2 * time.Second, player.MovedOn,
+		{"too short", netease.Track{ID: 7}, 29 * time.Second, player.MovedOn,
 			[]reportedPlay{{id: 7, start: true}}},
 		{"episode", netease.Track{ID: 7, ProgramID: 900}, 95 * time.Second, player.MovedOn, nil},
 	} {
@@ -44,8 +44,8 @@ func TestPlayReportsFollowPlaybackSessions(t *testing.T) {
 			a, sent := reportFixture(t)
 			start := player.PlaybackEvent{Track: tc.track, Started: true}
 			a.playback(start)
-			a.playback(player.PlaybackEvent{Track: tc.track, End: tc.end, Position: tc.at})
-			a.playback(player.PlaybackEvent{Track: tc.track, End: tc.end, Position: tc.at})
+			a.playback(player.PlaybackEvent{Track: tc.track, End: tc.end, Played: tc.at})
+			a.playback(player.PlaybackEvent{Track: tc.track, End: tc.end, Played: tc.at})
 			if got := waitReports(t, sent, len(tc.want)); !slices.Equal(got, tc.want) {
 				t.Errorf("reported %+v, want %+v", got, tc.want)
 			}
@@ -80,19 +80,26 @@ func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 		done <- struct{}{}
 		return errors.New("offline")
 	}
-	reportPlay = func(id int64, played time.Duration, end string, source netease.PlaySource) error {
+	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
+		return nil
+	}
+	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
 		if len(sent) != 1 || !sent[0].start {
 			t.Errorf("play arrived before startplay completed: %+v", sent)
 		}
-		sent = append(sent, reportedPlay{id: id, played: played, end: end, source: source})
+		sent = append(sent, reportedPlay{id: track.ID, played: played, end: end, source: source})
 		done <- struct{}{}
 		return nil
 	}
-	t.Cleanup(func() { reportPlayStart = netease.ReportPlayStart; reportPlay = netease.ReportPlay })
+	t.Cleanup(func() {
+		reportPlayStart = netease.ReportPlayStart
+		reportDawnStart = netease.ReportDawnStart
+		reportDawnEnd = netease.ReportDawnEnd
+	})
 	track := netease.Track{ID: 7}
 	source := player.PlaySource{Source: "list", ID: 42, Alg: "itembased"}
 	a.playback(player.PlaybackEvent{Track: track, Source: source, Started: true})
-	a.playback(player.PlaybackEvent{Track: track, Source: source, End: player.MovedOn, Position: 10 * time.Second})
+	a.playback(player.PlaybackEvent{Track: track, Source: source, End: player.MovedOn, Played: 30 * time.Second})
 	for range 2 {
 		select {
 		case <-done:
@@ -112,14 +119,19 @@ func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 	a.profile = &netease.Profile{}
 	done := make(chan struct{})
 	reportPlayStart = func(id int64, source netease.PlaySource) error { return nil }
-	reportPlay = func(id int64, played time.Duration, end string, source netease.PlaySource) error {
+	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
+	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
 		close(done)
 		return nil
 	}
-	t.Cleanup(func() { reportPlayStart = netease.ReportPlayStart; reportPlay = netease.ReportPlay })
+	t.Cleanup(func() {
+		reportPlayStart = netease.ReportPlayStart
+		reportDawnStart = netease.ReportDawnStart
+		reportDawnEnd = netease.ReportDawnEnd
+	})
 	track := netease.Track{ID: 7}
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
-	a.playback(player.PlaybackEvent{Track: track, End: player.Playthrough, Position: 30 * time.Second})
+	a.playback(player.PlaybackEvent{Track: track, End: player.Playthrough, Played: 30 * time.Second})
 	finished := make(chan struct{})
 	go func() { a.flushPlayReports(); close(finished) }()
 	select {
@@ -146,11 +158,16 @@ func reportFixture(t *testing.T) (*app, chan reportedPlay) {
 		sent <- reportedPlay{id: id, source: source, start: true}
 		return nil
 	}
-	reportPlay = func(id int64, played time.Duration, end string, source netease.PlaySource) error {
-		sent <- reportedPlay{id: id, played: played, end: end, source: source}
+	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
+	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+		sent <- reportedPlay{id: track.ID, played: played, end: end, source: source}
 		return nil
 	}
-	t.Cleanup(func() { reportPlayStart = netease.ReportPlayStart; reportPlay = netease.ReportPlay })
+	t.Cleanup(func() {
+		reportPlayStart = netease.ReportPlayStart
+		reportDawnStart = netease.ReportDawnStart
+		reportDawnEnd = netease.ReportDawnEnd
+	})
 	return a, sent
 }
 

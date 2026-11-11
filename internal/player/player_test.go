@@ -67,6 +67,32 @@ func TestRestoredAudioBeginsItsSessionWhenPlayed(t *testing.T) {
 	}
 }
 
+// Listening time follows audible playback, not the seek position or time
+// spent paused; otherwise skipping to the end invents a complete listen.
+func TestPlaybackListeningTimeExcludesPausesAndSeeks(t *testing.T) {
+	ch, p := posted()
+	defer p.out.Close()
+	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	p.now = func() time.Time { return clock }
+	var events []PlaybackEvent
+	p.Playback = func(event PlaybackEvent) { events = append(events, event) }
+	p.begin()
+	clock = clock.Add(40 * time.Second)
+	p.TogglePlay()
+	next(t, ch)
+	clock = clock.Add(10 * time.Minute)
+	p.TogglePlay()
+	clock = clock.Add(20 * time.Second)
+	p.Seek(90 * time.Second)
+	clock = clock.Add(time.Second)
+	next(t, ch)
+	clock = clock.Add(5 * time.Second)
+	p.finish(Interrupted)
+	if got := events[1].Played; got != 65*time.Second {
+		t.Fatalf("heard %v, want 65 seconds excluding pause and seek", got)
+	}
+}
+
 func TestPlayEmptyQueue(t *testing.T) {
 	p := &Player{at: -1}
 	p.PlayQueue(nil, 0) // an empty playlist's play button

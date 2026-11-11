@@ -8,6 +8,7 @@ require (
 	github.com/ebitengine/purego v0.11.3
 	github.com/egoist/mygo v0.8.3
 	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/klauspost/compress v1.20.4
 	github.com/mewkiz/flac v1.0.14
 	golang.org/x/image v0.47.0
 	rsc.io/qr v0.2.0
