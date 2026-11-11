@@ -34,6 +34,37 @@ const (
 	RepeatOne
 )
 
+// PlayEnd says why a play session ended, without inferring it from position.
+type PlayEnd string
+
+const (
+	MovedOn     PlayEnd = "ui"
+	Playthrough PlayEnd = "playend"
+	Interrupted PlayEnd = "interrupt"
+	Exception   PlayEnd = "exception"
+)
+
+// PlaySource identifies the list a queue came from. Unknown fields stay empty
+// and are omitted from play logs.
+type PlaySource struct {
+	Source string
+	ID     int64
+	Alg    string
+}
+
+// PlaybackEvent describes an actual playback session. Started follows the
+// first successful audio start, including each repeat; End is empty for it.
+type PlaybackEvent struct {
+	Track    netease.Track
+	Source   PlaySource
+	Started  bool
+	End      PlayEnd
+	Position time.Duration
+	Played   time.Duration
+	Bitrate  int // kilobits per second, zero if unknown
+	Level    string
+}
+
 // Player plays a queue of tracks. Its methods run on the main thread;
 // loading happens on goroutines, whose results post brings back there.
 type Player struct {
@@ -54,6 +85,9 @@ type Player struct {
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
+	// Playback, if set, hears when a song actually starts and why its play
+	// session ends. Pausing and seeking do not end that session.
+	Playback func(PlaybackEvent)
 
 	queue   []netease.Track
 	order   []int // the queue's indices in play order: shuffled or not
@@ -75,16 +109,21 @@ type Player struct {
 	feeding  bool // the feed is asked
 	awaiting bool // at the queue's end, for what the feed gives
 
-	track   *netease.Track
-	out     *audio.Player
-	stream  stream
-	info    *netease.Stream // what the current track streams
-	fade    fader
-	gain    float64 // the current track's normalizing gain
-	loading bool
-	playing bool // what the listener wants: false while paused
-	err     string
-	gen     int // counts loads, to drop the results of stale ones
+	track      *netease.Track
+	source     PlaySource
+	active     bool
+	heardSince time.Time
+	played     time.Duration
+	now        func() time.Time
+	out        *audio.Player
+	stream     stream
+	info       *netease.Stream // what the current track streams
+	fade       fader
+	gain       float64 // the current track's normalizing gain
+	loading    bool
+	playing    bool // what the listener wants: false while paused
+	err        string
+	gen        int // counts loads, to drop the results of stale ones
 	// cacheChanging is set while the song cache's folder moves: nothing
 	// loads meanwhile, and what plays is let go of.
 	cacheChanging bool
@@ -180,9 +219,11 @@ func (p *Player) announce(t *netease.Track, artwork []byte) {
 }
 
 func (p *Player) ended() {
+	p.finish(Playthrough)
 	if p.repeat == RepeatOne {
 		p.out.Seek(0)
 		p.out.Play()
+		p.begin()
 		return
 	}
 	if p.at+1 >= len(p.order) && p.feed != nil {
@@ -199,15 +240,27 @@ func (p *Player) ended() {
 
 // PlayQueue replaces the queue with tracks and plays the one at start.
 func (p *Player) PlayQueue(tracks []netease.Track, start int) {
+	p.PlayQueueFrom(tracks, start, PlaySource{})
+}
+
+// PlayQueueFrom plays a queue and carries where it came from into play logs.
+func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySource) {
+	p.source = source
 	p.playQueue(tracks, max(start, 0))
 }
 
 // PlayShuffled starts a whole list with any song at its head. Explicitly
 // choosing a song through PlayQueue still keeps that song first.
 func (p *Player) PlayShuffled(tracks []netease.Track) {
+	p.PlayShuffledFrom(tracks, PlaySource{})
+}
+
+// PlayShuffledFrom shuffles a queue and carries its source into play logs.
+func (p *Player) PlayShuffledFrom(tracks []netease.Track, source PlaySource) {
 	if len(tracks) == 0 {
 		return
 	}
+	p.source = source
 	p.shuffle = true
 	p.playQueue(tracks, -1)
 }
@@ -239,9 +292,14 @@ func (p *Player) PlayRadio(name string, tracks []netease.Track, feed func(got fu
 	if len(tracks) == 0 {
 		return
 	}
+	// An explicit seed keeps its origin; only the radio's own tracks use FM.
+	source := p.source
+	if source.Source == "" {
+		source.Source = "fm"
+	}
 	shuffle := p.shuffle
 	p.shuffle = false
-	p.PlayQueue(tracks, 0)
+	p.PlayQueueFrom(tracks, 0, source)
 	p.shuffle = shuffle
 	p.AttachRadio(name, feed)
 }
@@ -254,6 +312,9 @@ func (p *Player) RadioFrom(name string, tracks []netease.Track, feed func(got fu
 		return
 	}
 	p.queue, p.order, p.at = []netease.Track{*p.track}, []int{0}, 0
+	if p.source.Source == "" {
+		p.source.Source = "fm"
+	}
 	p.step = 0
 	p.appendTracks(tracks)
 	if p.shuffle {
@@ -323,6 +384,8 @@ func (p *Player) refill() {
 		case p.at+1 < len(p.order):
 			p.awaiting = false
 			p.step = 1
+			// The feed arrives after its seed; its tracks belong to this radio.
+			p.source = PlaySource{Source: "fm"}
 			p.load(p.at + 1)
 		default:
 			// The radio has nothing more: it stops at its end.
@@ -472,6 +535,7 @@ func (p *Player) Next() {
 	at := p.at + 1
 	if at >= len(p.order) {
 		if p.feed != nil {
+			p.finish(MovedOn)
 			p.stop()
 			p.awaitFeed()
 			return
@@ -530,6 +594,7 @@ func (p *Player) TogglePlay() {
 	}
 	out := p.out
 	if p.playing {
+		p.pause()
 		p.playing = false
 		p.fade.fade(0, fadeOut, func() {
 			p.post(func() {
@@ -546,8 +611,11 @@ func (p *Player) TogglePlay() {
 	if !p.seeking && !out.Playing() {
 		if out.Position() >= out.Duration()-time.Second {
 			out.Seek(0)
+			p.pause()
 		}
 		out.Play()
+		// Restore deliberately loads paused and therefore has no session yet.
+		p.begin()
 	}
 	p.fade.fade(1, fadeIn, nil)
 	// A session picked up again was loaded paused: its next track may
@@ -579,6 +647,7 @@ func (p *Player) Seek(t time.Duration) {
 	}
 	p.seekGen++
 	gen := p.seekGen
+	p.pause()
 	p.seeking, p.seekTo = true, t
 	out.Pause()
 	time.AfterFunc(seekGap, func() {
@@ -590,6 +659,7 @@ func (p *Player) Seek(t time.Duration) {
 			out.Seek(t)
 			if p.playing || !p.fade.silent() {
 				out.Play()
+				p.resume()
 			}
 			p.sync()
 		})
@@ -686,8 +756,89 @@ func (p *Player) stop() {
 	p.lyricBusy, p.coverBusy = false, false
 }
 
+// begin starts or resumes a play session only after audio is ready to be heard.
+func (p *Player) begin() {
+	if p.track == nil {
+		return
+	}
+	p.resume()
+	if p.active {
+		return
+	}
+	p.active = true
+	p.played = 0
+	source := p.source
+	if source.Alg == "" {
+		source.Alg = p.track.Alg
+	}
+	bitrate, level := p.quality()
+	p.emit(PlaybackEvent{Track: *p.track, Source: source, Started: true, Bitrate: bitrate, Level: level})
+}
+
+// heardTime excludes pauses, seeks and loading from the reported listening time.
+func (p *Player) heardTime() time.Duration {
+	heard := p.played
+	if !p.heardSince.IsZero() {
+		heard += p.time().Sub(p.heardSince)
+	}
+	return heard
+}
+
+func (p *Player) time() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
+}
+
+func (p *Player) resume() {
+	p.heardSince = p.time()
+}
+
+func (p *Player) pause() {
+	if !p.active {
+		return
+	}
+	p.played = p.heardTime()
+	p.heardSince = time.Time{}
+}
+
+// finish closes the current session with the transition's actual cause.
+func (p *Player) finish(end PlayEnd) {
+	if !p.active || p.track == nil {
+		return
+	}
+	p.pause()
+	p.active = false
+	source := p.source
+	if source.Alg == "" {
+		source.Alg = p.track.Alg
+	}
+	bitrate, level := p.quality()
+	p.emit(PlaybackEvent{Track: *p.track, Source: source, End: end,
+		Position: p.Position(), Played: p.played, Bitrate: bitrate, Level: level})
+}
+
+// quality reports the actual stream selected for this session.
+func (p *Player) quality() (int, string) {
+	if p.info == nil {
+		return 0, ""
+	}
+	return p.info.Bitrate / 1000, p.info.Level
+}
+
+func (p *Player) emit(event PlaybackEvent) {
+	if p.Playback != nil {
+		p.Playback(event)
+	}
+}
+
+// Finish closes an active session without moving its position, as on exit.
+func (p *Player) Finish() { p.finish(Interrupted) }
+
 // load plays the track at order[at], skipping those that cannot play.
 func (p *Player) load(at int) {
+	p.finish(MovedOn)
 	p.tries = 0
 	p.loadSkipping(at, 0, true, 0)
 }
@@ -695,6 +846,9 @@ func (p *Player) load(at int) {
 // loadSkipping loads the track at order[at], to play or not, from from,
 // skipping those that cannot play: skipped of them so far.
 func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
+	// A retry replaces the audio, not the listening session. Otherwise loading
+	// and pause-resume discard time already heard.
+	p.pause()
 	t := p.queue[p.order[at]]
 	p.stop()
 	p.gen++
@@ -761,6 +915,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			}
 			if p.playing {
 				p.out.Play()
+				p.begin()
 				p.fade.fade(1, fadeIn, nil)
 			}
 			// The one after it is fetched while this one plays, so that
@@ -778,6 +933,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	if errors.Is(err, netease.ErrOffline) {
 		p.loading, p.playing = false, false
+		p.pause()
 		p.err = "未缓存"
 		p.sync()
 		return
@@ -786,6 +942,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		// Asked for again it would be turned down again, and the song
 		// plays once the listener is signed in: nothing is skipped.
 		p.err = "登录已过期，请重新登录"
+		p.pause()
 		p.playing = false
 		p.sync()
 		return
@@ -796,6 +953,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 			return
 		}
 		p.err = "网易云正在校验网络，请稍后重试"
+		p.pause()
 		p.playing = false
 		p.sync()
 		return
@@ -808,6 +966,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 			return
 		}
 		p.err = "加载失败，请重试"
+		p.pause()
 		p.playing = false
 		p.sync()
 		return
@@ -828,6 +987,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		p.loadSkipping(next, skipped+1, p.playing, 0)
 		return
 	}
+	p.pause()
 	p.playing = false
 	p.sync()
 }
@@ -851,6 +1011,7 @@ const lyricTries = 3
 // waits: a stream URL gone stale, or a connection dropped, may work once
 // more.
 func (p *Player) retry(at, skipped int, from time.Duration, err error) {
+	p.pause()
 	p.tries++
 	p.retrying = true
 	p.loading = true
@@ -914,6 +1075,7 @@ func (p *Player) cutOff() {
 	}
 	p.playing = false
 	p.pending = p.Position()
+	p.finish(Exception)
 	p.stop()
 	p.sync()
 }

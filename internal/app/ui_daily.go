@@ -340,7 +340,7 @@ func (a *app) dailyPlayButton(c *ui.Context, songs []netease.Track, ours, playin
 		if ours {
 			a.pl.TogglePlay()
 		} else {
-			a.pl.PlayQueue(songs, firstPlayable(songs))
+			a.pl.PlayQueueFrom(songs, firstPlayable(songs), a.playSource())
 		}
 	}
 }
@@ -374,7 +374,7 @@ func (a *app) dailyPicks(c *ui.Context, songs []netease.Track, ours bool) {
 				})
 			})
 			if row.Clicked() {
-				a.pl.PlayQueue(songs, i)
+				a.pl.PlayQueueFrom(songs, i, a.playSource())
 			}
 		}
 	})
@@ -501,10 +501,10 @@ func (a *app) dailyPage(c *ui.Context) {
 						if a.pl.Shuffle() {
 							a.pl.ToggleShuffle()
 						}
-						a.pl.PlayQueue(songs, firstPlayable(songs))
+						a.pl.PlayQueueFrom(songs, firstPlayable(songs), a.playSource())
 					}
 					if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
-						a.pl.PlayShuffled(songs)
+						a.pl.PlayShuffledFrom(songs, a.playSource())
 					}
 				})
 			})

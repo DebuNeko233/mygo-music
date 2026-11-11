@@ -142,7 +142,7 @@ func (a *app) choosePlaylistSuggestion(key, q string) bool {
 			if tr.Playable() {
 				a.rememberSearch(q)
 				a.dismissSuggestions()
-				a.pl.PlayQueue(pl.Tracks, i)
+				a.pl.PlayQueueFrom(pl.Tracks, i, a.playSource())
 				a.trackList.ScrollTo(i+1, ui.Center) // Row zero is the playlist header.
 			}
 			return true

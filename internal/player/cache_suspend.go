@@ -60,6 +60,9 @@ func (c *Cache) Quiesce() func() {
 // applies that state after relocation. Both calls belong on the main thread.
 func (p *Player) SuspendCache() func() {
 	position := p.Position()
+	// Relocating files does not end the Dawn session. Settle only the audible
+	// interval so the inactive reload cannot add wall-clock time.
+	p.pause()
 	p.cacheChanging = true
 	// Old callbacks may refer to the moving directory. Invalidate their
 	// generation and settle busy flags even if resume does not reload audio.

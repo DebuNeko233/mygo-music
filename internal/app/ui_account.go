@@ -125,6 +125,7 @@ func (a *app) discardAccount() {
 
 // signedIn shows what is personal to prof, or to nobody.
 func (a *app) signedIn(prof *netease.Profile) {
+	a.flushPlayReports()
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()
 		a.recovery.timer = nil
@@ -206,6 +207,11 @@ func (a *app) pollLogin(gen int, key string) {
 			code, msg, name, avatar, err := netease.QRCheck(key)
 			var prof *netease.Profile
 			if code == netease.QRConfirmed {
+				// The old account's queued reports must finish before the QR
+				// confirmation cookies replace its global authentication jar.
+				done := make(chan struct{})
+				a.post(func() { a.flushPlayReports(); close(done) })
+				<-done
 				saveLoginSession()
 				prof, _ = netease.Account()
 			}

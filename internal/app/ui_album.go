@@ -125,7 +125,7 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 					if a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
-					a.pl.PlayQueue(al.Songs, firstPlayable(al.Songs))
+					a.pl.PlayQueueFrom(al.Songs, firstPlayable(al.Songs), a.playSource())
 				}
 				icon, label := iconPlus, "收藏"
 				if a.albumSaved(al.ID) {
