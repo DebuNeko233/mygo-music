@@ -94,7 +94,7 @@ func TestArtCacheKeepsHeldCovers(t *testing.T) {
 
 // A cover's size counts the pixels its data decodes to, and the smaller
 // copies it shows from, not only its data: the limit has to bound the
-// memory they take as well.
+// memory they take as well. Its completion runs on the cache's dispatcher.
 func TestArtCacheSizesCoversByTheirPixels(t *testing.T) {
 	b, err := os.ReadFile("testdata/animated.webp")
 	if err != nil {
@@ -106,14 +106,15 @@ func TestArtCacheSizesCoversByTheirPixels(t *testing.T) {
 		bmp, img, err := decodeArt(b)
 		return bmp, img, len(b), err
 	}
-	c := newArtCache(func(f func()) { f() })
+	posted := make(chan func(), 1)
+	c := newArtCache(func(f func()) { posted <- f })
 	c.now, c.limit = func() time.Time { return time.Unix(1e9, 0) }, 1<<30
 	c.get("cover", false)
-	for waited := time.Duration(0); c.size == 0; waited += time.Millisecond {
-		if waited > 5*time.Second {
-			t.Fatal("the cover never landed")
-		}
-		time.Sleep(time.Millisecond)
+	select {
+	case finish := <-posted:
+		finish()
+	case <-time.After(5 * time.Second):
+		t.Fatal("the cover never landed")
 	}
 	// 24×24 pixels, and the smaller copies, about a third again.
 	if want := len(b) + 24*24*4*4/3; c.size != want {
