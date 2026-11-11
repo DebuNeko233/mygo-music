@@ -34,6 +34,34 @@ const (
 	RepeatOne
 )
 
+// PlayEnd says why a play session ended, without inferring it from position.
+type PlayEnd string
+
+const (
+	MovedOn     PlayEnd = "ui"
+	Playthrough PlayEnd = "playend"
+	Interrupted PlayEnd = "interrupt"
+	Exception   PlayEnd = "exception"
+)
+
+// PlaySource identifies the list a queue came from. Unknown fields stay empty
+// and are omitted from play logs.
+type PlaySource struct {
+	Source string
+	ID     int64
+	Alg    string
+}
+
+// PlaybackEvent describes an actual playback session. Started follows the
+// first successful audio start, including each repeat; End is empty for it.
+type PlaybackEvent struct {
+	Track    netease.Track
+	Source   PlaySource
+	Started  bool
+	End      PlayEnd
+	Position time.Duration
+}
+
 // Player plays a queue of tracks. Its methods run on the main thread;
 // loading happens on goroutines, whose results post brings back there.
 type Player struct {
@@ -54,6 +82,9 @@ type Player struct {
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
+	// Playback, if set, hears when a song actually starts and why its play
+	// session ends. Pausing and seeking do not end that session.
+	Playback func(PlaybackEvent)
 
 	queue   []netease.Track
 	order   []int // the queue's indices in play order: shuffled or not
@@ -76,6 +107,8 @@ type Player struct {
 	awaiting bool // at the queue's end, for what the feed gives
 
 	track   *netease.Track
+	source  PlaySource
+	active  bool
 	out     *audio.Player
 	stream  stream
 	info    *netease.Stream // what the current track streams
@@ -180,9 +213,11 @@ func (p *Player) announce(t *netease.Track, artwork []byte) {
 }
 
 func (p *Player) ended() {
+	p.finish(Playthrough)
 	if p.repeat == RepeatOne {
 		p.out.Seek(0)
 		p.out.Play()
+		p.begin()
 		return
 	}
 	if p.at+1 >= len(p.order) && p.feed != nil {
@@ -199,15 +234,27 @@ func (p *Player) ended() {
 
 // PlayQueue replaces the queue with tracks and plays the one at start.
 func (p *Player) PlayQueue(tracks []netease.Track, start int) {
+	p.PlayQueueFrom(tracks, start, PlaySource{})
+}
+
+// PlayQueueFrom plays a queue and carries where it came from into play logs.
+func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySource) {
+	p.source = source
 	p.playQueue(tracks, max(start, 0))
 }
 
 // PlayShuffled starts a whole list with any song at its head. Explicitly
 // choosing a song through PlayQueue still keeps that song first.
 func (p *Player) PlayShuffled(tracks []netease.Track) {
+	p.PlayShuffledFrom(tracks, PlaySource{})
+}
+
+// PlayShuffledFrom shuffles a queue and carries its source into play logs.
+func (p *Player) PlayShuffledFrom(tracks []netease.Track, source PlaySource) {
 	if len(tracks) == 0 {
 		return
 	}
+	p.source = source
 	p.shuffle = true
 	p.playQueue(tracks, -1)
 }
@@ -472,6 +519,7 @@ func (p *Player) Next() {
 	at := p.at + 1
 	if at >= len(p.order) {
 		if p.feed != nil {
+			p.finish(MovedOn)
 			p.stop()
 			p.awaitFeed()
 			return
@@ -686,8 +734,44 @@ func (p *Player) stop() {
 	p.lyricBusy, p.coverBusy = false, false
 }
 
+// begin starts a play session only after audio is ready to be heard.
+func (p *Player) begin() {
+	if p.track == nil || p.active {
+		return
+	}
+	p.active = true
+	source := p.source
+	if source.Alg == "" {
+		source.Alg = p.track.Alg
+	}
+	p.emit(PlaybackEvent{Track: *p.track, Source: source, Started: true})
+}
+
+// finish closes the current session with the transition's actual cause.
+func (p *Player) finish(end PlayEnd) {
+	if !p.active || p.track == nil {
+		return
+	}
+	p.active = false
+	source := p.source
+	if source.Alg == "" {
+		source.Alg = p.track.Alg
+	}
+	p.emit(PlaybackEvent{Track: *p.track, Source: source, End: end, Position: p.Position()})
+}
+
+func (p *Player) emit(event PlaybackEvent) {
+	if p.Playback != nil {
+		p.Playback(event)
+	}
+}
+
+// Finish closes an active session without moving its position, as on exit.
+func (p *Player) Finish() { p.finish(Interrupted) }
+
 // load plays the track at order[at], skipping those that cannot play.
 func (p *Player) load(at int) {
+	p.finish(MovedOn)
 	p.tries = 0
 	p.loadSkipping(at, 0, true, 0)
 }
@@ -761,6 +845,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			}
 			if p.playing {
 				p.out.Play()
+				p.begin()
 				p.fade.fade(1, fadeIn, nil)
 			}
 			// The one after it is fetched while this one plays, so that
@@ -914,6 +999,7 @@ func (p *Player) cutOff() {
 	}
 	p.playing = false
 	p.pending = p.Position()
+	p.finish(Exception)
 	p.stop()
 	p.sync()
 }

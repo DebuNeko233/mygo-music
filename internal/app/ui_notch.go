@@ -525,7 +525,6 @@ func (n *notch) idle(c *ui.Context, open, left float32) {
 // them, so the other shows it too.
 func (a *app) syncWindows() {
 	pl := a.pl
-	a.notePlay()
 	var id int64
 	if tr := pl.Current(); tr != nil {
 		id = tr.ID

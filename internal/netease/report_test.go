@@ -14,6 +14,7 @@ import (
 
 // sentLog is a request to the weblog: where it went, and what it sealed.
 type sentLog struct {
+	host   string
 	path   string
 	sealed string
 }
@@ -23,6 +24,7 @@ func captureLog(t *testing.T) *sentLog {
 	t.Helper()
 	sent := &sentLog{}
 	answer(t, func(req *http.Request) string {
+		sent.host = req.URL.Host
 		sent.path = req.URL.Path
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
@@ -39,7 +41,10 @@ func captureLog(t *testing.T) *sentLog {
 // log unseals the one log the request carried.
 func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 	t.Helper()
-	if want := "/eapi/feedback/weblog"; s.path != want {
+	if want := "clientlogusf.music.163.com"; s.host != want {
+		t.Fatalf("posted to host %q, want %q", s.host, want)
+	}
+	if want := "/api/feedback/weblog"; s.path != want {
 		t.Fatalf("posted to %q, want %q", s.path, want)
 	}
 	var data struct {
@@ -67,7 +72,7 @@ func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 func TestReportPlayStartSendsAStartLog(t *testing.T) {
 	sent := captureLog(t)
 	const id = 3448738711
-	if err := ReportPlayStart(id); err != nil {
+	if err := ReportPlayStart(id, PlaySource{Source: "list", ID: 42, Alg: "itembased"}); err != nil {
 		t.Fatal(err)
 	}
 	action, fields := sent.log(t)
@@ -83,6 +88,23 @@ func TestReportPlayStartSendsAStartLog(t *testing.T) {
 	if _, ok := fields["time"]; ok {
 		t.Errorf("a startplay carries no time, sent %v", fields["time"])
 	}
+	if fields["mainsite"] != "1" || fields["mainsiteWeb"] != "1" || fields["source"] != "list" || fields["sourceId"] != "42" || fields["alg"] != "itembased" {
+		t.Errorf("startplay fields %+v", fields)
+	}
+}
+
+// Unknown attribution is omitted instead of sending empty source fields.
+func TestReportPlayStartOmitsUnknownSource(t *testing.T) {
+	sent := captureLog(t)
+	if err := ReportPlayStart(7, PlaySource{}); err != nil {
+		t.Fatal(err)
+	}
+	_, fields := sent.log(t)
+	for _, key := range []string{"source", "sourceId", "alg"} {
+		if _, ok := fields[key]; ok {
+			t.Errorf("unknown %s was sent as %v", key, fields[key])
+		}
+	}
 }
 
 // A song the listener leaves is reported to the weblog NetEase's players
@@ -92,7 +114,7 @@ func TestReportPlayStartSendsAStartLog(t *testing.T) {
 func TestReportPlaySendsAPlayLog(t *testing.T) {
 	sent := captureLog(t)
 	const id = 3448738711
-	if err := ReportPlay(id, 92*time.Second, MovedOn); err != nil {
+	if err := ReportPlay(id, 92*time.Second, MovedOn, PlaySource{}); err != nil {
 		t.Fatal(err)
 	}
 	action, fields := sent.log(t)

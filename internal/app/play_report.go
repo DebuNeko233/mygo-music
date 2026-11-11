@@ -1,89 +1,71 @@
 package app
 
 import (
+	"log"
 	"time"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
-// playWorth is how long a song must be heard before NetEase counts it as
-// played.
+// playWorth is how long a song must be heard before NetEase counts it as played.
 const playWorth = 3 * time.Second
 
-// playSlack is how near a song's end counts as hearing it through.
-const playSlack = time.Second
+var reportPlayStart func(int64, netease.PlaySource) error = netease.ReportPlayStart
+var reportPlay func(int64, time.Duration, string, netease.PlaySource) error = netease.ReportPlay
 
-// reportPlayStart tells NetEase that a song began playing.
-var reportPlayStart func(id int64) error = netease.ReportPlayStart
-
-// reportPlay tells NetEase how a song was heard: which one, for how long, and
-// how it ended.
-var reportPlay func(id int64, played time.Duration, end string) error = netease.ReportPlay
-
-// heardPlay is the song playing and the position it reached, reported once
-// the listener leaves it: NetEase's own players report a play when a song
-// ends, with the position it reached, not when it starts.
+// heardPlay is the one actual audio session waiting for its final play log.
 type heardPlay struct {
-	id   int64
-	at   time.Duration
-	sent bool // whether this play was reported
+	id     int64
+	active bool
 }
 
-// notePlay follows what plays and tells NetEase when a song starts, then how
-// that play went once playback leaves it, which NetEase files under what they
-// played lately and counts as their listening, as its own clients do. It runs
-// every frame, so the position a song was left at is known when another takes
-// its place. A podcast episode is not a song, and neither is one heard for
-// three seconds.
-func (a *app) notePlay() {
-	tr := a.pl.Current()
-	if tr == nil || tr.ProgramID != 0 || a.profile == nil {
-		a.closePlay(netease.Interrupted)
+// playback receives the player's explicit transitions, never a UI-frame sample.
+// Restoring paused, pausing and seeking emit no transition, so none can create
+// or discard a report. These callbacks run on the app's main thread.
+func (a *app) playback(event player.PlaybackEvent) {
+	if event.Started {
+		if event.Track.ProgramID != 0 || a.profile == nil {
+			return
+		}
+		source := netease.PlaySource{Source: event.Source.Source, ID: event.Source.ID, Alg: event.Source.Alg}
+		a.heard = heardPlay{id: event.Track.ID, active: true}
+		a.enqueueReport(func() {
+			if err := reportPlayStart(event.Track.ID, source); err != nil {
+				log.Printf("play report: start %d: %v", event.Track.ID, err)
+			}
+		})
 		return
 	}
-	pos := a.pl.Position()
-	switch {
-	case tr.ID != a.heard.id:
-		a.closePlay(netease.MovedOn)
-		a.heard = heardPlay{id: tr.ID}
-		a.startPlay(tr.ID)
-	case pos < a.heard.at-playSlack:
-		// The song started over, so the play before it stopped where it was.
-		a.closePlay(a.endOf())
-		a.heard = heardPlay{id: tr.ID}
-		a.startPlay(tr.ID)
-	}
-	if pos > a.heard.at {
-		a.heard.at = pos
-	}
-	if !a.pl.Playing() && !a.pl.Loading() {
-		a.closePlay(a.endOf())
-	}
-}
-
-// endOf names how a play ended by the position it reached.
-func (a *app) endOf() string {
-	if length := a.pl.Duration(); length > 0 && a.heard.at >= length-playSlack {
-		return netease.Playthrough
-	}
-	return netease.Interrupted
-}
-
-// startPlay tells NetEase that a song began, as its own players do when one
-// song gives way to another.
-func (a *app) startPlay(id int64) {
-	go func() { _ = reportPlayStart(id) }()
-}
-
-// closePlay reports the song that stopped playing, one report to a play.
-func (a *app) closePlay(end string) {
-	if a.heard.id == 0 || a.heard.sent {
+	if !a.heard.active || a.heard.id != event.Track.ID {
 		return
 	}
-	a.heard.sent = true
-	if a.heard.at < playWorth {
+	a.heard.active = false
+	if event.Position < playWorth {
 		return
 	}
-	id, played := a.heard.id, a.heard.at
-	go func() { _ = reportPlay(id, played, end) }()
+	source := netease.PlaySource{Source: event.Source.Source, ID: event.Source.ID, Alg: event.Source.Alg}
+	end := string(event.End)
+	a.enqueueReport(func() {
+		if err := reportPlay(event.Track.ID, event.Position, end, source); err != nil {
+			log.Printf("play report: end %d: %v", event.Track.ID, err)
+		}
+	})
 }
+
+// enqueueReport keeps each session's startplay before its play, and different
+// sessions in playback order. A failed request is logged rather than lost silently.
+func (a *app) enqueueReport(send func()) {
+	a.reportOnce.Do(func() {
+		a.reportQueue = make(chan func(), 64)
+		go func() {
+			for send := range a.reportQueue {
+				send()
+			}
+		}()
+	})
+	a.reportQueue <- send
+}
+
+// reportPlayStopped closes a session on account changes and application exit.
+func (a *app) reportPlayStopped() { a.pl.Finish() }

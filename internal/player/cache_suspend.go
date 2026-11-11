@@ -60,6 +60,7 @@ func (c *Cache) Quiesce() func() {
 // applies that state after relocation. Both calls belong on the main thread.
 func (p *Player) SuspendCache() func() {
 	position := p.Position()
+	p.finish(Interrupted)
 	p.cacheChanging = true
 	// Old callbacks may refer to the moving directory. Invalidate their
 	// generation and settle busy flags even if resume does not reload audio.

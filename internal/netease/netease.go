@@ -43,8 +43,10 @@ type Track struct {
 	Duration int64    `json:"dt"` // milliseconds
 	Fee      int      `json:"fee"`
 	Alias    []string `json:"alia"`
-	// Reason says why a daily recommendation was picked.
+	// Reason says why a daily recommendation was picked; Alg identifies its
+	// recommendation algorithm when NetEase provides one.
 	Reason string `json:"reason"`
+	Alg    string `json:"alg"`
 	// Privilege is what the listener may do with the track, if known.
 	Privilege *Privilege `json:"privilege"`
 	// A podcast's episode plays as a track of its audio, ID, with the
@@ -139,7 +141,7 @@ type Playlist struct {
 		UserID   int64  `json:"userId"`
 		Nickname string `json:"nickname"`
 	} `json:"creator"`
-	Tracks   []Track `json:"tracks"`
+	Tracks   []Track   `json:"tracks"`
 	TrackIDs []TrackID `json:"trackIds"`
 	// Preview holds a chart's top songs, as its card shows them.
 	Preview []ChartLine `json:"-"`

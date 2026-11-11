@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Event-driven refresh, not a periodic poll: returning to the front or opening
@@ -113,7 +114,7 @@ func copyPlaylists(pl []netease.Playlist) []netease.Playlist {
 func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	was := a.playlists[id]
 	if was != nil && thenPlay {
-		a.pl.PlayQueue(was.Tracks, firstPlayable(was.Tracks))
+		a.pl.PlayQueueFrom(was.Tracks, firstPlayable(was.Tracks), player.PlaySource{Source: "list", ID: id})
 	}
 	r := a.playlistRequest(id)
 	if r.busy {
@@ -149,7 +150,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 						before = copyPlaylist(*kept)
 						delete(a.loadingPl, id)
 						if thenPlay || a.plPlay[id] {
-							a.pl.PlayQueue(kept.Tracks, firstPlayable(kept.Tracks))
+							a.pl.PlayQueueFrom(kept.Tracks, firstPlayable(kept.Tracks), player.PlaySource{Source: "list", ID: id})
 							thenPlay = false
 							delete(a.plPlay, id)
 						}
@@ -191,7 +192,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			delete(a.plErr, id)
 			req.keep(bytes)
 			if was == nil && play {
-				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+				a.pl.PlayQueueFrom(pl.Tracks, firstPlayable(pl.Tracks), player.PlaySource{Source: "list", ID: id})
 			}
 		})
 	}()

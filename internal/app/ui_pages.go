@@ -285,10 +285,10 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 					if a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
-					a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+					a.pl.PlayQueueFrom(pl.Tracks, firstPlayable(pl.Tracks), a.playSource())
 				}
 				if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
-					a.pl.PlayShuffled(pl.Tracks)
+					a.pl.PlayShuffledFrom(pl.Tracks, a.playSource())
 				}
 				if a.savable(pl) {
 					icon, label := iconPlus, "收藏"
@@ -450,7 +450,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			}
 		})
 		if row.Clicked() && tr.Playable() {
-			a.pl.PlayQueue(tracks, i)
+			a.pl.PlayQueueFrom(tracks, i, a.playSource())
 		}
 	}).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).ScrollbarInsets(top, 0, bottom, 0)
 	if a.route.page == pagePlaylist {

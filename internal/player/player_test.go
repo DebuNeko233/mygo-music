@@ -12,6 +12,33 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// Playback events follow real audio transitions: pause and seek preserve the
+// session, while repeat-one closes it and starts another at zero.
+func TestPlaybackEventsDistinguishPauseSeekAndRepeat(t *testing.T) {
+	ch, p := posted()
+	defer p.out.Close()
+	p.source = PlaySource{Source: "list", ID: 42}
+	var events []PlaybackEvent
+	p.Playback = func(event PlaybackEvent) { events = append(events, event) }
+	p.begin()
+	p.TogglePlay()
+	next(t, ch)
+	p.TogglePlay()
+	p.Seek(90 * time.Second)
+	next(t, ch)
+	if len(events) != 1 || !events[0].Started {
+		t.Fatalf("pause/resume/seek produced %+v", events)
+	}
+	p.repeat = RepeatOne
+	p.ended()
+	if len(events) != 3 || events[1].End != Playthrough || !events[2].Started {
+		t.Fatalf("repeat produced %+v", events)
+	}
+	if events[0].Source.Source != "list" || events[0].Source.ID != 42 {
+		t.Fatalf("source was lost: %+v", events[0].Source)
+	}
+}
+
 func TestPlayEmptyQueue(t *testing.T) {
 	p := &Player{at: -1}
 	p.PlayQueue(nil, 0) // an empty playlist's play button

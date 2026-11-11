@@ -85,6 +85,14 @@ func eapiPost(path string, data map[string]any, out any) error {
 }
 
 func eapiPostContext(ctx context.Context, path string, data map[string]any, out any) error {
+	return eapiPostDomain(ctx, eapiDomain, path, data, out)
+}
+
+func eapiPostDomain(ctx context.Context, domain, path string, data map[string]any, out any) error {
+	return eapiPostEndpoint(ctx, domain+"/eapi/"+strings.TrimPrefix(path, "/api/"), path, data, out)
+}
+
+func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[string]any, out any) error {
 	header := map[string]string{
 		"osver":       eapiClient["osver"],
 		"deviceId":    device(),
@@ -112,7 +120,7 @@ func eapiPostContext(ctx context.Context, path string, data map[string]any, out 
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", eapiDomain+"/eapi/"+strings.TrimPrefix(path, "/api/"),
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint,
 		strings.NewReader(url.Values{"params": {params}}.Encode()))
 	if err != nil {
 		return err
@@ -152,8 +160,16 @@ func eapiPostContext(ctx context.Context, path string, data map[string]any, out 
 // eapiOK calls path through the eapi with data, and fails unless NetEase
 // answers code 200.
 func eapiOK(path string, data map[string]any) error {
+	return eapiOKDomain(eapiDomain, path, data)
+}
+
+func eapiOKDomain(domain, path string, data map[string]any) error {
+	return eapiOKEndpoint(domain+"/eapi/"+strings.TrimPrefix(path, "/api/"), path, data)
+}
+
+func eapiOKEndpoint(endpoint, path string, data map[string]any) error {
 	var res apiError
-	if err := eapiPost(path, data, &res); err != nil {
+	if err := eapiPostEndpoint(context.Background(), endpoint, path, data, &res); err != nil {
 		return err
 	}
 	if res.Code != 200 {

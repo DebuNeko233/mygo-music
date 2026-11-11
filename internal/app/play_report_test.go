@@ -1,114 +1,147 @@
 package app
 
 import (
+	"errors"
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
-
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 type reportedPlay struct {
 	id     int64
 	played time.Duration
 	end    string
+	source netease.PlaySource
+	start  bool
 }
 
-// A song that starts is announced to NetEase, and the song the listener
-// leaves is then reported with the position it reached and why it stopped, so
-// that the play is filed with its length; an episode is not a song, and one
-// heard for two seconds is not worth a play. The app reported nothing, so its
-// plays never showed in what it played lately.
-func TestSongsAreAnnouncedAndThenReported(t *testing.T) {
-	song := func(id int64) netease.Track { return netease.Track{ID: id, Duration: 200000} }
+// Playback transitions, not frames or position samples, decide when a play
+// starts and ends; pause/resume and seeking keep the same session.
+func TestPlayReportsFollowPlaybackSessions(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		heard  netease.Track
-		at     time.Duration
-		then   func(a *app)
-		starts []int64
-		plays  []reportedPlay
+		name  string
+		track netease.Track
+		at    time.Duration
+		end   player.PlayEnd
+		want  []reportedPlay
 	}{
-		{
-			name:   "moved on",
-			heard:  song(7),
-			at:     95 * time.Second,
-			then:   func(a *app) { a.pl.Cue([]netease.Track{song(8)}) },
-			starts: []int64{7, 8},
-			plays:  []reportedPlay{{7, 95 * time.Second, netease.MovedOn}},
-		},
-		{
-			// The song plays through, then starts over from its beginning.
-			name:   "played through",
-			heard:  song(7),
-			at:     199 * time.Second,
-			then:   func(a *app) { a.pl.Hold(0) },
-			starts: []int64{7, 7},
-			plays:  []reportedPlay{{7, 199 * time.Second, netease.Playthrough}},
-		},
-		{
-			name:   "left after two seconds",
-			heard:  song(7),
-			at:     2 * time.Second,
-			then:   func(a *app) { a.pl.Cue([]netease.Track{song(8)}) },
-			starts: []int64{7, 8},
-		},
-		{
-			name:   "episode",
-			heard:  netease.Track{ID: 8, ProgramID: 900, Duration: 200000},
-			at:     95 * time.Second,
-			then:   func(a *app) { a.pl.Cue([]netease.Track{song(9)}) },
-			starts: []int64{9},
-		},
+		{"moved on", netease.Track{ID: 7}, 95 * time.Second, player.MovedOn,
+			[]reportedPlay{{id: 7, start: true}, {id: 7, played: 95 * time.Second, end: "ui"}}},
+		{"played through", netease.Track{ID: 7}, 199 * time.Second, player.Playthrough,
+			[]reportedPlay{{id: 7, start: true}, {id: 7, played: 199 * time.Second, end: "playend"}}},
+		{"interrupted", netease.Track{ID: 7}, 30 * time.Second, player.Interrupted,
+			[]reportedPlay{{id: 7, start: true}, {id: 7, played: 30 * time.Second, end: "interrupt"}}},
+		{"decode failure", netease.Track{ID: 7}, 30 * time.Second, player.Exception,
+			[]reportedPlay{{id: 7, start: true}, {id: 7, played: 30 * time.Second, end: "exception"}}},
+		{"too short", netease.Track{ID: 7}, 2 * time.Second, player.MovedOn,
+			[]reportedPlay{{id: 7, start: true}}},
+		{"episode", netease.Track{ID: 7, ProgramID: 900}, 95 * time.Second, player.MovedOn, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a := newTestApp()
-			a.settings = defaultSettings()
-			a.profile = &netease.Profile{}
-			starts := make(chan int64, 8)
-			plays := make(chan reportedPlay, 8)
-			reportPlayStart = func(id int64) error {
-				starts <- id
-				return nil
-			}
-			reportPlay = func(id int64, played time.Duration, end string) error {
-				plays <- reportedPlay{id, played, end}
-				return nil
-			}
-			defer func() {
-				reportPlayStart = netease.ReportPlayStart
-				reportPlay = netease.ReportPlay
-			}()
-
-			tt := ui.NewTesterWith(func(c *ui.Context) { a.view(c) }, 800, 600, ui.TesterOptions{})
-			a.pl.Cue([]netease.Track{tc.heard})
-			a.pl.Hold(tc.at)
-			tt.Frame()
-
-			tc.then(a)
-			tt.Frame()
-			tt.Frame()
-			time.Sleep(200 * time.Millisecond)
-
-			if got := drain(starts); !slices.Equal(got, tc.starts) {
-				t.Errorf("announced %v, want %v", got, tc.starts)
-			}
-			if got := drain(plays); !slices.Equal(got, tc.plays) {
-				t.Errorf("reported %+v, want %+v", got, tc.plays)
+			a, sent := reportFixture(t)
+			start := player.PlaybackEvent{Track: tc.track, Started: true}
+			a.playback(start)
+			a.playback(player.PlaybackEvent{Track: tc.track, End: tc.end, Position: tc.at})
+			a.playback(player.PlaybackEvent{Track: tc.track, End: tc.end, Position: tc.at})
+			if got := waitReports(t, sent, len(tc.want)); !slices.Equal(got, tc.want) {
+				t.Errorf("reported %+v, want %+v", got, tc.want)
 			}
 		})
 	}
 }
 
-// drain takes what was sent, and nothing more.
-func drain[T any](ch chan T) []T {
-	var got []T
+// A restored paused song and a pause/resume send nothing; no hidden-window or
+// view frame is needed for a real transition to reach the same reporter.
+func TestPausedRestoreAndResumeDoNotCreateAReport(t *testing.T) {
+	a, sent := reportFixture(t)
+	track := netease.Track{ID: 7}
+	// Restore and pause/resume intentionally produce no PlaybackEvent.
+	if got := drainReports(sent); len(got) != 0 {
+		t.Fatalf("paused restore sent %+v", got)
+	}
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	if got := waitReports(t, sent, 1); len(got) != 1 || !got[0].start {
+		t.Fatalf("actual resume sent %+v", got)
+	}
+}
+
+// Requests run in playback order even when startplay fails; the failure must
+// not drop or reorder the following final play log.
+func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
+	a := newTestApp()
+	a.profile = &netease.Profile{}
+	var sent []reportedPlay
+	done := make(chan struct{}, 2)
+	reportPlayStart = func(id int64, source netease.PlaySource) error {
+		sent = append(sent, reportedPlay{id: id, source: source, start: true})
+		done <- struct{}{}
+		return errors.New("offline")
+	}
+	reportPlay = func(id int64, played time.Duration, end string, source netease.PlaySource) error {
+		if len(sent) != 1 || !sent[0].start {
+			t.Errorf("play arrived before startplay completed: %+v", sent)
+		}
+		sent = append(sent, reportedPlay{id: id, played: played, end: end, source: source})
+		done <- struct{}{}
+		return nil
+	}
+	t.Cleanup(func() { reportPlayStart = netease.ReportPlayStart; reportPlay = netease.ReportPlay })
+	track := netease.Track{ID: 7}
+	source := player.PlaySource{Source: "list", ID: 42, Alg: "itembased"}
+	a.playback(player.PlaybackEvent{Track: track, Source: source, Started: true})
+	a.playback(player.PlaybackEvent{Track: track, Source: source, End: player.MovedOn, Position: 10 * time.Second})
+	for range 2 {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("reports did not finish")
+		}
+	}
+	if len(sent) != 2 || sent[1].source.Source != "list" || sent[1].source.ID != 42 || sent[1].source.Alg != "itembased" {
+		t.Fatalf("reports %+v", sent)
+	}
+}
+
+func reportFixture(t *testing.T) (*app, chan reportedPlay) {
+	t.Helper()
+	a := newTestApp()
+	a.profile = &netease.Profile{}
+	sent := make(chan reportedPlay, 16)
+	reportPlayStart = func(id int64, source netease.PlaySource) error {
+		sent <- reportedPlay{id: id, source: source, start: true}
+		return nil
+	}
+	reportPlay = func(id int64, played time.Duration, end string, source netease.PlaySource) error {
+		sent <- reportedPlay{id: id, played: played, end: end, source: source}
+		return nil
+	}
+	t.Cleanup(func() { reportPlayStart = netease.ReportPlayStart; reportPlay = netease.ReportPlay })
+	return a, sent
+}
+
+func waitReports(t *testing.T, ch chan reportedPlay, n int) []reportedPlay {
+	t.Helper()
+	var got []reportedPlay
+	for len(got) < n {
+		select {
+		case report := <-ch:
+			got = append(got, report)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("received %+v, want %d reports", got, n)
+		}
+	}
+	return got
+}
+
+func drainReports(ch chan reportedPlay) []reportedPlay {
+	var got []reportedPlay
 	for {
 		select {
-		case v := <-ch:
-			got = append(got, v)
+		case report := <-ch:
+			got = append(got, report)
 		default:
 			return got
 		}

@@ -96,9 +96,10 @@ type app struct {
 	recent    recentData
 	recentTab int
 
-	// heard is the song playing and the position it reached, reported to
-	// NetEase once it stops playing: see play_report.go.
-	heard heardPlay
+	// heard is the actual audio session; reports leave in playback order.
+	heard       heardPlay
+	reportOnce  sync.Once
+	reportQueue chan func()
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
@@ -332,6 +333,8 @@ func Run() error {
 			a.keepSession()
 			a.syncCaptions()
 		}
+		a.pl.Playback = a.playback
+		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.reportPlayStopped() })
 		a.volume = a.settings.Volume
 		// The system's mixer applies the volume too, where it keeps one for
 		// the app, which is from the first sound on.
