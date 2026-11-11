@@ -113,7 +113,11 @@ func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[strin
 		"requestId":   fmt.Sprintf("%d_%04d", time.Now().UnixMilli(), time.Now().Nanosecond()%1000),
 		"__csrf":      "",
 	}
-	for _, c := range httpClient.Jar.Cookies(siteURL) {
+	jar := httpClient.Jar
+	if strings.Contains(endpoint, "://clientlog.music.163.com/") {
+		jar = playCookieJar()
+	}
+	for _, c := range jar.Cookies(siteURL) {
 		switch c.Name {
 		case "MUSIC_U", "NMTID":
 			header[c.Name] = c.Value

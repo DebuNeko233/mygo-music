@@ -1,9 +1,6 @@
 package netease
 
-import (
-	"os"
-	"testing"
-)
+import ()
 
 func livePlayCount(id int64) (int, error) {
 	profile, err := Account()
@@ -28,16 +25,4 @@ func livePlayCount(id int64) (int, error) {
 		}
 	}
 	return 0, nil
-}
-
-func TestPlayCountsLive(t *testing.T) {
-	if os.Getenv("LIVE") == "" || os.Getenv("NM_SESSION") == "" {
-		t.Skip()
-	}
-	useSession(t, os.Getenv("NM_SESSION"))
-	count, err := livePlayCount(1892257906)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("track 1892257906 listening count: %d", count)
 }

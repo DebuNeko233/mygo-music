@@ -20,6 +20,7 @@ func TestPlaybackEventsDistinguishPauseSeekAndRepeat(t *testing.T) {
 	p.source = PlaySource{Source: "list", ID: 42}
 	var events []PlaybackEvent
 	p.Playback = func(event PlaybackEvent) { events = append(events, event) }
+	p.info = &netease.Stream{Bitrate: 320000, Level: "exhigh"}
 	p.begin()
 	p.TogglePlay()
 	next(t, ch)
@@ -36,6 +37,9 @@ func TestPlaybackEventsDistinguishPauseSeekAndRepeat(t *testing.T) {
 	}
 	if events[0].Source.Source != "list" || events[0].Source.ID != 42 {
 		t.Fatalf("source was lost: %+v", events[0].Source)
+	}
+	if events[2].Bitrate != 320 || events[2].Level != "exhigh" {
+		t.Fatalf("repeat started with default quality: %+v", events[2])
 	}
 }
 
@@ -90,6 +94,128 @@ func TestPlaybackListeningTimeExcludesPausesAndSeeks(t *testing.T) {
 	p.finish(Interrupted)
 	if got := events[1].Played; got != 65*time.Second {
 		t.Fatalf("heard %v, want 65 seconds excluding pause and seek", got)
+	}
+}
+
+// Retrying the same song keeps its session and excludes the backoff and
+// subsequent loading from listening time.
+func TestPlaybackRetryPreservesHeardTime(t *testing.T) {
+	p := &Player{at: -1, post: func(func()) {}}
+	p.Cue([]netease.Track{{ID: 1, Duration: 600000}})
+	p.SuspendCache()
+	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	p.now = func() time.Time { return clock }
+	p.info = &netease.Stream{Bitrate: 128000, Level: "standard"}
+	p.begin()
+	clock = clock.Add(8 * time.Second)
+	p.retry(0, 0, 12*time.Second, netease.ErrUnavailable)
+	clock = clock.Add(time.Hour)
+	p.loadSkipping(0, 0, true, 12*time.Second)
+	p.info = &netease.Stream{Bitrate: 320000, Level: "exhigh"}
+	p.begin()
+	clock = clock.Add(4 * time.Second)
+	p.finish(Interrupted)
+	if p.played != 12*time.Second {
+		t.Fatalf("retry accumulated %v, want 12 seconds", p.played)
+	}
+}
+
+// Pausing a load and failing to restart audio both stop listening time even
+// though the track remains active for a later resume.
+func TestPlaybackStoppedLoadExcludesWallClock(t *testing.T) {
+	for _, stop := range []string{"pause", "failure"} {
+		t.Run(stop, func(t *testing.T) {
+			p := &Player{at: -1, post: func(func()) {}}
+			p.Cue([]netease.Track{{ID: 1, Duration: 600000}})
+			clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			p.now = func() time.Time { return clock }
+			p.begin()
+			clock = clock.Add(3 * time.Second)
+			if stop == "pause" {
+				p.pause()
+				p.playing = false
+			} else {
+				p.tries = loadTries
+				p.failed(0, 0, *p.track, 0, netease.ErrUnavailable)
+			}
+			clock = clock.Add(time.Hour)
+			p.finish(Interrupted)
+			if p.played != 3*time.Second {
+				t.Fatalf("stopped load accumulated %v, want 3 seconds", p.played)
+			}
+		})
+	}
+}
+
+// Cache migration pauses the clock but not the session: reloading audio adds
+// neither a second Started event nor an Interrupted event, and preserves time.
+func TestCacheMigrationPreservesPlaybackSession(t *testing.T) {
+	defer noSongSources(t)()
+	data, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts := make(chan func(), 16)
+	p := New(func(fn func()) { posts <- fn })
+	p.Cache = NewCache(t.TempDir(), 1<<20)
+	seedCache(t, p.Cache, 1, data)
+	p.Cue([]netease.Track{{ID: 1, Duration: 10000}})
+	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	p.now = func() time.Time { return clock }
+	var events []PlaybackEvent
+	p.Playback = func(event PlaybackEvent) { events = append(events, event) }
+	p.loadSkipping(0, 0, true, 250*time.Millisecond)
+	waitCachePlayer(t, p, posts)
+	defer func() {
+		p.out.Close()
+		p.stream.Close()
+	}()
+	clock = clock.Add(5 * time.Second)
+	position := p.Position()
+	resume := p.SuspendCache()
+	if !p.Playing() {
+		t.Fatal("cache migration cleared desired playback state")
+	}
+	clock = clock.Add(time.Hour)
+	p.Cache = NewCache(t.TempDir(), 1<<20)
+	seedCache(t, p.Cache, 1, data)
+	resume()
+	waitCachePlayer(t, p, posts)
+	clock = clock.Add(2 * time.Second)
+	p.finish(Interrupted)
+	if len(events) != 2 || !events[0].Started || events[1].End != Interrupted {
+		t.Fatalf("cache migration split the session: %+v", events)
+	}
+	if events[1].Played != 7*time.Second || events[1].Position < position {
+		t.Fatalf("cache migration lost played time or position: %+v", events[1])
+	}
+}
+
+// Radio seeds retain an existing source, radio conversions have FM context,
+// and delayed feed tracks use FM without inventing an ID.
+func TestRadioPlaySources(t *testing.T) {
+	p := New(func(func()) {})
+	p.SuspendCache()
+	seed := PlaySource{Source: "list", ID: 42}
+	p.PlayQueueFrom([]netease.Track{{ID: 1}}, 0, seed)
+	var refill func([]netease.Track)
+	p.PlayRadio("personal", []netease.Track{{ID: 1}}, func(got func([]netease.Track)) {
+		refill = got
+	})
+	if p.source != seed {
+		t.Fatalf("seed source changed to %+v", p.source)
+	}
+	p.awaiting = true
+	p.at = len(p.order) - 1
+	p.refill()
+	refill([]netease.Track{{ID: 2}})
+	if p.source.Source != "fm" || p.source.ID != 0 {
+		t.Fatalf("feed source %+v, want FM without ID", p.source)
+	}
+	p.source = PlaySource{}
+	p.RadioFrom("personal", nil, func(func([]netease.Track)) {})
+	if p.source.Source != "fm" || p.source.ID != 0 {
+		t.Fatalf("radio conversion source %+v", p.source)
 	}
 }
 

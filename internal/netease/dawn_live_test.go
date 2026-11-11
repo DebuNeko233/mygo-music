@@ -4,14 +4,17 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo"
 )
 
 // Only a real increase in the listener's server-side count proves that the
 // desktop records were counted; an upload acknowledgement alone does not.
 func TestDawnLive(t *testing.T) {
-	if os.Getenv("LIVE") == "" || os.Getenv("NM_SESSION") == "" {
+	if os.Getenv("LIVE") == "" || os.Getenv("NM_SESSION") == "" || os.Getenv("NM_LIVE_MUTATE") == "" {
 		t.Skip()
 	}
+	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
 	useSession(t, os.Getenv("NM_SESSION"))
 	track := Track{ID: 1892257906, Duration: 191000, Fee: 8, Name: "ベイビーヘイロー"}
 	before, err := livePlayCount(track.ID)

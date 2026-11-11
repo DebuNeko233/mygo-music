@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 )
 
 // sentLog is a request to the weblog: where it went, and what it sealed.
@@ -117,32 +116,37 @@ func TestReportPlayStartOmitsUnknownSource(t *testing.T) {
 	}
 }
 
-// A song the listener leaves is reported with its listening time and how it
-// ended. The weblog currently requires its own host and macOS eapi identity;
-// the previous desktop-pc request returned 200 but was not counted.
-func TestReportPlaySendsAPlayLog(t *testing.T) {
+// The recent-play weblog uses the dedicated host and macOS eapi identity;
+// desktop listening duration belongs to the separate Dawn record.
+func TestReportPlayStartUsesWeblogIdentity(t *testing.T) {
 	sent := captureLog(t)
-	const id = 3448738711
-	if err := ReportPlay(id, 92*time.Second, MovedOn, PlaySource{}); err != nil {
+	if err := ReportPlayStart(7, PlaySource{}); err != nil {
 		t.Fatal(err)
 	}
-	action, fields := sent.log(t)
-	if action != "play" || fields["type"] != "song" || fields["end"] != MovedOn {
-		t.Fatalf("logged %q %+v, want a song the listener moved on from", action, fields)
-	}
-	if got := fields["id"]; got != float64(id) {
-		t.Errorf("log is of song %v, want %d", got, id)
-	}
-	if got := fields["time"]; got != float64(92) {
-		t.Errorf("log plays 92 seconds of the song, sent %v", got)
-	}
-	if got := fields["mainsite"]; got != "1" {
-		t.Errorf("mainsite is %#v, want the string \"1\"", got)
-	}
+	sent.log(t)
 	for _, want := range []string{"os=osx", "appver=3.1.10.5100", "osver=15.5", "channel=netease"} {
 		if !strings.Contains(sent.cookie, want) {
 			t.Errorf("weblog identity misses %q in %q", want, sent.cookie)
 		}
+	}
+}
+
+// Reports that outlive a login retain the old identity until the next session
+// restores the live jar.
+func TestPlayReportsKeepTheirLoginCookies(t *testing.T) {
+	old := reportCookieJar
+	t.Cleanup(func() { reportCookieJar = old })
+	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{{Name: "MUSIC_U", Value: "old"}})
+	restore := SnapshotPlayReports()
+	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{{Name: "MUSIC_U", Value: "new"}})
+	cookies := playCookieJar().Cookies(siteURL)
+	if len(cookies) != 1 || cookies[0].Value != "old" {
+		t.Fatalf("queued report cookies changed account: %+v", cookies)
+	}
+	restore()
+	cookies = playCookieJar().Cookies(siteURL)
+	if len(cookies) != 1 || cookies[0].Value != "new" {
+		t.Fatalf("next login did not restore live cookies: %+v", cookies)
 	}
 }
 

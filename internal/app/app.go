@@ -97,10 +97,11 @@ type app struct {
 	recentTab int
 
 	// heard is the actual audio session; reports leave in playback order.
-	heard       heardPlay
-	reportOnce  sync.Once
-	reportQueue chan func()
-	reportDone  chan struct{}
+	heard         heardPlay
+	reportOnce    sync.Once
+	reportQueue   chan func()
+	reportDone    chan struct{}
+	reportRestore func()
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card

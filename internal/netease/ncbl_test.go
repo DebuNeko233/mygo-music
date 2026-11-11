@@ -23,7 +23,8 @@ func TestNCBLContainer(t *testing.T) {
 	if string(packet[:4]) != "NCBL" || binary.LittleEndian.Uint32(packet[4:]) != 3 {
 		t.Fatal("wrong NCBL container header")
 	}
-	keyB := new(big.Int).Exp(new(big.Int).SetBytes(key), big.NewInt(65537), ncblModulus).Bytes()
+	modulus, _ := new(big.Int).SetString(ncblModulusHex, 16)
+	keyB := new(big.Int).Exp(new(big.Int).SetBytes(key), big.NewInt(65537), modulus).Bytes()
 	if !bytes.Equal(packet[26:58], append(make([]byte, 32-len(keyB)), keyB...)) {
 		t.Fatal("key is not RSA wrapped")
 	}
@@ -63,13 +64,15 @@ func TestNCBLContainer(t *testing.T) {
 // NCBL's stream cipher is RFC 8439 ChaCha20, including its block counter.
 func TestNCBLChaChaVector(t *testing.T) {
 	key, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
-	nonce, _ := hex.DecodeString("000000090000004a00000000")
-	cipher, err := ncblChaCha(key, 1, nonce, make([]byte, 64))
+	nonce, _ := hex.DecodeString("000000000000004a00000000")
+	cipher, err := ncblChaCha(key, 1, nonce, make([]byte, 128))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e" +
-		"d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e"
+	want :=
+		"224f51f3401bd9e12fde276fb8631ded8c131f823d2c06e27e4fcaec9ef3cf78" +
+			"8a3b0aa372600a92b57974cded2b9334794cba40c63e34cdea212c4cf07d41b769" +
+			"a6749f3f630f4122cafe28ec4dc47e26d4346d70b98c73f3e9c53ac40c5945398b6eda1a832c89c167eacd901d7e2bf363740373201aa188fbbce83991c4ed"
 	if hex.EncodeToString(cipher) != want {
 		t.Fatalf("ChaCha20 produced %x", cipher)
 	}

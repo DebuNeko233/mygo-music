@@ -2,8 +2,10 @@ package netease
 
 import (
 	"encoding/json"
-	"math"
+	"net/http"
+	"net/http/cookiejar"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -30,18 +32,6 @@ func ReportPlayStart(id int64, source PlaySource) error {
 	return sendLog("startplay", data)
 }
 
-// ReportPlay tells NetEase how long the song was heard and why its play ended.
-func ReportPlay(id int64, played time.Duration, end string, source PlaySource) error {
-	data := playFields(id, source)
-	data["download"] = 0
-	data["end"] = end
-	data["time"] = int64(math.Round(played.Seconds()))
-	data["wifi"] = 0
-	data["mainsite"] = "1"
-	data["mainsiteWeb"] = "1"
-	return sendLog("play", data)
-}
-
 func playFields(id int64, source PlaySource) map[string]any {
 	data := map[string]any{"id": id, "type": "song"}
 	if source.Source != "" {
@@ -59,13 +49,41 @@ func playFields(id int64, source PlaySource) map[string]any {
 // sendLog posts to the dedicated weblog host, not the ordinary eapi gateway.
 const playLogDomain = "https://clientlog.music.163.com"
 
-// The play-count weblog currently accepts the macOS eapi identity. Keep it
+// The recent-play weblog currently accepts the macOS eapi identity. Keep it
 // scoped to this endpoint: other desktop requests must retain their own identity.
 var playLogClient = map[string]string{
 	"os":      "osx",
 	"appver":  "3.1.10.5100",
 	"osver":   "15.5",
 	"channel": "netease",
+}
+
+// SnapshotPlayReports redirects the queued reports of the old login into a
+// private jar until the next login. Reporting functions then authenticate with
+// the session that created them, not whichever account the global jar holds.
+func SnapshotPlayReports() func() {
+	jar, _ := cookiejar.New(nil)
+	jar.SetCookies(siteURL, httpClient.Jar.Cookies(siteURL))
+	reportJarMu.Lock()
+	old := reportCookieJar
+	reportCookieJar = func() http.CookieJar { return jar }
+	reportJarMu.Unlock()
+	return func() {
+		reportJarMu.Lock()
+		reportCookieJar = old
+		reportJarMu.Unlock()
+	}
+}
+
+var (
+	reportJarMu     sync.RWMutex
+	reportCookieJar = func() http.CookieJar { return httpClient.Jar }
+)
+
+func playCookieJar() http.CookieJar {
+	reportJarMu.RLock()
+	defer reportJarMu.RUnlock()
+	return reportCookieJar()
 }
 
 func sendLog(action string, data map[string]any) error {

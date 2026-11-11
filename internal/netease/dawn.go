@@ -25,8 +25,7 @@ func ReportDawnStart(track Track, bitrate int, level string, source PlaySource) 
 	plv := dawnFields(track, bitrate, level, source)
 	plv["app_mode"] = 2
 	now := time.Now()
-	plv["_addrefer"] = fmt.Sprintf("[F:63][%d#933#%s#205293#c9156c3][e][2][23][cell_pc_songlist_song:2|page_pc_songlist_songflow|page_mine_like_music][%d:song:x:x|:::|%d:list::]", now.UnixMilli(), dawnClientVersion, track.ID, source.ID)
-	plv["_multirefers"] = []string{"[F:26][s][18][_ai]", "[F:26][s][12][_ai]", fmt.Sprintf("[F:63][%d#933#%s#205293#c9156c3][e][2][8][cell_pc_main_tab_entrance:6|page_pc_main_tab][我喜欢的音乐:spm::|:::]", now.UnixMilli(), dawnClientVersion), "[F:26][s][5][_ai]", "[F:26][s][0][_ai]"}
+	dawnRefer(plv, now, track, source, 23, 933)
 	return uploadDawnRecord("_plv", plv, now)
 }
 
@@ -36,8 +35,7 @@ func ReportDawnEnd(track Track, played time.Duration, end string, bitrate int, l
 	pld := dawnFields(track, bitrate, level, source)
 	pld["app_mode"] = 1
 	now := time.Now()
-	pld["_addrefer"] = fmt.Sprintf("[F:63][%d#616#%s#205293#c9156c3][e][2][92][btn_pc_cover_play|cell_pc_songlist_song:6|page_pc_songlist_songflow|page_mine_like_music][:::|%d:song:x:x|:::|%d:list::]", now.UnixMilli(), dawnClientVersion, track.ID, source.ID)
-	pld["_multirefers"] = []string{"[F:26][s][87][_ai]", "[F:26][s][81][_ai]", "[F:26][s][75][_ai]", "[F:26][s][69][_ai]", "[F:26][s][63][_ai]"}
+	dawnRefer(pld, now, track, source, 92, 616)
 	pld["time"] = max(int64(math.Round(played.Seconds())), 1)
 	pld["realtime"] = pld["time"]
 	pld["end"] = end
@@ -56,24 +54,48 @@ func uploadDawnRecord(action string, fields map[string]any, at time.Time) error 
 }
 
 func dawnFields(track Track, bitrate int, level string, source PlaySource) map[string]any {
-	if bitrate == 0 {
-		bitrate = 320
-	}
-	if level == "" {
-		level = "exhigh"
-	}
 	data := map[string]any{
-		"mode": "circulation", "download": 0, "alg": source.Alg,
+		"mode": "circulation", "download": 0,
 		"status": "front", "id": strconv.FormatInt(track.ID, 10),
 		"type": "song", "is_listentogether": 0,
-		"source": source.Source, "is_heart": 0, "resource_ratio": "",
+		"is_heart": 0, "resource_ratio": "",
 		"resource_time": track.Duration / 1000, "musiceffect_id": "",
 		"bitrate": bitrate, "bitrate_level": level, "vipType": "", "fee": track.Fee, "file": 4,
-		"rightSource": 0, "sourceId": strconv.FormatInt(source.ID, 10),
-		"sourcetype": "track", "libra_abt": "",
+		"rightSource": 0, "libra_abt": "",
 		"channel": "netease", "curStartChannel": "",
 	}
+	for key, value := range playFields(track.ID, source) {
+		switch key {
+		case "source", "sourceId", "alg":
+			data[key] = value
+		}
+	}
+	if source.Source != "" || source.ID != 0 {
+		data["sourcetype"] = "track"
+	}
 	return data
+}
+
+// Refer describes only the entry point the app actually knows. The desktop
+// logger accepts absent navigation metadata; a fabricated liked-songs visit
+// would turn every album, artist and search play into a playlist play.
+func dawnRefer(fields map[string]any, now time.Time, track Track, source PlaySource, position, event int) {
+	if source.ID == 0 && source.Source == "" {
+		return
+	}
+	page, cell := "page_pc_songlist_songflow", "cell_pc_songlist_song"
+	switch source.Source {
+	case "album":
+		page, cell = "page_pc_album_detail", "cell_pc_album_song"
+	case "artist":
+		page, cell = "page_pc_artist_detail", "cell_pc_artist_song"
+	case "search":
+		page, cell = "page_pc_search_result", "cell_pc_search_song"
+	case "dailySongRecommend":
+		page, cell = "page_pc_daily_recommend", "cell_pc_daily_song"
+	}
+	fields["_addrefer"] = fmt.Sprintf("[F:63][%d#%d#%s#205293#c9156c3][e][2][%d][%s|%s][%d:song:x:x|:::|%d:%s::]",
+		now.UnixMilli(), event, dawnClientVersion, position, cell, page, track.ID, source.ID, source.Source)
 }
 
 func uploadDawn(records []byte) error {
@@ -83,7 +105,7 @@ func uploadDawn(records []byte) error {
 		"WNMCID": fmt.Sprintf("abcdef.%d.01.0", time.Now().UnixMilli()),
 		"mode":   "", "ntes_kaola_ad": "1", "os": "pc", "osver": "Microsoft-Windows-10-Professional-build-19045-64bit",
 	}
-	for _, c := range httpClient.Jar.Cookies(siteURL) {
+	for _, c := range playCookieJar().Cookies(siteURL) {
 		switch c.Name {
 		case "MUSIC_U", "NMTID", "__csrf", "JSESSIONID-WYYY", "WNMCID", "clientSign", "_ntes_nuid":
 			cookies[c.Name] = c.Value

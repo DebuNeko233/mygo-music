@@ -27,6 +27,10 @@ type heardPlay struct {
 // or discard a report. These callbacks run on the app's main thread.
 func (a *app) playback(event player.PlaybackEvent) {
 	if event.Started {
+		if a.reportRestore != nil {
+			a.reportRestore()
+			a.reportRestore = nil
+		}
 		if event.Track.ProgramID != 0 || a.profile == nil {
 			return
 		}
@@ -34,6 +38,7 @@ func (a *app) playback(event player.PlaybackEvent) {
 		track := event.Track
 		bitrate, level := event.Bitrate, event.Level
 		a.heard = heardPlay{id: track.ID, active: true}
+		a.reportPlayStopped()
 		a.enqueueReport(func() {
 			if err := reportPlayStart(track.ID, source); err != nil {
 				log.Printf("play report: recent play %d: %v", track.ID, err)
@@ -75,7 +80,17 @@ func (a *app) enqueueReport(send func()) {
 			close(a.reportDone)
 		}()
 	})
-	a.reportQueue <- send
+	queue := a.reportQueue
+	if queue == nil {
+		return
+	}
+	select {
+	case queue <- send:
+	default:
+		// Reporting must never stall input or rendering. Ordinary listening
+		// cannot fill this queue; a stalled network must not change that.
+		log.Printf("play report: queue full; dropping report")
+	}
 }
 
 // reportPlayStopped closes a session on account changes and application exit.
@@ -87,7 +102,14 @@ func (a *app) flushPlayReports() {
 	a.reportPlayStopped()
 	if a.reportQueue != nil {
 		close(a.reportQueue)
-		<-a.reportDone
+		select {
+		case <-a.reportDone:
+		case <-time.After(2 * time.Second):
+			log.Printf("play report: final requests did not finish before account change")
+			if a.reportRestore == nil {
+				a.reportRestore = netease.SnapshotPlayReports()
+			}
+		}
 		a.reportQueue = nil
 		a.reportDone = nil
 		a.reportOnce = sync.Once{}

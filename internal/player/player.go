@@ -292,9 +292,14 @@ func (p *Player) PlayRadio(name string, tracks []netease.Track, feed func(got fu
 	if len(tracks) == 0 {
 		return
 	}
+	// An explicit seed keeps its origin; only the radio's own tracks use FM.
+	source := p.source
+	if source.Source == "" {
+		source.Source = "fm"
+	}
 	shuffle := p.shuffle
 	p.shuffle = false
-	p.PlayQueue(tracks, 0)
+	p.PlayQueueFrom(tracks, 0, source)
 	p.shuffle = shuffle
 	p.AttachRadio(name, feed)
 }
@@ -307,6 +312,9 @@ func (p *Player) RadioFrom(name string, tracks []netease.Track, feed func(got fu
 		return
 	}
 	p.queue, p.order, p.at = []netease.Track{*p.track}, []int{0}, 0
+	if p.source.Source == "" {
+		p.source.Source = "fm"
+	}
 	p.step = 0
 	p.appendTracks(tracks)
 	if p.shuffle {
@@ -376,6 +384,8 @@ func (p *Player) refill() {
 		case p.at+1 < len(p.order):
 			p.awaiting = false
 			p.step = 1
+			// The feed arrives after its seed; its tracks belong to this radio.
+			p.source = PlaySource{Source: "fm"}
 			p.load(p.at + 1)
 		default:
 			// The radio has nothing more: it stops at its end.
@@ -761,7 +771,8 @@ func (p *Player) begin() {
 	if source.Alg == "" {
 		source.Alg = p.track.Alg
 	}
-	p.emit(PlaybackEvent{Track: *p.track, Source: source, Started: true})
+	bitrate, level := p.quality()
+	p.emit(PlaybackEvent{Track: *p.track, Source: source, Started: true, Bitrate: bitrate, Level: level})
 }
 
 // heardTime excludes pauses, seeks and loading from the reported listening time.
@@ -803,12 +814,17 @@ func (p *Player) finish(end PlayEnd) {
 	if source.Alg == "" {
 		source.Alg = p.track.Alg
 	}
-	bitrate, level := 0, ""
-	if p.info != nil {
-		bitrate, level = p.info.Bitrate/1000, p.info.Level
-	}
+	bitrate, level := p.quality()
 	p.emit(PlaybackEvent{Track: *p.track, Source: source, End: end,
 		Position: p.Position(), Played: p.played, Bitrate: bitrate, Level: level})
+}
+
+// quality reports the actual stream selected for this session.
+func (p *Player) quality() (int, string) {
+	if p.info == nil {
+		return 0, ""
+	}
+	return p.info.Bitrate / 1000, p.info.Level
 }
 
 func (p *Player) emit(event PlaybackEvent) {
@@ -830,6 +846,9 @@ func (p *Player) load(at int) {
 // loadSkipping loads the track at order[at], to play or not, from from,
 // skipping those that cannot play: skipped of them so far.
 func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
+	// A retry replaces the audio, not the listening session. Otherwise loading
+	// and pause-resume discard time already heard.
+	p.pause()
 	t := p.queue[p.order[at]]
 	p.stop()
 	p.gen++
@@ -914,6 +933,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	if errors.Is(err, netease.ErrOffline) {
 		p.loading, p.playing = false, false
+		p.pause()
 		p.err = "未缓存"
 		p.sync()
 		return
@@ -922,6 +942,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		// Asked for again it would be turned down again, and the song
 		// plays once the listener is signed in: nothing is skipped.
 		p.err = "登录已过期，请重新登录"
+		p.pause()
 		p.playing = false
 		p.sync()
 		return
@@ -932,6 +953,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 			return
 		}
 		p.err = "网易云正在校验网络，请稍后重试"
+		p.pause()
 		p.playing = false
 		p.sync()
 		return
@@ -944,6 +966,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 			return
 		}
 		p.err = "加载失败，请重试"
+		p.pause()
 		p.playing = false
 		p.sync()
 		return
@@ -964,6 +987,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		p.loadSkipping(next, skipped+1, p.playing, 0)
 		return
 	}
+	p.pause()
 	p.playing = false
 	p.sync()
 }
@@ -987,6 +1011,7 @@ const lyricTries = 3
 // waits: a stream URL gone stale, or a connection dropped, may work once
 // more.
 func (p *Player) retry(at, skipped int, from time.Duration, err error) {
+	p.pause()
 	p.tries++
 	p.retrying = true
 	p.loading = true

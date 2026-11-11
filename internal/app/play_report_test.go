@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -110,6 +111,7 @@ func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 	if len(sent) != 2 || sent[1].source.Source != "list" || sent[1].source.ID != 42 || sent[1].source.Alg != "itembased" {
 		t.Fatalf("reports %+v", sent)
 	}
+	a.flushPlayReports()
 }
 
 // Quitting waits for the final play request instead of abandoning it in the
@@ -149,6 +151,55 @@ func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 	a.flushPlayReports()
 }
 
+// A slow start request cannot delay later input, and closing its queue cannot
+// panic when that request subsequently finishes.
+func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
+	a := newTestApp()
+	a.profile = &netease.Profile{}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	requestFinished := make(chan struct{})
+	var once sync.Once
+	reportPlayStart = func(id int64, source netease.PlaySource) error {
+		once.Do(func() { close(started) })
+		<-release
+		return nil
+	}
+	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
+		select {
+		case <-requestFinished:
+		default:
+			close(requestFinished)
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		reportPlayStart = netease.ReportPlayStart
+		reportDawnStart = netease.ReportDawnStart
+	})
+	track := netease.Track{ID: 7}
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	<-started
+	for range 64 {
+		a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+		a.playback(player.PlaybackEvent{Track: track, Started: true})
+	}
+	finished := make(chan struct{})
+	go func() { a.flushPlayReports(); close(finished) }()
+	select {
+	case <-finished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("flush did not respect its deadline")
+	}
+	close(release)
+	<-requestFinished
+	// The old worker has released the test stubs before the new login begins.
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	a.flushPlayReports()
+	// An event on the closed queue is ignored rather than sent on a closed queue.
+	a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+}
+
 func reportFixture(t *testing.T) (*app, chan reportedPlay) {
 	t.Helper()
 	a := newTestApp()
@@ -164,6 +215,7 @@ func reportFixture(t *testing.T) (*app, chan reportedPlay) {
 		return nil
 	}
 	t.Cleanup(func() {
+		a.flushPlayReports()
 		reportPlayStart = netease.ReportPlayStart
 		reportDawnStart = netease.ReportDawnStart
 		reportDawnEnd = netease.ReportDawnEnd
