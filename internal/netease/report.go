@@ -58,6 +58,8 @@ func playFields(id int64, source PlaySource) map[string]any {
 
 // sendLog posts to the dedicated weblog host, not the ordinary eapi gateway.
 func sendLog(action string, data map[string]any) error {
+	// Every desktop log entry carries its own creation time in milliseconds.
+	data["logtime"] = time.Now().UnixMilli()
 	logs, err := json.Marshal([]map[string]any{{"action": action, "json": data}})
 	if err != nil {
 		return err

@@ -67,6 +67,10 @@ func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 	if len(logs) != 1 {
 		t.Fatalf("%d logs, want one", len(logs))
 	}
+	// The desktop client stamps each entry; omitting logtime made the report incomplete.
+	if stamp, ok := logs[0].JSON["logtime"].(float64); !ok || stamp <= 0 {
+		t.Fatalf("logtime is %#v, want a millisecond timestamp", logs[0].JSON["logtime"])
+	}
 	return logs[0].Action, logs[0].JSON
 }
 
