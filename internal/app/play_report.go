@@ -38,7 +38,6 @@ func (a *app) playback(event player.PlaybackEvent) {
 		track := event.Track
 		bitrate, level := event.Bitrate, event.Level
 		a.heard = heardPlay{id: track.ID, active: true}
-		a.reportPlayStopped()
 		a.enqueueReport(func() {
 			if err := reportPlayStart(track.ID, source); err != nil {
 				log.Printf("play report: recent play %d: %v", track.ID, err)

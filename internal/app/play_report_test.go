@@ -159,6 +159,13 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
 	requestFinished := make(chan struct{})
+	oldDawnEnd := reportDawnEnd
+	oldEnd := make(chan struct{})
+	var endOnce sync.Once
+	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+		endOnce.Do(func() { close(oldEnd) })
+		return oldDawnEnd(track, played, end, bitrate, level, source)
+	}
 	var once sync.Once
 	reportPlayStart = func(id int64, source netease.PlaySource) error {
 		once.Do(func() { close(started) })
@@ -176,6 +183,7 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 	t.Cleanup(func() {
 		reportPlayStart = netease.ReportPlayStart
 		reportDawnStart = netease.ReportDawnStart
+		reportDawnEnd = netease.ReportDawnEnd
 	})
 	track := netease.Track{ID: 7}
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
@@ -193,11 +201,28 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 	}
 	close(release)
 	<-requestFinished
-	// The old worker has released the test stubs before the new login begins.
+	// The old worker's final queued report observes the end stub before cleanup.
+	<-oldEnd
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
 	a.flushPlayReports()
 	// An event on the closed queue is ignored rather than sent on a closed queue.
 	a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+	<-a.reportDone
+}
+
+// A started event must not finish the new session through a stale player pointer.
+func TestStartedSessionSurvivesUntilItsEnd(t *testing.T) {
+	a, sent := reportFixture(t)
+	a.pl = player.New(a.post)
+	track := netease.Track{ID: 7}
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	if !a.heard.active || a.heard.id != track.ID {
+		t.Fatalf("new session was closed on start: %+v", a.heard)
+	}
+	a.playback(player.PlaybackEvent{Track: track, End: player.Playthrough, Played: 35 * time.Second})
+	if got := waitReports(t, sent, 2); len(got) != 2 || got[1].played != 35*time.Second {
+		t.Fatalf("new session sent %+v", got)
+	}
 }
 
 func reportFixture(t *testing.T) (*app, chan reportedPlay) {
