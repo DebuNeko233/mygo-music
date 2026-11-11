@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -117,6 +118,11 @@ func (t *Track) Thread() string {
 	return "R_SO_4_" + strconv.FormatInt(t.ID, 10)
 }
 
+// TrackID is a playlist entry: a song that a long playlist lists by id only.
+type TrackID struct {
+	ID int64 `json:"id"`
+}
+
 type Playlist struct {
 	ID          int64   `json:"id"`
 	Name        string  `json:"name"`
@@ -134,9 +140,7 @@ type Playlist struct {
 		Nickname string `json:"nickname"`
 	} `json:"creator"`
 	Tracks   []Track `json:"tracks"`
-	TrackIDs []struct {
-		ID int64 `json:"id"`
-	} `json:"trackIds"`
+	TrackIDs []TrackID `json:"trackIds"`
 	// Preview holds a chart's top songs, as its card shows them.
 	Preview []ChartLine `json:"-"`
 }
@@ -293,7 +297,8 @@ func Charts() ([]Playlist, error) {
 	return out, nil
 }
 
-// PlaylistDetail returns a playlist with up to 1000 of its tracks.
+// PlaylistDetail returns a playlist with all of its tracks, up to the ten
+// thousand NetEase keeps in one.
 func PlaylistDetail(id int64) (*Playlist, error) {
 	var res struct {
 		Playlist   Playlist    `json:"playlist"`
@@ -308,19 +313,31 @@ func PlaylistDetail(id int64) (*Playlist, error) {
 	// Its privileges mark VIP songs as taken down that a subscriber may
 	// play, as Stan's: the songs' details say right.
 	detailPrivileges(p.Tracks)
-	// Long playlists list only their first tracks in full: the rest by id.
-	// NetEase lists a thousand of them at most, so only those come.
-	if hi := min(len(p.TrackIDs), 1000); len(p.Tracks) < hi {
-		var ids []int64
-		for _, t := range p.TrackIDs[len(p.Tracks):hi] {
-			ids = append(ids, t.ID)
-		}
+	// Long playlists list only some of their tracks in full: the rest by
+	// id, which their details have to fill in.
+	if ids := missingTracks(p.Tracks, p.TrackIDs); len(ids) > 0 {
 		// A detail that is cut short still returns the songs it got: a
 		// playlist showing part of itself beats one that fails whole.
 		more, _ := SongDetails(ids)
 		p.Tracks = append(p.Tracks, more...)
 	}
 	return p, nil
+}
+
+// missingTracks returns the ids of a playlist's songs that come without
+// details, in the playlist's order.
+func missingTracks(tracks []Track, trackIDs []TrackID) []int64 {
+	listed := make(map[int64]bool, len(tracks))
+	for _, t := range tracks {
+		listed[t.ID] = true
+	}
+	ids := make([]int64, 0, len(trackIDs))
+	for _, t := range trackIDs {
+		if !listed[t.ID] {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids
 }
 
 // SongDetails returns the tracks of ids, in their order. It goes through
@@ -331,28 +348,58 @@ func SongDetails(ids []int64) ([]Track, error) {
 }
 
 func songDetails(ctx context.Context, ids []int64) ([]Track, error) {
+	// A playlist of ten thousand songs needs twenty-five batches of four
+	// hundred: asked one after another, it takes half a minute to show.
+	const batch, together = 400, 4
+	batches := (len(ids) + batch - 1) / batch
+	if batches == 0 {
+		return nil, nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	got := make([][]Track, batches)
+	errs := make([]error, batches)
+	var wg sync.WaitGroup
+	waiting := make(chan struct{}, together)
+	for i := range batches {
+		wg.Add(1)
+		waiting <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-waiting }()
+			lo, hi := i*batch, min((i+1)*batch, len(ids))
+			c := make([]map[string]int64, hi-lo)
+			for j, id := range ids[lo:hi] {
+				c[j] = map[string]int64{"id": id}
+			}
+			b, _ := json.Marshal(c)
+			var res struct {
+				Code       int         `json:"code"`
+				Songs      []Track     `json:"songs"`
+				Privileges []Privilege `json:"privileges"`
+			}
+			if err := eapiPostContext(ctx, "/api/v3/song/detail", map[string]any{"c": string(b)}, &res); err != nil {
+				errs[i] = err
+				return
+			}
+			if res.Code != 200 {
+				errs[i] = (apiError{Code: res.Code}).codeError("song detail")
+				return
+			}
+			withPrivileges(res.Songs, res.Privileges)
+			got[i] = res.Songs
+		}()
+	}
+	wg.Wait()
+	// A batch that failed cuts the rest short, as one request would have:
+	// the ids keep their order, and a playlist showing part of itself
+	// beats none of it.
 	var out []Track
-	for len(ids) > 0 {
-		batch := ids[:min(len(ids), 400)]
-		ids = ids[len(batch):]
-		c := make([]map[string]int64, len(batch))
-		for i, id := range batch {
-			c[i] = map[string]int64{"id": id}
+	for i := range got {
+		if errs[i] != nil {
+			return out, errs[i]
 		}
-		b, _ := json.Marshal(c)
-		var res struct {
-			Code       int         `json:"code"`
-			Songs      []Track     `json:"songs"`
-			Privileges []Privilege `json:"privileges"`
-		}
-		if err := eapiPostContext(ctx, "/api/v3/song/detail", map[string]any{"c": string(b)}, &res); err != nil {
-			return out, err
-		}
-		if res.Code != 200 {
-			return out, (apiError{Code: res.Code}).codeError("song detail")
-		}
-		withPrivileges(res.Songs, res.Privileges)
-		out = append(out, res.Songs...)
+		out = append(out, got[i]...)
 	}
 	return out, nil
 }

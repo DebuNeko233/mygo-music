@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -9,6 +10,31 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
+
+// A cover slide moves through painter poses, then releases its outgoing
+// layer and stops rebuilding. Count After wakeups as well as display frames.
+func TestCoverSlideFrameBudget(t *testing.T) {
+	for _, reduced := range []bool{false, true} {
+		a := newTestApp()
+		a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+		builds := 0
+		tt := ui.NewTesterWith(func(c *ui.Context) {
+			builds++
+			ui.Column(c).Fill().Center().Children(func() { a.npCover(c, a.pl.Current(), nil, 220) })
+		}, 320, 320, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
+		a.pl.Next()
+		tt.Frame()
+		tt.Advance(time.Second)
+		if a.npCoverState.switching || a.npCoverState.previous != nil {
+			t.Fatal("the outgoing cover outlived its animation")
+		}
+		before := builds
+		tt.Advance(time.Second)
+		if n := builds - before; n != 0 {
+			t.Errorf("reduced=%v: a resting cover rebuilt %d times", reduced, n)
+		}
+	}
+}
 
 // playingApp is an app playing a track with lyrics, at a position the test
 // sets with pl.Seek, and the number of times its view was built.
@@ -173,5 +199,55 @@ func TestShortLyricsFrameBudget(t *testing.T) {
 		if n := framesAt(a, tt, 30*time.Second); n > 3 {
 			t.Fatalf("%v: short lyrics requested %d idle frames", size, n)
 		}
+	}
+}
+
+func hotCommentStageClock(style string, reduced bool, pos time.Duration) (*app, *ui.Tester, *int) {
+	a, _, _ := quietApp(pos)
+	a.settings.StageStyle = style
+	builds := 0
+	var start time.Time
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		if start.IsZero() {
+			start = c.Now()
+		}
+		builds++
+		a.pl.Hold(pos + c.Now().Sub(start))
+		ui.Column(c).Fill().Children(func() { a.stage(c, a.pl.Current(), ui.RGB(255, 100, 100)) })
+	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
+	return a, tt, &builds
+}
+
+// Reduce Motion must cover hot-comment entry, replacement and exit too:
+// comments appear centered immediately, without fades, movement or frame loops.
+func TestStageHotCommentsReducedMotion(t *testing.T) {
+	for _, style := range stageStyles {
+		t.Run(style.label, func(t *testing.T) {
+			a, tt, builds := hotCommentStageClock(style.id, true, 0)
+			elapsed := time.Duration(0)
+			for _, step := range []struct {
+				at time.Duration
+				id int64
+			}{{1250 * time.Millisecond, 1}, {10150 * time.Millisecond, 2}, {19050 * time.Millisecond, 0}} {
+				tt.Advance(step.at - elapsed)
+				elapsed = step.at
+				card, shown := tt.Find("查看评论")
+				if step.id == 0 {
+					if shown {
+						t.Fatal("comment lingered after the quiet ended")
+					}
+					continue
+				}
+				if !shown || a.quiet.cm.ID != step.id || math.Abs(float64(card.Y-(800-card.H)/2)) > 0.5 {
+					t.Fatalf("comment did not appear immediately in place: id=%d bounds=%v shown=%v", step.id, card, shown)
+				}
+				before := *builds
+				tt.Advance(200 * time.Millisecond)
+				elapsed += 200 * time.Millisecond
+				if *builds != before {
+					t.Fatalf("static hot comment requested %d extra builds", *builds-before)
+				}
+			}
+		})
 	}
 }

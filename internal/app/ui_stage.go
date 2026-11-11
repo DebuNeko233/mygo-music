@@ -127,7 +127,11 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		if a.settings.StageStyle == "tilt" {
 			lead = tiltLead
 		}
-		stageNextFrame(c, lines, cur, pos, lead)
+		if c.Preferences().ReduceMotion {
+			stageNextBoundary(c, lines, cur, pos)
+		} else {
+			stageNextFrame(c, lines, cur, pos, lead)
+		}
 	}
 
 	lang := lyrics.Lang(lines)
@@ -135,7 +139,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		defer a.stageQuiet(c, dim, f, w)
 		quietUnder(ui.Box(c.Key("sung")).Lang(lang).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {
 			// The line before goes as the new one comes.
-			if cur > 0 {
+			if cur > 0 && !c.Preferences().ReduceMotion {
 				gone := float32((pos - lines[cur].At).Seconds()) / 0.4
 				if gone < 1 {
 					a.stageLine(c, &lines[cur-1], pos, f, w, h, 1-easeOutCubic(gone), accent)
@@ -144,7 +148,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 			switch {
 			case cur < 0:
 				a.interlude(c, pos, 0, lines[0].At)
-			case cur+1 < len(lines) && pos > lines[cur].End+time.Second && lines[cur+1].At-lines[cur].End > 4*time.Second:
+			case cur+1 < len(lines) && pos >= lines[cur].End+time.Second && lines[cur+1].At-lines[cur].End > 4*time.Second:
 				// A long break before the next line.
 				a.interlude(c, pos, lines[cur].End, lines[cur+1].At)
 			default:
@@ -162,6 +166,37 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 			})
 		})
 	})
+}
+
+// stageNextBoundary lets the reduced-motion stage sleep until its text or
+// highlight changes. A held word and an interlude need no polling; After
+// wakes the view at the next word, line, or start of a long break.
+func stageNextBoundary(c *ui.Context, lines []lyrics.Line, cur int, pos time.Duration) {
+	next := time.Duration(-1)
+	consider := func(at time.Duration) {
+		if at > pos && (next < 0 || at-pos < next) {
+			next = at - pos
+		}
+	}
+	if cur+1 < len(lines) {
+		consider(lines[cur+1].At)
+	}
+	if cur >= 0 {
+		line := &lines[cur]
+		gap := cur+1 < len(lines) && lines[cur+1].At-line.End > 4*time.Second
+		if gap {
+			consider(line.End + time.Second)
+		}
+		if !gap || pos < line.End+time.Second {
+			for _, word := range line.Words {
+				consider(word.Start)
+				consider(word.End)
+			}
+		}
+	}
+	if next > 0 {
+		c.After(next)
+	}
 }
 
 // stageNextFrame asks for the next frame of the stage as soon as it
@@ -201,6 +236,10 @@ func stageNextFrame(c *ui.Context, lines []lyrics.Line, cur int, pos, lead time.
 // stageLine shows the words of l as they are at pos, the whole line at
 // opacity fade.
 func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent ui.Color) {
+	if c.Preferences().ReduceMotion {
+		stageStillLine(c, l, pos, f, w, accent)
+		return
+	}
 	switch a.settings.StageStyle {
 	case "partita":
 		a.partitaLine(c, l, pos, f, h, fade, accent)
@@ -221,6 +260,26 @@ func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, 
 		Opacity(fade).PassThrough().Children(func() {
 		for i, word := range l.Words {
 			a.stageWord(c.Key(i), word, shapes[i], pos, f, accent)
+		}
+	})
+}
+
+// stageStillLine gives every style a stationary reading layout under Reduce
+// Motion. Whole words change color at their timing boundaries: no flight,
+// swelling, rotation, glow, sparks, or fading of the previous line remains.
+func stageStillLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w float32, accent ui.Color) {
+	ui.Row(c.Key(l.At)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(0, w*0.1).
+		Wrap().Justify(ui.Center).AlignContent(ui.Center).AlignItems(ui.Center).PassThrough().Children(func() {
+		if len(l.Words) == 0 {
+			ui.Text(c, l.Text).FontSize(f).FontWeight(800).TextColor(white)
+			return
+		}
+		for i, word := range l.Words {
+			color := white.Alpha(0.5)
+			if pos >= word.Start && pos < word.End {
+				color = accent
+			}
+			ui.Text(c.Key(i), word.Text).FontSize(f).FontWeight(800).TextColor(color).NoWrap()
 		}
 	})
 }
@@ -281,8 +340,11 @@ func (a *app) stageWord(c *ui.Context, word lyrics.Word, s wordShape, pos time.D
 // interlude shows three dots breathing through a break, filling as the
 // next line nears.
 func (a *app) interlude(c *ui.Context, pos, from, to time.Duration) {
-	progress := clamp01(float32((pos - from).Seconds() / max(0.1, (to-from).Seconds())))
-	breath := 1 + 0.12*float32(math.Sin(float64(c.Now().UnixMilli())/420))
+	progress, breath := float32(0), float32(1)
+	if !c.Preferences().ReduceMotion {
+		progress = clamp01(float32((pos - from).Seconds() / max(0.1, (to-from).Seconds())))
+		breath += 0.12 * float32(math.Sin(float64(c.Now().UnixMilli())/420))
+	}
 	ui.Row(c.Key("interlude")).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(18).PassThrough().Children(func() {
 		for i := range 3 {
 			lit := clamp01(progress*3 - float32(i))
