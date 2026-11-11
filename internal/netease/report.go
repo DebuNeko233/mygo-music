@@ -63,5 +63,5 @@ func sendLog(action string, data map[string]any) error {
 		return err
 	}
 	const path = "/api/feedback/weblog"
-	return eapiOKEndpoint("https://clientlogusf.music.163.com"+path, path, map[string]any{"logs": string(logs)})
+	return eapiOKEndpoint("https://clientlogdep.music.163.com"+path, path, map[string]any{"logs": string(logs)})
 }

@@ -132,6 +132,9 @@ func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[strin
 	req.Header.Set("Cookie", strings.Join(cookie, "; "))
 	req.Header.Set("User-Agent", eapiUA)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if strings.Contains(endpoint, "://clientlogdep.music.163.com/") {
+		req.Header.Set("MG-Product-Name", "music")
+	}
 	// Sent by hand: the jar would add the site's cookies to these. The
 	// transport is the client's, so that a test can answer these too.
 	res, err := DoRequest(&http.Client{Timeout: httpClient.Timeout, Transport: httpClient.Transport}, req)

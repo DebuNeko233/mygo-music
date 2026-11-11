@@ -24,6 +24,10 @@ func captureLog(t *testing.T) *sentLog {
 	t.Helper()
 	sent := &sentLog{}
 	answer(t, func(req *http.Request) string {
+		// The desktop transport identifies this product separately from its eapi headers.
+		if got := req.Header.Get("MG-Product-Name"); got != "music" {
+			t.Errorf("MG-Product-Name is %q, want music", got)
+		}
 		sent.host = req.URL.Host
 		sent.path = req.URL.Path
 		body, err := io.ReadAll(req.Body)
@@ -41,7 +45,7 @@ func captureLog(t *testing.T) *sentLog {
 // log unseals the one log the request carried.
 func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 	t.Helper()
-	if want := "clientlogusf.music.163.com"; s.host != want {
+	if want := "clientlogdep.music.163.com"; s.host != want {
 		t.Fatalf("posted to host %q, want %q", s.host, want)
 	}
 	if want := "/api/feedback/weblog"; s.path != want {
