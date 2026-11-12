@@ -20,11 +20,17 @@ func TestLikeUsesWebProtocol(t *testing.T) {
 	oldRandom := weapiRandom
 	weapiRandom = bytes.NewReader(bytes.Repeat([]byte{0}, 16))
 	t.Cleanup(func() { weapiRandom = oldRandom })
-	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{{Name: "__csrf", Value: "csrf-value", Path: "/"}})
+	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{
+		{Name: "MUSIC_U", Value: "session-value", Path: "/"},
+		{Name: "__csrf", Value: "csrf-value", Path: "/"},
+	})
 
 	httpClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.String() != "https://music.163.com/weapi/radio/like?csrf_token=csrf-value" {
 			t.Errorf("like request URL = %s", req.URL)
+		}
+		if cookie := req.Header.Get("Cookie"); !strings.Contains(cookie, "MUSIC_U=session-value") || !strings.Contains(cookie, "__csrf=csrf-value") {
+			t.Errorf("like request cookie = %q", cookie)
 		}
 		if err := req.ParseForm(); err != nil {
 			t.Fatal(err)

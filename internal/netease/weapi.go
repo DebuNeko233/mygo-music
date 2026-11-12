@@ -43,6 +43,11 @@ func weapiPost(path string, data map[string]any, out any) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var cookies []string
+	for _, c := range httpClient.Jar.Cookies(siteURL) {
+		cookies = append(cookies, c.Name+"="+c.Value)
+	}
+	req.Header.Set("Cookie", strings.Join(cookies, "; "))
 	return do(req, out)
 }
 
