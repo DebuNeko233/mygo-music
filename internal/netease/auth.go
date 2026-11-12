@@ -235,8 +235,8 @@ func Like(id int64, like bool) error {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 	}
-	data := map[string]any{"alg": "itembased", "trackId": strconv.FormatInt(id, 10), "like": strconv.FormatBool(like), "time": "3"}
-	if err := eapiPost("/api/radio/like", data, &res); err != nil {
+	data := map[string]any{"alg": "itembased", "trackId": id, "like": like, "time": "3"}
+	if err := weapiPost("/weapi/radio/like", data, &res); err != nil {
 		return err
 	}
 	if res.Code != 200 {
