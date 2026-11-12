@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log"
 	"math"
 	"time"
 
@@ -51,6 +52,7 @@ func (a *app) toggleLike(tr *netease.Track) {
 				return
 			}
 			if err != nil {
+				log.Printf("like song %d: %v", id, err)
 				a.setLiked(id, !like)
 				a.toast = "操作失败，请稍后再试"
 				return
