@@ -12,9 +12,9 @@ import (
 	"testing"
 )
 
-// Liking a song uses the web player's weapi, not the desktop eapi request that
-// NetEase accepts initially but later removes from the listener's liked songs.
-func TestLikeUsesWebProtocol(t *testing.T) {
+// Liking a song uses the regular song endpoint; radio/like belongs to private FM
+// and NetEase rejects its web requests with -460.
+func TestLikeUsesSongEndpoint(t *testing.T) {
 	oldTransport := httpClient.Transport
 	t.Cleanup(func() { httpClient.Transport = oldTransport })
 	oldRandom := weapiRandom
@@ -26,7 +26,7 @@ func TestLikeUsesWebProtocol(t *testing.T) {
 	})
 
 	httpClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() != "https://music.163.com/weapi/radio/like?csrf_token=csrf-value" {
+		if req.URL.String() != "https://music.163.com/weapi/song/like?csrf_token=csrf-value" {
 			t.Errorf("like request URL = %s", req.URL)
 		}
 		if cookie := req.Header.Get("Cookie"); !strings.Contains(cookie, "MUSIC_U=session-value") || !strings.Contains(cookie, "__csrf=csrf-value") {
@@ -57,7 +57,7 @@ func TestLikeUsesWebProtocol(t *testing.T) {
 			t.Fatal(err)
 		}
 		for field, want := range map[string]any{
-			"trackId": float64(42), "like": true, "alg": "itembased", "time": "3", "csrf_token": "csrf-value",
+			"trackId": float64(42), "like": true, "csrf_token": "csrf-value",
 		} {
 			if data[field] != want {
 				t.Errorf("%s = %#v, want %#v", field, data[field], want)
