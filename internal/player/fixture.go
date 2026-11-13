@@ -14,6 +14,7 @@ import (
 
 // Cue makes tracks the queue, in order, with the first current.
 func (p *Player) Cue(tracks []netease.Track) {
+	p.queueRevision++
 	p.step = 0
 	p.queue = tracks
 	p.order = make([]int, len(tracks))

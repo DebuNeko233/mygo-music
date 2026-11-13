@@ -10,6 +10,7 @@ import (
 	_ "image/png"
 	"math"
 	"slices"
+	"sync"
 	"time"
 	"weak"
 
@@ -42,16 +43,22 @@ type artCache struct {
 	// gone are the covers dropped, for as long as something else holds
 	// them: Now Playing keeps the cover it shows, which comes back as it
 	// was rather than loading again.
-	gone   map[string]weak.Pointer[artwork]
-	busy   map[string]uint64
-	sem    chan struct{}
-	post   func(func())
-	now    func() time.Time
-	size   int // the bytes the covers in art keep
-	limit  int
-	serial uint64
-	seen   map[string]struct{}
+	gone        map[string]weak.Pointer[artwork]
+	busy        map[string]uint64
+	sem         chan struct{}
+	post        func(func())
+	now         func() time.Time
+	size        int // the bytes the covers in art keep
+	limit       int
+	serial      uint64
+	seen        map[string]struct{}
+	results     *sync.Cond
+	resultBytes int
+	closed      bool // guarded by results.L
 }
+
+const artJobs = 8
+const artResultLimit = 16 << 20
 
 // artLimit is how many bytes of covers the cache keeps. A cover keeps its
 // data, some 50–100 KB for Now Playing's and a few for a row's, so this
@@ -60,7 +67,40 @@ type artCache struct {
 const artLimit = 64 << 20
 
 func newArtCache(post func(func())) *artCache {
-	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{}, sem: make(chan struct{}, 8), post: post, now: time.Now, limit: artLimit, seen: map[string]struct{}{}}
+	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{}, sem: make(chan struct{}, artJobs), post: post, now: time.Now, limit: artLimit, seen: map[string]struct{}{}, results: sync.NewCond(&sync.Mutex{})}
+}
+
+// Bound bytes already posted to the UI. A single large result may exceed
+// the budget; it must be accepted alone. Waiters also hold a job slot.
+func (c *artCache) reserveResult(size int) bool {
+	c.results.L.Lock()
+	defer c.results.L.Unlock()
+	for !c.closed && size > 0 && c.resultBytes > 0 && c.resultBytes+size > artResultLimit {
+		c.results.Wait()
+	}
+	if c.closed {
+		return false
+	}
+	c.resultBytes += size
+	return true
+}
+
+func (c *artCache) finishResult(size int) {
+	c.results.L.Lock()
+	c.resultBytes -= size
+	c.results.Broadcast()
+	c.results.L.Unlock()
+	<-c.sem
+}
+
+func (c *artCache) close() {
+	if c == nil {
+		return
+	}
+	c.results.L.Lock()
+	c.closed = true
+	c.results.Broadcast()
+	c.results.L.Unlock()
 }
 
 // add keeps a cover, and drops those asked for least recently once the
@@ -121,23 +161,37 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 	if c.busy[key] != 0 {
 		return nil
 	}
+	// Do not queue a goroutine for every URL scrolled past. A completion
+	// redraws the view, which asks again for the covers it still needs.
+	select {
+	case c.sem <- struct{}{}:
+	default:
+		return nil
+	}
 	c.serial++
 	request := c.serial
 	c.busy[key] = request
 	load := loadArt
 	go func() {
-		c.sem <- struct{}{}
 		bmp, img, size, err := load(url)
-		<-c.sem
 		var blurred *image.RGBA
 		var tint ui.Color
 		if err == nil {
 			tint = dominantColor(img)
+			size += pixelBytes(bmp)
 			if backdrop {
 				blurred = blurImage(img)
+				size += len(blurred.Pix)
 			}
+		} else {
+			size = 0
+		}
+		if !c.reserveResult(size) {
+			<-c.sem
+			return
 		}
 		c.post(func() {
+			defer c.finishResult(size)
 			if c.busy[key] != request {
 				return
 			}
@@ -149,15 +203,21 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			// The pixels count against the limit as well as the data: they
 			// come and go as the GPU needs them, and the limit has to bound
 			// both.
-			a := &artwork{loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size + pixelBytes(bmp)}
+			a := &artwork{loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size}
 			if blurred != nil {
 				a.backdrop = ui.NewBitmap(blurred)
-				a.size += len(blurred.Pix)
 			}
 			c.add(key, a)
 			// Shown by the frame post draws, the cover drops its pixels,
 			// which its data decodes again if they are needed.
-			time.AfterFunc(artRelease, func() { mygo.RunOnMain(bmp.ReleasePixels) })
+			ref := weak.Make(bmp)
+			time.AfterFunc(artRelease, func() {
+				mygo.RunOnMain(func() {
+					if bmp := ref.Value(); bmp != nil {
+						bmp.ReleasePixels()
+					}
+				})
+			})
 		})
 	}()
 	return nil

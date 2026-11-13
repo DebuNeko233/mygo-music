@@ -22,6 +22,7 @@ var (
 
 type listRequest struct {
 	at      time.Time
+	used    uint64 // playlist detail's last access, independent of freshness
 	busy    bool
 	retry   bool
 	failed  bool
@@ -31,6 +32,7 @@ type libraryRefreshState struct {
 	edits       int
 	revision    uint64
 	playlists   map[int64]*listRequest
+	playlistUse uint64
 	mine, likes listRequest
 	albums      listRequest
 	now         func() time.Time // optional test clock; never a UI context
@@ -91,7 +93,10 @@ func (a *app) forgetPlaylist(id int64) {
 	delete(a.loadingPl, id)
 	delete(a.plPlay, id)
 }
-func (a *app) touchPlaylist(id int64) { a.playlistRequest(id).at = a.listsNow() }
+func (a *app) touchPlaylist(id int64) {
+	a.usePlaylist(id)
+	a.playlistRequest(id).at = a.listsNow()
+}
 func copyPlaylist(pl netease.Playlist) netease.Playlist {
 	pl.Tracks = slices.Clone(pl.Tracks)
 	pl.TrackIDs = slices.Clone(pl.TrackIDs)
@@ -112,6 +117,7 @@ func copyPlaylists(pl []netease.Playlist) []netease.Playlist {
 // A play request takes the displayed queue immediately; refreshing changes
 // the page alone, never the queue currently playing.
 func (a *app) loadPlaylist(id int64, thenPlay bool) {
+	a.usePlaylist(id)
 	was := a.playlists[id]
 	if was != nil && thenPlay {
 		a.pl.PlayQueueFrom(was.Tracks, firstPlayable(was.Tracks), player.PlaySource{Source: "list", ID: id})
@@ -141,6 +147,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	fetch := playlistDetail
 	go func() {
 		if readDisk {
+			a.waitForPlaylistSnapshot(req)
 			var kept *netease.Playlist
 			if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
 				a.post(func() {
@@ -165,6 +172,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 				return
 			}
 			r.busy = false
+			defer a.trimPlaylistCache()
 			play := thenPlay || a.plPlay[id]
 			delete(a.loadingPl, id)
 			delete(a.plPlay, id)
@@ -190,7 +198,9 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			}
 			a.playlists[id] = pl
 			delete(a.plErr, id)
-			req.keep(bytes)
+			if bytes != nil {
+				a.savePlaylistSnapshot(req, func() []byte { return bytes })
+			}
 			if was == nil && play {
 				a.pl.PlayQueueFrom(pl.Tracks, firstPlayable(pl.Tracks), player.PlaySource{Source: "list", ID: id})
 			}
