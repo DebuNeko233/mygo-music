@@ -156,6 +156,7 @@ type app struct {
 	queueAt                        int // the row of the queue pane last scrolled to, -1 while it is hidden
 	comments                       commentState
 	tabCount                       rollState // the count on the comments' tab, as it rolls
+	stageWords                     stageWordLayout
 
 	fmMode        int    // the FM mode chosen, in fmModes
 	fmSynced      string // the radio fmMode was last taken from
