@@ -216,10 +216,9 @@ func (d *download) write(b []byte, run int) {
 }
 
 // toMemory moves the song into memory from a file that takes no more, as
-// on a full disk: it plays on, but is not kept.
+// on a full disk: it plays on, but is not kept. Its caller holds the lock,
+// which a lock taken again here would take for good, and the app with it.
 func (d *download) toMemory() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	d.data = make([]byte, d.n, max(prealloc(d.size), d.n))
 	got, _ := d.file.ReadAt(d.data, 0)
 	d.data = d.data[:got]

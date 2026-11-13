@@ -518,3 +518,39 @@ func TestSeekWaitsWhileASecondStreamReads(t *testing.T) {
 		t.Error("dropped the part another stream reads")
 	}
 }
+
+// A song the file of the cache cannot take plays on from memory: writing to
+// it took the download's lock a second time and held it for good, so the
+// fetch stopped and its progress with it, and the window stopped drawing.
+func TestWriteFailureMovesTheSongToMemory(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(b) }))
+	defer srv.Close()
+	// A file that takes no more, as one on a full disk: closed.
+	part, err := os.CreateTemp(t.TempDir(), "*.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatal(err)
+	}
+	dl := startDownload(srv.URL, int64(len(b)), part, nil)
+	have := make(chan int64, 1)
+	go func() { have <- dl.waitFor(int64(len(b))) }()
+	select {
+	case n := <-have:
+		dl.Close()
+		if n != int64(len(b)) {
+			t.Fatalf("%d of %d bytes in", n, len(b))
+		}
+	case <-time.After(5 * time.Second):
+		// The download holds its lock for good, and closing it waits too.
+		t.Fatal("the fetch waits on the download's lock")
+	}
+	if got := dl.peek(0, 4); !bytes.Equal(got, b[:4]) {
+		t.Errorf("bytes at 0 are %x, wanted %x", got, b[:4])
+	}
+}
