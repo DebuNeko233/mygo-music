@@ -114,3 +114,18 @@ func TestLRCAppliesTheOffset(t *testing.T) {
 		t.Errorf("lines %+v", early)
 	}
 }
+
+// A bracket in the words of a word-timed line is part of what is sung, not
+// the start of the next mark, so the word it is in keeps all of its text.
+func TestYRCKeepsBracketsInWords(t *testing.T) {
+	lines := Build("", "", "[0,2000](0,500,0)Hello (world)(500,500,0)again")
+	if len(lines) != 1 || len(lines[0].Words) != 2 {
+		t.Fatalf("lines %+v", lines)
+	}
+	if got := lines[0].Words[0].Text; got != "Hello (world)" {
+		t.Errorf("word %q", got)
+	}
+	if got := lines[0].Text; got != "Hello (world)again" {
+		t.Errorf("line %q", got)
+	}
+}
