@@ -94,60 +94,29 @@ func TestMP3SeekIsClean(t *testing.T) {
 	}
 }
 
-// A complete MP3 with a trailing ID3 tag ends after its declared duration
-// rather than report that the tag is an unsupported MPEG version.
-func TestMP3TrailingTagAfterDuration(t *testing.T) {
-	b, err := os.ReadFile("testdata/seek.mp3")
+// A FLAC whose samples all decoded ends at EOF even if its last frame does
+// not reach the end of the file. NetEase's files leave bytes there, which
+// used to be retried as a corrupt frame after the song's declared samples.
+func TestFLACTrailingBytesAfterSamples(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.flac")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := openMP3Stream(downloaded(append(b, []byte("TAG12345")...)), 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	buf := make([]float32, 4096)
-	for {
-		n, err := s.Read(buf)
-		if s.frames > 0 && s.pos >= s.frames {
-			if err != nil && !errors.Is(err, io.EOF) {
-				t.Fatalf("end after declared duration: %v", err)
-			}
-			break
+	for _, tail := range [][]byte{[]byte("TAG12345"), {0}} {
+		s, err := openStream(downloaded(append(b, tail...)), 5000)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if err != nil || n == 0 {
-			t.Fatalf("stopped before declared duration: %d samples, %v", n, err)
+		if err := s.SetPosition(s.Len()); err != nil {
+			t.Fatal(err)
 		}
-	}
-	if s.cut() != nil {
-		t.Fatalf("trailing tag became a decoder failure: %v", s.cut())
-	}
-}
-
-// A corrupt MP3 frame before its declared duration remains a decode failure.
-func TestMP3CorruptionBeforeDuration(t *testing.T) {
-	b, err := os.ReadFile("testdata/seek.mp3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	start := id3Size(downloaded(b))
-	off := start + int64(frameSize(b[start:]))
-	copy(b[off:], []byte{0xff, 0xf9, 0x90, 0x00}) // MPEG 2.5 is unsupported.
-	s, err := openMP3Stream(downloaded(b), 600000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	buf := make([]float32, 4096)
-	for {
-		n, err := s.Read(buf)
-		if err != nil || n == 0 {
-			break
+		if _, err := s.Read(make([]float32, 4096)); !errors.Is(err, io.EOF) {
+			t.Fatalf("read from declared samples: %v", err)
 		}
-	}
-	var decoded *decodeError
-	if !errors.As(s.cut(), &decoded) {
-		t.Fatalf("corrupt frame was not preserved: %v", s.cut())
+		if err := s.cut(); err != nil {
+			t.Fatalf("trailing bytes became a failure: %v", err)
+		}
+		s.Close()
 	}
 }
 

@@ -117,15 +117,14 @@ func (s *flacStream) Read(dst []float32) (int, error) {
 	for len(s.pend) == 0 {
 		f, err := s.parse(s.r)
 		if err != nil {
-			// An end before the samples the stream says it has is a
-			// download cut short, not the song's end; so is the error the
-			// download itself reports, which says more than an EOF does.
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				if s.Len() > 0 && s.pos < s.Len() {
-					err = io.ErrUnexpectedEOF
-				} else if errors.Is(err, io.ErrUnexpectedEOF) {
-					err = io.EOF
-				}
+			// Once all declared samples have decoded, the song is over:
+			// NetEase's FLAC files may have bytes after their last frame,
+			// and a file may omit ID3 tags before its frames. Before the
+			// declared samples, any truncated frame is a cut-off download.
+			if s.Len() > 0 && s.pos >= s.Len() && s.dl.Err() == nil {
+				err = io.EOF
+			} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				err = io.ErrUnexpectedEOF
 			}
 			if dlErr := s.dl.Err(); dlErr != nil {
 				err = dlErr
