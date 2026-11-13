@@ -135,8 +135,12 @@ func (d *download) run(ctx context.Context, from int64, run int, gap time.Durati
 		d.mu.Unlock()
 	}
 	// What stops coming is a connection gone, and what comes is given up on,
-	// so that the song may be asked for again.
-	stall := time.AfterFunc(gap, d.cancel)
+	// so that the song may be asked for again. The cancel of this fetch is
+	// taken under the lock: a seek puts another in its place.
+	d.mu.Lock()
+	cancel := d.cancel
+	d.mu.Unlock()
+	stall := time.AfterFunc(gap, cancel)
 	defer stall.Stop()
 	req, err := http.NewRequestWithContext(ctx, "GET", d.url, nil)
 	if err != nil {
@@ -317,8 +321,8 @@ func (d *download) seekTo(off int64) bool {
 // Close stops the download and wakes its readers: the stream lets the
 // song go.
 func (d *download) Close() {
-	d.cancel()
 	d.mu.Lock()
+	d.cancel()
 	if !d.done {
 		d.done, d.err = true, context.Canceled
 	}
