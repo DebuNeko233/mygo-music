@@ -297,32 +297,40 @@ func releaseRecognizer() {
 }
 
 // transcribe writes down the episode playing from from up to until, on a
-// goroutine.
+// goroutine. Opening the song is done there too: it reads the song's first
+// bytes to find how to decode them, which waits for the network, and the
+// window draws on the goroutine this is called from.
 func (a *app) transcribe(program int64, from, until time.Duration) {
-	src, err := a.pl.OpenAudio()
+	open, err := a.pl.AudioOpener()
 	if err != nil {
-		return
-	}
-	if err := src.SetPosition(int64(from.Seconds() * float64(src.SampleRate()))); err != nil {
-		src.Close()
-		return
-	}
-	dir, err := modelDir()
-	if err != nil {
-		src.Close()
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &captionWork{program: program, from: from, until: until, at: from, cancel: cancel}
 	a.captions.work = w
 	go func() {
-		defer src.Close()
+		src, err := open()
+		if err == nil {
+			if posErr := src.SetPosition(int64(from.Seconds() * float64(src.SampleRate()))); posErr != nil {
+				src.Close()
+				err = posErr
+			} else {
+				defer src.Close()
+			}
+		}
+		var dir string
+		if err == nil {
+			dir, err = modelDir()
+		}
+		if err != nil {
+			a.post(func() { a.captionGaveUp(w) })
+			return
+		}
 		recognizer.Lock()
 		defer recognizer.Unlock()
 		if ctx.Err() != nil {
 			return
 		}
-		var err error
 		if recognizer.t == nil {
 			recognizer.t, err = newTranscriber(dir)
 		}
@@ -333,6 +341,15 @@ func (a *app) transcribe(program int64, from, until time.Duration) {
 		}
 		a.post(func() { a.captionDone(w, err, ctx.Err() != nil) })
 	}()
+}
+
+// captionGaveUp drops w, which wrote nothing down: the next change of the
+// player starts another, as one that could not be opened is asked for again
+// rather than taken as an episode that cannot be written down.
+func (a *app) captionGaveUp(w *captionWork) {
+	if a.captions.work == w {
+		a.captions.work = nil
+	}
 }
 
 // captionSaid adds a segment written down to the transcript of its

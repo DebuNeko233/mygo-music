@@ -520,11 +520,25 @@ type Audio interface {
 // download, waiting for what has not come in, and fails once the track
 // changes. It works on any goroutine once opened; close it when done.
 func (p *Player) OpenAudio() (Audio, error) {
+	open, err := p.AudioOpener()
+	if err != nil {
+		return nil, err
+	}
+	return open()
+}
+
+// AudioOpener returns the current track's sound as an opener, as OpenAudio
+// returns it open, for a caller that opens it on another goroutine: opening
+// reads the song's first bytes to find how to decode them, which waits for
+// the network, while this reads only what the caller's goroutine may, as the
+// goroutine that draws does.
+func (p *Player) AudioOpener() (open func() (Audio, error), err error) {
 	if p.stream == nil || p.track == nil {
 		return nil, errors.New("player: nothing loaded")
 	}
 	dl, _ := p.stream.source()
-	return openShared(dl, p.track.Duration)
+	duration := p.track.Duration
+	return func() (Audio, error) { return openShared(dl, duration) }, nil
 }
 
 // PlayOrder returns the read-only queue indices in play order, and where the
