@@ -178,22 +178,36 @@ func Logout() {
 // UserPlaylists returns the playlists a listener made, the liked songs
 // first, and those they saved.
 func UserPlaylists(uid int64) (made, saved []Playlist, err error) {
-	var res struct {
-		Playlist []Playlist `json:"playlist"`
-	}
-	q := url.Values{"uid": {strconv.FormatInt(uid, 10)}, "limit": {"200"}, "offset": {"0"}}
-	if err := get("/api/user/playlist", q, &res); err != nil {
-		return nil, nil, err
-	}
-	for _, p := range res.Playlist {
-		if p.Subscribed {
-			saved = append(saved, p)
-		} else {
-			made = append(made, p)
+	for offset := 0; ; offset += userPlaylistPage {
+		var res struct {
+			Playlist []Playlist `json:"playlist"`
+		}
+		q := url.Values{
+			"uid":    {strconv.FormatInt(uid, 10)},
+			"limit":  {strconv.Itoa(userPlaylistPage)},
+			"offset": {strconv.Itoa(offset)},
+		}
+		if err := get("/api/user/playlist", q, &res); err != nil {
+			return nil, nil, err
+		}
+		for _, p := range res.Playlist {
+			if p.Subscribed {
+				saved = append(saved, p)
+			} else {
+				made = append(made, p)
+			}
+		}
+		// A page short of what was asked for is the last one: asking for
+		// the first page alone left the rest of a listener's playlists out
+		// of the library.
+		if len(res.Playlist) < userPlaylistPage {
+			return made, saved, nil
 		}
 	}
-	return made, saved, nil
 }
+
+// userPlaylistPage is how many playlists NetEase sends at a time.
+const userPlaylistPage = 200
 
 // RecommendedPlaylists returns the day's playlists picked for the listener.
 func RecommendedPlaylists() ([]Playlist, error) {
