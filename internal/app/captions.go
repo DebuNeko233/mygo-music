@@ -64,13 +64,13 @@ type captionState struct {
 
 // modelState is the model's: whether it is installed, or downloading.
 type modelState struct {
-	checked, installed bool
-	downloading        bool
-	deleting           bool // deletion in progress
-	gen                int  // generation to discard stale operations
-	done, total        int64
-	err                string
-	cancel             context.CancelFunc
+	checked, checking, installed bool
+	downloading                  bool
+	deleting                     bool // deletion in progress
+	gen                          int  // generation to discard stale operations
+	done, total                  int64
+	err                          string
+	cancel                       context.CancelFunc
 }
 
 // A transcript is what is written down of an episode, and which stretches
@@ -114,14 +114,26 @@ func transcriptPath(program int64) (string, error) {
 // platform. The listener may still have to download the model.
 func (a *app) captionsShown() bool { return captionsAvailable() }
 
-// modelReady reports whether the model is installed, looking once.
+// modelReady reports whether the model is installed, looking once. The look
+// reads the model whole, a gigabyte and more of digests, so it runs off the
+// thread that draws and its answer arrives in a frame of its own: until then
+// the model counts as one that is not installed.
 func (a *app) modelReady() bool {
 	m := &a.captions.model
-	if !m.checked {
-		m.checked = true
-		if dir, err := modelDir(); err == nil {
-			m.installed = modelInstalled(dir)
-		}
+	if !m.checked && !m.checking {
+		m.checking = true
+		go func() {
+			installed := false
+			if dir, err := modelDir(); err == nil {
+				installed = modelInstalled(dir)
+			}
+			a.post(func() {
+				m.checked, m.checking, m.installed = true, false, installed
+				// An episode may be waiting for the answer.
+				a.syncCaptions()
+				a.redraw()
+			})
+		}()
 	}
 	return m.installed
 }
