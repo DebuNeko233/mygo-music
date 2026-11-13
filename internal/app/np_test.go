@@ -11,6 +11,8 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// Escape closes Now Playing, which goes out as one layer: mid-way it still
+// covers the page and the sidebar alike.
 func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
@@ -23,12 +25,15 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	tt.Frame()
 	tt.Advance(time.Second)
 	tt.Frame()
-	if !tt.HasText("待播清单") {
+	if _, ok := tt.Find("专辑封面"); !ok {
 		t.Fatal("now playing did not open")
 	}
-	// Mid-way out, it still covers the page and the sidebar alike.
-	a.nowPlaying = false
+	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
+	if a.nowPlaying {
+		t.Fatal("escape left now playing open")
+	}
+	// Mid-way out, it still covers the page and the sidebar alike.
 	tt.Advance(60 * time.Millisecond)
 	tt.Frame()
 	img := tt.Image()
@@ -42,7 +47,7 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	}
 	tt.Advance(2 * time.Second)
 	tt.Frame()
-	if tt.HasText("待播清单") {
+	if _, ok := tt.Find("专辑封面"); ok {
 		t.Error("now playing still shows after closing")
 	}
 }
