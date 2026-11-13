@@ -274,9 +274,17 @@ func (a *app) signOut() {
 	a.recovery.accountPending = false
 	a.identityCache.Clear("", nil)
 	a.discardAccount()
+	// Taken before they are cleared here, as a session dropped here alone
+	// stays open with NetEase: ended there too, once the window shows the
+	// listener is out.
+	session := netease.SessionCookies()
 	clearLoginSession()
 	a.signedIn(nil)
-	go netease.Logout()
+	go func() {
+		if err := netease.Logout(session); err != nil {
+			a.post(func() { a.toast = "已退出登录，服务器未响应" })
+		}
+	}()
 }
 
 // loginDialog shows the QR code to scan with the NetEase app on a phone.

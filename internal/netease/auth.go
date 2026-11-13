@@ -169,10 +169,28 @@ func QRCheck(key string) (code int, msg, nickname, avatar string, err error) {
 	return r.Code, r.Message, r.Nickname, r.AvatarURL, err
 }
 
-// Logout ends the session with NetEase too.
-func Logout() {
-	post("/api/logout", url.Values{}, &struct{}{})
+// SessionCookies returns the cookies the session is kept by, for Logout to
+// end it with after they are cleared here.
+func SessionCookies() []*http.Cookie {
+	if httpClient.Jar == nil {
+		return nil
+	}
+	var session []*http.Cookie
+	for _, c := range httpClient.Jar.Cookies(siteURL) {
+		if c.Name == "MUSIC_U" || c.Name == "__csrf" {
+			session = append(session, c)
+		}
+	}
+	return session
+}
+
+// Logout ends the session with NetEase too, with the cookies it was kept by:
+// the app clears them here first, and a request without them ends nothing
+// there.
+func Logout(cookies []*http.Cookie) error {
+	err := postAs("/api/logout", url.Values{}, cookies, &struct{}{})
 	ClearSession()
+	return err
 }
 
 // UserPlaylists returns the playlists a listener made, the liked songs

@@ -205,7 +205,12 @@ func csrf() string {
 	if httpClient.Jar == nil {
 		return ""
 	}
-	for _, c := range httpClient.Jar.Cookies(siteURL) {
+	return csrfIn(httpClient.Jar.Cookies(siteURL))
+}
+
+// csrfIn returns the token among cookies, empty if none carries one.
+func csrfIn(cookies []*http.Cookie) string {
+	for _, c := range cookies {
 		if c.Name == "__csrf" {
 			return c.Value
 		}
@@ -214,15 +219,32 @@ func csrf() string {
 }
 
 func post(path string, form url.Values, out any) error {
+	return postAs(path, form, nil, out)
+}
+
+// postAs is post with the request carrying cookies of its own, for a request
+// that has to reach the account a session was kept by after it was cleared
+// here.
+func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error {
 	// The web API drops what it does not know the caller meant: following an
 	// artist and signing out came back with no effect at all without it.
 	token := csrf()
+	if cookies != nil {
+		token = csrfIn(cookies)
+	}
 	form.Set("csrf_token", token)
 	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if len(cookies) > 0 {
+		parts := make([]string, 0, len(cookies))
+		for _, c := range cookies {
+			parts = append(parts, c.Name+"="+c.Value)
+		}
+		req.Header.Set("Cookie", strings.Join(parts, "; "))
+	}
 	return do(req, out)
 }
 
