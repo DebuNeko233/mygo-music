@@ -10,6 +10,8 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// The menu of a playing song copies its name, its name and singers, and the
+// link to it.
 func TestSongMenuCopies(t *testing.T) {
 	var copied string
 	real := copyText
@@ -44,6 +46,8 @@ func TestSongMenuCopies(t *testing.T) {
 	}
 }
 
+// A right click on a song in a playlist opens the same menu, and choosing
+// from it copies without playing.
 func TestSongMenuOnRightClick(t *testing.T) {
 	var copied string
 	real := copyText

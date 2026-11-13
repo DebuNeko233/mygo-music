@@ -52,6 +52,8 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	}
 }
 
+// Picking a song from the queue plays it and leaves the queue listed as it
+// was, songs before it and all.
 func TestQueueStaysAsATrackIsPlayed(t *testing.T) {
 	a := newTestApp()
 	var tracks []netease.Track

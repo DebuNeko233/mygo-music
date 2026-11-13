@@ -34,6 +34,8 @@ func quietApp(pos time.Duration) (*app, netease.Track, []lyrics.Line) {
 	return a, tr, lines
 }
 
+// The quiet parts of a song show a hot comment each, long enough to be read,
+// and none when the setting is off or nothing is hot.
 func TestQuietComment(t *testing.T) {
 	a, tr, lines := quietApp(0)
 	s := time.Second

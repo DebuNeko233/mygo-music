@@ -9,6 +9,8 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// A comment's time reads as its age: minutes ago, then the hour, then the
+// day or the date it goes back to.
 func TestCommentTime(t *testing.T) {
 	now := time.Date(2026, 10, 25, 22, 0, 0, 0, time.Local)
 	for _, c := range []struct {
