@@ -881,6 +881,9 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	level := p.level()
 	ahead := p.takeAhead(t.ID, level)
 	ask := songURL
+	// Taken here, as the load opens the song on another goroutine, where
+	// the folder it plays from may change under it.
+	cache := p.Cache
 	p.at = at
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
@@ -908,7 +911,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.RetryMetadata()
 
 	go func() {
-		info, s, err := p.open(t, level, ahead, ask)
+		info, s, err := p.open(t, level, ahead, ask, cache)
 		p.post(func() {
 			if gen != p.gen {
 				if s != nil {
@@ -1250,10 +1253,11 @@ func (p *Player) level() string {
 }
 
 // open opens track t's audio at level: from what was fetched ahead of it,
-// kept in the cache, or else streamed into it, and kept once it has all
-// come in. ask is where its URL comes from, taken on the main thread.
-func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker) (*netease.Stream, stream, error) {
-	dl, info, err := p.fetch(t, level, ahead, ask)
+// kept in the cache cache, or else streamed into it, and kept once it has all
+// come in. ask is where its URL comes from, and cache is the folder it is
+// kept in: both taken on the main thread.
+func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker, cache *Cache) (*netease.Stream, stream, error) {
+	dl, info, err := p.fetch(t, level, ahead, ask, cache)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1267,8 +1271,8 @@ func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker) (*
 }
 
 // fetch returns the download of track t at level, and what it streams: the
-// one fetched ahead, the one the cache keeps, or one started now.
-func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker) (*download, *netease.Stream, error) {
+// one fetched ahead, the one the cache cache keeps, or one started now.
+func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker, cache *Cache) (*download, *netease.Stream, error) {
 	if ahead != nil {
 		if ahead.dl.Err() == nil {
 			return ahead.dl, ahead.info, nil
@@ -1276,7 +1280,7 @@ func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker) (
 		// Cut off before it played: asked for again, from its start.
 		ahead.dl.Close()
 	}
-	dl, info, ok := p.Cache.lookup(t.ID, level)
+	dl, info, ok := cache.lookup(t.ID, level)
 	if ok {
 		return dl, info, nil
 	}
@@ -1287,7 +1291,7 @@ func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker) (
 	if err != nil {
 		return nil, nil, err
 	}
-	return p.Cache.download(t.ID, level, info), info, nil
+	return cache.download(t.ID, level, info), info, nil
 }
 
 // Session is where playback was left, to pick up again.
