@@ -72,7 +72,9 @@ jobs:
             }
           ')
           [[ -n "$pattern" ]]
-          go test -v -count=1 -race -timeout 30m -run "^($pattern)$" ./internal/app
+          # A single software-rendered animation may take several minutes
+          # under the detector. This is a per-shard budget, not a job timeout.
+          go test -v -count=1 -race -timeout 60m -run "^($pattern)$" ./internal/app
 
   test:
     runs-on: ubuntu-latest
