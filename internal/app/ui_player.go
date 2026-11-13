@@ -403,6 +403,9 @@ func (a *app) playerBar(c *ui.Context) {
 	pl := a.pl
 	tr := pl.Current()
 	a.tickTimes(c)
+	if tr == nil {
+		a.barCover = barCoverState{}
+	}
 	if a.picked.id != 0 && (tr == nil || tr.ID != a.picked.id || pl.Playing()) {
 		// Played, or gone: it says what it is again.
 		a.picked = pickedUp{}
@@ -432,7 +435,7 @@ func (a *app) playerBar(c *ui.Context) {
 			hovered := info.Hovered()
 			info.Children(func() {
 				ui.Box(c).Size(48, 48).Shrink(0).Children(func() {
-					a.cover(c, tr.Album.PicURL, 120, 48, 8).Shadow(0, 2, 8, 0, p.cardShade)
+					a.playerBarArtwork(c, tr.Album.PicURL)
 					if hovered {
 						ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(8).Center().
 							Background(ui.RGBA(0, 0, 0, 0.35)).TextColor(ui.RGB(255, 255, 255)).Children(func() {

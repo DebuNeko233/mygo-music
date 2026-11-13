@@ -57,7 +57,9 @@ func TestPrefetchesNextCover(t *testing.T) {
 			url := netease.Sized(want.Album.PicURL, 600)
 			a.pl.SetLyrics(nil)
 			wanted := map[string]bool{url: true, netease.Sized(a.pl.Current().Album.PicURL, 600): true}
-			tt := ui.NewTesterWith(a.nowPlayingView, 640, 440, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			// This checks requests, not layout. Keep the software-rendered
+			// backdrop small so this fixture is cheap under the race detector.
+			tt := ui.NewTesterWith(a.nowPlayingView, 160, 120, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			tt.Frame()
 			for range len(wanted) {
 				if got := wait(t, asked, "cover"); !wanted[got] {
@@ -85,13 +87,23 @@ func TestPrefetchesNextCover(t *testing.T) {
 // past the end of a radio, whose next track must come from its feed.
 func TestCoverPrefetchSkipsUnavailableNext(t *testing.T) {
 	a := newTestApp()
-	a.prefetchCover()
-	a.pl.Cue([]netease.Track{{ID: 1, Album: netease.Album{PicURL: "test://one"}}})
+	a.pl.SuspendCache()
+	a.playbackArtwork("", nowPlayingCoverRequest)
+	const current = "test://one"
+	a.pl.Cue([]netease.Track{
+		{ID: 1, Album: netease.Album{PicURL: current}},
+		{ID: 2, Album: netease.Album{PicURL: "test://two"}},
+	})
+	a.art.add(netease.Sized(current, 600)+"#backdrop", &artwork{})
 	a.network.offline = true
-	a.prefetchCover()
+	a.playbackArtwork(a.pl.Current().Album.PicURL, nowPlayingCoverRequest)
 	a.network.offline = false
+	// Next would wrap to a different cover if the feed were absent.
+	a.pl.Next()
+	a.art.invalidate(netease.Sized(current, 600))
+	a.art.add(netease.Sized(a.pl.Current().Album.PicURL, 600)+"#backdrop", &artwork{})
 	a.pl.AttachRadio("radio", func(func([]netease.Track)) {})
-	a.prefetchCover()
+	a.playbackArtwork(a.pl.Current().Album.PicURL, nowPlayingCoverRequest)
 	if len(a.art.busy) != 0 {
 		t.Fatal("started a cover request without an available next song")
 	}
@@ -129,7 +141,7 @@ func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*ar
 	a.pl.Hold(0)
 	a.pl.SetLyrics(nil)
 	a.nowPlaying = true
-	tt := ui.NewTesterWith(a.view, 1000, 700,
+	tt := ui.NewTesterWith(a.view, 640, 440,
 		ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}, Dark: true})
 	tt.Advance(2 * time.Second)
 	return a, tt, arts

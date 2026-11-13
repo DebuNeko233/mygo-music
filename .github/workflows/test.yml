@@ -12,7 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  plain:
+    name: Build, vet and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -31,10 +32,55 @@ jobs:
       # AGENTS.md asks.
       - name: Test
         run: go test -count=1 ./internal/...
+
+  race:
+    name: Race detector (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, packages]
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - name: Test under the race detector
-        # The views are drawn on one goroutine and their work is done on
-        # others, which only this run looks at. It is slow enough to need
-        # more than the default ten minutes.
+        shell: bash
         env:
-          CGO_ENABLED: 1
-        run: go test -count=1 -race -timeout 30m ./internal/...
+          SHARD: ${{ matrix.shard }}
+          TOTAL_JOBS: ${{ strategy.job-total }}
+        run: |
+          if [[ "$SHARD" == packages ]]; then
+            packages=$(go list ./internal/... | grep -v '/internal/app$')
+            mapfile -t package_list <<< "$packages"
+            go test -v -count=1 -race -timeout 30m "${package_list[@]}"
+            exit
+          fi
+
+          # App tests render in software. Split their top-level names across
+          # runners so the detector can finish without dropping any cases.
+          names=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app)
+          pattern=$(printf '%s\n' "$names" | awk -v shard="$SHARD" -v app_shards="$((TOTAL_JOBS - 1))" '
+            /^(Test|Example|Fuzz)[[:alnum:]_]+$/ {
+              if (count++ % app_shards == shard - 1) {
+                printf "%s%s", sep, $0
+                sep = "|"
+              }
+            }
+          ')
+          [[ -n "$pattern" ]]
+          go test -v -count=1 -race -timeout 30m -run "^($pattern)$" ./internal/app
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [plain, race]
+    if: ${{ always() }}
+    steps:
+      - name: Check test results
+        env:
+          PLAIN: ${{ needs.plain.result }}
+          RACE: ${{ needs.race.result }}
+        run: test "$PLAIN" = success && test "$RACE" = success
