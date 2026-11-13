@@ -31,7 +31,8 @@ type artwork struct {
 	failed    bool
 	used      time.Time // when it was last asked for
 	loaded    time.Time
-	size      int // the bytes it keeps: its data, the pixels those decode to, and the backdrop's pixels
+	retryAt   time.Time // next refresh attempt after a temporary failure
+	size      int       // the bytes it keeps: its data, the pixels those decode to, and the backdrop's pixels
 }
 
 // artCache loads covers on goroutines and keeps them, up to artLimit
@@ -59,6 +60,8 @@ type artCache struct {
 
 const artJobs = 8
 const artResultLimit = 16 << 20
+const artRefreshAfter = 24 * time.Hour
+const artRefreshRetry = time.Minute
 
 // artLimit is how many bytes of covers the cache keeps. A cover keeps its
 // data, some 50–100 KB for Now Playing's and a few for a row's, so this
@@ -107,6 +110,9 @@ func (c *artCache) close() {
 // covers take more than the limit, down to three quarters of it, so that
 // it sorts them seldom. Those showing were asked for last, and stay.
 func (c *artCache) add(key string, a *artwork) {
+	if previous := c.art[key]; previous != nil {
+		c.size -= previous.size
+	}
 	c.art[key] = a
 	c.size += a.size
 	if c.size <= c.limit {
@@ -144,29 +150,30 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 	}
 	now := c.now()
 	c.seen[key] = struct{}{}
-	if a, ok := c.art[key]; ok {
+	current := c.art[key]
+	if current == nil {
+		if held := c.gone[key].Value(); held != nil {
+			delete(c.gone, key)
+			held.used = now
+			c.add(key, held)
+			current = held
+		}
+	}
+	if a := current; a != nil {
 		a.used = now
-		if !a.failed && !a.loaded.IsZero() && now.Sub(a.loaded) > 24*time.Hour {
-			c.invalidate(url)
-		} else {
+		if a.failed || a.loaded.IsZero() || now.Sub(a.loaded) < artRefreshAfter || now.Before(a.retryAt) {
 			return a
 		}
 	}
-	if a := c.gone[key].Value(); a != nil {
-		delete(c.gone, key)
-		a.used = now
-		c.add(key, a)
-		return a
-	}
 	if c.busy[key] != 0 {
-		return nil
+		return current
 	}
 	// Do not queue a goroutine for every URL scrolled past. A completion
 	// redraws the view, which asks again for the covers it still needs.
 	select {
 	case c.sem <- struct{}{}:
 	default:
-		return nil
+		return current
 	}
 	c.serial++
 	request := c.serial
@@ -197,6 +204,10 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			}
 			delete(c.busy, key)
 			if err != nil {
+				if old := c.art[key]; old != nil && old.bmp != nil {
+					old.retryAt = c.now().Add(artRefreshRetry)
+					return
+				}
 				c.add(key, &artwork{failed: true, retryable: netease.RetryableCoverError(err), loaded: c.now(), used: c.now()})
 				return
 			}
@@ -220,7 +231,7 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			})
 		})
 	}()
-	return nil
+	return current
 }
 
 // artRelease is how long a cover keeps its pixels once loaded: past the
