@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"os"
@@ -188,5 +189,63 @@ func TestArtCacheSizesCoversByTheirPixels(t *testing.T) {
 	// 24×24 pixels, and the smaller copies, about a third again.
 	if want := len(b) + 24*24*4*4/3; c.size != want {
 		t.Errorf("counted %d bytes of the cover, want %d", c.size, want)
+	}
+}
+
+// Expiry used to show a placeholder while a visible cover was being refreshed.
+func TestSidebarRefreshKeepsVisibleCover(t *testing.T) {
+	for _, scenario := range []string{"replacement", "failure", "full"} {
+		t.Run(scenario, func(t *testing.T) {
+			posts := make(chan func(), 1)
+			c := newArtCache(func(f func()) { posts <- f })
+			defer c.close()
+			now := time.Unix(100, 0)
+			c.now = func() time.Time { return now }
+			img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+			old, newCover := ui.NewBitmap(img), ui.NewBitmap(img)
+			url := "https://fixture.invalid/side?param=80y80"
+			size := pixelBytes(old)
+			c.add(url, &artwork{bmp: old, loaded: now, used: now, size: size})
+			now = now.Add(24*time.Hour + time.Second)
+			original := loadArt
+			defer func() { loadArt = original }()
+			loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+				if scenario == "failure" {
+					return nil, nil, 0, errors.New("offline")
+				}
+				return newCover, img, 0, nil
+			}
+			if scenario == "full" {
+				for range cap(c.sem) {
+					c.sem <- struct{}{}
+				}
+				if got := bitmap(c.get(url, false)); got != old {
+					t.Fatal("full queue hid visible cover")
+				}
+				if len(c.busy) != 0 {
+					t.Fatal("full queue accepted another request")
+				}
+				for range cap(c.sem) {
+					<-c.sem
+				}
+			}
+			for range 2 {
+				if got := bitmap(c.get(url, false)); got != old {
+					t.Fatal("old cover disappeared before replacement")
+				}
+			}
+			callback := wait(t, posts, "refresh completion")
+			callback()
+			want := newCover
+			if scenario == "failure" {
+				want = old
+			}
+			if got := bitmap(c.get(url, false)); got != want {
+				t.Fatal("wrong cover after refresh")
+			}
+			if len(c.busy) != 0 || c.size != size {
+				t.Fatal("refresh retried immediately or miscounted the cover")
+			}
+		})
 	}
 }
