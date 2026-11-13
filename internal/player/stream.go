@@ -225,8 +225,10 @@ func (d *download) write(b []byte, run int) {
 func (d *download) toMemory() {
 	d.data = make([]byte, d.n, max(prealloc(d.size), d.n))
 	got, _ := d.file.ReadAt(d.data, 0)
-	d.data = d.data[:got]
-	d.n = int64(got)
+	if got > 0 {
+		d.data = d.data[:got]
+		d.n = int64(got)
+	}
 	d.file.Close()
 	os.Remove(d.part)
 	d.file, d.part = nil, ""

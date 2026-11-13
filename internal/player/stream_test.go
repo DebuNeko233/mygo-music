@@ -583,16 +583,18 @@ func TestWriteFailureMovesTheSongToMemory(t *testing.T) {
 	go func() { have <- dl.waitFor(int64(len(b))) }()
 	select {
 	case n := <-have:
-		dl.Close()
 		if n != int64(len(b)) {
+			dl.Close()
 			t.Fatalf("%d of %d bytes in", n, len(b))
 		}
+		if got := dl.peek(0, 4); !bytes.Equal(got, b[:4]) {
+			dl.Close()
+			t.Fatalf("bytes at 0 are %x, wanted %x", got, b[:4])
+		}
+		dl.Close()
 	case <-time.After(5 * time.Second):
 		// The download holds its lock for good, and closing it waits too.
 		t.Fatal("the fetch waits on the download's lock")
-	}
-	if got := dl.peek(0, 4); !bytes.Equal(got, b[:4]) {
-		t.Errorf("bytes at 0 are %x, wanted %x", got, b[:4])
 	}
 }
 
