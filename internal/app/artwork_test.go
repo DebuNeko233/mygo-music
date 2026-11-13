@@ -1,14 +1,83 @@
 package app
 
 import (
+	"fmt"
 	"image"
 	"os"
 	"runtime"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 )
+
+// Slow UI callbacks must keep their slots: scrolling past more covers
+// cannot leave an unbounded number of decoded results waiting for the UI.
+func TestArtJobsBoundPendingResults(t *testing.T) {
+	posts := make(chan func(), 64)
+	c := newArtCache(func(fn func()) { posts <- fn })
+	t.Cleanup(c.close)
+	old := loadArt
+	t.Cleanup(func() { loadArt = old })
+	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+		img := image.NewRGBA(image.Rect(0, 0, 48, 48))
+		return ui.NewBitmap(img), img, 512, nil
+	}
+	for i := range 60 {
+		c.get(fmt.Sprint("cover-", i), false)
+	}
+	var ready []func()
+	for range artJobs {
+		ready = append(ready, wait(t, posts, "cover result"))
+	}
+	if len(c.busy) != artJobs {
+		t.Fatalf("accepted %d jobs while the UI was busy, want %d", len(c.busy), artJobs)
+	}
+	// Invalidating a queued result must still release its slot and cannot
+	// bring its pixels back after the invalidation.
+	for i := range artJobs {
+		c.invalidate(fmt.Sprint("cover-", i))
+	}
+	for _, post := range ready {
+		post()
+	}
+	if len(c.art) != 0 {
+		t.Fatal("invalidated results entered the cache")
+	}
+	c.get("visible-now", true)
+	wait(t, posts, "new visible cover")()
+	if a := c.get("visible-now", true); a == nil || a.backdrop == nil {
+		t.Fatal("completion did not free a slot for the visible cover")
+	}
+}
+
+// When one result consumes most of the byte budget, the next completion
+// waits without posting; invalidation releases that budget too.
+func TestArtResultsRespectByteBudget(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		posts := make(chan func(), artJobs)
+		c := newArtCache(func(fn func()) { posts <- fn })
+		defer c.close()
+		old := loadArt
+		defer func() { loadArt = old }()
+		loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+			img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+			return ui.NewBitmap(img), img, artResultLimit * 3 / 4, nil
+		}
+		c.get("first", false)
+		first := <-posts
+		c.get("second", false)
+		synctest.Wait()
+		if len(posts) != 0 {
+			t.Fatal("posted a second result over the byte budget")
+		}
+		c.invalidate("first")
+		c.invalidate("second")
+		first()
+		(<-posts)()
+	})
+}
 
 // An animated WebP cover, as some playlists have, shows its first frame,
 // in the bitmap too, which decodes its data again once it drops its pixels.

@@ -46,6 +46,7 @@ type app struct {
 	network                                networkState
 	homeFailures                           map[string]error
 	dirtySnapshots                         map[int64]bool
+	playlistWrites                         sync.Map // cacheRequest to the latest accepted write's done channel
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState
 	browseUsed, imagesUsed                 int64
@@ -219,9 +220,9 @@ type app struct {
 	cacheConfirm               cacheDirectoryConfirmation // the folder it asks to move the songs to
 	updates                    bool                       // the update plugin is used (useUpdater)
 
-	restored     bool   // playback picked up where it was left
-	savedSession string // the session as last kept
-	sessionDue   bool   // a save of the session is due
+	restored    bool // playback picked up where it was left
+	sessionSave sessionSaver
+	sessionDue  bool // a save of the session is due
 
 	// Workers can finish before NewWindow returns. Protect their early queue
 	// and dispatcher publication; callbacks always run unlocked.
@@ -425,6 +426,7 @@ func Run() error {
 		}
 		a.settings.save()
 		a.saveSession()
+		a.sessionSave.wait()
 		if write := a.transcriptWrite(); write != nil {
 			write()
 		}
@@ -439,6 +441,7 @@ func Run() error {
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
 	err := mygo.App.Run()
+	a.art.close()
 	if a.network.stop != nil {
 		a.network.stop()
 	}

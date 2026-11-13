@@ -89,13 +89,14 @@ type Player struct {
 	// session ends. Pausing and seeking do not end that session.
 	Playback func(PlaybackEvent)
 
-	queue   []netease.Track
-	order   []int // the queue's indices in play order: shuffled or not
-	at      int   // where in order the current track is, -1 for none
-	step    int   // the latest move in play order: 1 on, -1 back, 0 undirected
-	shuffle bool
-	repeat  RepeatMode
-	volume  float64
+	queue         []netease.Track
+	order         []int  // the queue's indices in play order: shuffled or not
+	queueRevision uint64 // changes when the queue or its order changes
+	at            int    // where in order the current track is, -1 for none
+	step          int    // the latest move in play order: 1 on, -1 back, 0 undirected
+	shuffle       bool
+	repeat        RepeatMode
+	volume        float64
 	// systemVolume is set while the system's mixer holds the listener's
 	// volume: what plays then carries only the track's gain and the fades,
 	// as the mixer applies the volume itself.
@@ -271,6 +272,7 @@ func (p *Player) playQueue(tracks []netease.Track, start int) {
 	}
 	p.endRadio()
 	p.step = 0
+	p.queueRevision++
 	start = min(start, len(tracks)-1)
 	p.queue = append([]netease.Track(nil), tracks...)
 	p.order = make([]int, len(p.queue))
@@ -312,6 +314,7 @@ func (p *Player) RadioFrom(name string, tracks []netease.Track, feed func(got fu
 		return
 	}
 	p.queue, p.order, p.at = []netease.Track{*p.track}, []int{0}, 0
+	p.queueRevision++
 	if p.source.Source == "" {
 		p.source.Source = "fm"
 	}
@@ -347,6 +350,7 @@ func (p *Player) EndRadio() {
 			kept[i] = p.queue[k]
 		}
 		p.queue, p.order = kept, make([]int, len(kept))
+		p.queueRevision++
 		for i := range p.order {
 			p.order[i] = i
 		}
@@ -404,6 +408,7 @@ func (p *Player) awaitFeed() {
 
 // appendTracks adds tracks to the end of the queue, but those in it.
 func (p *Player) appendTracks(tracks []netease.Track) {
+	before := len(p.queue)
 	in := make(map[int64]bool, len(p.queue))
 	for _, t := range p.queue {
 		in[t.ID] = true
@@ -414,6 +419,9 @@ func (p *Player) appendTracks(tracks []netease.Track) {
 			p.order = append(p.order, len(p.queue))
 			p.queue = append(p.queue, t)
 		}
+	}
+	if len(p.queue) != before {
+		p.queueRevision++
 	}
 }
 
@@ -432,6 +440,7 @@ func (p *Player) ToggleShuffle() {
 	if len(p.order) == 0 {
 		return
 	}
+	p.queueRevision++
 	cur := p.order[max(p.at, 0)]
 	if p.shuffle {
 		p.shuffleOrder(cur)
@@ -449,7 +458,7 @@ func (p *Player) CycleRepeat() { p.repeat = (p.repeat + 1) % 3 }
 // Current returns the track playing or loading, or nil.
 func (p *Player) Current() *netease.Track { return p.track }
 
-// Queue returns the tracks queued, in the order they were given.
+// Queue returns the read-only tracks queued, in the order they were given.
 func (p *Player) Queue() []netease.Track { return p.queue }
 
 // Playing reports what the listener wants: false while paused.
@@ -518,7 +527,7 @@ func (p *Player) OpenAudio() (Audio, error) {
 	return openShared(dl, p.track.Duration)
 }
 
-// PlayOrder returns the queue's indices in play order, and where the
+// PlayOrder returns the read-only queue indices in play order, and where the
 // current track is among them, -1 for none.
 func (p *Player) PlayOrder() ([]int, int) { return p.order, p.at }
 
@@ -1272,7 +1281,12 @@ type Session struct {
 	Radio    string          `json:"radio,omitempty"`
 }
 
-// Session returns where playback is, or false with nothing queued.
+// QueueRevision identifies the current queue and play order. Position,
+// repeat mode, and playback state do not change it.
+func (p *Player) QueueRevision() uint64 { return p.queueRevision }
+
+// Session returns where playback is, or false with nothing queued. Queue
+// and Order are borrowed; copy them before handing the session to a worker.
 func (p *Player) Session() (Session, bool) {
 	if p.track == nil || p.at < 0 {
 		return Session{}, false
@@ -1303,6 +1317,7 @@ func (p *Player) Restore(s Session) {
 		seen[i] = true
 	}
 	p.queue, p.order = s.Queue, s.Order
+	p.queueRevision++
 	p.step = 0
 	p.shuffle, p.repeat = s.Shuffle, s.Repeat%3
 	p.tries = 0

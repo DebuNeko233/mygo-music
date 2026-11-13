@@ -141,6 +141,7 @@ func (a *app) show(r route) {
 		a.query, a.searched = r.query, r
 	}
 	a.load(r)
+	a.trimPlaylistCache()
 }
 
 // load loads what the page of r shows, unless it has.

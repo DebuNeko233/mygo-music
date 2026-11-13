@@ -338,6 +338,8 @@ func (a *app) measureOfflineCache() {
 // persistLibrary is deferred until an edit's success or rollback has landed.
 // Copies leave the UI thread; only the changed playlist needs serializing.
 func (a *app) persistLibrary(ids ...int64) {
+	// An edit can temporarily pin cached playlists, even without a disk store.
+	defer a.trimPlaylistCache()
 	if a.browseCache == nil || a.profile == nil {
 		return
 	}
@@ -373,7 +375,9 @@ func (a *app) persistLibrary(ids ...int64) {
 	}
 	for id := range a.dirtySnapshots {
 		if pl := a.playlists[id]; pl != nil {
-			keep(fmt.Sprintf("playlist/%d", id), copyPlaylist(*pl))
+			req := a.cacheRequest(fmt.Sprintf("playlist/%d", id))
+			snapshot := copyPlaylist(*pl)
+			a.savePlaylistSnapshot(req, func() []byte { return cacheBytes(snapshot) })
 		}
 	}
 	clear(a.dirtySnapshots)
