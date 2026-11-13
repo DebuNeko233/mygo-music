@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+	"image"
 	"math"
 	"testing"
 	"time"
@@ -10,6 +12,145 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
+
+// Word colors repaint without rebuilding the view, and a gap needs no periodic frame.
+func TestLyricWordPaintBudget(t *testing.T) {
+	line := lyrics.Line{Text: "Alpha Beta", Words: []lyrics.Word{
+		{Text: "Alpha ", Start: time.Second, End: 1500 * time.Millisecond},
+		{Text: "Beta", Start: 3 * time.Second, End: 3500 * time.Millisecond},
+	}}
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 8000}})
+	a.pl.Hold(900 * time.Millisecond)
+	builds := 0
+	tt := ui.NewTester(func(c *ui.Context) {
+		builds++
+		c.Root().Background(ui.RGB(0, 0, 0))
+		a.paintLyricWords(c, &line, 240, linesStyle{size: 30, weight: 800, lineHeight: 1.25})
+	}, 240, 70)
+	brightness := func(r image.Rectangle) int {
+		img := tt.Image()
+		total := 0
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			for x := r.Min.X; x < r.Max.X; x++ {
+				total += int(img.RGBAAt(x, y).R)
+			}
+		}
+		return total
+	}
+	left, right := image.Rect(0, 0, 82, 70), image.Rect(100, 0, 240, 70)
+	dimLeft, dimRight, before := brightness(left), brightness(right), builds
+	if dimLeft == 0 || dimRight == 0 {
+		t.Fatal("dim words were not drawn")
+	}
+	a.pl.Hold(1300 * time.Millisecond)
+	tt.Advance(145 * time.Millisecond)
+	if got := brightness(left); got <= dimLeft {
+		t.Fatalf("word did not brighten: %d -> %d", dimLeft, got)
+	}
+	if brightness(right) != dimRight || builds != before {
+		t.Fatal("highlight changed a later word or rebuilt the view")
+	}
+	a.pl.Hold(1600 * time.Millisecond)
+	tt.Advance(45 * time.Millisecond)
+	a.pl.Hold(3400 * time.Millisecond)
+	tt.Advance(800 * time.Millisecond)
+	if brightness(right) != dimRight {
+		t.Fatal("periodic highlight updated during the silent gap")
+	}
+	tt.Advance(2 * time.Second)
+	if brightness(right) <= dimRight || builds != before {
+		t.Fatal("the next word did not repaint after the gap")
+	}
+}
+
+func lyricScrollFixture(n int) (*ui.Tester, *int, func(time.Duration)) {
+	a := newTestApp()
+	tr := netease.Track{ID: 1, Duration: int64(n * 2000)}
+	a.pl.Cue([]netease.Track{tr})
+	lines := make([]lyrics.Line, n)
+	for i := range lines {
+		lines[i] = lyrics.Line{
+			At: time.Duration(i) * 2 * time.Second, Text: fmt.Sprintf("第 %d 句歌词", i),
+			Translation: "Translation of the lyrics",
+		}
+	}
+	a.pl.SetLyrics(lines)
+	pos := time.Duration(n/2) * 2 * time.Second
+	a.pl.Seek(pos)
+	builds := 0
+	var seekAt time.Duration
+	var seekTime time.Time
+	tt := ui.NewTester(func(c *ui.Context) {
+		builds++
+		if !seekTime.IsZero() {
+			if left := seekTime.Sub(c.Now()); left > 0 {
+				c.After(left)
+			} else {
+				a.pl.Seek(seekAt)
+				seekTime = time.Time{}
+			}
+		}
+		a.lyricsPane(c, a.pl.Current(), 520)
+	}, 480, 520)
+	tt.Advance(2 * time.Second)
+	seek := func(pos time.Duration) {
+		seekAt, seekTime = pos, tt.Now().Add(20*time.Millisecond)
+		tt.Frame()
+	}
+	return tt, &builds, seek
+}
+
+// Following a new line keeps sliding without rebuilding the lyrics at each refresh.
+func TestLyricsScrollFrameBudget(t *testing.T) {
+	tt, builds, seek := lyricScrollFixture(120)
+	line := func() ui.Rect {
+		t.Helper()
+		info, ok := tt.AccessByRole(ui.RoleButton, "第 61 句歌词")
+		if !ok {
+			t.Fatal("next line not laid out")
+		}
+		return info.Bounds
+	}
+	start := line()
+	seek(122 * time.Second)
+	before := *builds
+	tt.Advance(150 * time.Millisecond)
+	mid := line()
+	tt.Advance(1850 * time.Millisecond)
+	end := line()
+	if mid.Y >= start.Y-5 || mid.Y <= end.Y+5 || math.Abs(float64(end.Y-520*0.3)) > 1 {
+		t.Fatalf("line did not glide to the upper third: start %v, mid %v, end %v", start, mid, end)
+	}
+	if n := *builds - before; n > 6 {
+		t.Fatalf("one automatic glide rebuilt the view %d times", n)
+	}
+}
+
+// Manual scrolling during a glide picks up where the lyrics are painted.
+func TestLyricsManualScrollInterruptsGlide(t *testing.T) {
+	for _, n := range []int{30, 120} {
+		t.Run(fmt.Sprint(n), func(t *testing.T) {
+			tt, _, seek := lyricScrollFixture(n)
+			y := func() float32 {
+				t.Helper()
+				line, ok := tt.AccessByRole(ui.RoleButton, fmt.Sprintf("第 %d 句歌词", n/2))
+				if !ok {
+					t.Fatal("the anchor line is missing")
+				}
+				return line.Bounds.Y
+			}
+			seek(time.Duration(n+4) * time.Second)
+			tt.Advance(100 * time.Millisecond)
+			before := y()
+			tt.Scroll(260, 170, 0, 32)
+			tt.Advance(2 * time.Second)
+			if got := y(); math.Abs(float64(got-(before-32))) > 24 {
+				t.Fatalf("manual scroll jumped to the automatic destination: %.1f -> %.1f", before, got)
+			}
+		})
+	}
+}
 
 // A cover slide moves through painter poses, then releases its outgoing
 // layer and stops rebuilding. Count After wakeups as well as display frames.

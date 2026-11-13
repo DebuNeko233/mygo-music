@@ -54,24 +54,20 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 		return
 	}
 	cur := lyrics.Index(lines, pos)
+	if pl.Playing() && cur+1 < len(lines) {
+		c.After(lines[cur+1].At - pos + 20*time.Millisecond)
+	}
 	// A line stays lit through a pause, but not where nothing is written
 	// down yet: after a seek ahead, until the words there are.
 	if cur >= 0 && pos >= lines[cur].End && a.captionsWriting(pos) {
 		cur = -1
 	}
-	if pl.Playing() {
-		if i := lyrics.Index(lines, pos); i+1 < len(lines) {
-			c.After(lines[i+1].At - pos + 20*time.Millisecond)
-		}
-	}
 	if a.lyricTrack != tr.ID {
 		a.lyricTrack, a.lyricAt = tr.ID, -2
 		a.lyricScroll, a.lyricGlide = ui.ScrollState{}, lyricGlide{}
 	}
-	scrollY := a.lyricScroll.Y // offset matching the previous frame
-	lag := a.lyricGlide.step(c, &a.lyricScroll)
 	scroll := ui.Scroll(c.Key("captions")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, h*0.5, 0)
-	a.timedLines(c, scroll, lines, pos, cur, lag, scrollY, linesStyle{size: 24, weight: 700, lineHeight: 1.4}, func() {
+	a.timedLines(c, scroll, lines, cur, linesStyle{size: 24, weight: 700, lineHeight: 1.4, lang: cs.language}, func() {
 		if cs.work != nil {
 			ui.Text(c, "正在识别…").FontSize(14).FontWeight(600).TextColor(white.Alpha(0.35)).Padding(16, 12)
 		}

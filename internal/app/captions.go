@@ -54,12 +54,14 @@ const captionLead = 30 * time.Second
 type captionState struct {
 	model modelState
 
-	program int64       // the episode the transcript is of, 0 for none
-	tr      *transcript // nil while it loads
-	lines   []lyrics.Line
-	work    *captionWork  // the transcription running, or nil
-	failed  int64         // the episode the transcription failed for
-	saved   time.Duration // how far the transcript on disk is written down
+	program  int64       // the episode the transcript is of, 0 for none
+	tr       *transcript // nil while it loads
+	lines    []lyrics.Line
+	language string
+	revision uint64
+	work     *captionWork  // the transcription running, or nil
+	failed   int64         // the episode the transcription failed for
+	saved    time.Duration // how far the transcript on disk is written down
 }
 
 // modelState is the model's: whether it is installed, or downloading.
@@ -252,7 +254,8 @@ func (a *app) syncCaptions() {
 	if program != cs.program {
 		a.pauseCaptions()
 		a.saveTranscript()
-		cs.program, cs.tr, cs.lines = program, nil, nil
+		cs.program, cs.tr, cs.lines, cs.language = program, nil, nil, ""
+		cs.revision++
 		if program != 0 && a.captionsShown() {
 			a.loadTranscript(program)
 		}
@@ -372,8 +375,22 @@ func (a *app) captionSaid(w *captionWork, s speech.Segment) {
 	if cs.work != w || w.program != cs.program || cs.tr == nil {
 		return
 	}
-	cs.tr.Segments = addSegment(cs.tr.Segments, s)
-	cs.lines = speech.Lines(cs.tr.Segments)
+	segs := cs.tr.Segments
+	atEnd := len(segs) == 0 || s.Start > segs[len(segs)-1].Start
+	cs.tr.Segments = addSegment(segs, s)
+	if len(cs.tr.Segments) == len(segs) {
+		return
+	}
+	newLines := speech.Lines([]speech.Segment{s})
+	if cs.language == "" {
+		cs.language = lyrics.Lang(newLines)
+	}
+	if atEnd {
+		cs.lines = append(cs.lines, newLines...)
+	} else {
+		cs.lines = speech.Lines(cs.tr.Segments)
+		cs.revision++
+	}
 }
 
 // captionHeard marks the episode written down from where w started to at.
@@ -457,6 +474,8 @@ func (a *app) loadTranscript(program int64) {
 			if cs.program == program && cs.tr == nil {
 				cs.tr = tr
 				cs.lines = speech.Lines(tr.Segments)
+				cs.language = lyrics.Lang(cs.lines)
+				cs.revision++
 				a.syncCaptions()
 			}
 		})
