@@ -650,11 +650,6 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 	}
 	got, err := io.ReadFull(s.dec, b)
 	// UnexpectedEOF from ReadFull is normal for a final partial PCM buffer.
-	// Once the song's declared duration has played, trailing metadata that
-	// looks like an unsupported frame is its end too, not a decode failure.
-	if s.frames > 0 && s.pos+int64(got/4) >= s.frames && s.dl.Err() == nil && err != nil {
-		err = io.EOF
-	}
 	if err != io.ErrUnexpectedEOF {
 		s.failure.record(err)
 	}
