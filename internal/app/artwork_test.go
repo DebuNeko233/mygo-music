@@ -192,6 +192,31 @@ func TestArtCacheSizesCoversByTheirPixels(t *testing.T) {
 	}
 }
 
+// Releasing the decoded pixels waits for the cover cache's dispatcher rather
+// than bypassing it on a timer goroutine, as releasing them beside a frame did.
+func TestArtReleaseUsesTheDispatcher(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		posts := make(chan func(), 2)
+		c := newArtCache(func(fn func()) { posts <- fn })
+		defer c.close()
+		old := loadArt
+		defer func() { loadArt = old }()
+		loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+			img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+			return ui.NewBitmap(img), img, 16, nil
+		}
+		c.get("cover", false)
+		(<-posts)()
+		time.Sleep(artRelease)
+		synctest.Wait()
+		select {
+		case <-posts:
+		default:
+			t.Fatal("the timer released pixels off the dispatcher")
+		}
+	})
+}
+
 // Expiry used to show a placeholder while a visible cover was being refreshed.
 func TestSidebarRefreshKeepsVisibleCover(t *testing.T) {
 	for _, scenario := range []string{"replacement", "failure", "full"} {
