@@ -70,13 +70,16 @@ func (a *app) playback(event player.PlaybackEvent) {
 // sessions in playback order. A failed request is logged rather than lost silently.
 func (a *app) enqueueReport(send func()) {
 	a.reportOnce.Do(func() {
-		a.reportQueue = make(chan func(), 64)
-		a.reportDone = make(chan struct{})
+		// The worker keeps its own queue and done channel: a later session
+		// takes the fields, and the one it ends must still finish.
+		queue := make(chan func(), 64)
+		done := make(chan struct{})
+		a.reportQueue, a.reportDone = queue, done
 		go func() {
-			for send := range a.reportQueue {
+			for send := range queue {
 				send()
 			}
-			close(a.reportDone)
+			close(done)
 		}()
 	})
 	queue := a.reportQueue
@@ -95,22 +98,48 @@ func (a *app) enqueueReport(send func()) {
 // reportPlayStopped closes a session on account changes and application exit.
 func (a *app) reportPlayStopped() { a.pl.Finish() }
 
-// flushPlayReports finishes the ordered start/end requests before the process
-// exits or the account changes. A later login creates a fresh queue.
-func (a *app) flushPlayReports() {
+// stopPlayReports ends the session's queue without waiting for it, and returns
+// the channel the queue closes when its requests are done, or nil when there
+// was nothing to send. Its caller runs on the thread that draws: the requests
+// finish on the goroutine that sends them, under the cookies the account had
+// while it was signed in, so neither signing in nor signing out waits for the
+// network. A later login creates a fresh queue.
+func (a *app) stopPlayReports() <-chan struct{} {
 	a.reportPlayStopped()
-	if a.reportQueue != nil {
-		close(a.reportQueue)
-		select {
-		case <-a.reportDone:
-		case <-time.After(2 * time.Second):
-			log.Printf("play report: final requests did not finish before account change")
-			if a.reportRestore == nil {
-				a.reportRestore = netease.SnapshotPlayReports()
+	queue, done := a.reportQueue, a.reportDone
+	if queue == nil {
+		return nil
+	}
+	a.reportQueue = nil
+	a.reportDone = nil
+	a.reportOnce = sync.Once{}
+	// The queue outlives the account that filled it: it sends with that
+	// account's cookies, not with those of whoever signs in next.
+	if a.reportRestore == nil {
+		a.reportRestore = netease.SnapshotPlayReports()
+	}
+	close(queue)
+	go func() {
+		<-done
+		a.post(func() {
+			if a.reportRestore != nil {
+				a.reportRestore()
+				a.reportRestore = nil
 			}
+		})
+	}()
+	return done
+}
+
+// flushPlayReports finishes the ordered start/end requests before the process
+// exits. By then every window is closed: waiting here holds up the exit, not
+// the drawing.
+func (a *app) flushPlayReports() {
+	if done := a.stopPlayReports(); done != nil {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			log.Printf("play report: final requests did not finish before the exit")
 		}
-		a.reportQueue = nil
-		a.reportDone = nil
-		a.reportOnce = sync.Once{}
 	}
 }
