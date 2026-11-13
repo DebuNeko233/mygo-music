@@ -64,7 +64,7 @@ func (a *app) stepLyricSize(d float64) {
 		return
 	}
 	a.settings.LyricSize = size
-	a.settings.save()
+	a.settings.saveSoon()
 	if a.lyrics != nil {
 		a.lyrics.apply()
 	}
@@ -102,7 +102,7 @@ func (a *app) setBinding(kind keyKind, name, acc string) {
 		*keys = map[string]string{}
 	}
 	(*keys)[name] = acc
-	a.settings.save()
+	a.settings.saveSoon()
 	if kind == kindGlobal {
 		a.registerGlobals()
 	}
@@ -133,7 +133,7 @@ func (a *app) restoreBinding(kind keyKind, name string) {
 		keys = &a.settings.Shortcuts.Global
 	}
 	delete(*keys, name)
-	a.settings.save()
+	a.settings.saveSoon()
 	if kind == kindGlobal {
 		a.registerGlobals()
 	}

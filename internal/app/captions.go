@@ -170,7 +170,7 @@ func (a *app) startModelDownload() {
 			case err == nil:
 				m.installed, m.checked = true, true
 				a.settings.Captions = true
-				a.settings.save()
+				a.settings.saveSoon()
 				a.syncCaptions()
 			case ctx.Err() != nil:
 			default:

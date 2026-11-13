@@ -161,7 +161,7 @@ func (n *notch) greet() {
 		return
 	}
 	s.NotchGreeted = true
-	s.save()
+	s.saveSoon()
 	n.hello = true
 	if n.win == nil {
 		return // as in tests
@@ -213,7 +213,7 @@ func (n *notch) bye() {
 func (n *notch) keep() {
 	n.hello = false
 	n.a.settings.Notch = true
-	n.a.settings.save()
+	n.a.settings.saveSoon()
 	n.setEnabled(true)
 }
 

@@ -24,7 +24,7 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 	if !a.settings.Captions {
 		a.captionsNote(c, "字幕已关闭", "开启字幕", func() {
 			a.settings.Captions = true
-			a.settings.save()
+			a.settings.saveSoon()
 			a.syncCaptions()
 		})
 		return

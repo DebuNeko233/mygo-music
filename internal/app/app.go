@@ -425,6 +425,9 @@ func Run() error {
 			// Where the lyrics were left, before the window goes.
 			a.lyrics.remember()
 		}
+		// A write still owed from a key repeat would otherwise land
+		// after this one, with the settings as they were before it.
+		settingsWrites.wait()
 		a.settings.save()
 		a.saveSession()
 		a.sessionSave.wait()

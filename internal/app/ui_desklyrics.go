@@ -249,7 +249,7 @@ func newDeskLyrics(a *app) *deskLyrics {
 		}
 		e.PreventDefault()
 		s.LyricWindow = false
-		s.save()
+		s.saveSoon()
 		d.apply()
 	})
 	// A move or a size change comes from the window, not from polling it.
@@ -300,7 +300,7 @@ func (d *deskLyrics) apply() {
 		if reshaped {
 			// A new shape sets the size that is remembered from here on.
 			s.LyricWidth, s.LyricHeight = int(w), int(h)
-			s.save()
+			s.saveSoon()
 		}
 	}
 	// The transparent edges resize only while unlocked; a locked window
@@ -329,7 +329,7 @@ func (d *deskLyrics) setLocked(locked bool) {
 		d.remember()
 	}
 	s.LyricLocked = locked
-	s.save()
+	s.saveSoon()
 	if d.win == nil {
 		return // as in tests
 	}
@@ -354,7 +354,7 @@ func (d *deskLyrics) remember() {
 	}
 	s.LyricX, s.LyricY = b.X, b.Y
 	s.LyricWidth, s.LyricHeight = b.Width, b.Height
-	s.save()
+	s.saveSoon()
 }
 
 // unlockBox is where the padlock stands in a locked window: at the middle of
