@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image"
 	"math"
 	"testing"
 	"time"
@@ -10,6 +11,34 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
+
+// The player bar cover asks for frames while fading, then rests.
+func TestPlayerBarCoverFrameBudget(t *testing.T) {
+	a := newTestApp()
+	before, after := "test://before", "test://after"
+	for _, url := range []string{before, after} {
+		img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+		a.art.add(netease.Sized(url, barCoverPixels), &artwork{bmp: ui.NewBitmap(img)})
+	}
+	url := before
+	builds := 0
+	tt := ui.NewTester(func(c *ui.Context) {
+		builds++
+		a.playerBarArtwork(c, url)
+	}, 64, 64)
+	tt.Advance(time.Second)
+	url = after
+	tt.Frame()
+	if !tt.FramePending() {
+		t.Fatal("a new cover did not schedule animation frames")
+	}
+	tt.Advance(time.Second)
+	resting := builds
+	tt.Advance(time.Second)
+	if tt.FramePending() || builds != resting {
+		t.Fatal("a finished cover transition kept scheduling frames")
+	}
+}
 
 // A cover slide moves through painter poses, then releases its outgoing
 // layer and stops rebuilding. Count After wakeups as well as display frames.

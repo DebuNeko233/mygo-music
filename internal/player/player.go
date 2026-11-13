@@ -531,6 +531,18 @@ func (p *Player) OpenAudio() (Audio, error) {
 // current track is among them, -1 for none.
 func (p *Player) PlayOrder() ([]int, int) { return p.order, p.at }
 
+// AdjacentTracks returns the read-only tracks Next and Prev would select.
+// At the end of a radio, Next must wait for the feed.
+func (p *Player) AdjacentTracks() (next, prev *netease.Track) {
+	if p.at < 0 || p.at >= len(p.order) {
+		return nil, nil
+	}
+	if at := p.nextIndex(); at >= 0 {
+		next = &p.queue[p.order[at]]
+	}
+	return next, &p.queue[p.order[p.prevIndex()]]
+}
+
 // StepDirection is the latest move in play order: 1 forward, -1 backward,
 // or 0 for a replacement or reselecting the same entry. Record it before
 // loading, while the old position is known; song IDs can repeat, and
@@ -541,18 +553,25 @@ func (p *Player) Next() {
 	if len(p.order) == 0 {
 		return
 	}
-	at := p.at + 1
-	if at >= len(p.order) {
-		if p.feed != nil {
-			p.finish(MovedOn)
-			p.stop()
-			p.awaitFeed()
-			return
-		}
-		at = 0
+	at := p.nextIndex()
+	if at < 0 {
+		p.finish(MovedOn)
+		p.stop()
+		p.awaitFeed()
+		return
 	}
 	p.step = 1
 	p.load(at)
+}
+
+func (p *Player) nextIndex() int {
+	if at := p.at + 1; at < len(p.order) {
+		return at
+	}
+	if p.feed != nil {
+		return -1
+	}
+	return 0
 }
 
 // Prev plays the track before this one, however far this one has played:
@@ -562,12 +581,15 @@ func (p *Player) Prev() {
 	if len(p.order) == 0 {
 		return
 	}
-	at := p.at - 1
-	if at < 0 {
-		at = len(p.order) - 1
-	}
 	p.step = -1
-	p.load(at)
+	p.load(p.prevIndex())
+}
+
+func (p *Player) prevIndex() int {
+	if p.at > 0 {
+		return p.at - 1
+	}
+	return len(p.order) - 1
 }
 
 // Jump plays the queue's track i.
