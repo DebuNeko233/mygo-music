@@ -57,7 +57,9 @@ func TestPrefetchesNextCover(t *testing.T) {
 			url := netease.Sized(want.Album.PicURL, 600)
 			a.pl.SetLyrics(nil)
 			wanted := map[string]bool{url: true, netease.Sized(a.pl.Current().Album.PicURL, 600): true}
-			tt := ui.NewTesterWith(a.nowPlayingView, 640, 440, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			// This checks requests, not layout. Keep the software-rendered
+			// backdrop small so this fixture is cheap under the race detector.
+			tt := ui.NewTesterWith(a.nowPlayingView, 160, 120, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			tt.Frame()
 			for range len(wanted) {
 				if got := wait(t, asked, "cover"); !wanted[got] {
@@ -139,7 +141,7 @@ func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*ar
 	a.pl.Hold(0)
 	a.pl.SetLyrics(nil)
 	a.nowPlaying = true
-	tt := ui.NewTesterWith(a.view, 1000, 700,
+	tt := ui.NewTesterWith(a.view, 640, 440,
 		ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}, Dark: true})
 	tt.Advance(2 * time.Second)
 	return a, tt, arts
