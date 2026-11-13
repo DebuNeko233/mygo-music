@@ -94,6 +94,32 @@ func TestMP3SeekIsClean(t *testing.T) {
 	}
 }
 
+// A FLAC whose samples all decoded ends at EOF even if its last frame does
+// not reach the end of the file. NetEase's files leave bytes there, which
+// used to be retried as a corrupt frame after the song's declared samples.
+func TestFLACTrailingBytesAfterSamples(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tail := range [][]byte{[]byte("TAG12345"), {0}} {
+		s, err := openStream(downloaded(append(b, tail...)), 5000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetPosition(s.Len()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Read(make([]float32, 4096)); !errors.Is(err, io.EOF) {
+			t.Fatalf("read from declared samples: %v", err)
+		}
+		if err := s.cut(); err != nil {
+			t.Fatalf("trailing bytes became a failure: %v", err)
+		}
+		s.Close()
+	}
+}
+
 // A FLAC plays as its samples are, and a seek lands on the very sample.
 func TestFLACSeek(t *testing.T) {
 	b, err := os.ReadFile("testdata/seek.flac")
