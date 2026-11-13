@@ -554,3 +554,45 @@ func TestWriteFailureMovesTheSongToMemory(t *testing.T) {
 		t.Errorf("bytes at 0 are %x, wanted %x", got, b[:4])
 	}
 }
+
+// A seek back to the start of a song plays it from its start again, as a song
+// on repeat seeks when it ends: the decoder was given a byte the seek into the
+// middle had dropped, failed on its first frame, and the song was taken as cut
+// off and skipped, so a song on repeat played once.
+func TestMP3SeekBackToTheStart(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := decodeAll(t, b)
+	dl, _ := stalled(t, b, func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b))
+	})
+	s, err := openMP3Stream(dl, int64(len(ref)/2)*1000/44100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	buf := make([]float32, 4096)
+	if _, err := s.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	// Into a part of the song not in yet: the seek asks for the song from
+	// there, and what came before goes.
+	if err := s.SetPosition(s.frames * 3 / 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPosition(0); err != nil {
+		t.Fatalf("seek back to the start: %v", err)
+	}
+	n, err := s.Read(buf)
+	if err != nil {
+		t.Fatalf("read from the start: %v", err)
+	}
+	if d := maxDiff(buf[:n], ref); d > 1e-4 {
+		t.Errorf("played from the start off by up to %.3f", d)
+	}
+}
