@@ -361,9 +361,45 @@ func PlaylistDetail(id int64) (*Playlist, error) {
 		// A detail that is cut short still returns the songs it got: a
 		// playlist showing part of itself beats one that fails whole.
 		more, _ := SongDetails(ids)
-		p.Tracks = append(p.Tracks, more...)
+		p.Tracks = playlistOrder(p.Tracks, more, p.TrackIDs)
 	}
 	return p, nil
+}
+
+// playlistOrder puts listed songs, and the details fetched for those it left
+// out, in the order the playlist keeps: the details come in a batch of their
+// own, and appending them at the end put every song past the first thousand
+// where the playlist does not have it. A song a playlist holds twice stays
+// twice, and one the ids do not mention stays at the end.
+func playlistOrder(listed, more []Track, trackIDs []TrackID) []Track {
+	if len(trackIDs) == 0 {
+		return append(listed, more...)
+	}
+	byID := make(map[int64]Track, len(listed)+len(more))
+	for _, t := range listed {
+		byID[t.ID] = t
+	}
+	for _, t := range more {
+		byID[t.ID] = t // fetched for its song's id: its details are the fuller
+	}
+	want := make(map[int64]int, len(trackIDs))
+	for _, id := range trackIDs {
+		want[id.ID]++
+	}
+	ordered := make([]Track, 0, len(trackIDs)+len(listed))
+	for _, id := range trackIDs {
+		if t, ok := byID[id.ID]; ok && want[id.ID] > 0 {
+			ordered = append(ordered, t)
+			want[id.ID]--
+		}
+	}
+	for _, t := range listed {
+		if want[t.ID] > 0 {
+			ordered = append(ordered, t)
+			want[t.ID]--
+		}
+	}
+	return ordered
 }
 
 // missingTracks returns the ids of a playlist's songs that come without
