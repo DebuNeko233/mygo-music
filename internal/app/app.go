@@ -158,6 +158,7 @@ type app struct {
 	tabCount                       rollState // the count on the comments' tab, as it rolls
 
 	fmMode        int    // the FM mode chosen, in fmModes
+	fmSynced      string // the radio fmMode was last taken from
 	radioStarting string // the radio asked for its first songs, or ""
 
 	scrub            float64
