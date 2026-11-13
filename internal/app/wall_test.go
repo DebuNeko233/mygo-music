@@ -74,8 +74,10 @@ func TestWallPlaysTheCoverClicked(t *testing.T) {
 func TestWallPlaysTheCoverSwaying(t *testing.T) {
 	a, tt := wallApp(t, 300, 0)
 	a.pl.Hold(0) // playing
-	for range 8 {
-		tt.Advance(time.Second)
+	// A whole turn of the sway is sampled, whatever the clock starts it on:
+	// the rows are only ever on their way from one side to the other.
+	for range 2 * 14 {
+		tt.Advance(500 * time.Millisecond)
 		tt.Frame()
 		r := find(t, tt, "歌005")
 		sway := r.X - (a.wallState.shown.X + a.wallState.pan.X + 5*wallPitch)
@@ -176,6 +178,29 @@ func TestWallFrames(t *testing.T) {
 		tt.Scroll(600, 600, 0, 70)
 		tt.Frame()
 		save(fmt.Sprintf("wall-%d-up.png", n))
+	}
+}
+
+// A row sways to one side for a half period, where it turns for the other,
+// rows next to each other going opposite ways.
+func TestRowSwayTargetTurnsEveryHalfPeriod(t *testing.T) {
+	base := time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC) // on a turn of the first row
+	for _, c := range []struct {
+		at   time.Time
+		r    int
+		to   float32
+		turn time.Duration
+	}{
+		{base, 0, wallSway, wallSwayHalf},
+		{base, 1, -wallSway, wallSwayHalf},
+		{base.Add(wallSwayHalf), 0, -wallSway, wallSwayHalf},
+		{base.Add(wallSwayHalf), 1, wallSway, wallSwayHalf},
+		{base.Add(wallSwayHalf + 2*time.Second), 2, -wallSway, wallSwayHalf - 2*time.Second},
+	} {
+		to, turn := rowSwayTarget(c.r, c.at)
+		if to != c.to || turn != c.turn {
+			t.Errorf("row %d at %v: sways to %v, turning in %v; want %v in %v", c.r, c.at, to, turn, c.to, c.turn)
+		}
 	}
 }
 

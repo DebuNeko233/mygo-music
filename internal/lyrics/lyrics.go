@@ -30,12 +30,31 @@ type Word struct {
 	Start, End time.Duration
 }
 
-var lrcTime = regexp.MustCompile(`\[(\d+):(\d+)(?:[.:](\d+))?\]`)
+var (
+	lrcTime   = regexp.MustCompile(`\[(\d+):(\d+)(?:[.:](\d+))?\]`)
+	lrcOffset = regexp.MustCompile(`\[offset:\s*([+-]?\d+)\s*\]`)
+)
+
+// lrcOffsetOf is the shift the lyrics ask for, in milliseconds: with
+// [offset:+500] every line comes half a second later than it says, as for
+// a file that starts before the part of the recording the times count.
+func lrcOffsetOf(lrc string) time.Duration {
+	m := lrcOffset.FindStringSubmatch(lrc)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n) * time.Millisecond
+}
 
 // parseLRC reads lyrics in the LRC format, as NetEase serves them: a line
 // may carry several times, and credits come as lines of their own.
 func parseLRC(lrc string) []Line {
 	var out []Line
+	offset := lrcOffsetOf(lrc)
 	for _, raw := range strings.Split(lrc, "\n") {
 		times := lrcTime.FindAllStringSubmatchIndex(raw, -1)
 		if len(times) == 0 {
@@ -63,12 +82,12 @@ func parseLRC(lrc string) []Line {
 					frac /= 10
 				}
 			}
-			at := time.Duration(min)*time.Minute + time.Duration(sec)*time.Second + frac
+			at := time.Duration(min)*time.Minute + time.Duration(sec)*time.Second + frac + offset
 			// Prevent overflow: max 24 hours
 			if at > 24*time.Hour {
 				continue
 			}
-			out = append(out, Line{At: at, Text: text})
+			out = append(out, Line{At: max(at, 0), Text: text})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At < out[j].At })
@@ -77,7 +96,7 @@ func parseLRC(lrc string) []Line {
 
 var (
 	yrcLine = regexp.MustCompile(`^\[(\d+),(\d+)\]`)
-	yrcWord = regexp.MustCompile(`\((\d+),(\d+),\d+\)([^(]*)`)
+	yrcWord = regexp.MustCompile(`\((\d+),(\d+),\d+\)`)
 )
 
 // parseYRC reads NetEase's word-timed lyrics: a line is
@@ -104,9 +123,17 @@ func parseYRC(yrc string) []Line {
 		}
 		l := Line{At: ms(m[1]), Timed: true}
 		l.End = l.At + ms(m[2])
-		for _, w := range yrcWord.FindAllStringSubmatch(raw[len(m[0]):], -1) {
-			start := ms(w[1])
-			word := Word{Text: w[3], Start: start, End: start + ms(w[2])}
+		// Each word runs from the mark before it to the mark of the next,
+		// brackets and all: a word's own text is as it is sung.
+		body := raw[len(m[0]):]
+		marks := yrcWord.FindAllStringSubmatchIndex(body, -1)
+		for i, w := range marks {
+			text := body[w[1]:]
+			if i+1 < len(marks) {
+				text = body[w[1]:marks[i+1][0]]
+			}
+			start := ms(body[w[2]:w[3]])
+			word := Word{Text: text, Start: start, End: start + ms(body[w[4]:w[5]])}
 			if strings.TrimSpace(word.Text) == "" {
 				// A space between words: it belongs to the word before.
 				if n := len(l.Words); n > 0 {

@@ -12,6 +12,7 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// An edge shows on the side the page can still be scrolled to.
 func TestScrollEdgesFollowContent(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
@@ -38,6 +39,7 @@ func TestScrollEdgesFollowContent(t *testing.T) {
 	}
 }
 
+// A page that fits in the window, bar the scrolling, shows no edge.
 func TestShortPageHasNoEdges(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()

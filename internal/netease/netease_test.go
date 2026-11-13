@@ -70,6 +70,37 @@ func TestPlaylistDetailFillsEveryTrack(t *testing.T) {
 	}
 }
 
+// A playlist whose songs come by id keeps them where it has them, past the
+// thousand it lists in full, and keeps a song it holds twice twice.
+func TestPlaylistDetailKeepsItsOrder(t *testing.T) {
+	listed := []Track{{ID: 5}, {ID: 9}, {ID: 5}}
+	trackIDs := []TrackID{{ID: 5}, {ID: 6}, {ID: 9}, {ID: 5}}
+	detail, err := json.Marshal(map[string]any{"code": 200, "playlist": map[string]any{
+		"id": 7, "name": "长歌单", "trackCount": len(trackIDs), "tracks": listed, "trackIds": trackIDs,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer(t, func(req *http.Request) string {
+		if strings.HasSuffix(req.URL.Path, "/playlist/detail") {
+			return string(detail)
+		}
+		return `{"code":200,"songs":[{"id":6,"name":"six"}]}`
+	})
+
+	pl, err := PlaylistDetail(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, t := range pl.Tracks {
+		ids = append(ids, t.ID)
+	}
+	if want := []int64{5, 6, 9, 5}; !slices.Equal(ids, want) {
+		t.Errorf("tracks %v, want %v", ids, want)
+	}
+}
+
 // The songs a playlist lists by id are the ones it did not list in full, in
 // its own order.
 func TestMissingTracksFollowsPlaylistOrder(t *testing.T) {

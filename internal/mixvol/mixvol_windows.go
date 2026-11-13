@@ -58,6 +58,12 @@ const (
 	// mixer's objects: a mixer that has stopped answering must not hold up the
 	// app's shutdown.
 	closeTimeout = time.Second
+
+	// setTimeout bounds how long SetVolume waits for the mixer to take a
+	// volume, for the reason closeTimeout bounds Close: a device that has
+	// stopped answering would otherwise hold up the goroutine that draws, and
+	// the window with it.
+	setTimeout = time.Second
 )
 
 // A guid is a COM GUID laid out as memory holds one: Data1 as a little-endian
@@ -153,17 +159,25 @@ func openLink(changed func(State)) link {
 // setVolume puts v in the mixer and waits until the mixer holds it, since the
 // app raises its own gain to 1.0 as soon as this returns and a volume that
 // reached the mixer only afterwards would let the full volume through for a
-// moment.
+// moment. The wait ends after setTimeout regardless: called from the goroutine
+// that draws, it must not hold the window for longer than a device that has
+// stopped answering is worth waiting for. A volume the mixer takes after that
+// still lands, and one it never takes is lost until the app sets another.
 func (l *winLink) setVolume(v float64) {
 	cmd := volumeCommand{volume: v, done: make(chan struct{})}
+	timeout := time.NewTimer(setTimeout)
+	defer timeout.Stop()
 	select {
 	case l.cmds <- cmd:
 	case <-l.done:
+		return
+	case <-timeout.C:
 		return
 	}
 	select {
 	case <-cmd.done:
 	case <-l.done:
+	case <-timeout.C:
 	}
 }
 

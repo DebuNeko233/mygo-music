@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -125,5 +126,30 @@ func TestChangedLibraryRefused(t *testing.T) {
 	os.WriteFile(path, append(lib, "evil"...), 0o755)
 	if verifyLibs(dir) == nil {
 		t.Error("a changed library loads")
+	}
+}
+
+// A library of the right size that does not hold what was downloaded
+// counts as not installed, so that the model is downloaded again rather
+// than the app starting without a library it can load.
+func TestInstalledRefusesACorruptLibrary(t *testing.T) {
+	files := map[string][]byte{"model.onnx": []byte("model"), "tokenizer/vocab.json": []byte("{}")}
+	withModel(t, files, "")
+	root := t.TempDir()
+	for _, f := range modelFiles {
+		path := filepath.Join(root, ModelName, filepath.FromSlash(f.path))
+		os.MkdirAll(filepath.Dir(path), 0o755)
+		os.WriteFile(path, files[f.path], 0o644)
+	}
+	corrupt := slices.Clone(lib)
+	corrupt[0] ^= 0xff
+	os.MkdirAll(libDir(root), 0o755)
+	os.WriteFile(filepath.Join(libDir(root), "libtest.dylib"), corrupt, 0o755)
+	if Installed(root) {
+		t.Error("a corrupt library counts as installed")
+	}
+	os.WriteFile(filepath.Join(libDir(root), "libtest.dylib"), lib, 0o755)
+	if !Installed(root) {
+		t.Error("the library that was downloaded counts as missing")
 	}
 }

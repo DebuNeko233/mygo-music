@@ -64,7 +64,7 @@ func (a *app) stepLyricSize(d float64) {
 		return
 	}
 	a.settings.LyricSize = size
-	a.settings.save()
+	a.settings.saveSoon()
 	if a.lyrics != nil {
 		a.lyrics.apply()
 	}
@@ -102,7 +102,7 @@ func (a *app) setBinding(kind keyKind, name, acc string) {
 		*keys = map[string]string{}
 	}
 	(*keys)[name] = acc
-	a.settings.save()
+	a.settings.saveSoon()
 	if kind == kindGlobal {
 		a.registerGlobals()
 	}
@@ -133,7 +133,7 @@ func (a *app) restoreBinding(kind keyKind, name string) {
 		keys = &a.settings.Shortcuts.Global
 	}
 	delete(*keys, name)
-	a.settings.save()
+	a.settings.saveSoon()
 	if kind == kindGlobal {
 		a.registerGlobals()
 	}
@@ -221,13 +221,18 @@ func (a *app) bindInApp(c *ui.Context, root ui.Element) {
 	if a.recording != "" {
 		return
 	}
+	// A field that has the focus is typed into, and a key without a
+	// modifier is a letter, a space or a digit to it, not an action: the
+	// search can be given K to play, but then there is no typing k in it.
+	// Only this window's search is bound here, so no other field of this
+	// view needs to be kept out.
+	typing := c.Focused(a.searchBox)
 	for _, h := range hotkeys {
 		mods, key, ok := parseAccelerator(a.binding(kindInApp, h.name))
 		if !ok {
 			continue
 		}
-		if key == ui.KeySpace && c.Focused(a.searchBox) {
-			// Space types a space in the search field.
+		if typing && mods&(ui.Cmd|ui.Ctrl|ui.Alt|ui.Super) == 0 {
 			continue
 		}
 		run := func() {

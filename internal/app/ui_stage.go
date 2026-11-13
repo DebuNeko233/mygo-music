@@ -50,6 +50,26 @@ func easeOutCubic(t float32) float32 {
 	return 1 - (1-t)*(1-t)*(1-t)
 }
 
+// stageWordLayout is the layout of the line the stage shows last, kept so
+// that a line sung over hundreds of frames is measured once.
+type stageWordLayout struct {
+	line   *lyrics.Line
+	f      float32
+	shapes []wordShape
+}
+
+// laidOutShapes is stageShapes for the line at f, laid out once and kept:
+// the stage builds the same line again every frame while its words spring
+// in and fill, and measuring every word of it each time costs more than
+// the drawing does.
+func (a *app) laidOutShapes(c *ui.Context, l *lyrics.Line, f float32) []wordShape {
+	if a.stageWords.line == l && a.stageWords.f == f {
+		return a.stageWords.shapes
+	}
+	a.stageWords = stageWordLayout{line: l, f: f, shapes: stageShapes(c, l, f)}
+	return a.stageWords.shapes
+}
+
 // stageShapes lays out the words of a line at font size f.
 func stageShapes(c *ui.Context, l *lyrics.Line, f float32) []wordShape {
 	seed := float64(l.At / time.Millisecond)
@@ -249,7 +269,7 @@ func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, 
 		return
 	}
 	seed := float64(l.At / time.Millisecond)
-	shapes := stageShapes(c, l, f)
+	shapes := a.laidOutShapes(c, l, f)
 	// Where the line sits: to one side or the middle, a little up or down.
 	// Use positive modulo to handle negative timestamps from malformed lyrics.
 	justify := []ui.Align{ui.Start, ui.Center, ui.End}[((int(seed)%3)+3)%3]

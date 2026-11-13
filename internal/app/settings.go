@@ -2,8 +2,10 @@ package app
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/egoist/mygo"
 )
@@ -253,14 +255,89 @@ func (s *settings) clamp() {
 // save keeps the settings where they were loaded from; defaults that were
 // never loaded, as in tests, are not saved.
 func (s settings) save() error {
-	path := s.path
-	if path == "" {
+	if s.path == "" {
 		return nil
 	}
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
+	return writeSettings(s.path, b)
+}
+
+// saveSoon keeps the settings without waiting for the disk. A key that steps
+// the lyric size or the volume takes them again on every repeat, and the
+// window draws between the repeats: none of those may wait on a write and a
+// sync. What reaches the disk is the settings as they stand when the write
+// runs, so a burst of changes costs one write.
+func (s settings) saveSoon() {
+	if s.path == "" {
+		return
+	}
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		log.Printf("settings: %v", err)
+		return
+	}
+	settingsWrites.submit(settingsWrite{path: s.path, data: b})
+}
+
+// settingsWrite is the settings as they are to be written.
+type settingsWrite struct {
+	path string
+	data []byte
+}
+
+// settingsWrites writes them, on a goroutine of its own.
+var settingsWrites settingsSaver
+
+type settingsSaver struct {
+	mu      sync.Mutex
+	pending *settingsWrite
+	done    chan struct{}
+}
+
+func (w *settingsSaver) submit(job settingsWrite) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.pending = &job
+	if w.done == nil {
+		w.done = make(chan struct{})
+		go w.run()
+	}
+}
+
+func (w *settingsSaver) run() {
+	for {
+		w.mu.Lock()
+		job := w.pending
+		w.pending = nil
+		if job == nil {
+			close(w.done)
+			w.done = nil
+			w.mu.Unlock()
+			return
+		}
+		w.mu.Unlock()
+		if err := writeSettings(job.path, job.data); err != nil {
+			log.Printf("settings: %v", err)
+		}
+	}
+}
+
+// wait only on shutdown (or in tests): a write still owed must not land after
+// the settings that are saved on the way out.
+func (w *settingsSaver) wait() {
+	w.mu.Lock()
+	done := w.done
+	w.mu.Unlock()
+	if done != nil {
+		<-done
+	}
+}
+
+// writeSettings puts them at path, or leaves what is there.
+func writeSettings(path string, b []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

@@ -205,9 +205,16 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 	<-oldEnd
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
 	a.flushPlayReports()
-	// An event on the closed queue is ignored rather than sent on a closed queue.
+	if a.reportQueue != nil || a.reportDone != nil {
+		t.Fatal("the queue outlived the flush that ended it")
+	}
+	// An event after the flush starts a queue of its own instead of sending on
+	// the closed one.
 	a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
-	<-a.reportDone
+	if a.reportQueue == nil {
+		t.Fatal("the event after the flush went nowhere")
+	}
+	a.flushPlayReports()
 }
 
 // A started event must not finish the new session through a stale player pointer.
@@ -222,6 +229,55 @@ func TestStartedSessionSurvivesUntilItsEnd(t *testing.T) {
 	a.playback(player.PlaybackEvent{Track: track, End: player.Playthrough, Played: 35 * time.Second})
 	if got := waitReports(t, sent, 2); len(got) != 2 || got[1].played != 35*time.Second {
 		t.Fatalf("new session sent %+v", got)
+	}
+}
+
+// Signing in does not wait for the reports the old account still owes: they
+// send on under its own cookies, so a stuck request cannot hold up the window.
+func TestAccountChangeDoesNotWaitForItsReports(t *testing.T) {
+	a := newTestApp()
+	a.profile = &netease.Profile{}
+	release := make(chan struct{})
+	letGo := sync.OnceFunc(func() { close(release) })
+	started := make(chan struct{})
+	var once sync.Once
+	reportPlayStart = func(id int64, source netease.PlaySource) error {
+		once.Do(func() { close(started) })
+		<-release
+		return nil
+	}
+	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
+	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+		return nil
+	}
+	t.Cleanup(func() {
+		letGo()
+		reportPlayStart = netease.ReportPlayStart
+		reportDawnStart = netease.ReportDawnStart
+		reportDawnEnd = netease.ReportDawnEnd
+	})
+	track := netease.Track{ID: 7}
+	a.playback(player.PlaybackEvent{Track: track, Started: true})
+	<-started
+
+	drained := make(chan (<-chan struct{}), 1)
+	go func() { drained <- a.stopPlayReports() }()
+	var done <-chan struct{}
+	select {
+	case done = <-drained:
+	case <-time.After(time.Second):
+		t.Fatal("the account change waited for the reports")
+	}
+	select {
+	case <-done:
+		t.Fatal("the queue ended while a request was still stuck")
+	default:
+	}
+	letGo()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the queued reports did not finish")
 	}
 }
 

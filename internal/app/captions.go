@@ -64,13 +64,13 @@ type captionState struct {
 
 // modelState is the model's: whether it is installed, or downloading.
 type modelState struct {
-	checked, installed bool
-	downloading        bool
-	deleting           bool // deletion in progress
-	gen                int  // generation to discard stale operations
-	done, total        int64
-	err                string
-	cancel             context.CancelFunc
+	checked, checking, installed bool
+	downloading                  bool
+	deleting                     bool // deletion in progress
+	gen                          int  // generation to discard stale operations
+	done, total                  int64
+	err                          string
+	cancel                       context.CancelFunc
 }
 
 // A transcript is what is written down of an episode, and which stretches
@@ -114,14 +114,26 @@ func transcriptPath(program int64) (string, error) {
 // platform. The listener may still have to download the model.
 func (a *app) captionsShown() bool { return captionsAvailable() }
 
-// modelReady reports whether the model is installed, looking once.
+// modelReady reports whether the model is installed, looking once. The look
+// reads the model whole, a gigabyte and more of digests, so it runs off the
+// thread that draws and its answer arrives in a frame of its own: until then
+// the model counts as one that is not installed.
 func (a *app) modelReady() bool {
 	m := &a.captions.model
-	if !m.checked {
-		m.checked = true
-		if dir, err := modelDir(); err == nil {
-			m.installed = modelInstalled(dir)
-		}
+	if !m.checked && !m.checking {
+		m.checking = true
+		go func() {
+			installed := false
+			if dir, err := modelDir(); err == nil {
+				installed = modelInstalled(dir)
+			}
+			a.post(func() {
+				m.checked, m.checking, m.installed = true, false, installed
+				// An episode may be waiting for the answer.
+				a.syncCaptions()
+				a.redraw()
+			})
+		}()
 	}
 	return m.installed
 }
@@ -170,7 +182,7 @@ func (a *app) startModelDownload() {
 			case err == nil:
 				m.installed, m.checked = true, true
 				a.settings.Captions = true
-				a.settings.save()
+				a.settings.saveSoon()
 				a.syncCaptions()
 			case ctx.Err() != nil:
 			default:
@@ -297,32 +309,40 @@ func releaseRecognizer() {
 }
 
 // transcribe writes down the episode playing from from up to until, on a
-// goroutine.
+// goroutine. Opening the song is done there too: it reads the song's first
+// bytes to find how to decode them, which waits for the network, and the
+// window draws on the goroutine this is called from.
 func (a *app) transcribe(program int64, from, until time.Duration) {
-	src, err := a.pl.OpenAudio()
+	open, err := a.pl.AudioOpener()
 	if err != nil {
-		return
-	}
-	if err := src.SetPosition(int64(from.Seconds() * float64(src.SampleRate()))); err != nil {
-		src.Close()
-		return
-	}
-	dir, err := modelDir()
-	if err != nil {
-		src.Close()
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &captionWork{program: program, from: from, until: until, at: from, cancel: cancel}
 	a.captions.work = w
 	go func() {
-		defer src.Close()
+		src, err := open()
+		if err == nil {
+			if posErr := src.SetPosition(int64(from.Seconds() * float64(src.SampleRate()))); posErr != nil {
+				src.Close()
+				err = posErr
+			} else {
+				defer src.Close()
+			}
+		}
+		var dir string
+		if err == nil {
+			dir, err = modelDir()
+		}
+		if err != nil {
+			a.post(func() { a.captionGaveUp(w) })
+			return
+		}
 		recognizer.Lock()
 		defer recognizer.Unlock()
 		if ctx.Err() != nil {
 			return
 		}
-		var err error
 		if recognizer.t == nil {
 			recognizer.t, err = newTranscriber(dir)
 		}
@@ -333,6 +353,15 @@ func (a *app) transcribe(program int64, from, until time.Duration) {
 		}
 		a.post(func() { a.captionDone(w, err, ctx.Err() != nil) })
 	}()
+}
+
+// captionGaveUp drops w, which wrote nothing down: the next change of the
+// player starts another, as one that could not be opened is asked for again
+// rather than taken as an episode that cannot be written down.
+func (a *app) captionGaveUp(w *captionWork) {
+	if a.captions.work == w {
+		a.captions.work = nil
+	}
 }
 
 // captionSaid adds a segment written down to the transcript of its

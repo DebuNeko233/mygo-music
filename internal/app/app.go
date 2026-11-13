@@ -156,8 +156,10 @@ type app struct {
 	queueAt                        int // the row of the queue pane last scrolled to, -1 while it is hidden
 	comments                       commentState
 	tabCount                       rollState // the count on the comments' tab, as it rolls
+	stageWords                     stageWordLayout
 
 	fmMode        int    // the FM mode chosen, in fmModes
+	fmSynced      string // the radio fmMode was last taken from
 	radioStarting string // the radio asked for its first songs, or ""
 
 	scrub            float64
@@ -425,6 +427,9 @@ func Run() error {
 			// Where the lyrics were left, before the window goes.
 			a.lyrics.remember()
 		}
+		// A write still owed from a key repeat would otherwise land
+		// after this one, with the settings as they were before it.
+		settingsWrites.wait()
 		a.settings.save()
 		a.saveSession()
 		a.sessionSave.wait()

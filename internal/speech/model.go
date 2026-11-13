@@ -94,8 +94,9 @@ func Installed(root string) bool {
 		}
 	}
 	for _, f := range natives() {
-		info, err := os.Stat(filepath.Join(libDir(root), f.name))
-		if err != nil || info.Size() != f.size {
+		path := filepath.Join(libDir(root), f.name)
+		info, err := os.Stat(path)
+		if err != nil || info.Size() != f.size || digest(path) != f.sha256 {
 			return false
 		}
 	}

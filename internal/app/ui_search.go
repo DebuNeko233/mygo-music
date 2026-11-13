@@ -114,12 +114,12 @@ func (a *app) rememberSearch(q string) {
 		}
 	}
 	a.settings.SearchHistory = history
-	a.settings.save()
+	a.settings.saveSoon()
 }
 
 func (a *app) clearSearchHistory() {
 	a.settings.SearchHistory = nil
-	a.settings.save()
+	a.settings.saveSoon()
 }
 
 func (a *app) searchPage(c *ui.Context) {

@@ -279,12 +279,17 @@ func TestPauseFades(t *testing.T) {
 	if !p.Playing() || !p.out.Playing() {
 		t.Fatal("did not play again")
 	}
-	time.Sleep(fadeIn + 50*time.Millisecond)
+	// Where the fade ends, rather than when a sleep says it is over: the
+	// level rises to the one it plays at by then.
 	p.fade.mu.Lock()
-	level := p.fade.level(time.Now())
+	level := p.fade.level(p.fade.start.Add(p.fade.dur))
+	long := p.fade.dur > fadeIn
 	p.fade.mu.Unlock()
 	if level != 1 {
 		t.Errorf("faded in to %v", level)
+	}
+	if long {
+		t.Error("the fade in takes longer than it may")
 	}
 }
 
@@ -317,9 +322,16 @@ func TestSeekTwicePlaysOn(t *testing.T) {
 	for len(ch) > 0 {
 		next(t, ch)
 	}
-	time.Sleep(seekGap * 2)
-	for len(ch) > 0 {
-		next(t, ch)
+	// Both jumps are posted: the first is overtaken by the second, which is
+	// the one that plays on from where the bar was let go.
+	deadline := time.After(2 * time.Second)
+	for p.seeking {
+		select {
+		case fn := <-ch:
+			fn()
+		case <-deadline:
+			t.Fatal("the seek did not play on")
+		}
 	}
 	if !p.out.Playing() || p.out.Position() < 95*time.Second {
 		t.Errorf("after two seeks: playing %v at %v", p.out.Playing(), p.out.Position())

@@ -56,6 +56,10 @@ func (a *app) likedPlaylist() int64 {
 	return 0
 }
 
+// personalFM is the personal FM's next songs, a variable so a test can give
+// them without the network.
+var personalFM = netease.PersonalFM
+
 // radioFeed returns what gives the radio name more tracks: it loads them
 // on a goroutine, and gives them to got on the main thread, none if it
 // cannot.
@@ -65,7 +69,7 @@ func (a *app) radioFeed(name string) func(got func([]netease.Track)) {
 		switch {
 		case strings.HasPrefix(name, "fm:"):
 			mode := strings.TrimPrefix(name, "fm:")
-			fetch = func() ([]netease.Track, error) { return netease.PersonalFM(mode) }
+			fetch = func() ([]netease.Track, error) { return personalFM(mode) }
 		case name == heartRadio:
 			// More like the last song queued, from the song it began with.
 			q, pid := a.pl.Queue(), a.likedPlaylist()
@@ -99,6 +103,9 @@ func (a *app) radioFeed(name string) func(got func([]netease.Track)) {
 func (a *app) playFM() {
 	name := fmRadio(fmModes[a.fmMode].mode)
 	if a.pl.Radio() == name {
+		// A start still on its way would play the mode it asked for when it
+		// lands, so it is given up now that this one is wanted.
+		a.radioStarting = ""
 		if !a.pl.Playing() {
 			a.pl.TogglePlay()
 		}
@@ -212,10 +219,16 @@ func (a *app) fmPage(c *ui.Context) {
 	ui.Scroll(c.Key("fm")).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pagePad, bottom+48, pagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		a.startMark(c)
 		defer a.endMark(c)
-		// The mode the FM plays in, if it plays.
-		for i, m := range fmModes {
-			if a.pl.Radio() == fmRadio(m.mode) {
-				a.fmMode = i
+		// The mode the FM plays in, if it plays, taken from the radio when the
+		// radio changes: taken on every build, it put back the mode the
+		// listener had just chosen, since the radio goes on playing the last
+		// one until the first songs of the one asked for arrive.
+		if r := a.pl.Radio(); r != a.fmSynced {
+			a.fmSynced = r
+			for i, m := range fmModes {
+				if r == fmRadio(m.mode) {
+					a.fmMode = i
+				}
 			}
 		}
 		ui.Row(c).AlignItems(ui.End).Children(func() {

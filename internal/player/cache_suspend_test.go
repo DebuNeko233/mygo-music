@@ -237,3 +237,47 @@ func TestSuspendCacheSettlesMetadataWhileAwaiting(t *testing.T) {
 		t.Fatal("invalidated metadata remained busy or applied after suspension")
 	}
 }
+
+// A track fetched ahead when the folder moves is let go of as it loads: kept,
+// its fetch went on into a folder being moved away and its file stayed open
+// through the move, which Windows will not rename out from under it.
+func TestSuspendCacheLetsGoOfWhatWasFetchedAhead(t *testing.T) {
+	started := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("song"))
+		w.(http.Flusher).Flush()
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	posts := make(chan func(), 8)
+	p := New(func(fn func()) { posts <- fn })
+	p.Cache = NewCache(t.TempDir(), 1<<20)
+	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+	st := &netease.Stream{URL: srv.URL, Size: 100, Type: "mp3", Level: "exhigh"}
+	dl := p.Cache.download(2, "exhigh", st)
+	<-started
+	dl.waitFor(4)
+	// The next track, fetched ahead as it would be, loads while the folder
+	// moves.
+	p.ahead = &ahead{id: 2, level: "exhigh", dl: dl, info: st}
+	p.cacheChanging = true
+	p.loadSkipping(1, 0, true, 0)
+	dl.mu.Lock()
+	finished := dl.finished
+	dl.mu.Unlock()
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the fetch ahead runs on into the folder being moved")
+	}
+	dl.mu.Lock()
+	open := dl.file != nil
+	dl.mu.Unlock()
+	if open {
+		t.Fatal("the fetch ahead holds its file through the move")
+	}
+	if entries, err := os.ReadDir(p.Cache.dir); err != nil || len(entries) != 0 {
+		t.Fatalf("unfinished file remains: %v %v", entries, err)
+	}
+}

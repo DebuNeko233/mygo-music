@@ -135,8 +135,12 @@ func (d *download) run(ctx context.Context, from int64, run int, gap time.Durati
 		d.mu.Unlock()
 	}
 	// What stops coming is a connection gone, and what comes is given up on,
-	// so that the song may be asked for again.
-	stall := time.AfterFunc(gap, d.cancel)
+	// so that the song may be asked for again. The cancel of this fetch is
+	// taken under the lock: a seek puts another in its place.
+	d.mu.Lock()
+	cancel := d.cancel
+	d.mu.Unlock()
+	stall := time.AfterFunc(gap, cancel)
 	defer stall.Stop()
 	req, err := http.NewRequestWithContext(ctx, "GET", d.url, nil)
 	if err != nil {
@@ -216,14 +220,15 @@ func (d *download) write(b []byte, run int) {
 }
 
 // toMemory moves the song into memory from a file that takes no more, as
-// on a full disk: it plays on, but is not kept.
+// on a full disk: it plays on, but is not kept. Its caller holds the lock,
+// which a lock taken again here would take for good, and the app with it.
 func (d *download) toMemory() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	d.data = make([]byte, d.n, max(prealloc(d.size), d.n))
 	got, _ := d.file.ReadAt(d.data, 0)
-	d.data = d.data[:got]
-	d.n = int64(got)
+	if got > 0 {
+		d.data = d.data[:got]
+		d.n = int64(got)
+	}
 	d.file.Close()
 	os.Remove(d.part)
 	d.file, d.part = nil, ""
@@ -276,14 +281,26 @@ func (d *download) discard() {
 // seekTo asks for the song again from off, unless off is among the bytes in
 // already: what is in is dropped, and the part from there comes as it
 // plays, so that a seek into a part not downloaded yet plays at once rather
-// than once the download has reached it. It is for the stream that plays:
-// with another reading the song, as transcribing an episode does, what is
-// dropped may be what that one still needs, so the seek waits instead.
+// than once the download has reached it. A fetch that has ended holds
+// nothing, so the song is asked for again as one that never came in would
+// be. It is for the stream that plays: with another reading the song, as
+// transcribing an episode does, what is dropped may be what that one still
+// needs, so the seek waits instead.
 func (d *download) seekTo(off int64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if off < 0 || d.done || d.users > 2 || (off >= d.base && off < d.base+d.n) {
+	if off < 0 || d.users > 2 || (off >= d.base && off < d.base+d.n) || (off == d.base && !d.done) {
 		return false
+	}
+	if d.done {
+		// The song is gone, or stopped short of what the stream asks for:
+		// what ended it stands, and asking again would only repeat it.
+		if d.closed || d.err != nil {
+			return false
+		}
+		// The fetch that ended closed finished, which the one asked for
+		// here closes in its turn, for what waits on the song to go.
+		d.finished = make(chan struct{})
 	}
 	d.cancel()
 	d.runs++
@@ -306,8 +323,8 @@ func (d *download) seekTo(off int64) bool {
 // Close stops the download and wakes its readers: the stream lets the
 // song go.
 func (d *download) Close() {
-	d.cancel()
 	d.mu.Lock()
+	d.cancel()
 	if !d.done {
 		d.done, d.err = true, context.Canceled
 	}
@@ -684,19 +701,25 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 const preroll = 4 * 1152
 
 func (s *mp3Stream) SetPosition(frame int64) error {
-	var off int64
-	if from := frame - preroll; from > 0 && s.frames > 0 {
+	// The frame to decode from, and where its bytes are, which is unknown:
+	// the bytes are spread over the song in proportion to the frames.
+	off := s.start
+	if s.frames > 0 {
+		from := max(frame-preroll, 0)
 		size := s.dl.size
 		if size <= 0 {
 			size = s.dl.waitFor(math.MaxInt64)
 		}
 		off = s.start + int64(float64(size-s.start)*float64(from)/float64(s.frames))
-		// Ask for the part from there rather than wait for the download to
-		// reach it: the seek sounds at once, if the server sends the song
-		// from a byte.
-		s.dl.seekTo(off)
-		off = findFrame(s.dl, off)
 	}
+	// Ask for the part from there rather than wait for the download to
+	// reach it: the seek sounds at once, if the server sends the song from
+	// a byte. From the start too, as a song playing on repeat seeks: a seek
+	// into the middle dropped what came before it, and the decoder reads
+	// from the start of the bytes in, so the song is asked for again there
+	// instead of decoding a song it no longer holds from the wrong byte.
+	s.dl.seekTo(off)
+	off = findFrame(s.dl, off)
 	dec, err := gomp3.NewDecoder(&downloadReader{d: s.dl, pos: off})
 	if err != nil {
 		s.failure.record(err)

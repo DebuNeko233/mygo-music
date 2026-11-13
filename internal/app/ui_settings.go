@@ -170,7 +170,7 @@ func (a *app) recordKey(kind keyKind, name string, ev ui.InputEvent) bool {
 
 // changed applies the settings everywhere and keeps them.
 func (a *app) changed() {
-	a.settings.save()
+	a.settings.saveSoon()
 	a.settings.takeAccent()
 	// The appearance is the windows' to take, and without one, as in
 	// tests, there is nothing to take it.

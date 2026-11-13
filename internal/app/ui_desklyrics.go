@@ -249,7 +249,7 @@ func newDeskLyrics(a *app) *deskLyrics {
 		}
 		e.PreventDefault()
 		s.LyricWindow = false
-		s.save()
+		s.saveSoon()
 		d.apply()
 	})
 	// A move or a size change comes from the window, not from polling it.
@@ -300,7 +300,7 @@ func (d *deskLyrics) apply() {
 		if reshaped {
 			// A new shape sets the size that is remembered from here on.
 			s.LyricWidth, s.LyricHeight = int(w), int(h)
-			s.save()
+			s.saveSoon()
 		}
 	}
 	// The transparent edges resize only while unlocked; a locked window
@@ -329,7 +329,7 @@ func (d *deskLyrics) setLocked(locked bool) {
 		d.remember()
 	}
 	s.LyricLocked = locked
-	s.save()
+	s.saveSoon()
 	if d.win == nil {
 		return // as in tests
 	}
@@ -354,7 +354,7 @@ func (d *deskLyrics) remember() {
 	}
 	s.LyricX, s.LyricY = b.X, b.Y
 	s.LyricWidth, s.LyricHeight = b.Width, b.Height
-	s.save()
+	s.saveSoon()
 }
 
 // unlockBox is where the padlock stands in a locked window: at the middle of
@@ -661,57 +661,4 @@ func (d *deskLyrics) resizeEdges(c *ui.Context) {
 			return false
 		})
 	}
-}
-
-// needed is as large as the window must stand to show the lines whole: as wide
-// as the widest of them and as tall as they stand together. Never smaller than
-// the settings ask for.
-func (d *deskLyrics) needed(c *ui.Context, shown []lyrics.Line, start, cur int, size float32, weight int, family, transFamily string) (w, h float32) {
-	s := &d.a.settings
-	w, h = lyricWindowSize(s.LyricSize, s.LyricLines)
-	if len(shown) == 0 {
-		return w, h
-	}
-	trans := s.LyricTrans
-	lines, _ := d.a.pl.Lyrics()
-	lang := lyrics.Lang(lines)
-	widest, tall := float32(0), float32(16)
-	for i, l := range shown {
-		lineSize := size
-		if start+i == cur {
-			lineSize = size * 1.04
-		}
-		widest = max(widest, textWidth(c, l.Text, family, lineSize, weight, lang))
-		tall += lineSize * 1.35
-		if trans && l.Translation != "" {
-			widest = max(widest, textWidth(c, l.Translation, transFamily, size*0.62, 500, c.Locale()))
-			tall += size * 0.62 * 1.4
-		}
-	}
-	return max(w, widest+32), max(h, tall)
-}
-
-// grow is only for opening a window over long words. Playing and hovering
-// never change its size: it stays the size the listener dragged it to.
-func (d *deskLyrics) grow(c *ui.Context, shown []lyrics.Line, start, cur int, size float32, weight int, family, transFamily string) {
-	if d.win == nil || d.a.settings.LyricLocked {
-		return // as in tests, and a locked window keeps the size it was locked at
-	}
-	needW, needH := d.needed(c, shown, start, cur, size, weight, family, transFamily)
-	b := d.win.Bounds()
-	w, h := max(b.Width, int(needW)), max(b.Height, int(needH))
-	if w == b.Width && h == b.Height {
-		return
-	}
-	x, y := lyricWindowPlace(b.X, b.Y, float32(w), float32(h), mygo.Screen.PrimaryDisplay().WorkArea)
-	d.win.SetMinimumSize(int(needW), int(needH))
-	d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: w, Height: h})
-	// A new size may bring the window's frame and shadow back.
-	clearFrame(d.win)
-}
-
-// textWidth is how wide a line is set.
-func textWidth(c *ui.Context, text, family string, size float32, weight int, lang string) float32 {
-	w, _ := c.MeasureText(0, ui.Span{Text: text, Font: family, Size: size, Weight: weight, Lang: lang})
-	return w
 }

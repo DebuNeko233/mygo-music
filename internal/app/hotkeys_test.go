@@ -163,16 +163,19 @@ func (s *keySystem) holds(acc string) bool {
 	return contains(s.held, acc)
 }
 
-// The keys the settings start with are the actions' own, and one the settings
-// hold as empty or as something the set cannot take keeps the action's own.
+// The keys the settings hold as empty, or as something the set cannot take,
+// give way to the action's own.
 func TestTheShortcutSettingsFillInTheDefaults(t *testing.T) {
 	filled := shortcutKeys{}.filled()
 	if len(filled.InApp) != len(hotkeys) || len(filled.Global) != len(hotkeys) {
 		t.Fatalf("filled %d in-app and %d global keys, want %d each",
 			len(filled.InApp), len(filled.Global), len(hotkeys))
 	}
-	if filled.InApp["playPause"] != "Space" || filled.Global["playPause"] != "MediaPlayPause" {
-		t.Errorf("play/pause has %q and %q", filled.InApp["playPause"], filled.Global["playPause"])
+	next := hotkey{}
+	for _, h := range hotkeys {
+		if h.name == "next" {
+			next = h
+		}
 	}
 
 	kept := shortcutKeys{
@@ -182,10 +185,10 @@ func TestTheShortcutSettingsFillInTheDefaults(t *testing.T) {
 	if kept.InApp["playPause"] != "" {
 		t.Errorf("a key the listener took away came back as %q", kept.InApp["playPause"])
 	}
-	if kept.InApp["next"] != "CmdOrCtrl+Shift+Right" {
+	if kept.InApp["next"] != next.inApp {
 		t.Errorf("a key the app cannot take was kept: %q", kept.InApp["next"])
 	}
-	if kept.Global["next"] != "MediaNextTrack" {
+	if kept.Global["next"] != next.global {
 		t.Errorf("a global key without a modifier was kept: %q", kept.Global["next"])
 	}
 	if kept.Global["prev"] != "" {

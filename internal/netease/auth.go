@@ -169,31 +169,63 @@ func QRCheck(key string) (code int, msg, nickname, avatar string, err error) {
 	return r.Code, r.Message, r.Nickname, r.AvatarURL, err
 }
 
-// Logout ends the session with NetEase too.
-func Logout() {
-	post("/api/logout", url.Values{}, &struct{}{})
+// SessionCookies returns the cookies the session is kept by, for Logout to
+// end it with after they are cleared here.
+func SessionCookies() []*http.Cookie {
+	if httpClient.Jar == nil {
+		return nil
+	}
+	var session []*http.Cookie
+	for _, c := range httpClient.Jar.Cookies(siteURL) {
+		if c.Name == "MUSIC_U" || c.Name == "__csrf" {
+			session = append(session, c)
+		}
+	}
+	return session
+}
+
+// Logout ends the session with NetEase too, with the cookies it was kept by:
+// the app clears them here first, and a request without them ends nothing
+// there.
+func Logout(cookies []*http.Cookie) error {
+	err := postAs("/api/logout", url.Values{}, cookies, &struct{}{})
 	ClearSession()
+	return err
 }
 
 // UserPlaylists returns the playlists a listener made, the liked songs
 // first, and those they saved.
 func UserPlaylists(uid int64) (made, saved []Playlist, err error) {
-	var res struct {
-		Playlist []Playlist `json:"playlist"`
-	}
-	q := url.Values{"uid": {strconv.FormatInt(uid, 10)}, "limit": {"200"}, "offset": {"0"}}
-	if err := get("/api/user/playlist", q, &res); err != nil {
-		return nil, nil, err
-	}
-	for _, p := range res.Playlist {
-		if p.Subscribed {
-			saved = append(saved, p)
-		} else {
-			made = append(made, p)
+	for offset := 0; ; offset += userPlaylistPage {
+		var res struct {
+			Playlist []Playlist `json:"playlist"`
+		}
+		q := url.Values{
+			"uid":    {strconv.FormatInt(uid, 10)},
+			"limit":  {strconv.Itoa(userPlaylistPage)},
+			"offset": {strconv.Itoa(offset)},
+		}
+		if err := get("/api/user/playlist", q, &res); err != nil {
+			return nil, nil, err
+		}
+		for _, p := range res.Playlist {
+			if p.Subscribed {
+				saved = append(saved, p)
+			} else {
+				made = append(made, p)
+			}
+		}
+		// A page short of what was asked for is the last one: asking for
+		// the first page alone left the rest of a listener's playlists out
+		// of the library.
+		if len(res.Playlist) < userPlaylistPage {
+			return made, saved, nil
 		}
 	}
-	return made, saved, nil
 }
+
+// userPlaylistPage is how many playlists NetEase sends at a time.
+const userPlaylistPage = 200
 
 // RecommendedPlaylists returns the day's playlists picked for the listener.
 func RecommendedPlaylists() ([]Playlist, error) {

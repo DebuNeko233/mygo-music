@@ -18,13 +18,17 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 	pl := a.pl
 	cs := &a.captions
 	if !a.modelReady() {
+		if a.captions.model.checking {
+			a.captionsNote(c, "正在检查模型…", "", nil)
+			return
+		}
 		a.modelCard(c)
 		return
 	}
 	if !a.settings.Captions {
 		a.captionsNote(c, "字幕已关闭", "开启字幕", func() {
 			a.settings.Captions = true
-			a.settings.save()
+			a.settings.saveSoon()
 			a.syncCaptions()
 		})
 		return

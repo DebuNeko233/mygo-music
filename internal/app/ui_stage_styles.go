@@ -48,13 +48,13 @@ func (a *app) stageStyleButton(c *ui.Context) {
 		for _, s := range stageStyles {
 			if m.Item(s.label).Checked(a.settings.StageStyle == s.id).Chosen() && a.settings.StageStyle != s.id {
 				a.settings.StageStyle = s.id
-				a.settings.save()
+				a.settings.saveSoon()
 			}
 		}
 		m.Separator()
 		if m.Item("火花").Checked(a.settings.StageSparks).Chosen() {
 			a.settings.StageSparks = !a.settings.StageSparks
-			a.settings.save()
+			a.settings.saveSoon()
 		}
 	})
 }

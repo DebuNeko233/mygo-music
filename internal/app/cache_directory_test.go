@@ -37,6 +37,9 @@ func cacheTestApp(t *testing.T) (*app, string, string) {
 
 func readCacheSettings(t *testing.T, path string) settings {
 	t.Helper()
+	// The window keeps the settings on a goroutine of its own, so what is
+	// owed to the disk is waited for before it is read back.
+	settingsWrites.wait()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

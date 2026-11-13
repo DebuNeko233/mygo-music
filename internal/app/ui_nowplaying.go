@@ -353,7 +353,7 @@ func (a *app) choosePane(i int) {
 	a.npPane = i
 	if (i == paneLyrics || i == paneStage) && a.settings.LyricsStage != (i == paneStage) {
 		a.settings.LyricsStage = i == paneStage
-		a.settings.save()
+		a.settings.saveSoon()
 	}
 }
 

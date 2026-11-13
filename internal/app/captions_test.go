@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -107,6 +108,9 @@ func captionsTestApp(t *testing.T, installed bool) *app {
 	captionsAvailable = func() bool { return true }
 	modelInstalled = func(string) bool { return installed }
 	a := newTestApp()
+	// The look for the model runs on a goroutine of its own; these tests
+	// have its answer already.
+	a.captions.model.checked, a.captions.model.installed = true, installed
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "510 泰国侨批沉浮录", ProgramID: 42, Duration: 600000, Description: "下南洋"}})
 	a.nowPlaying = true
@@ -206,5 +210,46 @@ func TestCaptionsOnTheirWay(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("这期节目没有识别到语音") {
 		t.Errorf("written down whole: %q", tt.Texts())
+	}
+}
+
+// Looking for the model reads a gigabyte of it, so it must not happen on the
+// thread that draws: the answer arrives in a frame of its own.
+func TestModelCheckDoesNotHoldTheDrawingThread(t *testing.T) {
+	isolateUserData(t)
+	oldAvail, oldInstalled := captionsAvailable, modelInstalled
+	t.Cleanup(func() { captionsAvailable, modelInstalled = oldAvail, oldInstalled })
+	captionsAvailable = func() bool { return true }
+	release := make(chan struct{})
+	letGo := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(letGo)
+	looking := make(chan struct{})
+	var once sync.Once
+	modelInstalled = func(string) bool {
+		once.Do(func() { close(looking) })
+		<-release
+		return true
+	}
+	a := newTestApp()
+	posts := testPosts(a)
+	ready := make(chan bool, 1)
+	go func() { ready <- a.modelReady() }()
+	select {
+	case got := <-ready:
+		if got {
+			t.Fatal("the model was reported installed before it was looked at")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("looking for the model held the thread that draws")
+	}
+	select {
+	case <-looking:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the model was never looked at")
+	}
+	letGo()
+	refreshPost(t, posts)
+	if !a.modelReady() {
+		t.Fatal("the answer never came back")
 	}
 }

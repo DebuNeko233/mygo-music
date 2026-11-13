@@ -120,6 +120,47 @@ func TestFLACTrailingBytesAfterSamples(t *testing.T) {
 	}
 }
 
+// A FLAC whose stream info leaves its samples out, as a stream may while it
+// downloads, plays to its end: its last frame was taken as a cut-off
+// download, so the song was asked for again until the app said it broke.
+func TestFLACUnknownLengthEndsAtEOF(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The samples the stream info declares, left out: 36 bits from the low
+	// nibble of its fourteenth byte on.
+	i := bytes.Index(b, []byte("fLaC")) + 8
+	b[i+13] &= 0xf0
+	clear(b[i+14 : i+18])
+	s, err := openStream(downloaded(b), 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if s.Len() != -1 {
+		t.Fatalf("length %d: the samples are still declared", s.Len())
+	}
+	buf := make([]float32, 4096)
+	played := 0
+	for {
+		n, err := s.Read(buf)
+		played += n
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("read after %d samples: %v", played, err)
+			}
+			break
+		}
+	}
+	if want := 5 * 44100 * 2; played != want {
+		t.Errorf("played %d samples, wanted %d", played, want)
+	}
+	if cut := s.cut(); cut != nil {
+		t.Errorf("the song's end became a failure: %v", cut)
+	}
+}
+
 // A FLAC plays as its samples are, and a seek lands on the very sample.
 func TestFLACSeek(t *testing.T) {
 	b, err := os.ReadFile("testdata/seek.flac")
@@ -516,5 +557,85 @@ func TestSeekWaitsWhileASecondStreamReads(t *testing.T) {
 	defer dl.release()
 	if dl.seekTo(int64(len(b)) * 3 / 4) {
 		t.Error("dropped the part another stream reads")
+	}
+}
+
+// A song the file of the cache cannot take plays on from memory: writing to
+// it took the download's lock a second time and held it for good, so the
+// fetch stopped and its progress with it, and the window stopped drawing.
+func TestWriteFailureMovesTheSongToMemory(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(b) }))
+	defer srv.Close()
+	// A file that takes no more, as one on a full disk: closed.
+	part, err := os.CreateTemp(t.TempDir(), "*.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatal(err)
+	}
+	dl := startDownload(srv.URL, int64(len(b)), part, nil)
+	have := make(chan int64, 1)
+	go func() { have <- dl.waitFor(int64(len(b))) }()
+	select {
+	case n := <-have:
+		if n != int64(len(b)) {
+			dl.Close()
+			t.Fatalf("%d of %d bytes in", n, len(b))
+		}
+		if got := dl.peek(0, 4); !bytes.Equal(got, b[:4]) {
+			dl.Close()
+			t.Fatalf("bytes at 0 are %x, wanted %x", got, b[:4])
+		}
+		dl.Close()
+	case <-time.After(5 * time.Second):
+		// The download holds its lock for good, and closing it waits too.
+		t.Fatal("the fetch waits on the download's lock")
+	}
+}
+
+// A seek back to the start of a song plays it from its start again, as a song
+// on repeat seeks when it ends: the decoder was given a byte the seek into the
+// middle had dropped, failed on its first frame, and the song was taken as cut
+// off and skipped, so a song on repeat played once.
+func TestMP3SeekBackToTheStart(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.mp3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := decodeAll(t, b)
+	dl, _ := stalled(t, b, func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b))
+	})
+	s, err := openMP3Stream(dl, int64(len(ref)/2)*1000/44100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	buf := make([]float32, 4096)
+	if _, err := s.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	// Into a part of the song not in yet: the seek asks for the song from
+	// there, and what came before goes.
+	if err := s.SetPosition(s.frames * 3 / 4); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPosition(0); err != nil {
+		t.Fatalf("seek back to the start: %v", err)
+	}
+	n, err := s.Read(buf)
+	if err != nil {
+		t.Fatalf("read from the start: %v", err)
+	}
+	if d := maxDiff(buf[:n], ref); d > 1e-4 {
+		t.Errorf("played from the start off by up to %.3f", d)
 	}
 }

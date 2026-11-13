@@ -34,12 +34,24 @@ type recentData struct {
 	failure error
 	at      time.Time // when what it holds was asked for
 	songs   []netease.Play
+	// tracks are the songs of songs, as the rows of a list want them, made
+	// as the record comes in: a frame does not copy them all again.
+	tracks []netease.Track
 	// The other kinds of play record, the ones NetEase keeps beside the
 	// songs, the latest first as they are.
 	playlists []netease.Played[netease.Playlist]
 	albums    []netease.Played[netease.AlbumProfile]
 	podcasts  []netease.Played[netease.Podcast]
 	voices    []netease.Played[netease.Voice]
+}
+
+// setSongs takes the songs of the record, and the tracks its rows list.
+func (d *recentData) setSongs(songs []netease.Play) {
+	d.songs = songs
+	d.tracks = make([]netease.Track, len(songs))
+	for i := range songs {
+		d.tracks[i] = songs[i].Track
+	}
 }
 
 // keptRecent is what the page keeps of the records between runs.
@@ -68,7 +80,8 @@ func (a *app) loadRecent() {
 	if !d.shown {
 		var kept keptRecent
 		if at := req.read(&kept); !at.IsZero() {
-			d.songs, d.playlists, d.albums = kept.Songs, kept.Playlists, kept.Albums
+			d.setSongs(kept.Songs)
+			d.playlists, d.albums = kept.Playlists, kept.Albums
 			d.podcasts, d.voices = kept.Podcasts, kept.Voices
 			d.at, d.shown = kept.At, true
 		}
@@ -102,7 +115,7 @@ func (a *app) loadRecent() {
 				return
 			}
 			d.err = ""
-			d.songs = songs
+			d.setSongs(songs)
 			if playlistsErr == nil {
 				d.playlists = playlists
 			}
@@ -215,22 +228,19 @@ func (a *app) recentPage(c *ui.Context) {
 			}
 		})
 	default:
-		songs := make([]netease.Track, len(d.songs))
-		meta := make([]string, len(d.songs))
-		now := c.Now()
-		for i := range d.songs {
-			songs[i] = d.songs[i].Track
-			meta[i] = playedAt(d.songs[i].At, d.songs[i].Device, now)
-		}
-		if len(songs) == 0 {
+		if len(d.tracks) == 0 {
 			a.scrollPage(c, func() {
 				header(c)
 				a.empty(c, "最近没有听过歌曲")
 			})
 			return
 		}
+		// When and where each song was played, as its row is built: a
+		// frame builds the rows in view, not the hundreds of the record.
+		now := c.Now()
+		played := func(i int) string { return playedAt(d.songs[i].At, d.songs[i].Device, now) }
 		// The songs come from albums of their own: their covers say which.
-		a.trackRowsMeta(c, songs, true, meta, header)
+		a.trackRowsMeta(c, d.tracks, true, played, header)
 	}
 }
 

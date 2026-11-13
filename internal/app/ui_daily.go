@@ -399,10 +399,11 @@ func (a *app) dailyStack(c *ui.Context, songs []netease.Track, fanned bool, out 
 		}
 		// The record, behind its sleeve.
 		mid := float32(sleeveLeft + sleeveSize/2)
+		label := bitmap(a.art.get(netease.Sized(songs[0].Album.PicURL, 240), false))
 		ui.Box(c.Key("record")).Absolute().Left(mid+recordOut(out)-recordSize/2).Top((sleeveSize-recordSize)/2).
 			Size(recordSize, recordSize).Radius(recordSize/2).Shadow(0, 8, 20, -4, ui.RGBA(0, 0, 0, 0.5)).
 			Draw(func(p *ui.Painter, r ui.Rect) {
-				drawRecord(p, r, bitmap(a.art.get(netease.Sized(songs[0].Album.PicURL, 240), false)), float32(a.dailySpin.angle))
+				drawRecord(p, r, label, float32(a.dailySpin.angle))
 			})
 		// The sleeve.
 		sleeve := ui.Box(c.Key("sleeve")).Absolute().Left(sleeveLeft).Top(0).Size(sleeveSize, sleeveSize).Radius(12).

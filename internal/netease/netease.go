@@ -199,12 +199,52 @@ func getContext(ctx context.Context, path string, query url.Values, out any) err
 	return do(req, out)
 }
 
+// csrf returns the token the web API wants alongside a request that changes
+// an account: the one the session cookies carry, empty before signing in.
+func csrf() string {
+	if httpClient.Jar == nil {
+		return ""
+	}
+	return csrfIn(httpClient.Jar.Cookies(siteURL))
+}
+
+// csrfIn returns the token among cookies, empty if none carries one.
+func csrfIn(cookies []*http.Cookie) string {
+	for _, c := range cookies {
+		if c.Name == "__csrf" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
 func post(path string, form url.Values, out any) error {
-	req, err := http.NewRequest("POST", apiBase+path, strings.NewReader(form.Encode()))
+	return postAs(path, form, nil, out)
+}
+
+// postAs is post with the request carrying cookies of its own, for a request
+// that has to reach the account a session was kept by after it was cleared
+// here.
+func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error {
+	// The web API drops what it does not know the caller meant: following an
+	// artist and signing out came back with no effect at all without it.
+	token := csrf()
+	if cookies != nil {
+		token = csrfIn(cookies)
+	}
+	form.Set("csrf_token", token)
+	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if len(cookies) > 0 {
+		parts := make([]string, 0, len(cookies))
+		for _, c := range cookies {
+			parts = append(parts, c.Name+"="+c.Value)
+		}
+		req.Header.Set("Cookie", strings.Join(parts, "; "))
+	}
 	return do(req, out)
 }
 
@@ -321,9 +361,45 @@ func PlaylistDetail(id int64) (*Playlist, error) {
 		// A detail that is cut short still returns the songs it got: a
 		// playlist showing part of itself beats one that fails whole.
 		more, _ := SongDetails(ids)
-		p.Tracks = append(p.Tracks, more...)
+		p.Tracks = playlistOrder(p.Tracks, more, p.TrackIDs)
 	}
 	return p, nil
+}
+
+// playlistOrder puts listed songs, and the details fetched for those it left
+// out, in the order the playlist keeps: the details come in a batch of their
+// own, and appending them at the end put every song past the first thousand
+// where the playlist does not have it. A song a playlist holds twice stays
+// twice, and one the ids do not mention stays at the end.
+func playlistOrder(listed, more []Track, trackIDs []TrackID) []Track {
+	if len(trackIDs) == 0 {
+		return append(listed, more...)
+	}
+	byID := make(map[int64]Track, len(listed)+len(more))
+	for _, t := range listed {
+		byID[t.ID] = t
+	}
+	for _, t := range more {
+		byID[t.ID] = t // fetched for its song's id: its details are the fuller
+	}
+	want := make(map[int64]int, len(trackIDs))
+	for _, id := range trackIDs {
+		want[id.ID]++
+	}
+	ordered := make([]Track, 0, len(trackIDs)+len(listed))
+	for _, id := range trackIDs {
+		if t, ok := byID[id.ID]; ok && want[id.ID] > 0 {
+			ordered = append(ordered, t)
+			want[id.ID]--
+		}
+	}
+	for _, t := range listed {
+		if want[t.ID] > 0 {
+			ordered = append(ordered, t)
+			want[t.ID]--
+		}
+	}
+	return ordered
 }
 
 // missingTracks returns the ids of a playlist's songs that come without
