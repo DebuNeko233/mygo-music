@@ -26,3 +26,4 @@ Only write a test for behaviour that can actually break. If the code under test 
 - Look at visuals instead of asserting on them. The `NM_FRAMES` tests save PNGs into that directory and skip when it isn't set. Check pixels only for coverage, such as whether a layer still covers the window.
 - Start each test with a one-sentence comment saying the behaviour it checks, in the style of the code.
 - Run `go test ./internal/...` before committing, and run a new UI test with `-count=5`. Fix or delete a flaky test; don't retry it.
+- Run the tests under the race detector now and then: `CGO_ENABLED=1 go test ./internal/app -race -timeout 30m`. Drawing is done in software, and the detector slows it enough that `internal/app` needs more than the default ten minutes; a timeout there is not a race.
