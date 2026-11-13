@@ -99,11 +99,11 @@ func (a *app) enqueueReport(send func()) {
 func (a *app) reportPlayStopped() { a.pl.Finish() }
 
 // stopPlayReports ends the session's queue without waiting for it, and returns
-// the channel the queue closes when its requests are done, or nil when there
-// was nothing to send. Its caller runs on the thread that draws: the requests
-// finish on the goroutine that sends them, under the cookies the account had
-// while it was signed in, so neither signing in nor signing out waits for the
-// network. A later login creates a fresh queue.
+// the channel closed once its requests are done and the global cookies are
+// back, or nil when there was nothing to send. Its caller runs on the thread
+// that draws: the requests finish on the goroutine that sends them, under the
+// cookies the account had while it was signed in, so neither signing in nor
+// signing out waits for the network. A later login creates a fresh queue.
 func (a *app) stopPlayReports() <-chan struct{} {
 	a.reportPlayStopped()
 	queue, done := a.reportQueue, a.reportDone
@@ -115,20 +115,21 @@ func (a *app) stopPlayReports() <-chan struct{} {
 	a.reportOnce = sync.Once{}
 	// The queue outlives the account that filled it: it sends with that
 	// account's cookies, not with those of whoever signs in next.
-	if a.reportRestore == nil {
-		a.reportRestore = netease.SnapshotPlayReports()
+	restore := a.reportRestore
+	if restore == nil {
+		restore = netease.SnapshotPlayReports()
 	}
+	a.reportRestore = nil
 	close(queue)
+	finished := make(chan struct{})
 	go func() {
 		<-done
-		a.post(func() {
-			if a.reportRestore != nil {
-				a.reportRestore()
-				a.reportRestore = nil
-			}
-		})
+		// The window has no part in the jar, so it is given back here,
+		// once nothing is left to send with it.
+		restore()
+		close(finished)
 	}()
-	return done
+	return finished
 }
 
 // flushPlayReports finishes the ordered start/end requests before the process

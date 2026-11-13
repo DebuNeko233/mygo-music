@@ -268,18 +268,16 @@ func TestAccountChangeDoesNotWaitForItsReports(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("the account change waited for the reports")
 	}
-	if a.reportRestore == nil {
-		t.Error("the queued reports lost the cookies of the account that queued them")
+	select {
+	case <-done:
+		t.Fatal("the queue ended while a request was still stuck")
+	default:
 	}
 	letGo()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("the queued reports did not finish")
-	}
-	a.flushKept()
-	if a.reportRestore != nil {
-		t.Error("the signed-in account's cookies never came back")
 	}
 }
 
