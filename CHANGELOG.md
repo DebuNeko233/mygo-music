@@ -1,5 +1,16 @@
 # 更新日志
 
+## 0.2.9
+
+### What's Changed
+* fix: 修复 MP3 尾部标签导致的解码错误 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/55
+* perf:限制歌单和封面内存占用，后台保存播放进度 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/56
+* fix: 修复 FLAC 末尾解码重试 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/57
+* fix: 修复喜欢歌曲被服务器撤回 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/53
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.8...v0.2.9
+
 ## 0.2.8
 
 ### What's Changed
