@@ -27,18 +27,13 @@ var weapiRandom = rand.Reader
 // weapiPost uses the web player's request protocol for operations its servers
 // expect through that protocol, rather than the desktop client's eapi.
 func weapiPost(path string, data map[string]any, out any) error {
-	csrf := ""
-	for _, c := range httpClient.Jar.Cookies(siteURL) {
-		if c.Name == "__csrf" {
-			csrf = c.Value
-		}
-	}
-	data["csrf_token"] = csrf
+	token := csrf()
+	data["csrf_token"] = token
 	form, err := weapiEncrypt(data)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(csrf), strings.NewReader(form.Encode()))
+	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}

@@ -199,8 +199,26 @@ func getContext(ctx context.Context, path string, query url.Values, out any) err
 	return do(req, out)
 }
 
+// csrf returns the token the web API wants alongside a request that changes
+// an account: the one the session cookies carry, empty before signing in.
+func csrf() string {
+	if httpClient.Jar == nil {
+		return ""
+	}
+	for _, c := range httpClient.Jar.Cookies(siteURL) {
+		if c.Name == "__csrf" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
 func post(path string, form url.Values, out any) error {
-	req, err := http.NewRequest("POST", apiBase+path, strings.NewReader(form.Encode()))
+	// The web API drops what it does not know the caller meant: following an
+	// artist and signing out came back with no effect at all without it.
+	token := csrf()
+	form.Set("csrf_token", token)
+	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
