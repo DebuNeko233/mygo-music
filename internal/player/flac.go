@@ -121,9 +121,12 @@ func (s *flacStream) Read(dst []float32) (int, error) {
 			// NetEase's FLAC files may have bytes after their last frame,
 			// and a file may omit ID3 tags before its frames. Before the
 			// declared samples, any truncated frame is a cut-off download.
+			// A stream that leaves its samples out says nothing of where
+			// its end is: its last frame's end is the song's end.
 			if s.Len() > 0 && s.pos >= s.Len() && s.dl.Err() == nil {
 				err = io.EOF
-			} else if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			} else if s.Len() > 0 && s.pos < s.Len() &&
+				(errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)) {
 				err = io.ErrUnexpectedEOF
 			}
 			if dlErr := s.dl.Err(); dlErr != nil {

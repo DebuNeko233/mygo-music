@@ -120,6 +120,47 @@ func TestFLACTrailingBytesAfterSamples(t *testing.T) {
 	}
 }
 
+// A FLAC whose stream info leaves its samples out, as a stream may while it
+// downloads, plays to its end: its last frame was taken as a cut-off
+// download, so the song was asked for again until the app said it broke.
+func TestFLACUnknownLengthEndsAtEOF(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The samples the stream info declares, left out: 36 bits from the low
+	// nibble of its fourteenth byte on.
+	i := bytes.Index(b, []byte("fLaC")) + 8
+	b[i+13] &= 0xf0
+	clear(b[i+14 : i+18])
+	s, err := openStream(downloaded(b), 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if s.Len() != -1 {
+		t.Fatalf("length %d: the samples are still declared", s.Len())
+	}
+	buf := make([]float32, 4096)
+	played := 0
+	for {
+		n, err := s.Read(buf)
+		played += n
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("read after %d samples: %v", played, err)
+			}
+			break
+		}
+	}
+	if want := 5 * 44100 * 2; played != want {
+		t.Errorf("played %d samples, wanted %d", played, want)
+	}
+	if cut := s.cut(); cut != nil {
+		t.Errorf("the song's end became a failure: %v", cut)
+	}
+}
+
 // A FLAC plays as its samples are, and a seek lands on the very sample.
 func TestFLACSeek(t *testing.T) {
 	b, err := os.ReadFile("testdata/seek.flac")
