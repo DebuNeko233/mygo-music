@@ -100,3 +100,17 @@ func TestIsCredit(t *testing.T) {
 		}
 	}
 }
+
+// The offset tag of an LRC file moves every line by what it asks for, so
+// that the times of a file that starts before the recording hold.
+func TestLRCAppliesTheOffset(t *testing.T) {
+	lines := mergeLyrics("[offset:+500]\n[00:10.00]一\n[00:20.00]二\n", "")
+	if len(lines) != 2 || lines[0].At != 10500*time.Millisecond || lines[1].At != 20500*time.Millisecond {
+		t.Fatalf("lines %+v", lines)
+	}
+	// A shift into the past keeps a line at the start of the song.
+	early := mergeLyrics("[offset:-30000]\n[00:10.00]一\n[00:40.00]二\n", "")
+	if len(early) != 2 || early[0].At != 0 || early[1].At != 10000*time.Millisecond {
+		t.Errorf("lines %+v", early)
+	}
+}

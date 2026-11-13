@@ -30,12 +30,31 @@ type Word struct {
 	Start, End time.Duration
 }
 
-var lrcTime = regexp.MustCompile(`\[(\d+):(\d+)(?:[.:](\d+))?\]`)
+var (
+	lrcTime   = regexp.MustCompile(`\[(\d+):(\d+)(?:[.:](\d+))?\]`)
+	lrcOffset = regexp.MustCompile(`\[offset:\s*([+-]?\d+)\s*\]`)
+)
+
+// lrcOffsetOf is the shift the lyrics ask for, in milliseconds: with
+// [offset:+500] every line comes half a second later than it says, as for
+// a file that starts before the part of the recording the times count.
+func lrcOffsetOf(lrc string) time.Duration {
+	m := lrcOffset.FindStringSubmatch(lrc)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n) * time.Millisecond
+}
 
 // parseLRC reads lyrics in the LRC format, as NetEase serves them: a line
 // may carry several times, and credits come as lines of their own.
 func parseLRC(lrc string) []Line {
 	var out []Line
+	offset := lrcOffsetOf(lrc)
 	for _, raw := range strings.Split(lrc, "\n") {
 		times := lrcTime.FindAllStringSubmatchIndex(raw, -1)
 		if len(times) == 0 {
@@ -63,12 +82,12 @@ func parseLRC(lrc string) []Line {
 					frac /= 10
 				}
 			}
-			at := time.Duration(min)*time.Minute + time.Duration(sec)*time.Second + frac
+			at := time.Duration(min)*time.Minute + time.Duration(sec)*time.Second + frac + offset
 			// Prevent overflow: max 24 hours
 			if at > 24*time.Hour {
 				continue
 			}
-			out = append(out, Line{At: at, Text: text})
+			out = append(out, Line{At: max(at, 0), Text: text})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At < out[j].At })
