@@ -894,7 +894,13 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.pending = from
 	p.announce(&t, nil)
 	if p.cacheChanging {
-		// The folder moves: what is chosen is loaded once it has.
+		// The folder moves: what is chosen is loaded once it has. What was
+		// fetched ahead for it is let go of rather than kept for a load that
+		// never comes: its fetch would run on into a folder being moved away,
+		// and its file would stay open through the move.
+		if ahead != nil {
+			ahead.dl.Close()
+		}
 		return
 	}
 	p.refill()
