@@ -784,7 +784,8 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	}
 	if waitForLayout {
 		// Wait for the new padding or wrapping before following the line.
-		a.lyricAt = -2
+		// Recompute the destination without treating reflow as a new song.
+		a.lyricViewportW, a.lyricViewportH = 0, 0
 		c.AnimationFrame()
 		return
 	}
@@ -815,7 +816,8 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 				return // not laid out yet: the next frame scrolls
 			}
 		}
-		snap := st.immersive && (introHeight > 0 || a.lyricAt == -2 || resized || a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
+		snap := st.immersive && (introHeight > 0 || a.lyricAt == -2 || !a.lyricGlide.posed ||
+			a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
 		a.lyricAt = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
 		target = min(max(0, target), a.lyricScroll.MaxY)
@@ -871,6 +873,7 @@ var lyricScrollMotion = ui.Animation{Spring: ui.SpringOptions{Stiffness: 100, Da
 
 func (g *lyricGlide) to(c *ui.Context, offset, target float32) {
 	if offset == target {
+		g.pending = false
 		return
 	}
 	g.target, g.pending = target, true

@@ -142,6 +142,28 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 	}
 }
 
+// Long multilingual credits wrap in a narrow pane and the last entry remains reachable.
+func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
+	const w, h = 230, 164
+	const last = "マスタリング：最後の担当者"
+	a, tt := shortLyricsApp(nil, w, h)
+	a.settings.LyricEdgeFade = true
+	long := "Lead Guitar: " + strings.Repeat("Long Performer Name / ", 6)
+	a.pl.RefreshLyrics(1, "[00:00.00]和声编写：A\n[00:01.00]"+long+
+		"\n[00:02.00]作曲／編曲：C\n[00:05.00]纯音乐，请欣赏\n[01:30.00]"+last, "", "")
+	tt.Frame()
+	// Five single-line rows would leave less than 90 points to scroll.
+	if a.lyricScroll.MaxY < 90 || a.lyricScroll.MaxX > 0 {
+		t.Fatalf("long credit did not wrap vertically: %+v", a.lyricScroll)
+	}
+	tt.Scroll(w/2, h/2, 0, 1500)
+	tt.Advance(time.Second)
+	end, ok := tt.Find(last)
+	if !ok || end.Y < 0 || end.Y+end.H > h+1 {
+		t.Fatalf("last credit was clipped at the end of the scroll: %+v", end)
+	}
+}
+
 // Switching tracks must never paint the instrumental notice at the top while measuring its new viewport.
 func TestInstrumentalNoticeDoesNotFlashAtTop(t *testing.T) {
 	const w, h = 300, 360

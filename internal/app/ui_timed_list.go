@@ -152,7 +152,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	if follow {
 		row := max(0, followRow)
 		front, back = row, row
-		if !resized && !replaced && abs32(m.offsets[row]-s.Y) < box.H*1.3 {
+		if !replaced && abs32(m.offsets[row]-s.Y) < box.H*1.3 {
 			front, back = min(anchor, row), max(anchor, row)
 		}
 	}
@@ -217,7 +217,9 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	}
 	a.lyricViewportW, a.lyricViewportH = box.W, box.H
 	// A distant seek jumps directly to its newly measured neighborhood.
-	snap := follow && (resized || replaced || abs32(target-s.Y) > box.H || c.Preferences().ReduceMotion || target > s.MaxY || introHeight > 0 && abs32(target-s.Y) > 0.5)
+	snap := follow && (replaced || resized && (!st.immersive || !g.posed) ||
+		abs32(target-s.Y) > box.H || c.Preferences().ReduceMotion || target > s.MaxY ||
+		introHeight > 0 && abs32(target-s.Y) > 0.5)
 	if snap {
 		s.Y, *g = target, lyricGlide{}
 		m.poseKey++

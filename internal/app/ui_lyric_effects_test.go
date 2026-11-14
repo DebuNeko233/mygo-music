@@ -163,6 +163,44 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 	}
 }
 
+// Resizing during an automatic glide retargets the motion without snapping to the new anchor.
+func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
+	for _, count := range []int{12, timedListThreshold} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			lines := make([]lyrics.Line, count)
+			for i := range lines {
+				lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Line %d", i)}
+			}
+			a, tt := shortLyricsApp(lines, 120, 200)
+			a.settings.LyricEdgeFade = true
+			a.pl.Hold(lines[4].At)
+			tt.Frame()
+			tt.SetPreferences(ui.Preferences{})
+			a.pl.Hold(lines[5].At)
+			tt.Frame()
+			tt.Advance(80 * time.Millisecond)
+			tt.SetSize(120, 170)
+			const target = 170 * 0.3
+			row := func() float32 {
+				t.Helper()
+				got, ok := tt.AccessByRole(ui.RoleButton, lines[5].Text)
+				if !ok || got.Offscreen {
+					t.Fatalf("active line left the viewport: %+v", got)
+				}
+				return got.Bounds.Y
+			}
+			start := row()
+			tt.Advance(90 * time.Millisecond)
+			middle := row()
+			tt.Advance(1100 * time.Millisecond)
+			end := row()
+			if start-middle < 2 || middle-end < 2 || abs32(end-target) > 2 {
+				t.Fatalf("resize interrupted the glide: %.1f → %.1f → %.1f (target %.1f)", start, middle, end, target)
+			}
+		})
+	}
+}
+
 // Immersive lyrics light LRC as a whole line and reserve the sweep for real word timestamps.
 func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
 	a := newTestApp()

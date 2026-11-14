@@ -5,6 +5,21 @@ import (
 	"time"
 )
 
+// Credits from all three languages share aliases without absorbing role-labeled lyrics.
+func TestDisplayMultilingualCredits(t *testing.T) {
+	lrc := "[00:00.00]和声编写：A\n[00:01.00]Lead Guitar: B\n[00:02.00]作曲／編曲：C\n" +
+		"[00:03.00]作詞：D\n[00:04.00]Lyricsby: D\n[00:05.00]インストゥルメンタル"
+	_, view := BuildDisplay(lrc, "", "")
+	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[0].Kind != Instrumental {
+		t.Fatalf("multilingual credits were not grouped or deduplicated: %+v", view)
+	}
+	for _, text := range []string{"合：一起唱", "歌手の名前：歌う", "Alice: Sing along"} {
+		if lineKind(text) != Sung {
+			t.Errorf("speaker label treated as metadata: %q", text)
+		}
+	}
+}
+
 // Cache records can give a pure-music notice a time and put credits on both sides of it.
 func TestDisplayInstrumentalWithCredits(t *testing.T) {
 	_, view := BuildDisplay("[00:00.00]作曲 : A\n[00:01.00]编曲 : B\n[00:05.00]纯音乐，请欣赏\n[01:47.50]企划 : C\n[01:48.50]出品 : D", "", "")
