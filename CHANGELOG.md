@@ -3,9 +3,9 @@
 ## 0.2.11
 
 ### What's Changed
-* fix: 修复最小化正在播放窗口时崩溃 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/65
-* test: 删除实现耦合和脆弱文案测试 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/66
-* fix: 跳过已下线的歌曲 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/68
+* fix: 修复最小化正在播放窗口时崩溃 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/65
+* test: 删除实现耦合和脆弱文案测试 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/66
+* fix: 跳过已下线的歌曲 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/68
 
 
 **Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.10...v0.2.11
