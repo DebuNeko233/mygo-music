@@ -401,6 +401,11 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 				t.Fatal("lyrics did not follow playback")
 			}
 			dir := os.Getenv("NM_FRAMES")
+			if dir == "" {
+				// The test checks input and scroll state. The pixel tests above
+				// still exercise the Gaussian at their original resolution.
+				tt.SetScale(0.25)
+			}
 			save := func(label string) {
 				t.Helper()
 				if dir == "" {
@@ -500,6 +505,7 @@ func TestLyricManualResizeKeepsReadingPosition(t *testing.T) {
 			Translation: strings.Repeat("A lyric translation wraps as the window gets narrower. ", 3)}
 	}
 	a, tt := shortLyricsApp(lines, 500, 400)
+	tt.SetScale(0.25) // accessibility bounds use DIPs
 	a.settings.LyricEdgeFade = true
 	a.pl.Hold(lines[5].At)
 	tt.Frame()

@@ -8,6 +8,11 @@ on:
   push:
   pull_request:
 
+# A newer commit on the same branch or PR replaces the pending work.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -60,12 +65,21 @@ jobs:
             exit
           fi
 
-          # App tests render in software. Split their top-level names across
-          # runners so the detector can finish without dropping any cases.
+          # Keep the longest software-rendered tests on separate runners.
+          # Every other test, including newly added ones, still has one shard.
           names=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app)
           pattern=$(printf '%s\n' "$names" | awk -v shard="$SHARD" -v app_shards="$((TOTAL_JOBS - 1))" '
+            BEGIN {
+              heavy["TestNowPlayingFrameBudget"] = 1
+              heavy["TestLyricEdgeFadeScrolling"] = 2
+              heavy["TestNowPlayingLyricScrollbarAlignmentAndDrag"] = 3
+              heavy["TestLyricManualResizeKeepsReadingPosition"] = 4
+              heavy["TestImmersiveLyricGlideContinuesAfterResize"] = 5
+              heavy["TestLyricIntroEasesIntoFirstLine"] = 6
+            }
             /^(Test|Example|Fuzz)[[:alnum:]_]+$/ {
-              if (count++ % app_shards == shard - 1) {
+              assigned = ($0 in heavy) ? heavy[$0] : (count++ % app_shards) + 1
+              if (assigned == shard) {
                 printf "%s%s", sep, $0
                 sep = "|"
               }

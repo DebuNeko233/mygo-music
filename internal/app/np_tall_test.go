@@ -49,23 +49,27 @@ func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
 	for _, immersive := range []bool{false, true} {
 		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
 			a := tallLyricsApp(t)
-			a.settings.LyricEdgeFade = immersive
-			tt := ui.NewTesterWith(func(c *ui.Context) {
-				if immersive {
-					// This test exercises dragging. The small gutter test covers the Gaussian pass.
-					a.lyricBrowseUntil = c.Now().Add(lyricBrowseDelay)
-				}
-				a.view(c)
-			}, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			tt := ui.NewTesterWith(a.view, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			// Scale only the software raster, so full-screen layout tests stay inexpensive.
 			const scale = 0.5
 			tt.SetScale(scale)
 			for _, size := range [][2]int{{1600, 550}, {1728, 1117}} {
 				w, h := size[0], size[1]
+				// Settle the viewport before entering manual mode. Resetting the
+				// song's scroll state would otherwise clear browsing and run
+				// the full-screen Gaussian, which has its own gutter test.
+				a.settings.LyricEdgeFade = false
 				tt.SetSize(w, h)
-				a.pl.Hold(77 * time.Second)
 				a.seekLyricFollow()
 				tt.Frame()
+				if immersive {
+					a.settings.LyricEdgeFade = true
+					a.lyricBrowseUntil = tt.Now().Add(lyricBrowseDelay)
+					tt.Frame()
+					if a.lyricBlurPass != nil {
+						t.Fatal("manual scrolling ran the automatic blur pass")
+					}
+				}
 				cover, ok := tt.Find("专辑封面")
 				if !ok {
 					t.Fatal("cover missing")

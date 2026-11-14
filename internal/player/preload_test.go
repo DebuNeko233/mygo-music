@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"netease-music-mygo/internal/netease"
@@ -219,41 +220,63 @@ func TestRiskControlUsesLongerRetryGaps(t *testing.T) {
 // Risk control retries a prefetch once, rather than keeping an account-level
 // refusal active with requests until the song ends.
 func TestRiskControlPrefetchIsLimited(t *testing.T) {
-	var asks atomic.Int64
-	ch := make(chan func(), 64)
-	p := New(func(fn func()) { ch <- fn })
-	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
-	p.Hold(time.Second)
-	ask := func(int64, string) (*netease.Stream, error) {
-		asks.Add(1)
-		return nil, netease.ErrRiskControl
-	}
-	p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
-	pumpFor(t, ch, "one more prefetch after a risk refusal", 12*time.Second, func() bool { return asks.Load() == 2 })
-	time.Sleep(50 * time.Millisecond)
-	if got := asks.Load(); got != 2 {
-		t.Fatalf("risk control kept requesting: %d requests", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var asks atomic.Int64
+		ch := make(chan func(), 64)
+		p := New(func(fn func()) { ch <- fn })
+		p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+		p.Hold(time.Second)
+		ask := func(int64, string) (*netease.Stream, error) {
+			asks.Add(1)
+			return nil, netease.ErrRiskControl
+		}
+		p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
+		time.Sleep(10*time.Second - time.Millisecond)
+		synctest.Wait()
+		if run(ch) {
+			t.Fatal("prefetch retried before its risk-control delay")
+		}
+		select {
+		case fn := <-ch:
+			fn()
+		case <-time.After(time.Second):
+			t.Fatal("prefetch retry was never posted")
+		}
+		synctest.Wait()
+		time.Sleep(10 * time.Second)
+		run(ch)
+		synctest.Wait()
+		if got := asks.Load(); got != 2 {
+			t.Fatalf("risk control kept requesting: %d requests", got)
+		}
+	})
 }
 
 // A prefetch waiting out risk control stops when the song has moved on.
 func TestRiskControlPrefetchStopsWhenTheSongMovesOn(t *testing.T) {
-	var asks atomic.Int64
-	ch := make(chan func(), 64)
-	p := New(func(fn func()) { ch <- fn })
-	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
-	p.Hold(time.Second)
-	ask := func(int64, string) (*netease.Stream, error) {
-		asks.Add(1)
-		return nil, netease.ErrRiskControl
-	}
-	p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, prefetchTries)
-	p.gen++ // Next, previous, or another queue invalidates this wait.
-	run(ch)
-	time.Sleep(50 * time.Millisecond)
-	if got := asks.Load(); got != 1 {
-		t.Errorf("the old song asked again: %d requests", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var asks atomic.Int64
+		ch := make(chan func(), 64)
+		p := New(func(fn func()) { ch <- fn })
+		p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+		p.Hold(time.Second)
+		ask := func(int64, string) (*netease.Stream, error) {
+			asks.Add(1)
+			return nil, netease.ErrRiskControl
+		}
+		p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
+		p.gen++ // Next, previous, or another queue invalidates this wait.
+		select {
+		case fn := <-ch:
+			fn() // Run the original retry after its timer fires.
+		case <-time.After(11 * time.Second):
+			t.Fatal("prefetch retry was never posted")
+		}
+		synctest.Wait()
+		if got := asks.Load(); got != 1 {
+			t.Errorf("the old song asked again: %d requests", got)
+		}
+	})
 }
 
 // Temporary errors on one song leave the next one able to load.

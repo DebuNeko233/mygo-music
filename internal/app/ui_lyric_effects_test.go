@@ -140,6 +140,7 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 				lines[i] = lyrics.Line{At: firstAt + time.Duration(i-first)*time.Second, Text: fmt.Sprintf("Lyric %02d", i)}
 			}
 			a, tt := shortLyricsApp(lines, 200, tc.height)
+			tt.SetScale(0.25) // only row geometry is observed
 			a.settings.LyricEdgeFade = true
 			tt.SetPreferences(ui.Preferences{})
 			firstY := func(left time.Duration) float32 {
@@ -172,6 +173,7 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 				lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Line %d", i)}
 			}
 			a, tt := shortLyricsApp(lines, 120, 200)
+			tt.SetScale(0.25)
 			a.settings.LyricEdgeFade = true
 			a.pl.Hold(lines[4].At)
 			tt.Frame()

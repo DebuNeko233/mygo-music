@@ -326,6 +326,8 @@ func framesAt(a *app, tt *ui.Tester, pos time.Duration) int {
 // the rest.
 func TestNowPlayingFrameBudget(t *testing.T) {
 	a, tt, _ := playingApp()
+	// Keep the desktop layout and frame cadence while reducing software raster work.
+	tt.SetScale(0.25)
 	if n := framesAt(a, tt, 12*time.Second); n > 3 {
 		t.Errorf("a page under the player: %d frames a second", n)
 	}

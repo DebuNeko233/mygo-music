@@ -30,6 +30,8 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			a.comments = commentState{track: 1, loaded: true, total: 1, latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
 			a.nowPlaying, a.npPane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
+			// The minimized layout and restored hit targets are measured in DIPs.
+			tt.SetScale(0.25)
 			tt.Frame()
 			tt.Advance(time.Second)
 			tt.Frame()
