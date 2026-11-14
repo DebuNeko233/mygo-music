@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -19,11 +18,10 @@ func TestScrubSeeksOnRelease(t *testing.T) {
 	tr := netease.Track{ID: 7, Name: "宝船", Duration: 200000}
 	a.pl.Cue([]netease.Track{tr, {ID: 8, Name: "下一首"}})
 	a.pl.SetLyrics(nil)
-	out := audio.NewPlayer(&silence{})
-	out.SetVolume(0)
-	out.Play()
-	a.pl.Attach(out)
-	defer out.Close()
+	// Keep playback at a fixed position regardless of how long CI takes
+	// to draw the window under the race detector.
+	const start = 3 * time.Second
+	a.pl.Hold(start)
 	a.nowPlaying = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
@@ -41,7 +39,7 @@ func TestScrubSeeksOnRelease(t *testing.T) {
 	tt.Frame()
 	tt.Move(at(1)+30, y+30) // past its end, below it
 	tt.Frame()
-	if pos := a.pl.Position(); pos > 10*time.Second {
+	if pos := a.pl.Position(); pos != start {
 		t.Fatalf("seeked to %v while dragging", pos)
 	}
 	if a.pl.Current().ID != 7 {
