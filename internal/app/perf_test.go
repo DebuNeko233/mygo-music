@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +14,37 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
+
+// An ending word can finish before the next regular highlight tick without rebuilding the view.
+func TestLyricWordFinishesBeforeRegularTick(t *testing.T) {
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 8000}})
+	line := lyrics.Line{Text: "Quick", Words: []lyrics.Word{
+		{Text: "Quick", Start: time.Second, End: 1050 * time.Millisecond},
+	}}
+	a.pl.Hold(1030 * time.Millisecond)
+	builds := 0
+	tt := ui.NewTester(func(c *ui.Context) {
+		builds++
+		c.Root().Background(ui.RGB(0, 0, 0))
+		a.paintLyricWords(c, &line, 200, linesStyle{size: 30, weight: 800, lineHeight: 1.25})
+	}, 200, 65)
+	partial := tt.Image()
+	before := builds
+
+	a.pl.Hold(line.Words[0].End)
+	// The last 20 ms of the word should schedule its own paint even
+	// though the regular tick is 40 ms away.
+	tt.Advance(25 * time.Millisecond)
+	finished := tt.Image()
+	if builds != before || !pixelsLowerInBand(finished, partial, 0, 65) {
+		t.Fatal("the word did not finish on a paint-only frame near its end")
+	}
+	tt.Frame()
+	if settled := tt.Image(); !bytes.Equal(finished.Pix, settled.Pix) {
+		t.Fatal("the deadline frame still showed a partially lit word")
+	}
+}
 
 // Word colors repaint without rebuilding the view, and a gap needs no periodic frame.
 func TestLyricWordPaintBudget(t *testing.T) {
@@ -124,6 +157,45 @@ func TestLyricsScrollFrameBudget(t *testing.T) {
 	}
 	if n := *builds - before; n > 6 {
 		t.Fatalf("one automatic glide rebuilt the view %d times", n)
+	}
+}
+
+// Opening and resizing a long transcript should only measure rows near the reader.
+func TestLongCaptionMeasurementBudget(t *testing.T) {
+	a := captionsTestApp(t, true)
+	cs := &a.captions
+	cs.program = a.pl.Current().ProgramID
+	cs.tr = &transcript{Spans: []span{{0, a.pl.Duration()}}}
+	const count = 2000
+	for i := range count {
+		cs.lines = append(cs.lines, lyrics.Line{
+			At:   time.Duration(i) * 250 * time.Millisecond,
+			Text: fmt.Sprintf("第 %04d 句，%s", i, strings.Repeat("这段播客字幕会换行", 4)),
+		})
+	}
+	const active = count / 2
+	a.pl.Seek(cs.lines[active].At)
+	tt := ui.NewTester(func(c *ui.Context) {
+		_, h := c.Size()
+		a.captionsPane(c, a.pl.Current(), h)
+	}, 640, 460)
+
+	for _, width := range []int{640, 485, 340} {
+		tt.SetSize(width, 460)
+		tt.Advance(time.Second)
+		row, ok := tt.AccessByRole(ui.RoleButton, cs.lines[active].Text)
+		if !ok || row.Offscreen || math.Abs(float64(row.Bounds.Y-460*0.3)) > 2 {
+			t.Fatalf("width %d: active caption lost its reading position: %+v", width, row.Bounds)
+		}
+		measured := 0
+		for _, done := range a.timedList.measured {
+			if done {
+				measured++
+			}
+		}
+		if measured > 80 {
+			t.Fatalf("width %d: measured %d rows to show one viewport", width, measured)
+		}
 	}
 }
 
