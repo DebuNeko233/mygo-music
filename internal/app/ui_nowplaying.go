@@ -856,10 +856,10 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
 	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
-	if !st.browsing && (cur != a.lyricAt || resized || introHeight > 0) {
+	if st.shouldFollow(cur != a.lyricAt, resized, introHeight > 0) {
 		target := float32(0)
 		followRow := active
-		if introHeight > 0 {
+		if st.followRow(cur, introHeight > 0) != cur {
 			followRow = firstSung
 		}
 		if followRow.Valid() {
@@ -867,14 +867,12 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			if lb := followRow.LayoutBounds(); lb.H > 0 && box.H > 0 {
 				// The line and its column share the same layout offset,
 				// even when the listener scrolls during this frame.
-				inset := lyricReadInset(box.H, lb.H)
+				rowTop := lb.Y - content.LayoutBounds().Y
 				if introHeight > 0 {
-					// Anchor the dots where the first line will land. The
-					// shrinking slot then moves the lyric without a second glide.
-					lb.Y -= intro.LayoutBounds().H
-					inset = lerp(inset, lyricHeadroom(box.H, st), introOpacity)
+					// Use the row's offset with the intro slot removed.
+					rowTop -= intro.LayoutBounds().H
 				}
-				target = lyricHeadroom(box.H, st) + lb.Y - content.LayoutBounds().Y - inset
+				target = lyricFollowTarget(box.H, lb.H, rowTop, lyricHeadroom(box.H, st), introHeight > 0, introOpacity)
 			} else {
 				if initialFollow {
 					body.Invisible()
@@ -884,7 +882,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			}
 		}
 		snap := initialFollow || st.immersive && (introHeight > 0 || !a.lyricGlide.posed ||
-			a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
+			lyricShouldSnap(c, target, a.lyricScroll.Y, box.H, a.lyricAt == lyricResumeFollow))
 		a.lyricAt = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
 		target = min(max(0, target), a.lyricScroll.MaxY)
@@ -920,6 +918,30 @@ func (a *app) keepLyricReadingPosition(c *ui.Context, line *lyrics.Line, row, vi
 
 func lyricReadInset(viewport, line float32) float32 {
 	return min(viewport*0.3, max(0, viewport-line))
+}
+
+func (st linesStyle) shouldFollow(lineChanged, reflow, intro bool) bool {
+	return !st.browsing && (lineChanged || reflow || intro)
+}
+
+func (st linesStyle) followRow(current int, intro bool) int {
+	if intro {
+		return st.introLine
+	}
+	return current
+}
+
+// rowTop excludes the headroom and intro slot in either list layout.
+func lyricFollowTarget(viewport, rowHeight, rowTop, head float32, intro bool, introOpacity float32) float32 {
+	inset := lyricReadInset(viewport, rowHeight)
+	if intro {
+		inset = lerp(inset, head, introOpacity)
+	}
+	return max(0, head+rowTop-inset)
+}
+
+func lyricShouldSnap(c *ui.Context, target, current, viewport float32, resuming bool) bool {
+	return c.Preferences().ReduceMotion || !resuming && abs32(target-current) > viewport
 }
 
 func lyricHeadroom(viewport float32, st linesStyle) float32 {

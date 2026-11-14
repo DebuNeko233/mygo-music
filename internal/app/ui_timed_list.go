@@ -132,7 +132,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	if st.immersive {
 		m.manual = st.browsing
 	}
-	follow := !st.browsing && (changedLine || replaced || resized && !m.manual)
+	follow := st.shouldFollow(changedLine || replaced, resized && !m.manual, false)
 	anchor, inset := 0, float32(0)
 	previousLead := m.leading
 	hadMeasurements := len(m.measured) > 0 && !replaced
@@ -146,10 +146,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		anchor = m.rowAt(s.Y)
 	}
 	front, back := anchor, anchor
-	followRow := cur
-	if st.intro.intro {
-		followRow = st.introLine
-	}
+	followRow := st.followRow(cur, st.intro.intro)
 	if follow {
 		row := max(0, followRow)
 		front, back = row, row
@@ -177,9 +174,8 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	}
 	lead := head
 	m.leading = lead
-	if !m.manual && (lead != previousLead || introHeight > 0) {
-		follow = true
-	}
+	follow = st.shouldFollow(follow, !m.manual && lead != previousLead, !m.manual && introHeight > 0)
+	followRow = st.followRow(cur, introHeight > 0)
 	maxY := max(0, total-box.H)
 	scroll.Padding(0, max(st.rightInset, timedPaneInsetRight), 0, 0)
 	if !replaced {
@@ -206,11 +202,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		target = 0
 		if followRow >= 0 {
 			lineHeight := m.offsets[followRow+1] - m.offsets[followRow] - timedLineGap
-			inset := lyricReadInset(box.H, lineHeight)
-			if introHeight > 0 {
-				inset = lerp(inset, head, introOpacity)
-			}
-			target = min(max(0, lead+m.offsets[followRow]-inset), maxY)
+			target = min(maxY, lyricFollowTarget(box.H, lineHeight, m.offsets[followRow], lead, introHeight > 0, introOpacity))
 		}
 	}
 	if !st.browsing {
@@ -219,7 +211,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	a.lyricViewportW, a.lyricViewportH = box.W, box.H
 	// A distant seek jumps directly to its newly measured neighborhood.
 	snap := follow && (replaced || resized && (!st.immersive || !g.posed) ||
-		abs32(target-s.Y) > box.H || c.Preferences().ReduceMotion || target > s.MaxY ||
+		lyricShouldSnap(c, target, s.Y, box.H, false) || target > s.MaxY ||
 		introHeight > 0 && abs32(target-s.Y) > 0.5)
 	if snap {
 		s.Y, *g = target, lyricGlide{}
