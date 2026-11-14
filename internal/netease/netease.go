@@ -612,6 +612,7 @@ type songURLAnswer struct {
 	Msg     string `json:"msg"`
 	Data    []struct {
 		Stream
+		Code          int             `json:"code"`
 		URL           string          `json:"url"`
 		Peak          *float64        `json:"peak"`
 		FreeTrialInfo json.RawMessage `json:"freeTrialInfo"`
@@ -624,10 +625,16 @@ func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
 	if res.Code != 200 {
 		return nil, apiError{Code: res.Code, Message: res.Message, Msg: res.Msg}.codeError(path)
 	}
-	if len(res.Data) == 0 || res.Data[0].URL == "" {
+	if len(res.Data) == 0 {
 		return nil, errors.New("netease: no playback URL returned")
 	}
 	d := res.Data[0]
+	if d.Code == http.StatusNotFound {
+		return nil, ErrUnavailable
+	}
+	if d.URL == "" {
+		return nil, errors.New("netease: no playback URL returned")
+	}
 	// A preview of a VIP song is no song.
 	if len(d.FreeTrialInfo) > 0 && string(d.FreeTrialInfo) != "null" {
 		return nil, ErrUnavailable

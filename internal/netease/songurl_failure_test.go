@@ -56,7 +56,18 @@ func TestSongURLDoesNotAcceptFallbackPreview(t *testing.T) {
 	}
 }
 
-// A missing playback URL is not proof of a song restriction, even in a successful API response.
+// Song 3368421969 returns a successful envelope with code 404 in its data and no URL after being delisted.
+func TestSongURLMarksDelistedSongUnavailable(t *testing.T) {
+	answer(t, func(*http.Request) string {
+		return `{"code":200,"data":[{"id":3368421969,"url":null,"code":404,"freeTrialInfo":null}]}`
+	})
+	_, err := SongURL(3368421969, "exhigh")
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("delisted song returned %v, so it would retry instead of being skipped", err)
+	}
+}
+
+// A missing playback URL without a song-level restriction is not proof of a song restriction, even in a successful API response.
 func TestSongURLDistinguishesMissingURLAndPreview(t *testing.T) {
 	deviceOnce.Do(func() { deviceID = strings.Repeat("0", 52) })
 	for _, tc := range []struct {
