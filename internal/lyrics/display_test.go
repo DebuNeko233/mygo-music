@@ -124,6 +124,14 @@ func TestDisplayDictionaryAliases(t *testing.T) {
 	}
 }
 
+// Keep observed bilingual fields while avoiding generated cross-language combinations.
+func TestDisplayCreditAliasesAreExplicit(t *testing.T) {
+	_, view := BuildDisplay("[00:00]录音师 Recording Engineer：A\n[00:01]制作人 Producer：B\n[00:02]作詞 Lyricist：唱下去", "", "")
+	if len(view.Lines) != 3 || view.Lines[0].Kind != Credit || view.Lines[1].Kind != Credit || view.Lines[2].Kind != Sung {
+		t.Fatalf("field aliases misclassified the original text: %+v", view.Lines)
+	}
+}
+
 // Exact notices leave similar sung phrases and speaker labels on the timeline.
 func TestDisplayDictionaryLeavesSungTextAlone(t *testing.T) {
 	lrc := "[00:00.00]暂无歌词\n[00:03.00]合：仍然在唱\n[00:04.00]作曲是一场梦：我的梦\n" +

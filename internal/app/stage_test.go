@@ -9,24 +9,31 @@ import (
 	"netease-music-mygo/internal/lyrics"
 )
 
-// Each lyric view can show a translated LRC row that was missing from YRC.
-func TestLyricViewsSharePartialYRCFallback(t *testing.T) {
-	a, pane := shortLyricsApp(nil, 360, 300)
-	a.pl.RefreshLyrics(1, "[00:24.406]回退歌词\n[00:24.980]下一句", "[00:24.406]Fallback translation",
-		"[25250,3930](25250,3930,0)下一句")
-	a.pl.Hold(25 * time.Second)
-	pane.Frame()
-	if !pane.HasText("回退歌词") || !pane.HasText("Fallback translation") {
-		t.Fatal("playback pane lost the fallback row or its translation")
-	}
-	stage := ui.NewTesterWith(func(c *ui.Context) { a.stage(c, a.pl.Current(), white) }, 360, 300,
-		ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-	if !stage.HasText("Fallback translation") {
-		t.Fatal("stage did not select the LRC row at the playback position")
-	}
-	desktop := ui.NewTester((&deskLyrics{a: a}).view, 480, 200)
-	if !desktop.HasText("回退歌词") || !desktop.HasText("Fallback translation") {
-		t.Fatal("desktop lyrics lost the fallback row or its translation")
+// All three lyric views choose YRC for the whole song and fall back to LRC together.
+func TestLyricViewsShareSelectedSource(t *testing.T) {
+	const lrc = "[00:24.406]Fallback\n[00:24.980]Chorus"
+	const translation = "[00:24.406]Opening translation\n[00:24.980]Shared translation"
+	for _, tc := range []struct{ name, yrc, text, translated, omitted string }{
+		{"YRC", "[25250,3930](25250,3930,0)Chorus", "Chorus", "Shared translation", "Fallback"},
+		{"LRC", "[999999999,500](999999999,500,0)Invalid YRC", "Chorus", "Shared translation", "Invalid YRC"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, pane := shortLyricsApp(nil, 360, 300)
+			a.pl.RefreshLyrics(1, lrc, translation, tc.yrc)
+			a.pl.Hold(26 * time.Second)
+			pane.Frame()
+			stage := ui.NewTesterWith(func(c *ui.Context) { a.stage(c, a.pl.Current(), white) }, 360, 300,
+				ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			desktop := ui.NewTester((&deskLyrics{a: a}).view, 480, 200)
+			for _, view := range []*ui.Tester{pane, stage, desktop} {
+				if !view.HasText(tc.text) || !view.HasText(tc.translated) || view.HasText(tc.omitted) {
+					t.Fatalf("view used the wrong source or lost its translation: %q", view.Texts())
+				}
+			}
+			if tc.name == "LRC" && !pane.HasText("Fallback") {
+				t.Fatal("whole-song fallback lost the LRC-only row")
+			}
+		})
 	}
 }
 

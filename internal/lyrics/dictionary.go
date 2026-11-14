@@ -14,32 +14,32 @@ var creditFields = func() map[string]string {
 	fields := make(map[string]string)
 	for _, group := range []string{
 		"作词|作词人|词|作詞|作詩|Lyrics|Lyricist|Lyrics by",
-		"作曲|作曲人|曲|Music|Composer|Composed by",
+		"作曲|作曲人|曲|Music|Composer|Composed by|作曲Composer",
 		"编曲|编曲人|編曲|アレンジ|Arrangement|Arranger",
 		"作曲/编曲|作曲/編曲|Music & Arrangement",
 		"作词/作曲|作詞/作曲|Lyrics & Music",
-		"制作人|Producer|Producers|プロデューサー",
+		"制作人|Producer|Producers|プロデューサー|制作人 Producer",
 		"制作|製作", "制作协力|制作協力", "音乐制作|音楽制作", "监制|監制",
-		"音乐监制|Music Supervisor",
-		"混音|混音师|混音工程师|混音工程|Mixing|Mixing Engineer|ミックス",
-		"混音助理|Mixing Assistant",
+		"音乐监制|Music Supervisor|音乐监制 Music Supervisor",
+		"混音|混音师|混音工程师|混音工程|Mixing|Mixing Engineer|ミックス|混音 Mixing Engineer|混音师 Mixing Engineer",
+		"混音助理|Mixing Assistant|混音助理 Mixing Assistant",
 		"混音室", "编曲/混音",
-		"录音|録音|Recording", "录音师|录音工程师|Recording Engineer", "录音棚|录音室|Recording Studio", "录音助理",
-		"母带|母带制作|母带处理|母带工程师|Mastering|Mastering Engineer|マスタリング",
+		"录音|録音|Recording", "录音师|录音工程师|Recording Engineer|录音师 Recording Engineer", "录音棚|录音室|Recording Studio|录音棚 Recording Studio", "录音助理",
+		"母带|母带制作|母带处理|母带工程师|Mastering|Mastering Engineer|マスタリング|母带制作 Mastering Engineer|母带 Mastering Engineer|母带处理 Mastering Engineer",
 		"混音/母带|Mixing/Mastering Engineer",
 		"和声|和音|Background Vocals|コーラス", "和声编写", "吉他|Guitar|Guitars|ギター",
 		"主音吉他|Lead Guitar", "节奏吉他|Rhythm Guitar", "电吉他",
 		"贝斯|Bass|ベース", "鼓|Drums|ドラム", "鼓编程", "打击乐|Percussion",
 		"键盘|Keyboards|キーボード", "风琴|Organ", "弦乐|Strings", "弦乐编写", "小提琴", "大提琴", "萨克斯",
-		"钢琴|Piano", "笛子|Dizi", "古筝|Guzheng", "琵琶|Pipa", "筝|Koto",
+		"钢琴|Piano|钢琴 Piano", "笛子|Dizi|笛子 Dizi", "古筝|Guzheng|古筝 Guzheng", "琵琶|Pipa|琵琶 Pipa", "筝|Koto",
 		"哨笛|Tin Whistle", "三味线|Shamisen",
-		"指挥|Conductor", "乐队|Orchestra", "乐队配器|Orchestrator",
-		"工程师|ProTools Operator|Engineering", "声音工程师|音频工程师|Sound Engineer",
+		"指挥|Conductor|指挥 Conductor", "乐队|Orchestra|乐队 Orchestra", "乐队配器|Orchestrator|乐队配器 Orchestrator",
+		"工程师|ProTools Operator|Engineering|工程师 ProTools Operator", "声音工程师|音频工程师|Sound Engineer|声音工程师 Sound Engineer",
 		"舞台监督|Orchestra Stage Manager", "乐团经理|Orchestra Manager", "录音现场指导|Scoring Sessions Director",
 		"重新编排", "乐器录制", "制谱|Music Copyist", "人声|Voice", "主人声",
 		"演唱|歌唱|Vocals|Vocal|ボーカル", "原唱", "翻唱", "Vocal & Lyrics", "Lead & Background Vocals",
 		"人声录音", "人声录音室", "人声编辑", "配唱制作", "附加制作", "音乐总监",
-		"出品|出品人|Produced by|Produced", "联合出品", "联合制作|Co-produced by", "发行",
+		"出品|出品人|Produced by|Produced|出品 Produced by", "联合出品", "联合制作|Co-produced by", "发行",
 		"企划|企画", "统筹|项目统筹", "推广", "营销推广", "封面|封面设计", "曲绘", "合作联系",
 		"OP", "SP", "OP/SP", "曲版权管理方", "词版权管理方", "录音作品及MV版权", "P-Line", "C-Line",
 	} {
@@ -47,11 +47,6 @@ var creditFields = func() map[string]string {
 		key := aliases[0]
 		for _, name := range aliases {
 			fields[compactField(name)] = key
-			for _, english := range aliases {
-				if english[0] < unicode.MaxASCII && name[0] >= unicode.MaxASCII {
-					fields[compactField(name+english)] = key
-				}
-			}
 		}
 	}
 	return fields

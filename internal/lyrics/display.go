@@ -89,8 +89,11 @@ func yrcCredits(source string) []Line {
 		for _, part := range row.Parts {
 			text.WriteString(part.Text)
 		}
-		if s := strings.TrimSpace(text.String()); s != "" && lineKind(s) != Sung {
-			lines = append(lines, Line{At: time.Duration(row.Time) * time.Millisecond, Text: s})
+		s := strings.TrimSpace(text.String())
+		if s != "" {
+			if kind := lineKind(s); kind != Sung {
+				lines = append(lines, Line{At: time.Duration(row.Time) * time.Millisecond, Text: s, Kind: kind})
+			}
 		}
 	}
 	return lines
@@ -98,29 +101,29 @@ func yrcCredits(source string) []Line {
 
 // NewDisplay builds a playback-pane view from parsed lines and any supplemental metadata.
 func NewDisplay(lines []Line, supplemental ...Line) Display {
-	return newDisplay(lines, supplemental, false)
-}
-
-func newDisplay(lines, supplemental []Line, hasNotice bool) Display {
-	d := Display{Lines: make([]Line, 0, len(lines)+len(supplemental))}
+	all := make([]Line, 0, len(lines)+len(supplemental))
 	for _, source := range [][]Line{lines, supplemental} {
 		for _, line := range source {
-			if strings.TrimSpace(line.Text) == "" {
-				continue
+			if strings.TrimSpace(line.Text) != "" {
+				line.Kind = lineKind(line.Text)
+				all = append(all, line)
 			}
-			line.Kind = lineKind(line.Text)
-			if line.Kind == unavailable {
-				d.unavailable = true
-				continue
-			}
-			hasNotice = hasNotice || line.Kind == Instrumental
-			d.Lines = append(d.Lines, line)
 		}
 	}
+	classifyInstrumentalNotes(all)
+	return newDisplay(all)
+}
+
+// newDisplay takes ownership of the classified lines.
+func newDisplay(lines []Line) Display {
+	var d Display
 	var seen map[string]int
-	rows := d.Lines[:0]
-	for _, line := range d.Lines {
-		line.Kind = contextualKind(line.Text, line.Kind, hasNotice)
+	rows := lines[:0]
+	for _, line := range lines {
+		if line.Kind == unavailable {
+			d.unavailable = true
+			continue
+		}
 		if line.Kind != Sung {
 			key := InstrumentalText
 			if line.Kind == Instrumental {
@@ -142,7 +145,7 @@ func newDisplay(lines, supplemental []Line, hasNotice bool) Display {
 		}
 		rows = append(rows, line)
 	}
-	clear(d.Lines[len(rows):])
+	clear(lines[len(rows):])
 	d.Lines = rows
 	less := func(i, j int) bool { return rows[i].At < rows[j].At }
 	if !sort.SliceIsSorted(rows, less) {

@@ -9,127 +9,181 @@ import (
 	"unicode"
 )
 
-func contextualKind(text string, kind LineKind, hasNotice bool) LineKind {
-	if kind == Sung && hasNotice && isInstrumentalNote(text) {
-		return Credit
+// Treat known release-note fragments as credits only if the song has an
+// explicit instrumental notice.
+func classifyInstrumentalNotes(sources ...[]Line) {
+	hasNotice := false
+	for _, lines := range sources {
+		if slices.ContainsFunc(lines, func(line Line) bool { return line.Kind == Instrumental }) {
+			hasNotice = true
+			break
+		}
 	}
-	return kind
+	if !hasNotice {
+		return
+	}
+	for _, lines := range sources {
+		for i := range lines {
+			if lines[i].Kind == Sung && isInstrumentalNote(lines[i].Text) {
+				lines[i].Kind = Credit
+			}
+		}
+	}
 }
 
 func buildDisplay(lrc, translation, yrc string, metadata []Line, includeMetadata bool) Display {
 	original := slices.DeleteFunc(parseLRC(lrc), func(line Line) bool { return line.Text == "" })
 	words := parseYRC(yrc)
 	translations := parseLRC(translation)
-	hasNotice := slices.ContainsFunc(metadata, func(line Line) bool { return lineKind(line.Text) == Instrumental })
 	for _, source := range [][]Line{original, words, translations} {
 		for i := range source {
 			source[i].Kind = lineKind(source[i].Text)
 		}
 	}
-	isNotice := func(line Line) bool { return line.Kind == Instrumental }
-	hasNotice = hasNotice || slices.ContainsFunc(original, isNotice) || slices.ContainsFunc(words, isNotice)
-	for _, source := range [][]Line{original, words} {
-		for i := range source {
-			source[i].Kind = contextualKind(source[i].Text, source[i].Kind, hasNotice)
-		}
-	}
+	classifyInstrumentalNotes(original, words, metadata)
 
-	merged := reconcileLines(original, words, translations)
+	lines := selectLyricSource(original, words, translations)
 	end := maxLyricTime
-	for i := len(merged) - 1; i >= 0; i-- {
-		line := &merged[i]
-		if i+1 < len(merged) && merged[i+1].At > line.At {
-			end = merged[i+1].At
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := &lines[i]
+		if i+1 < len(lines) && lines[i+1].At > line.At {
+			end = lines[i+1].At
 		}
 		if line.Kind == Sung && !line.Timed && len(line.Words) == 0 {
 			line.End = min(end, line.At+6*time.Second)
 			line.Words = SpreadWords(line.Text, line.At, line.End)
 		}
 	}
-	if !includeMetadata {
-		metadata = nil
+	if includeMetadata {
+		lines = append(lines, metadata...)
 	}
-	return withPlainNotice(newDisplay(merged, metadata, hasNotice), lrc, yrc)
+	return withPlainNotice(newDisplay(lines), lrc, yrc)
+}
+
+// Pick one singing timeline. Keep static credits and notices from either
+// source, and let display construction deduplicate them.
+func selectLyricSource(original, words, translations []Line) []Line {
+	sung := func(line Line) bool { return line.Kind == Sung }
+	useWords := slices.ContainsFunc(words, func(line Line) bool { return sung(line) && line.Timed }) ||
+		(!slices.ContainsFunc(original, sung) && slices.ContainsFunc(words, sung))
+	if !useWords {
+		attachTranslations(original, nil, translations)
+		return appendMetadata(original, words)
+	}
+	attachTranslations(words, original, translations)
+	return appendMetadata(words, original)
+}
+
+func appendMetadata(lines, other []Line) []Line {
+	count := len(lines)
+	for _, line := range other {
+		if line.Kind != Sung {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) != count {
+		slices.SortStableFunc(lines, func(a, b Line) int { return cmp.Compare(a.At, b.At) })
+	}
+	return lines
 }
 
 type translationCue struct {
-	line     *Line
-	wordTime time.Duration
+	line       *Line
+	sourceTime time.Duration
+	anchor     int // one-based translation index for an exact match
 }
 
-// Use the original LRC time for a merged row. Translation tracks commonly
-// share that clock even when YRC supplies the visible line and word times.
-func attachTranslations(original, words []Line, wordOriginal []int, translations []Line) {
+// The selected source fixes the on-screen rows. Exact LRC text may supply
+// an alternate clock for translations of YRC rows, without supplying text.
+func attachTranslations(lines, original, translations []Line) {
 	if len(translations) == 0 {
 		return
 	}
-	cues := make([]translationCue, 0, len(original)+len(words))
-	// The map is in source order. Walk both sources once to record each
-	// row's LRC clock and, when available, its alternate word clock.
-	nextWord := 0
-	for i := range original {
-		line := &original[i]
+	cues := make([]translationCue, 0, len(lines))
+	for i := range lines {
+		if lines[i].Kind == Sung {
+			cues = append(cues, translationCue{line: &lines[i], sourceTime: lines[i].At})
+		}
+	}
+	exact := make(map[time.Duration][]int)
+	for i, line := range translations {
+		if sungTranslation(line) {
+			exact[line.At] = append(exact[line.At], i)
+		}
+	}
+	used := make([]bool, len(translations))
+	matchExact := func(cue *translationCue, at time.Duration) {
+		if indices := exact[at]; cue.anchor == 0 && len(indices) > 0 {
+			j := indices[0]
+			exact[at] = indices[1:]
+			cue.line.Translation, cue.anchor, used[j] = translations[j].Text, j+1, true
+		}
+	}
+	pairs := matchTranslationClocks(cues, original)
+	for _, pair := range pairs {
+		cue := &cues[pair.left]
+		cue.sourceTime = original[pair.right].At
+		matchExact(cue, cue.sourceTime)
+	}
+	// The translation endpoint supplies LRC-time cues. Reserve the exact
+	// translations of omitted LRC rows before matching the YRC clock.
+	last := 0
+	for _, pair := range pairs {
+		reserveOmittedTranslations(original[last:pair.right], exact, used)
+		last = pair.right + 1
+	}
+	reserveOmittedTranslations(original[last:], exact, used)
+	for i := range cues {
+		matchExact(&cues[i], cues[i].line.At)
+	}
+	// Credits with unrecognized labels can have exact translations too.
+	attachCreditTranslations(lines, translations, used)
+	attachCreditTranslations(original, translations, used)
+	attachNearbyTranslations(cues, translations, used)
+}
+
+func reserveOmittedTranslations(lines []Line, exact map[time.Duration][]int, used []bool) {
+	for _, line := range lines {
 		if line.Kind != Sung {
 			continue
 		}
-		wordTime := line.At
-		for nextWord < len(wordOriginal) && wordOriginal[nextWord] == 0 {
-			nextWord++
-		}
-		if nextWord < len(wordOriginal) && wordOriginal[nextWord] == i+1 {
-			wordTime = words[nextWord].At
-			nextWord++
-		}
-		cues = append(cues, translationCue{line, wordTime})
-	}
-	for i := range words {
-		if words[i].Kind == Sung && (wordOriginal == nil || wordOriginal[i] == 0) {
-			cues = append(cues, translationCue{&words[i], words[i].At})
+		if indices := exact[line.At]; len(indices) > 0 {
+			used[indices[0]] = true
+			exact[line.At] = indices[1:]
 		}
 	}
-	if len(original) != 0 && len(words) != 0 {
-		slices.SortStableFunc(cues, func(a, b translationCue) int { return cmp.Compare(a.line.At, b.line.At) })
-	}
-
-	// Exact pairs divide the remaining cues into intervals so proximity
-	// cannot cross an exact pair. Equal timestamps keep source order.
-	used := make([]bool, len(translations))
-	nextCue, nextTranslation := 0, 0
-	for i, j := 0, 0; i < len(cues) && j < len(translations); {
-		tr := translations[j]
-		switch {
-		case tr.At < cues[i].line.At || !sungTranslation(tr):
-			j++
-		case tr.At > cues[i].line.At:
-			i++
-		default:
-			attachNearbyTranslations(cues[nextCue:i], translations[nextTranslation:j], used[nextTranslation:j])
-			cues[i].line.Translation, used[j] = tr.Text, true
-			i++
-			j++
-			nextCue, nextTranslation = i, j
-		}
-	}
-	attachNearbyTranslations(cues[nextCue:], translations[nextTranslation:], used[nextTranslation:])
-	attachCreditTranslations(original, translations, used)
-	attachCreditTranslations(words, translations, used)
 }
 
 func sungTranslation(line Line) bool { return line.Kind == Sung && line.Text != "" }
 
 func attachNearbyTranslations(cues []translationCue, translations []Line, used []bool) {
-	if len(cues) == 0 || len(translations) == 0 {
+	if !slices.ContainsFunc(cues, func(c translationCue) bool { return c.anchor == 0 }) {
 		return
 	}
+	// Each exact pair bounds approximate matches on either side. Exact
+	// clocks can disagree about ordering, leaving no safe gap between them.
+	upper := make([]int, len(cues))
+	limit := len(translations)
+	for i := len(cues) - 1; i >= 0; i-- {
+		upper[i] = limit
+		if cues[i].anchor != 0 {
+			limit = min(limit, cues[i].anchor-1)
+		}
+	}
 	const tolerance = 1500 * time.Millisecond
-	pairs := orderedLyricPairs(len(cues), len(translations), func(i int, add func(int, time.Duration)) {
-		primary, secondary := cues[i].line.At, cues[i].wordTime
+	lower := 0
+	pairs := orderedLyricPairs(len(cues), len(translations), func(i int, add func(int, time.Duration) bool) {
+		if cues[i].anchor != 0 {
+			lower = max(lower, cues[i].anchor)
+			return
+		}
+		primary, secondary := cues[i].line.At, cues[i].sourceTime
 		low, high := min(primary, secondary), max(primary, secondary)
 		visit := func(after, before time.Duration) {
-			start := sort.Search(len(translations), func(j int) bool { return translations[j].At > after })
-			for j := start; j < len(translations) && translations[j].At < before; j++ {
-				if tr := translations[j]; sungTranslation(tr) {
-					add(j, min(distance(tr.At, primary), distance(tr.At, secondary)))
+			start := max(lower, sort.Search(len(translations), func(j int) bool { return translations[j].At > after }))
+			for j := start; j < upper[i] && translations[j].At < before; j++ {
+				if tr := translations[j]; !used[j] && sungTranslation(tr) && !add(j, min(distance(tr.At, primary), distance(tr.At, secondary))) {
+					break
 				}
 			}
 		}
@@ -176,140 +230,47 @@ func lyricMatchKey(text string) string {
 	}, text)
 }
 
-func reconcileLines(original, words, translations []Line) []Line {
-	if len(words) == 0 {
-		attachTranslations(original, nil, nil, translations)
-		return original
+func matchTranslationClocks(cues []translationCue, original []Line) []lyricPair {
+	if len(cues) == 0 || len(original) == 0 {
+		return nil
 	}
-	if len(original) == 0 {
-		attachTranslations(nil, words, nil, translations)
-		return words
-	}
-	originalKeys, wordKeys := make([]string, len(original)), make([]string, len(words))
 	byText := make(map[string][]int)
 	for i, line := range original {
 		if line.Kind == Sung {
-			key := lyricMatchKey(line.Text)
-			originalKeys[i] = key
-			if key != "" {
+			if key := lyricMatchKey(line.Text); key != "" {
 				byText[key] = append(byText[key], i)
 			}
 		}
 	}
-	for i, line := range words {
-		if line.Kind == Sung {
-			wordKeys[i] = lyricMatchKey(line.Text)
+	const window = 5 * time.Second
+	// Equal timestamps and identical text carry no distinguishing timing
+	// information. Use source order for this dense case.
+	if len(byText) == 1 {
+		key := lyricMatchKey(cues[0].line.Text)
+		indices := byText[key]
+		if len(indices) != 0 &&
+			distance(cues[0].line.At, original[indices[0]].At) < window &&
+			original[indices[0]].At == original[indices[len(indices)-1]].At &&
+			slices.IndexFunc(cues, func(c translationCue) bool {
+				return c.line.At != cues[0].line.At || lyricMatchKey(c.line.Text) != key
+			}) < 0 {
+			pairs := make([]lyricPair, min(len(cues), len(indices)))
+			for i := range pairs {
+				pairs[i] = lyricPair{i, indices[i]}
+			}
+			return pairs
 		}
 	}
-
-	const window = 5 * time.Second
-	pairs := orderedLyricPairs(len(words), len(original), func(i int, add func(int, time.Duration)) {
-		at := words[i].At
-		indices := byText[wordKeys[i]]
+	return orderedLyricPairs(len(cues), len(original), func(i int, add func(int, time.Duration) bool) {
+		at := cues[i].line.At
+		indices := byText[lyricMatchKey(cues[i].line.Text)]
 		start := sort.Search(len(indices), func(j int) bool { return original[indices[j]].At > at-window })
 		for _, j := range indices[start:] {
-			if original[j].At >= at+window {
+			if original[j].At >= at+window || !add(j, distance(at, original[j].At)) {
 				break
 			}
-			add(j, distance(at, original[j].At))
 		}
 	})
-
-	matched := make([]bool, len(original))
-	wordOriginal := make([]int, len(words))
-	matchCount := 0
-	merge := func(i, j int) {
-		matched[j] = true
-		wordOriginal[i] = j + 1
-		matchCount++
-	}
-	wordStart, originalStart := 0, 0
-	for _, pair := range pairs {
-		mergeSimilarLyrics(words[wordStart:pair.left], original[originalStart:pair.right],
-			wordKeys[wordStart:pair.left], originalKeys[originalStart:pair.right],
-			func(i, j int) { merge(wordStart+i, originalStart+j) })
-		merge(pair.left, pair.right)
-		wordStart, originalStart = pair.left+1, pair.right+1
-	}
-	mergeSimilarLyrics(words[wordStart:], original[originalStart:], wordKeys[wordStart:], originalKeys[originalStart:],
-		func(i, j int) { merge(wordStart+i, originalStart+j) })
-
-	attachTranslations(original, words, wordOriginal, translations)
-	for i, source := range wordOriginal {
-		if source != 0 {
-			words[i].Translation = original[source-1].Translation
-		}
-	}
-	lines := slices.Grow(words, len(original)-matchCount)
-	for i, line := range original {
-		if !matched[i] {
-			lines = append(lines, line)
-		}
-	}
-	sort.SliceStable(lines, func(i, j int) bool { return lines[i].At < lines[j].At })
-	return lines
-}
-
-// Try small text differences only between exact matches. When either source
-// has multiple plausible partners, keep the original rows for that interval.
-func mergeSimilarLyrics(words, original []Line, wordKeys, originalKeys []string, merge func(int, int)) {
-	if len(words) == 0 || len(original) == 0 {
-		return
-	}
-	const window = 100 * time.Millisecond
-	originalUsed := make([]bool, len(original))
-	type pair struct{ word, original int }
-	var pairs []pair
-	for i, line := range words {
-		if wordKeys[i] == "" {
-			continue
-		}
-		match := -1
-		start := sort.Search(len(original), func(j int) bool { return original[j].At >= line.At-window })
-		for j := start; j < len(original) && original[j].At <= line.At+window; j++ {
-			if !similarLyricKeys(wordKeys[i], originalKeys[j]) {
-				continue
-			}
-			if match >= 0 || originalUsed[j] {
-				return
-			}
-			match = j
-		}
-		if match >= 0 {
-			if len(pairs) > 0 && pairs[len(pairs)-1].original >= match {
-				return
-			}
-			originalUsed[match] = true
-			pairs = append(pairs, pair{i, match})
-		}
-	}
-	for _, pair := range pairs {
-		merge(pair.word, pair.original)
-	}
-}
-
-// Short rows and one-character substitutions are easy to confuse with
-// overlapping vocals. Limit this fallback to a single inserted or omitted
-// character, or a single replacement in a longer line.
-func similarLyricKeys(a, b string) bool {
-	if a == b || b == "" {
-		return false
-	}
-	left, right := []rune(a), []rune(b)
-	if len(left) > len(right) {
-		left, right = right, left
-	}
-	if len(left) < 5 || len(right)-len(left) > 1 {
-		return false
-	}
-	i := 0
-	for i < len(left) && left[i] == right[i] {
-		i++
-	}
-	if len(left) != len(right) {
-		return slices.Equal(left[i:], right[i+1:])
-	}
-	return len(left) >= 10 && slices.Equal(left[i+1:], right[i+1:])
 }
 
 type lyricPair struct{ left, right int }
@@ -317,7 +278,7 @@ type lyricPair struct{ left, right int }
 // Choose the most one-to-one pairs in source order, then the smallest total
 // time difference. Each candidate extends the best path ending to its left
 // in a Fenwick tree. Deferring updates for one row prevents pairing it twice.
-func orderedLyricPairs(left, right int, candidates func(int, func(int, time.Duration))) []lyricPair {
+func orderedLyricPairs(left, right int, candidates func(int, func(int, time.Duration) bool)) []lyricPair {
 	type path struct {
 		lyricPair
 		previous, count int
@@ -336,7 +297,14 @@ func orderedLyricPairs(left, right int, candidates func(int, func(int, time.Dura
 		return a < b
 	}
 	var i int
-	add := func(j int, cost time.Duration) {
+	// Limit candidates per row to keep dense input linear in row count.
+	// Candidates arrive in source order so repeated rows keep their pairing.
+	const candidatesPerRow = 64
+	var rowStart int
+	add := func(j int, cost time.Duration) bool {
+		if len(paths)-rowStart == candidatesPerRow {
+			return false
+		}
 		previous := 0
 		for n := j; n > 0; n -= n & -n {
 			if better(tree[n], previous) {
@@ -345,12 +313,13 @@ func orderedLyricPairs(left, right int, candidates func(int, func(int, time.Dura
 		}
 		p := paths[previous]
 		paths = append(paths, path{lyricPair{i, j}, previous, p.count + 1, p.cost + cost})
+		return true
 	}
 	best := 0
 	for i = 0; i < left; i++ {
-		first := len(paths)
+		rowStart = len(paths)
 		candidates(i, add)
-		for k := first; k < len(paths); k++ {
+		for k := rowStart; k < len(paths); k++ {
 			for n := paths[k].right + 1; n <= right; n += n & -n {
 				if better(k, tree[n]) {
 					tree[n] = k

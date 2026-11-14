@@ -1,6 +1,7 @@
 package lyrics
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -25,16 +26,16 @@ func TestReconcileCachedTranslationTiming(t *testing.T) {
 	}
 }
 
-// A short LRC-only line in the cache stays visible alongside the adjacent word-timed lines.
-func TestReconcileCachedPartialYRC(t *testing.T) {
+// A partial YRC keeps its own timeline even when LRC has an extra line.
+func TestReconcileCachedPartialYRCUsesOnlyYRC(t *testing.T) {
 	// This excerpt preserves the source times, including the handoff between the two formats.
 	const lrc = "[00:24.406]短句啊\n[00:24.980]甲乙丙丁戊己庚辛壬\n[00:28.758]子丑寅卯辰巳午未申"
 	const yrc = "[25250,3930](25250,380,0)甲(25630,320,0)乙(25950,440,0)丙(26390,360,0)丁(26750,240,0)戊(26990,250,0)己(27240,260,0)庚(27500,390,0)辛(27890,1000,0)壬\n" +
 		"[29180,3060](29180,210,0)子(29390,200,0)丑(29590,170,0)寅(29760,310,0)卯(30070,60,0)辰(30130,200,0)巳(30330,380,0)午(30710,420,0)未(31130,830,0)申"
 	lines, display := BuildDisplay(lrc, "", yrc)
-	if len(lines) != 3 || lines[0].At != 24406*time.Millisecond || lines[0].End != 25250*time.Millisecond || lines[0].Timed ||
-		!lines[1].Timed || !lines[2].Timed {
-		t.Fatalf("LRC gap was not filled without moving the adjacent YRC: %+v", lines)
+	if len(lines) != 2 || lines[0].At != 25250*time.Millisecond || lines[1].At != 29180*time.Millisecond ||
+		!lines[0].Timed || !lines[1].Timed {
+		t.Fatalf("partial YRC imported an LRC row or changed its own timing: %+v", lines)
 	}
 	for _, tc := range []struct {
 		ms      time.Duration
@@ -42,11 +43,11 @@ func TestReconcileCachedPartialYRC(t *testing.T) {
 		next    int
 	}{
 		{24405, -1, 0},
-		{24406, 0, 1},
-		{25249, 0, 1},
-		{25250, 1, 2},
-		{29180, 2, -1},
-		{24406, 0, 1}, // seeking backward uses the same boundaries
+		{24406, -1, 0},
+		{25249, -1, 0},
+		{25250, 0, 1},
+		{29180, 1, -1},
+		{24406, -1, 0}, // seeking backward uses the same boundaries
 	} {
 		cur, next := display.Position(tc.ms * time.Millisecond)
 		if cur != tc.current || next != tc.next {
@@ -78,13 +79,17 @@ func TestReconcileMalformedTimestamps(t *testing.T) {
 	const yrc = "[86400001,800](86400001,800,0)past limit\n[86400000,1](86400000,1,0)end past limit\n" +
 		"[15000,500](15000,250,0)kept (86400001,250,0)as text"
 	lines, _ := BuildDisplay(lrc, "", yrc)
-	if len(lines) != 2 || lines[0].At != 10*time.Second+123456789*time.Nanosecond ||
-		lines[0].Text != "See [00:20.00] here" || lines[1].At != 15*time.Second || lines[1].End != 15500*time.Millisecond ||
-		lines[1].Timed || lines[1].Text != "kept as text" {
-		t.Fatalf("invalid time leaked into the timeline: %+v", lines)
+	if len(lines) != 1 || lines[0].At != 10*time.Second+123456789*time.Nanosecond ||
+		lines[0].Text != "See [00:20.00] here" || lines[0].Timed {
+		t.Fatalf("invalid YRC prevented the LRC fallback: %+v", lines)
 	}
-	for _, word := range lines[1].Words {
-		if word.Start < lines[1].At || word.End > lines[1].End {
+	lines, _ = BuildDisplay("", "", yrc)
+	if len(lines) != 1 || lines[0].At != 15*time.Second || lines[0].End != 15500*time.Millisecond ||
+		lines[0].Timed || lines[0].Text != "kept as text" {
+		t.Fatalf("invalid word timing discarded usable YRC text: %+v", lines)
+	}
+	for _, word := range lines[0].Words {
+		if word.Start < lines[0].At || word.End > lines[0].End {
 			t.Fatalf("fallback word outside the line: %+v", word)
 		}
 	}
@@ -125,8 +130,8 @@ func TestReconcileExactTranslationForYRCOnlyRow(t *testing.T) {
 	const yrc = "[10600,400](10600,400,0)YRC only\n[14020,400](14020,400,0)Same"
 	const translation = "[00:10.60]Only this line\n[00:14]Both sources"
 	lines, _ := BuildDisplay(lrc, translation, yrc)
-	if len(lines) != 3 || lines[0].Translation != "" || lines[1].Translation != "Only this line" ||
-		lines[2].Translation != "Both sources" || !lines[1].Timed || !lines[2].Timed {
+	if len(lines) != 2 || lines[0].Translation != "Only this line" ||
+		lines[1].Translation != "Both sources" || !lines[0].Timed || !lines[1].Timed {
 		t.Fatalf("nearby LRC row took an exact YRC translation: %+v", lines)
 	}
 }
@@ -147,26 +152,34 @@ func TestReconcileRepeatedLinesInOrder(t *testing.T) {
 	}
 }
 
-// A near-simultaneous text variant merges into the word-timed row while distinct source rows survive.
-func TestReconcileMinorTextVariant(t *testing.T) {
-	const lrc = "[00:08]Another voice\n[00:10]不要忘记我\n[00:12]下雨"
-	const translation = "[00:10]Remember me"
-	const yrc = "[8000,400](8000,400,0)独唱\n[10050,1500](10050,1500,0)请不要忘记我\n[12050,1500](12050,1500,0)下雨"
-	lines, _ := BuildDisplay(lrc, translation, yrc)
-	if len(lines) != 4 || lines[0].Text != "独唱" || lines[1].Text != "Another voice" ||
-		lines[2].Text != "请不要忘记我" || lines[2].At != 10050*time.Millisecond ||
-		!lines[2].Timed || lines[2].Translation != "Remember me" {
-		t.Fatalf("variant was duplicated or a distinct voice was lost: %+v", lines)
+// Two similar lines from the chosen source must both survive, and LRC-only text must stay out.
+func TestReconcileYRCTextDoesNotMixOrDeduplicateSources(t *testing.T) {
+	const lrc = "[00:08]LRC only\n[00:10]不要忘记我"
+	const yrc = "[10050,500](10050,500,0)不要忘记我\n[10100,500](10100,500,0)请不要忘记我"
+	lines, _ := BuildDisplay(lrc, "[00:10]Remember me", yrc)
+	if len(lines) != 2 || lines[0].Text != "不要忘记我" || lines[0].Translation != "Remember me" ||
+		lines[1].Text != "请不要忘记我" || lines[1].Translation != "" {
+		t.Fatalf("selected lyrics were mixed or deduplicated: %+v", lines)
 	}
 }
 
-// A spelling variant must remain separate when there are multiple plausible source rows.
-func TestReconcileAmbiguousTextVariant(t *testing.T) {
-	const lrc = "[00:10]不要忘记我\n[00:10.09]请不要忘记"
-	const yrc = "[10050,1500](10050,1500,0)请不要忘记我"
-	lines, _ := BuildDisplay(lrc, "", yrc)
-	if len(lines) != 3 || lines[0].Text != "不要忘记我" || lines[1].Text != "请不要忘记我" || lines[2].Text != "请不要忘记" {
-		t.Fatalf("ambiguous source row was removed: %+v", lines)
+// A translation for a missing YRC line must not move to a nearby different line.
+func TestReconcileDoesNotShiftOmittedTranslation(t *testing.T) {
+	const lrc = "[00:10]Omitted\n[00:11]Kept"
+	for _, yrc := range []string{"[11000,500](11000,500,0)Kept", "[10000,500](10000,500,0)Kept"} {
+		lines, _ := BuildDisplay(lrc, "[00:10]Omitted translation", yrc)
+		if len(lines) != 1 || lines[0].Text != "Kept" || lines[0].Translation != "" {
+			t.Fatalf("an omitted line's translation shifted to the selected source: %+v", lines)
+		}
+	}
+}
+
+// An unrecognized credit translation with an exact cue cannot drift to nearby singing.
+func TestReconcileReservesCreditTranslationBeforeProximity(t *testing.T) {
+	lines, display := BuildDisplay("[00:10]作曲：甲\n[00:11]Sung line", "[00:10]Composed by A", "")
+	if len(lines) != 1 || lines[0].Translation != "" || len(display.Lines) != 2 ||
+		display.Lines[0].Translation != "Composed by A" {
+		t.Fatalf("credit translation shifted to singing: %+v", display.Lines)
 	}
 }
 
@@ -207,5 +220,85 @@ func TestReconcileTranslationOnYRCClock(t *testing.T) {
 	lines, _ := BuildDisplay(lrc, "[00:12]第一句\n[00:18]第二句", yrc)
 	if len(lines) != 2 || lines[0].Translation != "第一句" || lines[1].Translation != "第二句" {
 		t.Fatalf("translation on the YRC clock was lost: %+v", lines)
+	}
+}
+
+// An exact YRC translation survives even when LRC puts the same line before a YRC-only row.
+func TestReconcileExactTranslationsWithCrossedSourceClocks(t *testing.T) {
+	const lrc = "[00:10]First"
+	const yrc = "[11000,500](11000,500,0)Second\n[12000,500](12000,500,0)First"
+	lines, _ := BuildDisplay(lrc, "[00:11]第二句\n[00:12]第一句", yrc)
+	if len(lines) != 2 || lines[0].Text != "Second" || lines[0].Translation != "第二句" ||
+		lines[1].Text != "First" || lines[1].Translation != "第一句" {
+		t.Fatalf("exact translation was lost or moved across source clocks: %+v", lines)
+	}
+}
+
+// A large equal-time repeat group keeps source order without dropping any translation.
+func TestReconcileDenseRepetitionsKeepTranslations(t *testing.T) {
+	const count = 128
+	lrc := strings.Repeat("[00:10]Repeated\n", count)
+	yrc := strings.Repeat("[10400,500](10400,500,0)Repeated\n", count)
+	translation := strings.Repeat("[00:10]Verse\n", count-1) + "[00:10]Last verse"
+	lines, _ := BuildDisplay(lrc, translation, yrc)
+	if len(lines) != count || lines[count-1].Translation != "Last verse" {
+		t.Fatalf("repeat group lost its last translation: %d lines", len(lines))
+	}
+	for i, line := range lines[:count-1] {
+		if !line.Timed || line.Translation != "Verse" {
+			t.Fatalf("row %d lost word timing or translation: %+v", i, line)
+		}
+	}
+}
+
+// Compare the sparse matcher with all possible ordered pairings on small grids.
+func TestOrderedLyricPairsMaximizesCountThenMinimizesDistance(t *testing.T) {
+	const size = 3
+	for mask := range 1 << (size * size) {
+		for phase := range 3 {
+			cost := func(i, j int) time.Duration {
+				return time.Duration((i*5+j*3+phase)%7) * time.Millisecond
+			}
+			allowed := func(i, j int) bool { return mask&(1<<(i*size+j)) != 0 }
+			pairs := orderedLyricPairs(size, size, func(i int, add func(int, time.Duration) bool) {
+				for j := range size {
+					if allowed(i, j) {
+						add(j, cost(i, j))
+					}
+				}
+			})
+
+			var wantCount int
+			var wantCost time.Duration
+			var visit func(i, j, count int, total time.Duration)
+			visit = func(i, j, count int, total time.Duration) {
+				if count > wantCount || count == wantCount && total < wantCost {
+					wantCount, wantCost = count, total
+				}
+				for left := i; left < size; left++ {
+					for right := j; right < size; right++ {
+						if allowed(left, right) {
+							visit(left+1, right+1, count+1, total+cost(left, right))
+						}
+					}
+				}
+			}
+			visit(0, 0, 0, 0)
+
+			previous := lyricPair{-1, -1}
+			var total time.Duration
+			for _, pair := range pairs {
+				if pair.left <= previous.left || pair.left >= size ||
+					pair.right <= previous.right || pair.right >= size || !allowed(pair.left, pair.right) {
+					t.Fatalf("mask %09b phase %d: invalid order or pairing %+v", mask, phase, pairs)
+				}
+				total += cost(pair.left, pair.right)
+				previous = pair
+			}
+			if len(pairs) != wantCount || total != wantCost {
+				t.Fatalf("mask %09b phase %d: got %d pairs for %v, want %d for %v",
+					mask, phase, len(pairs), total, wantCount, wantCost)
+			}
+		}
 	}
 }

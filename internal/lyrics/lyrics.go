@@ -172,7 +172,7 @@ func parseYRC(yrc string) []Line {
 	return out
 }
 
-// Build returns the reconciled lyrics. Supplemental JSON credits can inform
+// Build returns lyrics from the selected source. Supplemental JSON credits can inform
 // classification but are only included as rows by BuildDisplay.
 func Build(lrc, translation, yrc string) []Line {
 	return buildDisplay(lrc, translation, yrc, yrcCredits(yrc), false).Lines
