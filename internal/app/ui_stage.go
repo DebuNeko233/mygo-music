@@ -154,7 +154,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		}
 	}
 
-	lang := lyrics.Lang(lines)
+	lang := pl.LyricLanguage()
 	box.Children(func() {
 		defer a.stageQuiet(c, dim, f, w)
 		quietUnder(ui.Box(c.Key("sung")).Lang(lang).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {

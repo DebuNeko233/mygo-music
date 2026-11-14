@@ -148,6 +148,8 @@ type app struct {
 	npPane                         int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
 	lyricScroll                    ui.ScrollState
 	lyricGlide                     lyricGlide
+	paintedLyric                   paintedLyric
+	timedList                      timedListLayout
 	lyricAt                        int
 	lyricTrack                     int64
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines

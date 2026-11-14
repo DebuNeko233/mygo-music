@@ -506,7 +506,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 	family := lyricFamily(s.LyricFont)
 	transFamily := lyricFamily(s.LyricTransFont)
 	shown, start := lyricWindowLines(lines, cur, s.LyricLines)
-	lang := lyrics.Lang(lines)
+	lang := pl.LyricLanguage()
 
 	if over && !s.LyricLocked {
 		c.Root().Background(ui.RGBA(0, 0, 0, 0.2))

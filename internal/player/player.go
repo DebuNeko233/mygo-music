@@ -139,6 +139,7 @@ type Player struct {
 
 	lyrics                            []lyrics.Line
 	lyricsLoaded                      bool
+	lyricLanguage                     string
 	lyricRevision                     uint64
 	lyricBusy, coverBusy, coverLoaded bool
 	lyricFailure, coverFailure        error
@@ -492,6 +493,9 @@ func (p *Player) Repeat() RepeatMode { return p.repeat }
 
 // Lyrics returns the current track's lyrics, and whether they have loaded.
 func (p *Player) Lyrics() ([]lyrics.Line, bool) { return p.lyrics, p.lyricsLoaded }
+
+// LyricLanguage is computed when the current lyrics change.
+func (p *Player) LyricLanguage() string { return p.lyricLanguage }
 
 // Downloaded returns the share of the current track downloaded so far, or
 // false before it has started to.
@@ -913,7 +917,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.retrying = false
 	p.lyricsErr = ""
 	p.awaiting = false
-	p.lyrics, p.lyricsLoaded = nil, false
+	p.lyrics, p.lyricsLoaded, p.lyricLanguage = nil, false, ""
 	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
 	p.lyricFailure, p.coverFailure = nil, nil
 	p.pending = from

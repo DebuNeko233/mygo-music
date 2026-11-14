@@ -1,6 +1,8 @@
 package app
 
 import (
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +32,8 @@ func quietApp(pos time.Duration) (*app, netease.Track, []lyrics.Line) {
 		{ID: 2, Content: "从前从前，有个人爱你很久", LikedCount: 31000},
 	}
 	hot[0].User.Nickname, hot[1].User.Nickname = "听众甲", "听众乙"
-	a.comments = commentState{track: tr.ID, loaded: true, hot: hot}
+	a.comments = commentState{track: tr.ID, loaded: true}
+	a.comments.setHot(hot)
 	return a, tr, lines
 }
 
@@ -70,9 +73,54 @@ func TestQuietComment(t *testing.T) {
 	}
 	a.settings.HotComments = true
 	// No hot comments, nothing shows.
-	a.comments.hot = nil
+	a.comments.setHot(nil)
 	if cm, _ := a.quietComment(&tr, lines, true, 5*s); cm != nil {
 		t.Errorf("showed %q without hot comments", cm.Content)
+	}
+}
+
+// Refreshing the same number of lyric lines can change where an intro ends.
+func TestQuietCommentAfterLyricsRefresh(t *testing.T) {
+	a, tr, lines := quietApp(0)
+	pos := 5 * time.Second
+	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil {
+		t.Fatal("expected a comment during the original intro")
+	}
+	refreshed := slices.Clone(lines)
+	refreshed[1].At, refreshed[1].End = 3*time.Second, 9*time.Second
+	a.pl.SetLyrics(refreshed)
+	if cm, _ := a.quietComment(&tr, refreshed, true, pos); cm != nil {
+		t.Fatal("the comment persisted into the new singing interval")
+	}
+}
+
+// Confirming that a song has no lyrics makes its hot comments eligible.
+func TestQuietCommentAfterEmptyLyricsLoad(t *testing.T) {
+	a, tr, _ := quietApp(0)
+	pos := 5 * time.Second
+	if cm, _ := a.quietComment(&tr, nil, false, pos); cm != nil {
+		t.Fatal("showed a comment before the lyrics finished loading")
+	}
+	if cm, _ := a.quietComment(&tr, nil, true, pos); cm == nil {
+		t.Fatal("no comment after confirming that the song has no lyrics")
+	}
+}
+
+// Replacing the hot list drops old entries while card likes follow the original comment.
+func TestQuietCommentAfterHotListReplacement(t *testing.T) {
+	a, tr, lines := quietApp(0)
+	pos := 5 * time.Second
+	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil || cm.ID != 1 {
+		t.Fatal("expected the original hot comment")
+	}
+	a.comments.setHot([]netease.Comment{
+		{ID: 3},
+		{ID: 4, Content: strings.Repeat("好", quietRunes+1)},
+		{ID: 5, Content: strings.Repeat("好", quietRunes)},
+	})
+	a.comments.hot[2].LikedCount++
+	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil || cm.ID != 5 || cm.LikedCount != 1 {
+		t.Fatalf("wrong replacement hot comment: %+v", cm)
 	}
 }
 

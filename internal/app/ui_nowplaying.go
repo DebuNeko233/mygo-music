@@ -480,17 +480,15 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		a.lyricTrack, a.lyricAt = tr.ID, -2
 		a.lyricScroll, a.lyricGlide = ui.ScrollState{}, lyricGlide{}
 	}
-	scrollY := a.lyricScroll.Y // offset matching the previous frame
-	lag := a.lyricGlide.step(c, &a.lyricScroll)
 
-	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, 0, 0)
+	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, timedPaneInsetRight, 0, 0)
 	dim, quiet := a.quietShown(c, scroll, tr, lines, loaded)
 	if dim > 0.98 {
 		// Under the hot comment, gone, not drawn faint.
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, pos, cur, lag, scrollY, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true}, nil)
+	a.timedLines(c, scroll, lines, cur, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage()}, nil)
 }
 
 // Both lyric layouts share the same recovery action and settled error state.
@@ -511,16 +509,15 @@ type linesStyle struct {
 	weight      int
 	lineHeight  float32
 	quiet       bool
+	lang        string
 	centerShort bool // center a whole lyric block that fits; captions keep their growing list
 }
 
 // timedLines lights cur at pos, centering short lyrics when requested.
 // Overflowing lines follow playback at the upper third when cur or the
 // viewport changes; cur -1 precedes the first line. Clicking a line seeks
-// to it. The lines are held back by lag, how far the glide to the line
-// lit has still to go (lyricGlide). foot, if set, follows the lines.
-func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, pos time.Duration, cur int, lag, scrollY float32, st linesStyle, foot func()) {
-	pl := a.pl
+// to it. foot, if set, follows the lines.
+func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, cur int, st linesStyle, foot func()) {
 	// Bounds below belong to the last layout. A width-only window resize
 	// may leave the cover and pane top unchanged: schedule a pass after the
 	// new text wrapping is laid out, even if this pass sees the old viewport.
@@ -529,84 +526,46 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		a.lyricWindowW, a.lyricWindowH = w, h
 		c.AnimationFrame()
 	}
+	if len(lines) >= timedListThreshold {
+		a.longTimedLines(c, scroll, lines, cur, st, foot)
+		return
+	}
 	var active, content, body ui.Element
-	lang := lyrics.Lang(lines)
 	draw := func() {
 		key := c
 		if st.centerShort {
 			// New lyrics need a fresh measurement, even at the same line index.
 			key = c.Key(&lines[0])
 		}
-		content = ui.Column(key).Gap(6).Shrink(0).Translate(0, -lag)
+		content = ui.Column(key).Gap(6).Shrink(0)
 		content.Children(func() {
-			for i, l := range lines {
-				line := ui.ButtonBase(c.Key(i)).Column().AlignItems(ui.Start).Padding(10, 12).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
+			for i := range lines {
 				on := i == cur
-				alpha := float32(0.28)
-				if on {
-					alpha = 1
-				} else if line.Hovered() {
-					alpha = 0.55
-				}
-				if st.quiet {
-					// Nearly gone under a hot comment.
-					alpha *= quietFaded
-				}
-				if line.Hovered() {
-					line.Background(white.Alpha(0.06))
-				}
-				scale := float32(0.94)
-				if on {
-					scale = 1
-				}
-				line.TransformOrigin(0, 0.5).AnimatePose(ui.Pose{Scale: scale}, ui.Animation{Spring: ui.SpringOptions{Duration: 600 * time.Millisecond, Bounce: 0.1}})
-				line.Children(func() {
-					// The line fades as a pose, in frames that only paint, rather
-					// than building the view at the display's rate as it does.
-					text := ui.Column(c).AlignItems(ui.Start).Gap(6)
-					text.AnimatePose(ui.Pose{Fade: 1 - alpha}, ui.Animation{Duration: 380 * time.Millisecond})
-					text.Children(func() {
-						if on && len(l.Words) > 0 {
-							// The line sung lights up word by word as it is sung.
-							ui.RichText(c.Key("words")).Lang(lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).Children(func() {
-								for wi, wd := range l.Words {
-									lit := clamp01(float32((pos - wd.Start).Seconds() / max(0.05, (wd.End-wd.Start).Seconds())))
-									ui.Text(c.Key(wi), wd.Text).TextColor(white.Alpha(0.38 + 0.62*lit))
-								}
-							})
-							if pl.Playing() {
-								// Words brighten smoothly enough at 25 frames a second.
-								c.After(40 * time.Millisecond)
-							}
-						} else {
-							ui.Text(c, l.Text).Lang(lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
-						}
-						if l.Translation != "" {
-							ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
-						}
-					})
-				})
-				if line.Clicked() {
-					pl.Seek(l.At)
-				}
+				line := a.timedLine(c.Key(i), &lines[i], on, timedLineWidth(scroll.LayoutBounds().W), st)
 				if on {
 					active = line
 				}
 			}
 		})
-		if foot != nil {
-			foot()
-		}
 	}
+	var moving ui.Element
 	scroll.Children(func() {
 		if st.centerShort {
 			body = ui.Column(c).MinHeight(scroll.LayoutBounds().H).Justify(ui.Center)
 			body.Children(draw)
+			moving = content
 		} else {
-			draw()
+			// The recognition status follows the transcript when it moves.
+			moving = ui.Column(c).Shrink(0).Children(func() {
+				draw()
+				if foot != nil {
+					foot()
+				}
+			})
 		}
 	})
 	box := scroll.LayoutBounds()
+	waitForLayout := false
 	if st.centerShort {
 		// Layout includes wrapping, translations and per-word text. Measure
 		// only the lines, so long lyrics' trailing scroll space cannot make
@@ -620,18 +579,18 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			a.lyricAt = cur
 			a.lyricViewportW, a.lyricViewportH = box.W, box.H
 			a.lyricScroll.Y, a.lyricGlide = 0, lyricGlide{}
-			content.Translate(0, 0)
 			return
 		}
 		// Only overflowing lyrics need room to bring the last line up.
 		body.Padding(0, 0, h*0.5, 0)
-		if math.Abs(float64(body.LayoutBounds().H-textH-h*0.5)) > 1 {
-			// Bounds are from the previous layout. Follow after the new
-			// padding or wrapping has settled, using matching geometry.
-			a.lyricAt = -2
-			c.AnimationFrame()
-			return
-		}
+		waitForLayout = math.Abs(float64(body.LayoutBounds().H-textH-h*0.5)) > 1
+	}
+	a.lyricGlide.place(c, &a.lyricScroll, scroll, moving)
+	if waitForLayout {
+		// Wait for the new padding or wrapping before following the line.
+		a.lyricAt = -2
+		c.AnimationFrame()
+		return
 	}
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
@@ -641,10 +600,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		if active.Valid() {
 			// Where the glide is going, without where it still is.
 			if lb := active.LayoutBounds(); lb.H > 0 && box.H > 0 {
-				// Both boxes are from the previous layout. step may already
-				// have applied a pending target to lyricScroll this build;
-				// adding that new offset would count the scroll twice.
-				target = lb.Y - box.Y + scrollY - box.H*0.3
+				// The line and its column share the same layout offset,
+				// even when the listener scrolls during this frame.
+				target = lb.Y - content.LayoutBounds().Y - box.H*0.3
 			} else {
 				c.AnimationFrame()
 				return // not laid out yet: the next frame scrolls
@@ -652,80 +610,68 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		}
 		a.lyricAt = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
-		a.lyricGlide.to(c, &a.lyricScroll, min(max(0, target), a.lyricScroll.MaxY))
+		a.lyricGlide.to(c, a.lyricScroll.Y, min(max(0, target), a.lyricScroll.MaxY))
 	}
 }
 
-// lyricGlide scrolls the lyrics to the line sung, as a critically damped
-// spring, as ScrollTo's would. ScrollTo moves the offset in every frame,
-// and MyGo builds the view again in the frame after each that moved it,
-// and its spring creeps over the last pixel for half a second: with a line
-// following another every second or two, most of a song. So the offset
-// goes to the line at once, in one frame, and the lines are held back by
-// what the glide has still to go, its lag, which settles to nothing within
-// half a pixel.
+// lyricGlide puts the scroll layout at its destination in one build. A
+// matching translation cancels that jump, and AnimatePose slides the whole
+// column there in frames that reuse the existing layout and text.
 type lyricGlide struct {
-	on bool
-	// The lag t after start: (a + b·t)·e^(−ωt), in DIPs.
-	a, b  float64
-	start time.Time
-	// The offset it goes to, set in the next frame (pending), with the lag
-	// that holds the lines back from it: the layout of the frame that
-	// chose it takes the offset too, the lines built without the lag.
-	target  float32
-	pending bool
-	set     float32 // the offset it set
+	offset, target float32
+	posed, pending bool
+	settleAt       time.Time
 }
 
-// lyricOmega is the spring's ω: a line or two away, it comes within half a
-// pixel in about 800 ms.
-const lyricOmega = 10
+// Keep the same critically damped spring, at half-pixel precision.
+var lyricScrollMotion = ui.Animation{Spring: ui.SpringOptions{Stiffness: 100, Damping: 20, Precision: 0.5}}
 
-// at returns the lag at now, and how fast it changes, in DIPs a second.
-func (g *lyricGlide) at(now time.Time) (lag, v float64) {
-	if !g.on {
-		return 0, 0
+func (g *lyricGlide) to(c *ui.Context, offset, target float32) {
+	if offset == target {
+		return
 	}
-	t := now.Sub(g.start).Seconds()
-	e := math.Exp(-lyricOmega * t)
-	return (g.a + g.b*t) * e, (g.b - lyricOmega*(g.a+g.b*t)) * e
-}
-
-// to scrolls s to target from the next frame, gliding from where it
-// shows, at the speed it went if it was on its way.
-func (g *lyricGlide) to(c *ui.Context, s *ui.ScrollState, target float32) {
-	now := c.Now()
-	lag, v := g.at(now)
-	shown := float64(s.Y) + lag
 	g.target, g.pending = target, true
-	g.on = !c.Preferences().ReduceMotion
-	g.start, g.a = now, shown-float64(target)
-	g.b = v + lyricOmega*g.a
 	c.AnimationFrame()
 }
 
-// step returns the lag of the lines in this frame, and asks for the next
-// while there is one. The listener scrolling stops the glide where it
-// shows.
-func (g *lyricGlide) step(c *ui.Context, s *ui.ScrollState) float32 {
+func (g *lyricGlide) place(c *ui.Context, s *ui.ScrollState, scroll, content ui.Element) {
+	if g.posed && s.Y != g.offset {
+		// A wheel, trackpad or scrollbar moved the layout offset. Take over
+		// at the currently painted position, including that input's delta.
+		if box := content.LayoutBounds(); box.H > 0 && content.Transitioning() {
+			s.Y = min(max(0, s.Y+lyricPoseLag(scroll, content)), s.MaxY)
+		}
+		*g = lyricGlide{}
+		return
+	}
 	if g.pending {
-		s.Y, g.set, g.pending = g.target, g.target, false
+		s.Y, g.pending = min(g.target, s.MaxY), false
+		if g.posed && !c.Preferences().ReduceMotion && !c.Instant() {
+			g.settleAt = c.Now().Add(time.Second)
+		}
 	}
-	if !g.on {
-		return 0
+	if !g.settleAt.IsZero() && !c.Now().Before(g.settleAt) && content.Transitioning() {
+		// A large seek can take longer to settle than a single line.
+		g.settleAt = c.Now().Add(200 * time.Millisecond)
 	}
-	lag, v := g.at(c.Now())
-	if s.Y != g.set {
-		// The listener took over: the offset takes what showed.
-		s.Y, g.on = max(0, min(s.Y+float32(lag), s.MaxY)), false
-		return 0
+	if left := g.settleAt.Sub(c.Now()); left > 0 {
+		// Paint-only frames move the lines, but a build commits the final
+		// clipping and visibility for accessibility after they arrive.
+		c.After(left)
+	} else {
+		g.settleAt = time.Time{}
 	}
-	if math.Abs(lag) < 0.5 && math.Abs(v) < 20 {
-		g.on = false
-		return 0
+	g.offset, g.posed = s.Y, true
+	content.Translate(0, s.Y).AnimatePose(ui.Pose{Y: -s.Y}, lyricScrollMotion)
+}
+
+// lyricPoseLag is the visual offset left between the scroll layout and its painted content.
+func lyricPoseLag(scroll, content ui.Element) float32 {
+	x, y := content.LocalToWindow(0, 0)
+	if _, shown, ok := scroll.WindowToLocal(x, y); ok {
+		return content.LayoutBounds().Y - scroll.LayoutBounds().Y - shown
 	}
-	c.AnimationFrame()
-	return float32(lag)
+	return 0
 }
 
 // queuePane lists the whole queue in play order, the track playing marked

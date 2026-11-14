@@ -73,3 +73,17 @@ func TestMetadataPermanentFailureStopsRecovery(t *testing.T) {
 		t.Fatal("explicit lyric refresh did not recover")
 	}
 }
+
+// Replacement lyrics recompute the language even if the track and number of lines stay the same.
+func TestLyricLanguageAfterRefresh(t *testing.T) {
+	p := New(func(func()) {})
+	p.track = &netease.Track{ID: 1}
+	p.RefreshLyrics(1, "[00:01]次のことば", "", "")
+	if p.LyricLanguage() != "ja" {
+		t.Fatal("Japanese lyrics did not select their font language")
+	}
+	p.RefreshLyrics(1, "[00:01]New lyric", "", "")
+	if p.LyricLanguage() != "" {
+		t.Fatal("metadata replacement retained the previous language")
+	}
+}
