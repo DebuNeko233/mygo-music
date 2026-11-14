@@ -2,9 +2,6 @@ package app
 
 import (
 	"fmt"
-	"image/png"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -203,7 +200,7 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 	}
 }
 
-// Immersive lyrics light LRC as a whole line and reserve the sweep for real word timestamps.
+// Immersive lyrics light LRC as a whole line and reserve progressive highlights for real word timestamps.
 func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
 	a := newTestApp()
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 10000}})
@@ -221,51 +218,7 @@ func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
 	}
 	line.Timed = true
 	tt.Frame()
-	if a.paintedLyric.line != &line || len(a.paintedLyric.sweep) != len(line.Words) {
-		t.Fatal("word-timed lyrics should use the sweep")
-	}
-}
-
-// A wrapped word keeps a sweep on both visual lines after reflow.
-func TestLyricSweepReflows(t *testing.T) {
-	text := strings.Repeat("m", 8)
-	line := lyrics.Line{Text: text, Words: []lyrics.Word{{Text: text, Start: time.Second, End: 3 * time.Second}}}
-	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 8000}})
-	a.pl.Seek(1700 * time.Millisecond)
-	tt := ui.NewTester(func(c *ui.Context) {
-		c.Root().Background(ui.Hex("#22384b"))
-		w, _ := c.Size()
-		a.paintLyricWords(c, &line, w, linesStyle{size: 30, weight: 800, lineHeight: 1.25, immersive: true})
-	}, 400, 150)
-	initial := a.paintedLyric.layout.Lines()
-	if len(initial) != 1 || len(a.paintedLyric.sweep[0].parts) != 1 {
-		t.Fatal("expected a sweep on the original line")
-	}
-	tt.SetSize(int(initial[0].Rect.W*0.6), 150)
-	if got := a.paintedLyric.sweep[0].parts; len(got) != 2 || got[0].rect.Y >= got[1].rect.Y {
-		t.Fatalf("sweep did not follow visual line order after wrapping: %+v", got)
-	}
-	if dir := os.Getenv("NM_FRAMES"); dir != "" {
-		f, err := os.Create(filepath.Join(dir, "lyric-word-sweep.png"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
-		if err := png.Encode(f, tt.Image()); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-// Color glyphs fall back to opacity so an emoji at the end cannot bypass the sweep.
-func TestLyricSweepColorGlyphFallback(t *testing.T) {
-	for _, text := range []string{"word🎵", "1️⃣", "🇨🇳"} {
-		if !lyricMayHaveColorGlyph(text) {
-			t.Errorf("%q should keep the opacity highlight", text)
-		}
-	}
-	if lyricMayHaveColorGlyph("一行 lyrics") {
-		t.Fatal("ordinary lyric text lost the sweep")
+	if a.paintedLyric.line != &line || len(a.paintedLyric.clips) != len(line.Words) {
+		t.Fatal("word-timed lyrics should paint individual words")
 	}
 }

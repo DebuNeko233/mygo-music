@@ -114,8 +114,6 @@ type paintedLyric struct {
 	direction ui.Direction
 	layout    *ui.TextLayout
 	clips     [][]ui.Rect
-	sweep     []lyricSweep
-	immersive bool
 	height    float32
 }
 
@@ -146,17 +144,10 @@ func (a *app) paintLyricWords(c *ui.Context, line *lyrics.Line, width float32, s
 	font := lyricFont(c, st)
 	direction := c.Direction()
 	cache := &a.paintedLyric
-	sweep := st.immersive && !c.Preferences().ReduceMotion
-	if cache.line != line || cache.width != width || cache.font != font || cache.direction != direction || cache.immersive != sweep {
+	if cache.line != line || cache.width != width || cache.font != font || cache.direction != direction {
 		layout := shapeLyric(lyricWordsText(line.Words), font, width, direction)
 		_, height := layout.Size()
 		clips := make([][]ui.Rect, len(line.Words))
-		var sweeps []lyricSweep
-		var visualLines []ui.TextLine
-		if sweep {
-			sweeps = make([]lyricSweep, len(line.Words))
-			visualLines = layout.Lines()
-		}
 		offset := 0
 		for i, word := range line.Words {
 			end := offset
@@ -165,17 +156,14 @@ func (a *app) paintLyricWords(c *ui.Context, line *lyrics.Line, width float32, s
 			}
 			if end > offset {
 				clips[i] = layout.SelectionRects(ui.TextInputRange{Start: offset, End: end})
-				if sweep && !lyricMayHaveColorGlyph(word.Text) {
-					sweeps[i] = shapeLyricSweep(layout, visualLines, clips[i], offset, end)
-				}
 			}
 			offset = end
 		}
-		*cache = paintedLyric{line: line, width: width, font: font, direction: direction, layout: layout, clips: clips, height: height, sweep: sweeps, immersive: sweep}
+		*cache = paintedLyric{line: line, width: width, font: font, direction: direction, layout: layout, clips: clips, height: height}
 	}
-	layout, clips, sweeps := cache.layout, cache.clips, cache.sweep
+	layout, clips := cache.layout, cache.clips
 	ui.Box(c).Width(width).Height(cache.height).Draw(func(p *ui.Painter, r ui.Rect) {
-		drawLyricWords(p, r, line.Words, layout, clips, sweeps, a.pl.Position(), a.pl.Playing())
+		drawLyricWords(p, r, line.Words, layout, clips, a.pl.Position(), a.pl.Playing())
 	})
 }
 
@@ -194,7 +182,7 @@ func wordPaintTime(word lyrics.Word, pos time.Duration) (float32, time.Duration)
 
 // Only the highlight changes at playback speed. The retained text keeps
 // its wrapping and glyph positions, including when a word crosses lines.
-func drawLyricWords(p *ui.Painter, r ui.Rect, words []lyrics.Word, layout *ui.TextLayout, clips [][]ui.Rect, sweeps []lyricSweep, pos time.Duration, playing bool) {
+func drawLyricWords(p *ui.Painter, r ui.Rect, words []lyrics.Word, layout *ui.TextLayout, clips [][]ui.Rect, pos time.Duration, playing bool) {
 	var next time.Duration
 	allLit := true
 	for _, word := range words {
@@ -218,10 +206,6 @@ func drawLyricWords(p *ui.Painter, r ui.Rect, words []lyrics.Word, layout *ui.Te
 	for i, word := range words {
 		lit, _ := wordPaintTime(word, pos)
 		if lit == 0 {
-			continue
-		}
-		if lit < 1 && len(sweeps) > 0 && sweeps[i].width > 0 {
-			sweeps[i].paint(p, r, layout, lit)
 			continue
 		}
 		for _, clip := range clips[i] {

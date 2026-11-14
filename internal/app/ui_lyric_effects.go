@@ -1,12 +1,9 @@
 package app
 
 import (
-	"sync"
 	"time"
-	"unicode"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/shader"
 
 	"netease-music-mygo/internal/lyrics"
 )
@@ -111,96 +108,4 @@ func (a *app) paintLyricInterlude(c *ui.Context, box ui.Element, gap lyricInterl
 			p.Fill(ui.Rect{X: r.X + timedLineInsetX + float32(i*15), Y: r.Y + (r.H-size)/2, W: size, H: size}, white.Alpha(opacity*(0.32+0.58*lit)), size/2)
 		}
 	})
-}
-
-type lyricSweep struct {
-	width float32
-	parts []lyricSweepPart
-}
-
-type lyricSweepPart struct {
-	rect ui.Rect
-	rtl  bool
-}
-
-// Shader.Fill leaves color glyphs outside the sweep. Symbol words keep the
-// opacity highlight, including emoji, flags and variation/keycap sequences.
-func lyricMayHaveColorGlyph(text string) bool {
-	for _, r := range text {
-		if unicode.IsSymbol(r) || r == '\uFE0F' || r == '\u20E3' {
-			return true
-		}
-	}
-	return false
-}
-
-// Resolve the sweep direction from the carets at each visual line's ends.
-// Disjoint bidi runs keep the opacity highlight so no unrelated text is swept.
-func shapeLyricSweep(layout *ui.TextLayout, lines []ui.TextLine, clips []ui.Rect, start, end int) lyricSweep {
-	var sweep lyricSweep
-	for _, clip := range clips {
-		if n := len(sweep.parts); n > 0 && sweep.parts[n-1].rect.Y == clip.Y {
-			return lyricSweep{}
-		}
-		for _, line := range lines {
-			if line.Rect.Y != clip.Y {
-				continue
-			}
-			first := layout.CaretAt(ui.TextCaretPosition{Index: max(start, line.Start), Affinity: ui.TextDownstream})
-			last := layout.CaretAt(ui.TextCaretPosition{Index: min(end, line.End), Affinity: ui.TextUpstream})
-			// Mixed runs can share a single selection rect. Only use a
-			// directional sweep if the carets cover the selected advance.
-			if abs32(abs32(last.X-first.X)-clip.W) > 1 {
-				return lyricSweep{}
-			}
-			sweep.parts = append(sweep.parts, lyricSweepPart{rect: clip, rtl: last.X < first.X})
-			sweep.width += clip.W
-			break
-		}
-	}
-	if len(sweep.parts) != len(clips) {
-		return lyricSweep{}
-	}
-	return sweep
-}
-
-const lyricSweepSource = `package main
-
-var Lead float
-var Reverse float
-
-func Fragment(dst vec4, pos vec2) vec4 {
-	x := mix(pos.x, rectSize().x-pos.x, Reverse)
-	fade := min(5.0, rectSize().x*0.25)
-	return vec4(1.0-smoothstep(Lead-fade, Lead+fade, x))
-}
-`
-
-var lyricSweepShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(lyricSweepSource) })
-
-func (s lyricSweep) paint(p *ui.Painter, r ui.Rect, layout *ui.TextLayout, progress float32) {
-	// A word on two lines sweeps through the first part before the next.
-	// Extend the travel at both ends so the soft front starts and ends cleanly.
-	lead := progress*(s.width+10) - 5
-	for _, part := range s.parts {
-		clip := part.rect
-		if lead <= -5 {
-			break
-		}
-		clip.X += r.X
-		clip.Y += r.Y
-		p.Clip(clip, 0, func() {
-			draw := func() { p.TextLayout(layout, r.X, r.Y, white) }
-			if lead >= clip.W+5 {
-				draw()
-				return
-			}
-			reverse := float32(0)
-			if part.rtl {
-				reverse = 1
-			}
-			lyricSweepShader().Fill(p, clip, shader.Options{Uniforms: map[string]any{"Lead": lead, "Reverse": reverse}}, draw)
-		})
-		lead -= clip.W
-	}
 }
