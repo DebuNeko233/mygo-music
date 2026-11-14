@@ -28,7 +28,7 @@ func TestLyricBlurIgnoresCanvasPadding(t *testing.T) {
 			viewport.Children(func() {
 				ui.Box(c).Absolute().Bottom(0).Width(64).Height(1).Background(white)
 			})
-			viewport.Effect(lyricEdgeFade{viewport: viewport, pass: &pass})
+			viewport.Effect(lyricEdgeFade{pass: &pass})
 		}, 64, 128)
 		return tt.Image()
 	}
@@ -59,7 +59,7 @@ func TestLyricEdgeFadeCoverage(t *testing.T) {
 			}
 		})
 		if enabled {
-			viewport.Effect(lyricEdgeFade{viewport: viewport, active: active, pass: &pass})
+			viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, 0), pass: &pass})
 		}
 	}, w, h)
 	for _, scale := range []int{1, 2} {
@@ -124,11 +124,39 @@ func TestLyricBlurRampsFromActiveRow(t *testing.T) {
 				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
 			}
 		})
-		viewport.Effect(lyricEdgeFade{viewport: viewport, active: active, pass: &pass})
+		viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, 0), pass: &pass})
 	}, 64, 150)
 	frame := tt.Image()
 	if past, upcoming := frame.RGBAAt(32, 30).R, frame.RGBAAt(32, 78).R; past >= upcoming {
 		t.Fatalf("upcoming row should stay clearer: past=%d, upcoming=%d", past, upcoming)
+	}
+}
+
+// Manual scrolling fades both edges without spreading strokes into adjacent pixels.
+func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
+	a := newTestApp()
+	tt := ui.NewTester(func(c *ui.Context) {
+		c.Root().Background(ui.RGB(0, 0, 0))
+		viewport := ui.Box(c).Fill()
+		viewport.Children(func() {
+			for _, y := range []int{4, 48, 91} {
+				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
+			}
+		})
+		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, 0, true)
+	}, 64, 96)
+	frame := tt.Image()
+	if middle := frame.RGBAAt(32, 48).R; middle != 255 {
+		t.Fatalf("middle stroke changed opacity: %d", middle)
+	}
+	for _, y := range []int{4, 91} {
+		stroke := frame.RGBAAt(32, y).R
+		if stroke == 0 || stroke >= 255 || frame.RGBAAt(32, y-1).R != 0 || frame.RGBAAt(32, y+1).R != 0 {
+			t.Fatalf("expected a faded, sharp stroke at y=%d, got %d", y, stroke)
+		}
+	}
+	if a.lyricBlurPass != nil {
+		t.Fatal("manual scrolling allocated a Gaussian canvas")
 	}
 }
 
@@ -206,7 +234,7 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				_, h := c.Size()
 				c.Root().Background(ui.Hex("#22384b"))
-				ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h) })
+				ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}) })
 			}, 280, 320, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			before := a.lyricScroll.Y
 			if before <= 0 {

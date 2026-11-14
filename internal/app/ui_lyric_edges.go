@@ -7,11 +7,26 @@ import (
 	"github.com/egoist/mygo/ui/shader"
 )
 
+const lyricEdgeMask = `
+func edge(y, height float) float {
+	band := min(96.0, height*0.20)
+	return 1.0-smoothstep(0.0, band, min(y, height-y))
+}
+`
+
+const lyricBrowseFadeSource = "package main\n" + lyricEdgeMask + `
+func ColorEffect(pos vec2, color vec4) vec4 {
+	return color*(1.0-edge(pos.y, rectSize().y))
+}
+`
+
+var lyricBrowseFade = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(lyricBrowseFadeSource) })
+
 // The same 13-tap Gaussian runs horizontally and vertically. Adjacent
 // weights are grouped into seven bilinear sample positions per pass.
 // Both edges reach the same blur. The current row is above center, so
 // the longer run below it softens more slowly than the run above it.
-const lyricGaussianKernel = `
+const lyricGaussianKernel = lyricEdgeMask + `
 // Active holds the top and bottom of the clear row in texture pixels.
 var Active vec3
 var Height float
@@ -19,15 +34,9 @@ var Top float
 var Scale float
 var ContentSize vec2
 
-func edge(pos vec2) float {
-	y := (pos.y-Top)/Scale
-	band := min(96.0, Height*0.20)
-	return 1.0-smoothstep(0.0, band, min(y, Height-y))
-}
-
 func blurSigma(pos vec2) float {
 	if Active.z == 0 {
-		return mix(1.5, 3.5, edge(pos))
+		return mix(1.5, 3.5, edge((pos.y-Top)/Scale, Height))
 	}
 	y := pos.y
 	bottom := Top+Height*Scale
@@ -72,7 +81,7 @@ func LayerEffect(pos vec2) vec4 {
 		return layerAt(pos)
 	}
 	pixel := vec2(pos.x*Scale+Left, y)
-	fade := edge(pixel)
+	fade := edge(pos.y, Height)
 	stride := blurSigma(pixel)*Scale/2.8
 	return gaussian(pixel, vec2(0.0, stride))*(1.0-fade)
 }
@@ -88,19 +97,23 @@ var lyricGaussian = sync.OnceValue(func() [2]*shader.Shader {
 })
 
 type lyricEdgeFade struct {
-	viewport, active ui.Element
-	incoming         ui.Element
-	blend            float32
-	pass             **ui.Canvas
+	clearBand func(scale, insetY float32) [3]float32
+	pass      **ui.Canvas
 }
 
-func (a *app) lyricEdges(scroll, active, intro, first ui.Element, introOpacity float32) {
-	fx := lyricEdgeFade{viewport: scroll, active: active, pass: &a.lyricBlurPass}
+func (a *app) lyricEdges(scroll, active, intro, first ui.Element, introOpacity float32, browsing bool) {
+	if browsing {
+		// Fade the same edges without a Gaussian pass during manual scrolling.
+		scroll.Effect(lyricBrowseFade().Effect(shader.Options{}))
+		return
+	}
+	var incoming ui.Element
+	var blend float32
 	if intro.Valid() {
 		// Move the clear band from the dots to the first line as they fade.
-		fx.active, fx.incoming, fx.blend = intro, first, 1-introOpacity
+		active, incoming, blend = intro, first, 1-introOpacity
 	}
-	scroll.Effect(fx)
+	scroll.Effect(lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass})
 }
 
 func (lyricEdgeFade) EffectMargin() ui.Point {
@@ -109,32 +122,44 @@ func (lyricEdgeFade) EffectMargin() ui.Point {
 	return ui.Point{}
 }
 
-func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitmap, inset ui.Point) {
-	scale := p.Scale()
-	row := func(e ui.Element) [3]float32 {
-		bounds := e.LayoutBounds()
-		if bounds.H <= 0 {
+// Bind the lookup to this viewport's paint pass so it follows the live pose
+// on repaint-only scroll frames.
+func lyricClearBand(viewport, active, incoming ui.Element, blend float32) func(float32, float32) [3]float32 {
+	return func(scale, insetY float32) [3]float32 {
+		row := func(e ui.Element) [3]float32 {
+			bounds := e.LayoutBounds()
+			if bounds.H <= 0 {
+				return [3]float32{}
+			}
+			x, y := e.LocalToWindow(0, 0)
+			_, top, ok := viewport.WindowToLocal(x, y)
+			x, y = e.LocalToWindow(0, bounds.H)
+			_, bottom, okBottom := viewport.WindowToLocal(x, y)
+			if ok && okBottom {
+				return [3]float32{top*scale + insetY, bottom*scale + insetY, 1}
+			}
 			return [3]float32{}
 		}
-		x, y := e.LocalToWindow(0, 0)
-		_, top, ok := fx.viewport.WindowToLocal(x, y)
-		x, y = e.LocalToWindow(0, bounds.H)
-		_, bottom, okBottom := fx.viewport.WindowToLocal(x, y)
-		if ok && okBottom {
-			return [3]float32{top*scale + inset.Y, bottom*scale + inset.Y, 1}
-		}
-		return [3]float32{}
-	}
-	active := row(fx.active)
-	if fx.blend > 0 {
-		coming := row(fx.incoming)
-		if active[2] == 0 {
-			active = coming
-		} else if coming[2] != 0 {
-			for i := range 2 {
-				active[i] += (coming[i] - active[i]) * fx.blend
+		band := row(active)
+		if blend > 0 {
+			coming := row(incoming)
+			if band[2] == 0 {
+				band = coming
+			} else if coming[2] != 0 {
+				for i := range 2 {
+					band[i] = lerp(band[i], coming[i], blend)
+				}
 			}
 		}
+		return band
+	}
+}
+
+func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitmap, inset ui.Point) {
+	scale := p.Scale()
+	var active [3]float32
+	if fx.clearBand != nil {
+		active = fx.clearBand(scale, inset.Y)
 	}
 	w, h := bitmap.Size()
 	pass := *fx.pass

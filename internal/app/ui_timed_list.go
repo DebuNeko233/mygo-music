@@ -143,17 +143,19 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	start, end := max(0, front-radius), min(len(lines), back+radius+1)
 	previous := m.offsets[anchor]
 	m.measure(lines, start, end)
-	total := m.offsets[len(lines)] - timedLineGap + st.introHeight
+	total := m.offsets[len(lines)] - timedLineGap
+	var introHeight, introOpacity float32
 	head := float32(0)
 	_, h := c.Size()
 	if st.centerShort && total <= box.H {
 		head = (box.H - total) / 2
 		total += head
 	} else {
+		introHeight, introOpacity = a.lyricIntro(c, st.intro)
 		head = lyricHeadroom(box.H, st)
-		total += head + h*0.5
+		total += head + introHeight + h*0.5
 	}
-	lead := head + st.introHeight
+	lead := head + introHeight
 	m.leading = lead
 	if st.immersive && !st.browsing && lead != previousLead {
 		follow = true
@@ -224,9 +226,9 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 				ui.Box(c.Key("head")).Height(head).Shrink(0)
 			}
 			before := m.offsets[first]
-			if st.introHeight > 0 {
-				intro = ui.Box(c.Key("intro")).Height(st.introHeight).Shrink(0)
-				a.paintLyricInterlude(c, intro, st.intro, st.introOpacity)
+			if introHeight > 0 {
+				intro = ui.Box(c.Key("intro")).Height(introHeight).Shrink(0)
+				a.paintLyricInterlude(c, intro, st.intro, introOpacity)
 			}
 			if before > 0 {
 				ui.Box(c.Key("before-rows")).Height(before).Shrink(0)
@@ -256,8 +258,8 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 			}
 		})
 		g.place(c, s, scroll, content, st.browsing)
-		if st.immersive && !st.browsing && maxY > 0 {
-			a.lyricEdges(scroll, active, intro, firstLine, st.introOpacity)
+		if st.immersive && maxY > 0 {
+			a.lyricEdges(scroll, active, intro, firstLine, introOpacity, st.browsing)
 		}
 	})
 }

@@ -124,7 +124,7 @@ func lyricScrollFixture(n int) (*ui.Tester, *int, func(time.Duration)) {
 				seekTime = time.Time{}
 			}
 		}
-		a.lyricsPane(c, a.pl.Current(), 520)
+		a.lyricsPane(c, a.pl.Current(), 520, ui.Rect{})
 	}, 480, 520)
 	tt.Advance(2 * time.Second)
 	seek := func(pos time.Duration) {

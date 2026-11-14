@@ -40,8 +40,8 @@ func TestLyricInterludeTiming(t *testing.T) {
 	}
 }
 
-// The intro reserves room above the first lyric without taking over its click target.
-func TestLyricIntroKeepsFirstLine(t *testing.T) {
+// A lyric block that fits stays centered before and after the first timestamp.
+func TestLyricIntroSkipsFittingLyrics(t *testing.T) {
 	lines := []lyrics.Line{
 		{At: 6 * time.Second, Text: "First lyric", Translation: "Translation"},
 		{At: 10 * time.Second, Text: "Second lyric"},
@@ -54,13 +54,68 @@ func TestLyricIntroKeepsFirstLine(t *testing.T) {
 	a.settings.LyricEdgeFade = true
 	tt.Frame()
 	with, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text)
-	if !ok || with.Bounds.Y <= without.Bounds.Y || a.lyricScroll.MaxY > 1 {
-		t.Fatalf("intro should sit above the first lyric in a centered block: before %+v, after %+v", without.Bounds, with.Bounds)
+	if !ok || abs32(with.Bounds.Y-without.Bounds.Y) > 1 {
+		t.Fatalf("the intro moved the first lyric: before %+v, after %+v", without.Bounds, with.Bounds)
 	}
+	checkShortLyricsCenter(t, tt, a, lines, 320)
 	if err := tt.Click(lines[0].Text); err != nil || a.pl.Position() != lines[0].At {
 		t.Fatalf("could not seek to first lyric: %v, position %v", err, a.pl.Position())
 	}
 	checkShortLyricsCenter(t, tt, a, lines, 320)
+}
+
+// Wrapped lyrics regain the intro when they overflow and lose it when they fit again.
+func TestLyricIntroFollowsReflow(t *testing.T) {
+	const height = 280
+	lines := []lyrics.Line{
+		{At: 6 * time.Second, Text: "Composed and arranged", Translation: strings.Repeat("Production credits with wrapping. ", 11)},
+		{At: 10 * time.Second, Text: "Produced and mixed"},
+	}
+	a, tt := shortLyricsApp(lines, 720, height)
+	a.settings.LyricEdgeFade = true
+	tt.Frame()
+	checkShortLyricsCenter(t, tt, a, lines, height)
+	tt.SetSize(180, height)
+	first, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text)
+	if !ok || a.lyricScroll.MaxY <= 0 || first.Bounds.Y < height*0.3+lyricIntroHeight {
+		t.Fatalf("wrapped credits should scroll and show the intro: first row %+v, scroll %+v", first.Bounds, a.lyricScroll)
+	}
+	tt.SetSize(720, height)
+	checkShortLyricsCenter(t, tt, a, lines, height)
+}
+
+// A lyric near the close button ignores clicks and becomes clickable again when it moves away.
+func TestLyricNearCloseDoesNotSeek(t *testing.T) {
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 30000}})
+	line := lyrics.Line{At: 5 * time.Second, Text: "Lyric"}
+	y := float32(35)
+	tt := ui.NewTester(func(c *ui.Context) {
+		st := linesStyle{size: 20, immersive: true, closeBounds: ui.Rect{X: 60, Y: 0, W: 38, H: 38}}
+		ui.Column(c).Absolute().Top(y).Left(75).Width(180).Children(func() {
+			a.timedLine(c, &line, 0, 156, st)
+		})
+	}, 280, 180)
+	tt.Frame()
+	clickLyric := func() {
+		t.Helper()
+		row, ok := tt.AccessByRole(ui.RoleButton, line.Text)
+		if !ok {
+			t.Fatal("lyric row is missing")
+		}
+		tt.ClickAt(row.Bounds.X+45, row.Bounds.Y+row.Bounds.H/2)
+	}
+	clickLyric()
+	if got := a.pl.Position(); got != 0 {
+		t.Fatalf("clicking the protected row sought to %v", got)
+	}
+	y = 100
+	tt.Frame()
+	tt.Frame()
+	clickLyric()
+	if got := a.pl.Position(); got != line.At {
+		t.Fatalf("clicking below the protected area sought to %v, want %v", got, line.At)
+	}
 }
 
 // Removing the dots used to jump the first line to its final position in one frame.
@@ -69,8 +124,6 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 	for _, tc := range []struct {
 		count, height int
 	}{
-		{2, 320}, // centered
-		{2, 140}, // centered, with limited space for the dots
 		{12, 180},
 		{timedListThreshold, 180},
 	} {

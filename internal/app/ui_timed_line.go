@@ -12,8 +12,20 @@ import (
 
 func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float32, st linesStyle) ui.Element {
 	line := ui.ButtonBase(c).Column().AlignItems(ui.Start).Padding(timedLineInsetY, timedLineInsetX).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
+	// Use the painted bounds so scrolling a line near the close button
+	// protects the entire row, including its translation and padding.
+	nearClose := false
+	if close := st.closeBounds; close.W > 0 {
+		row := line.Bounds()
+		const guard = 16
+		nearClose = row.W > 0 && row.H > 0 && row.X < close.X+close.W+guard && row.X+row.W > close.X-guard &&
+			row.Y < close.Y+close.H+guard && row.Y+row.H > close.Y-guard
+		if nearClose {
+			line.PassThrough().AccessDisabled(true)
+		}
+	}
 	on := relative == 0
-	hovered := line.Hovered()
+	hovered := !nearClose && line.Hovered()
 	alpha := float32(0.28)
 	if on {
 		alpha = 1
@@ -54,7 +66,7 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 			}
 		})
 	})
-	if line.Clicked() {
+	if line.Clicked() && !nearClose {
 		if st.immersive {
 			a.seekLyricFollow()
 			c.AnimationFrame()

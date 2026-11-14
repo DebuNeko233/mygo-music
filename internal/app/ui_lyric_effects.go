@@ -60,6 +60,17 @@ const (
 	lyricIntroTick   = time.Second / 60
 )
 
+func (a *app) lyricIntro(c *ui.Context, gap lyricInterlude) (height, opacity float32) {
+	if !gap.intro {
+		return 0, 0
+	}
+	height, opacity, next := lyricIntroPose(gap.to-a.pl.Position(), c.Preferences().ReduceMotion)
+	if next > 0 && a.pl.Playing() {
+		c.After(next)
+	}
+	return height, opacity
+}
+
 // Fade the dots while closing their space before the first line lights up.
 // Use playback time so pausing holds the pose and a seek skips the transition.
 func lyricIntroPose(left time.Duration, reduceMotion bool) (height, opacity float32, next time.Duration) {

@@ -22,7 +22,7 @@ func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
 	a.pl.Hold(0)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		_, height := c.Size()
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), height) })
+		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), height, ui.Rect{}) })
 	}, w, h, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	return a, tt
 }
