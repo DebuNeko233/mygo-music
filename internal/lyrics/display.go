@@ -29,6 +29,18 @@ type Display struct {
 
 func (d Display) HasSinging() bool { return len(d.sung) > 0 }
 
+// SungLines shares the parsed timing and translations with views that omit metadata.
+func (d Display) SungLines() []Line {
+	if len(d.sung) == len(d.Lines) {
+		return d.Lines
+	}
+	lines := make([]Line, 0, len(d.sung))
+	for _, i := range d.sung {
+		lines = append(lines, d.Lines[i])
+	}
+	return lines
+}
+
 // EmptyText is the notice for a loaded display with no rows.
 func (d Display) EmptyText() string {
 	if d.unavailable {
@@ -86,8 +98,11 @@ func yrcCredits(source string) []Line {
 
 // NewDisplay builds a playback-pane view from parsed lines and any supplemental metadata.
 func NewDisplay(lines []Line, supplemental ...Line) Display {
+	return newDisplay(lines, supplemental, false)
+}
+
+func newDisplay(lines, supplemental []Line, hasNotice bool) Display {
 	d := Display{Lines: make([]Line, 0, len(lines)+len(supplemental))}
-	hasNotice := false
 	for _, source := range [][]Line{lines, supplemental} {
 		for _, line := range source {
 			if strings.TrimSpace(line.Text) == "" {
@@ -105,9 +120,7 @@ func NewDisplay(lines []Line, supplemental ...Line) Display {
 	var seen map[string]int
 	rows := d.Lines[:0]
 	for _, line := range d.Lines {
-		if line.Kind == Sung && hasNotice && isInstrumentalNote(line.Text) {
-			line.Kind = Credit
-		}
+		line.Kind = contextualKind(line.Text, line.Kind, hasNotice)
 		if line.Kind != Sung {
 			key := InstrumentalText
 			if line.Kind == Instrumental {
@@ -170,28 +183,8 @@ func withPlainNotice(display Display, lrc, yrc string) Display {
 	return display
 }
 
-// BuildDisplay keeps the player's existing timed lines and prepares the
-// playback-pane rows from both sources while the raw payloads are available.
+// BuildDisplay returns the shared singing timeline and the reading order with credits.
 func BuildDisplay(lrc, translation, yrc string) ([]Line, Display) {
-	translations := parseLRC(translation)
-	lines := build(lrc, translations, yrc)
-	metadata := yrcCredits(yrc)
-	if len(lines) == 0 || !lines[0].Timed {
-		return lines, withPlainNotice(NewDisplay(lines, metadata...), lrc, yrc)
-	}
-	original := parseLRC(lrc)
-	attachTranslations(original, translations)
-	credits := metadata
-	for _, line := range original {
-		if lineKind(line.Text) != Sung {
-			credits = append(credits, line)
-		}
-	}
-	// Use the display classification, which also recognizes prose alongside an instrumental notice.
-	display := NewDisplay(lines, credits...)
-	if display.HasSinging() {
-		return lines, display
-	}
-	// The fallback already includes every LRC row, including its credits.
-	return lines, withPlainNotice(NewDisplay(build(lrc, translations, ""), append(metadata, lines...)...), lrc, yrc)
+	display := buildDisplay(lrc, translation, yrc, yrcCredits(yrc), true)
+	return display.SungLines(), display
 }

@@ -104,7 +104,7 @@ func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
 }
 
 func (p *Player) setLyrics(lines []lyrics.Line, display lyrics.Display) {
-	p.lyrics, p.lyricsLoaded, p.lyricLanguage = lines, true, lyrics.Lang(lines)
+	p.lyrics, p.lyricsLoaded, p.lyricLanguage = lines, true, lyrics.Lang(display.Lines)
 	p.lyricDisplay = display
 }
 

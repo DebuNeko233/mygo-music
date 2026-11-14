@@ -555,7 +555,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 		})
 	case len(lines) == 0 && loaded:
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "纯音乐，请欣赏").FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
+			display, _ := pl.LyricsDisplay()
+			ui.Text(c, display.EmptyText()).FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
 		})
 	case len(shown) == 0:
 	default:

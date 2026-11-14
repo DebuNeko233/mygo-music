@@ -99,13 +99,16 @@ func TestDisplayFallsBackWhenYRCContainsInstrumentalNotes(t *testing.T) {
 		{"json", `{"t":500,"c":[{"tx":"纯音乐，请欣赏"}]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, view := BuildDisplay(lrc, translation, tc.notice+"\n"+note)
+			lines, view := BuildDisplay(lrc, translation, tc.notice+"\n"+note)
 			if len(view.Lines) != 4 || view.Lines[0].Kind != Instrumental || view.Lines[1].Kind != Credit {
 				t.Fatalf("display did not keep the notice and note as metadata: %+v", view.Lines)
 			}
 			current, next := view.Position(10 * time.Second)
 			if current != 2 || next != 3 || view.Lines[current].Text != "First sung line" || view.Lines[current].Translation != "第一句" || view.Lines[current].Timed {
 				t.Fatalf("fallback lost the timed LRC and its translation: current=%d next=%d lines=%+v", current, next, view.Lines)
+			}
+			if len(lines) != 2 || lines[0].Text != view.Lines[current].Text || lines[0].At != view.Lines[current].At || lines[0].Translation != view.Lines[current].Translation {
+				t.Fatalf("singing timeline did not use the same fallback: %+v", lines)
 			}
 		})
 	}

@@ -4,8 +4,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/lyrics"
 )
+
+// Each lyric view can show a translated LRC row that was missing from YRC.
+func TestLyricViewsSharePartialYRCFallback(t *testing.T) {
+	a, pane := shortLyricsApp(nil, 360, 300)
+	a.pl.RefreshLyrics(1, "[00:24.406]回退歌词\n[00:24.980]下一句", "[00:24.406]Fallback translation",
+		"[25250,3930](25250,3930,0)下一句")
+	a.pl.Hold(25 * time.Second)
+	pane.Frame()
+	if !pane.HasText("回退歌词") || !pane.HasText("Fallback translation") {
+		t.Fatal("playback pane lost the fallback row or its translation")
+	}
+	stage := ui.NewTesterWith(func(c *ui.Context) { a.stage(c, a.pl.Current(), white) }, 360, 300,
+		ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	if !stage.HasText("Fallback translation") {
+		t.Fatal("stage did not select the LRC row at the playback position")
+	}
+	desktop := ui.NewTester((&deskLyrics{a: a}).view, 480, 200)
+	if !desktop.HasText("回退歌词") || !desktop.HasText("Fallback translation") {
+		t.Fatal("desktop lyrics lost the fallback row or its translation")
+	}
+}
 
 // Choosing a style from the stage's menu sets its lyrics in it, and
 // choosing 流光 goes back to the classic.

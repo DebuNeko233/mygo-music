@@ -218,6 +218,15 @@ func clock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }
 
+// playbackClock includes hours for long tracks such as podcast episodes.
+func playbackClock(d time.Duration) string {
+	if d < time.Hour {
+		return clock(d)
+	}
+	s := int(d / time.Second)
+	return fmt.Sprintf("%d:%02d:%02d", s/3600, (s/60)%60, s%60)
+}
+
 // plays formats a play count as people in China read it.
 func plays(n float64) string {
 	switch {

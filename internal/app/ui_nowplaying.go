@@ -202,21 +202,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 					a.songMenu(c.Key("more"), tr, 22, white.Alpha(0.7)).Margin(0, -8, 0, 0)
 				})
 				a.scrubber(c.Key("np-scrub"), &a.npScrub, white.Alpha(0.18), white.Alpha(0.9), 16, accent.Mix(white, 0.35))
-				// As tall with the quality's badge as without it: the badge goes
-				// while the next song loads, and the column would move with it.
-				ui.Row(c).Height(16).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, clock(pl.Position())).FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.5))
-					ui.Spacer(c)
-					qualityBadge(c, pl.Stream())
-					ui.Spacer(c)
-					status := "-" + clock(pl.Duration()-pl.Position())
-					if pl.Loading() {
-						status = "正在缓冲…"
-					} else if pl.Err() != "" && !pl.PlaybackRetryable() {
-						status = pl.Err()
-					}
-					ui.Text(c, status).FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.5))
-				})
+				a.nowPlayingTime(c)
 				ui.Box(c).Margin(14, 0, 18, 0).Children(func() {
 					a.transport(c, white, white.Alpha(0.45), accent, 28)
 				})
@@ -412,6 +398,57 @@ func (a *app) radioChip(c *ui.Context, name string) {
 	if chip.Clicked() {
 		a.exitRadio()
 	}
+}
+
+// The time labels mirror the thumb while dragging. During playback they
+// rebuild at a clock boundary, independently of the scrubber's paint-only frames.
+func (a *app) nowPlayingTime(c *ui.Context) {
+	pl := a.pl
+	duration, position := pl.Duration(), pl.Position()
+	preview := a.npScrub.active
+	if preview {
+		position = secs(a.npScrub.v)
+	}
+	position = max(0, position)
+	if duration > 0 {
+		position = min(position, duration)
+	}
+
+	elapsed := position.Truncate(time.Second)
+	status := "—"
+	next := time.Second - (position - elapsed)
+	if duration > 0 {
+		left := duration - position
+		remaining := left.Truncate(time.Second)
+		if fraction := left - remaining; fraction > 0 {
+			next = min(next, fraction)
+			remaining += time.Second
+		}
+		status = playbackClock(remaining)
+		if remaining > 0 {
+			status = "−" + status
+		}
+	}
+	loading := pl.Loading()
+	if loading {
+		status = "正在缓冲…"
+	} else if pl.Err() != "" && !pl.PlaybackRetryable() {
+		status = pl.Err()
+	}
+	if !preview && !loading && pl.Playing() && (duration <= 0 || position < duration) {
+		c.After(max(16*time.Millisecond, next))
+	}
+
+	// Equal side columns keep the quality badge centered as the labels change.
+	ui.Row(c.Key("progress-time")).Height(16).AlignItems(ui.Center).Children(func() {
+		label := func(text string) ui.Element {
+			return ui.Text(c, text).Grow(1).Basis(0).MinWidth(0).SingleLine().
+				FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.6))
+		}
+		label(playbackClock(elapsed))
+		qualityBadge(c, pl.Stream())
+		label(status).TextAlign(ui.End)
+	})
 }
 
 // qualityBadge marks a lossless stream, as it plays.
