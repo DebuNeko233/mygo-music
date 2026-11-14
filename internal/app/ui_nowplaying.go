@@ -76,8 +76,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	pl := a.pl
 	tr := pl.Current()
 	w, h := c.Size()
-	art := a.art.get(netease.Sized(tr.Album.PicURL, 600), true)
-	a.prefetchCover()
+	art := a.playbackArtwork(tr.Album.PicURL, nowPlayingCoverRequest)
 	if cs := &a.npCoverState; a.npPane == paneStage || a.npPane == paneWall {
 		cs.previous = nil
 		cs.switching = false
@@ -105,27 +104,6 @@ func (a *app) nowPlayingView(c *ui.Context) {
 		// paint over those in the flow.
 		ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Children(func() { a.nowPlayingBody(c, tr, art, accent, w, h, pointerIn) })
 	})
-}
-
-// prefetchCover warms the exact large-cover entry Now Playing uses, only
-// for the song Next would play. The cache shares in-flight requests and
-// persistent image data with the player and other pages.
-func (a *app) prefetchCover() {
-	order, at := a.pl.PlayOrder()
-	if a.network.offline || at < 0 || at >= len(order) {
-		return
-	}
-	next := at + 1
-	if next == len(order) {
-		if a.pl.Radio() != "" {
-			return // a radio asks its feed instead of wrapping
-		}
-		next = 0
-	}
-	q := a.pl.Queue()
-	if k := order[next]; k >= 0 && k < len(q) {
-		a.art.get(netease.Sized(q[k].Album.PicURL, 600), true)
-	}
 }
 
 func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool) {

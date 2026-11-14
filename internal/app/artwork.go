@@ -14,7 +14,6 @@ import (
 	"time"
 	"weak"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	_ "golang.org/x/image/webp"
 
@@ -223,7 +222,7 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			// which its data decodes again if they are needed.
 			ref := weak.Make(bmp)
 			time.AfterFunc(artRelease, func() {
-				mygo.RunOnMain(func() {
+				c.post(func() {
 					if bmp := ref.Value(); bmp != nil {
 						bmp.ReleasePixels()
 					}

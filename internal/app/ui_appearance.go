@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -183,7 +182,7 @@ func (a *app) readPicture(path string) {
 			// Shown by the frames after it lands, the picture drops the
 			// pixels the GPU uploaded: its bytes decode them again if they
 			// are needed.
-			time.AfterFunc(backdropRelease, func() { mygo.RunOnMain(pic.bmp.ReleasePixels) })
+			time.AfterFunc(backdropRelease, func() { a.post(pic.bmp.ReleasePixels) })
 		}
 		a.redraw()
 	})

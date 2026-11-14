@@ -195,6 +195,7 @@ type app struct {
 	// bars, which show their scroll edges then.
 	underTop, underBottom bool
 	barScrub              scrubState
+	barCover              barCoverState
 	npScrub               scrubState
 	backdropCache         backdropCache // the backdrop of Now Playing, as last painted
 	npArt                 *artwork      // the cover whose colors Now Playing shows
