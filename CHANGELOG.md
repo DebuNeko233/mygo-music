@@ -1,5 +1,17 @@
 # 更新日志
 
+## 0.2.10
+
+### What's Changed
+* chore: 切回官方 MyGo，避免封面刷新时闪回占位图 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/60
+* 更新 Go 至 1.27.4 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/61
+* fix: 播放栏封面切换加入淡化过渡 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/62
+* perf: 优化歌词滚动与播客字幕渲染性能 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/63
+* 修复了若干问题
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.9...v0.2.10
+
 ## 0.2.9
 
 ### What's Changed
