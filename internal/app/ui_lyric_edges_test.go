@@ -132,8 +132,8 @@ func TestLyricBlurRampsFromActiveRow(t *testing.T) {
 	}
 }
 
-// Hovering restores a faded row without replacing the active row's clear band.
-func TestLyricHoverRestoresClearRow(t *testing.T) {
+// Hover clears the blur while preserving the edge fade and the current line.
+func TestLyricHoverKeepsEdgeFade(t *testing.T) {
 	for _, browsing := range []bool{false, true} {
 		t.Run(fmt.Sprint(browsing), func(t *testing.T) {
 			a := newTestApp()
@@ -160,8 +160,12 @@ func TestLyricHoverRestoresClearRow(t *testing.T) {
 			before := tt.Image().RGBAAt(32, 4).R
 			tt.Move(32, 4)
 			frame := tt.Image()
-			if before >= 255 || frame.RGBAAt(32, 4).R != 255 || frame.RGBAAt(32, 5).R != 0 {
-				t.Fatal("hover did not restore the sharp edge row")
+			hover := frame.RGBAAt(32, 4).R
+			if hover == 0 || hover >= 255 || frame.RGBAAt(32, 5).R != 0 {
+				t.Fatal("the hovered edge row should be sharp and stay faded")
+			}
+			if browsing && hover != before || !browsing && hover <= before {
+				t.Fatalf("unexpected hover change from %d to %d (browsing=%v)", before, hover, browsing)
 			}
 			if frame.RGBAAt(32, 48).R != 255 || frame.RGBAAt(32, 91).R >= 255 {
 				t.Fatal("hover changed the active row or cleared the other edge")
@@ -250,21 +254,24 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 	}
 }
 
-// The immersive lyric viewport extends from the controls toward both window edges on resize.
+// The immersive lyric viewport stays out of the window controls and extends below the volume row.
 func TestImmersiveLyricViewportTracksControls(t *testing.T) {
 	a := tallLyricsApp(t)
 	a.settings.LyricEdgeFade = true
 	a.settings.HotComments = false
 	// One line exercises the same viewport without paying for the blur in the test.
 	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
-	tt := ui.NewTesterWith(a.nowPlayingView, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	var barHeight float32
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		barHeight = topBar(c)
+		a.nowPlayingView(c)
+	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for _, size := range [][2]int{{1200, 800}, {880, 580}, {1920, 1080}, {750, 1330}, {880, 580}, {1200, 800}} {
 		tt.SetSize(size[0], size[1])
-		tab, okTab := tt.AccessByRole(ui.RoleButton, "歌词")
 		volume, okVolume := tt.AccessByRole(ui.RoleSlider, "音量")
 		view, okView := tt.AccessByRole(ui.RoleScroll, "歌词")
-		if !okTab || !okVolume || !okView {
-			t.Fatalf("at %v: missing tab (%v), volume (%v), or lyric viewport (%v)", size, okTab, okVolume, okView)
+		if !okVolume || !okView {
+			t.Fatalf("at %v: missing volume (%v) or lyric viewport (%v)", size, okVolume, okView)
 		}
 		// The slider and its speaker share a center, and the speaker's
 		// hit area sets the height of the volume row.
@@ -275,7 +282,7 @@ func TestImmersiveLyricViewportTracksControls(t *testing.T) {
 		bottom := max(volume.Bounds.Y+volume.Bounds.H, speaker.Bounds.Y+speaker.Bounds.H)
 		const extension = 16
 		height := float32(size[1])
-		wantTop := max(min(tab.Bounds.Y-extension, 32), 16)
+		wantTop := barHeight
 		wantBottom := min(max(bottom+extension, height-32), height-16)
 		if abs32(view.Bounds.Y-wantTop) > 1 || abs32(view.Bounds.Y+view.Bounds.H-wantBottom) > 1 {
 			t.Fatalf("at %v: lyrics %v, want top %.1f and bottom %.1f", size, view.Bounds, wantTop, wantBottom)

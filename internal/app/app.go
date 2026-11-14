@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -155,6 +156,7 @@ type app struct {
 	timedList                      timedListLayout
 	lyricAt                        int
 	lyricTrack                     int64
+	lyricFirst                     *lyrics.Line
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
 	lyricWindowW, lyricWindowH     float32 // window size whose reflow has been scheduled
 	queueList                      ui.ListState

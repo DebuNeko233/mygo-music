@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 const unavailable LineKind = Instrumental + 1
@@ -69,7 +70,8 @@ func creditField(text string) (name, value string, ok bool) {
 		return "", "", false
 	}
 	name, ok = creditFields[compactField(text[:i])]
-	value = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(text[i:], ":"), "："))
+	_, separatorWidth := utf8.DecodeRuneInString(text[i:])
+	value = strings.TrimSpace(text[i+separatorWidth:])
 	return name, value, ok && value != ""
 }
 

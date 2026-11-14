@@ -19,12 +19,7 @@ func withinRow(y float, row vec3) bool {
 `
 
 const lyricBrowseFadeSource = "package main\n" + lyricEdgeMask + `
-var Hover vec3
-
 func ColorEffect(pos vec2, color vec4) vec4 {
-	if withinRow(pos.y, Hover) {
-		return color
-	}
 	return color*(1.0-edge(pos.y, rectSize().y))
 }
 `
@@ -42,6 +37,8 @@ var Height float
 var Top float
 var Scale float
 var ContentSize vec2
+var Hover vec3
+var Credits vec3
 
 func blurSigma(pos vec2) float {
 	if Active.z == 0 {
@@ -75,8 +72,12 @@ func gaussian(pos, stride vec2) vec4 {
 const lyricGaussianHorizontal = "package main\n" + lyricGaussianKernel + `
 func Fragment(dst vec4, pos vec2) vec4 {
 	stride := blurSigma(pos)*Scale/2.8
-	// Skip the center of the clear row, leaving a halo for the vertical pass.
-	if Active.z > 0 && pos.y >= Active.x+8.0*Scale && pos.y <= Active.y-8.0*Scale {
+	// Skip the interior of each clear band, leaving more than the
+	// vertical kernel's maximum reach for samples from its neighbors.
+	halo := vec2(8.0*Scale, -8.0*Scale)
+	if withinRow(pos.y, vec3(Active.xy+halo, Active.z)) ||
+		withinRow(pos.y, vec3(Hover.xy+halo, Hover.z)) ||
+		withinRow(pos.y, vec3(Credits.xy+halo, Credits.z)) {
 		return vec4(0)
 	}
 	return gaussian(pos, vec2(stride, 0.0))
@@ -84,16 +85,13 @@ func Fragment(dst vec4, pos vec2) vec4 {
 `
 
 const lyricGaussianVertical = "package main\n" + lyricGaussianKernel + `
-var Hover vec3
-var Credits vec3
-
 func LayerEffect(pos vec2) vec4 {
 	y := pos.y*Scale+Top
-	if withinRow(y, Active) || withinRow(y, Hover) {
+	if withinRow(y, Active) {
 		return layerAt(pos)
 	}
 	fade := 1.0-edge(pos.y, Height)
-	if withinRow(y, Credits) {
+	if withinRow(y, Hover) || withinRow(y, Credits) {
 		// Keep the strokes sharp while they pass through the edge fade.
 		return layerAt(pos)*fade
 	}
@@ -120,6 +118,13 @@ type lyricEdgeFade struct {
 	browsing   bool
 }
 
+func addLyricCreditRow(rows *[2]ui.Element, row ui.Element) {
+	if !rows[0].Valid() {
+		rows[0] = row
+	}
+	rows[1] = row
+}
+
 func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introOpacity float32, browsing bool, credits [2]ui.Element) {
 	var incoming ui.Element
 	var blend float32
@@ -128,7 +133,7 @@ func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, intro
 		active, incoming, blend = intro, first, 1-introOpacity
 	}
 	fx := lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass, browsing: browsing}
-	if hovered.Valid() {
+	if !browsing && hovered.Valid() {
 		fx.hoverBand = lyricClearBand(scroll, hovered, ui.Element{}, 0)
 	}
 	if !browsing && credits[0].Valid() {
@@ -188,10 +193,7 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 	var hover, credits [3]float32
 	if fx.browsing {
 		// The manual fade works in DIPs and needs no Gaussian canvas.
-		if fx.hoverBand != nil {
-			hover = fx.hoverBand(1, 0)
-		}
-		lyricBrowseFade().Effect(shader.Options{Uniforms: map[string]any{"Hover": hover}}).PaintEffect(p, box, bitmap, inset)
+		lyricBrowseFade().Effect(shader.Options{}).PaintEffect(p, box, bitmap, inset)
 		return
 	}
 	scale := p.Scale()
@@ -212,8 +214,15 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 		*fx.pass = pass
 	}
 	kernel := lyricGaussian()
+	if fx.hoverBand != nil {
+		hover = fx.hoverBand(scale, inset.Y)
+	}
+	if fx.creditBand != nil {
+		credits = fx.creditBand(scale, inset.Y)
+	}
 	uniforms := map[string]any{
 		"Active": active, "Height": box.H, "Top": inset.Y, "Scale": scale,
+		"Hover": hover, "Credits": credits,
 		"ContentSize": [2]float32{float32(w), float32(h)},
 	}
 	pass.Draw(p, func(cp *ui.Painter) {
@@ -222,14 +231,6 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 		})
 	})
 	uniforms["Left"] = inset.X
-	if fx.hoverBand != nil {
-		hover = fx.hoverBand(scale, inset.Y)
-	}
-	uniforms["Hover"] = hover
-	if fx.creditBand != nil {
-		credits = fx.creditBand(scale, inset.Y)
-	}
-	uniforms["Credits"] = credits
 	kernel[1].Effect(shader.Options{Uniforms: uniforms, Images: [4]*ui.Bitmap{pass.Bitmap()}}).
 		PaintEffect(p, box, bitmap, inset)
 }

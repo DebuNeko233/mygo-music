@@ -141,3 +141,65 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 		})
 	}
 }
+
+// Switching tracks must never paint the instrumental notice at the top while measuring its new viewport.
+func TestInstrumentalNoticeDoesNotFlashAtTop(t *testing.T) {
+	const w, h = 300, 360
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 1}})
+	a.pl.SetLyrics(nil)
+	var tt *ui.Tester
+	checkTop := func() {
+		t.Helper()
+		frame := tt.Image()
+		for y := 0; y < h/4; y++ {
+			for x := 0; x < w; x++ {
+				if frame.RGBAAt(x, y).R != 0 {
+					t.Fatal("the notice painted at the top during the track switch")
+				}
+			}
+		}
+	}
+	tt = ui.NewTester(func(c *ui.Context) {
+		// Inspect the previous paint before the tester settles the next build.
+		if tt != nil {
+			checkTop()
+		}
+		c.Root().Background(ui.RGB(0, 0, 0))
+		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}) })
+	}, w, h)
+
+	a.pl.Cue([]netease.Track{{ID: 2}})
+	a.pl.SetLyrics([]lyrics.Line{{At: 5 * time.Second, Text: lyrics.InstrumentalText}})
+	tt.Frame()
+	checkTop()
+	row, ok := tt.Find(lyrics.InstrumentalText)
+	if !ok || abs32(row.Y+row.H/2-h/2) > 1 {
+		t.Fatalf("instrumental notice did not appear centered: %+v", row)
+	}
+}
+
+// Revalidating the current track resets a manual reading position from the previous lyrics.
+func TestImmersiveLyricsFollowAfterRefresh(t *testing.T) {
+	lines := make([]lyrics.Line, 16)
+	for i := range lines {
+		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Before %02d", i)}
+	}
+	a, tt := shortLyricsApp(lines, 240, 180)
+	a.settings.LyricEdgeFade = true
+	a.pl.Hold(8 * time.Second)
+	tt.Frame()
+	tt.Scroll(160, 100, 0, 240)
+	if a.lyricBrowseUntil.IsZero() {
+		t.Fatal("manual scrolling did not enter browsing mode")
+	}
+	for i := range lines {
+		lines[i].Text = fmt.Sprintf("After %02d", i)
+	}
+	a.pl.SetLyrics(lines)
+	tt.Frame()
+	row, ok := tt.AccessByRole(ui.RoleButton, lines[8].Text)
+	if !ok || row.Offscreen || !a.lyricBrowseUntil.IsZero() || a.lyricAt != 8 {
+		t.Fatalf("refreshed lyrics did not follow the current line: row=%+v, index=%d", row, a.lyricAt)
+	}
+}

@@ -244,7 +244,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		first := sort.Search(len(lines), func(i int) bool { return m.offsets[i+1] > lo })
 		last := sort.Search(len(lines), func(i int) bool { return m.offsets[i] >= hi })
 		var active, hovered, intro, firstLine ui.Element
-		var firstCredit, lastCredit ui.Element
+		var credits [2]ui.Element
 		content.Children(func() {
 			if head > 0 {
 				ui.Box(c.Key("head")).Height(head).Shrink(0)
@@ -263,13 +263,10 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 				}
 				height := m.offsets[i+1] - m.offsets[i] - timedLineGap
 				row := a.timedLine(c.Key(i), &lines[i], i-cur, timedLineWidth(box.W), st).Height(height).Shrink(0)
-				if st.immersive && cur < 0 && i < st.introLine && lines[i].Kind == lyrics.Credit {
-					if !firstCredit.Valid() {
-						firstCredit = row
-					}
-					lastCredit = row
+				if st.immersive && !st.browsing && cur < 0 && i < st.introLine && lines[i].Kind == lyrics.Credit {
+					addLyricCreditRow(&credits, row)
 				}
-				if st.immersive && row.Hovered() {
+				if st.immersive && !st.browsing && row.Hovered() {
 					hovered = row
 				}
 				if st.intro.intro && i == st.introLine {
@@ -298,7 +295,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		})
 		g.place(c, s, scroll, content, st.browsing)
 		if st.immersive && maxY > 0 {
-			a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing, [2]ui.Element{firstCredit, lastCredit})
+			a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing, credits)
 		}
 	})
 }

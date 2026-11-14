@@ -443,6 +443,26 @@ func TestShortLyricsFrameBudget(t *testing.T) {
 	}
 }
 
+// Whole-line highlighting stays idle between two LRC timestamps.
+func TestImmersiveLRCStaysIdleBetweenLines(t *testing.T) {
+	lines := lyrics.Build("[00:00.00]First line\n[00:10.00]Second line\n[00:20.00]Third line", "", "")
+	a := newTestApp()
+	a.settings.LyricEdgeFade = true
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 30000}})
+	a.pl.SetLyrics(lines)
+	a.pl.Hold(2 * time.Second)
+	paints := 0
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		c.Root().Draw(func(*ui.Painter, ui.Rect) { paints++ })
+		a.lyricsPane(c, a.pl.Current(), 110, ui.Rect{})
+	}, 180, 110, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	before := paints
+	tt.Advance(time.Second)
+	if paints != before {
+		t.Fatalf("a settled LRC line triggered %d extra paints", paints-before)
+	}
+}
+
 func hotCommentStageClock(style string, reduced bool, pos time.Duration) (*app, *ui.Tester, *int) {
 	a, _, _ := quietApp(pos)
 	a.settings.StageStyle = style

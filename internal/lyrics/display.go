@@ -74,53 +74,53 @@ func yrcCredits(source string) []Line {
 
 // NewDisplay builds a playback-pane view from parsed lines and any supplemental metadata.
 func NewDisplay(lines []Line, supplemental ...Line) Display {
-	var d Display
-	var seen map[string]struct{}
+	d := Display{Lines: make([]Line, 0, len(lines)+len(supplemental))}
 	hasNotice := false
-	for _, source := range [][]Line{lines, supplemental} {
-		for _, line := range source {
-			if lineKind(line.Text) == Instrumental {
-				hasNotice = true
-				break
-			}
-		}
-		if hasNotice {
-			break
-		}
-	}
 	for _, source := range [][]Line{lines, supplemental} {
 		for _, line := range source {
 			if strings.TrimSpace(line.Text) == "" {
 				continue
 			}
 			line.Kind = lineKind(line.Text)
-			if line.Kind == Sung && hasNotice && isInstrumentalNote(line.Text) {
-				line.Kind = Credit
-			}
-			if line.Kind == unavailable {
-				continue
-			}
-			if line.Kind != Sung {
-
-				key := metadataKey(line.Text)
-				if line.Kind == Instrumental {
-					key = InstrumentalText
-					line.Text = InstrumentalText
-				}
-				if _, exists := seen[key]; exists {
-					continue
-				}
-				if seen == nil {
-					seen = make(map[string]struct{})
-				}
-				seen[key] = struct{}{}
-				line.Words = nil
-			}
+			hasNotice = hasNotice || line.Kind == Instrumental
 			d.Lines = append(d.Lines, line)
 		}
 	}
-	if len(supplemental) > 0 {
-		sort.SliceStable(d.Lines, func(i, j int) bool { return d.Lines[i].At < d.Lines[j].At })
+	var seen map[string]int
+	rows := d.Lines[:0]
+	for _, line := range d.Lines {
+		if line.Kind == unavailable {
+			continue
+		}
+		if line.Kind == Sung && hasNotice && isInstrumentalNote(line.Text) {
+			line.Kind = Credit
+		}
+		if line.Kind != Sung {
+			key := InstrumentalText
+			if line.Kind == Instrumental {
+				line.Text = InstrumentalText
+			} else {
+				key = metadataKey(line.Text)
+			}
+			if index, exists := seen[key]; exists {
+				if rows[index].Translation == "" {
+					rows[index].Translation = line.Translation
+				}
+				continue
+			}
+			if seen == nil {
+				seen = make(map[string]int)
+			}
+			seen[key] = len(rows)
+			line.Words = nil
+		}
+		rows = append(rows, line)
+	}
+	clear(d.Lines[len(rows):])
+	d.Lines = rows
+	less := func(i, j int) bool { return rows[i].At < rows[j].At }
+	if !sort.SliceIsSorted(rows, less) {
+		sort.SliceStable(rows, less)
 	}
 	for i, line := range d.Lines {
 		if line.Kind == Sung {
@@ -152,18 +152,21 @@ func containsSinging(lines []Line) bool {
 // BuildDisplay keeps the player's existing timed lines and prepares the
 // playback-pane rows from both sources while the raw payloads are available.
 func BuildDisplay(lrc, translation, yrc string) ([]Line, Display) {
-	lines := Build(lrc, translation, yrc)
+	translations := parseLRC(translation)
+	lines := build(lrc, translations, yrc)
 	if len(lines) == 0 || !lines[0].Timed {
 		return lines, NewDisplay(lines, yrcCredits(yrc)...)
 	}
 	metadata := yrcCredits(yrc)
 	if containsSinging(lines) {
-		for _, line := range parseLRC(lrc) {
+		original := parseLRC(lrc)
+		attachTranslations(original, translations)
+		for _, line := range original {
 			if lineKind(line.Text) != Sung {
 				metadata = append(metadata, line)
 			}
 		}
 		return lines, NewDisplay(lines, metadata...)
 	}
-	return lines, NewDisplay(Build(lrc, translation, ""), append(metadata, lines...)...)
+	return lines, NewDisplay(build(lrc, translations, ""), append(metadata, lines...)...)
 }

@@ -27,7 +27,7 @@ func TestDisplayUsesYRCAndMergesCredits(t *testing.T) {
 	yrc := `{"t":500,"c":[{"tx":"出品："},{"tx":"B"},{"or":"ignored","li":"ignored"}]}
 {"t":2000,"c":[{"tx":"录音棚 Recording Studio："},{"tx":"D"}]}
 [13010,4780](13010,660,0)从(13670,670,0)不`
-	_, view := BuildDisplay(lrc, "[00:13.00]Never", yrc)
+	_, view := BuildDisplay(lrc, "[00:01.00]Produced by B\n[00:13.00]Never", yrc)
 	if !view.HasSinging() || len(view.Lines) != 5 {
 		t.Fatalf("merged display: %+v", view.Lines)
 	}
@@ -37,6 +37,31 @@ func TestDisplayUsesYRCAndMergesCredits(t *testing.T) {
 	}
 	if cur, next = view.Position(110 * time.Second); cur != 3 || next != -1 {
 		t.Fatalf("trailing credit changed the active lyric: %d, %d", cur, next)
+	}
+	if got := view.Lines[1].Translation; got != "Produced by B" {
+		t.Fatalf("merged credit lost its translation: %q", got)
+	}
+}
+
+// Playback searches by timestamp even when a caller supplies rows out of order.
+func TestDisplayOrdersSungRowsWithoutChangingSource(t *testing.T) {
+	lines := []Line{{At: 8 * time.Second, Text: "Second"}, {At: time.Second, Text: "First"}}
+	view := NewDisplay(lines)
+	current, next := view.Position(2 * time.Second)
+	if current != 0 || next != 1 || view.Lines[current].Text != "First" || lines[0].Text != "Second" {
+		t.Fatalf("position = %d, %d, display = %+v, source = %+v", current, next, view.Lines, lines)
+	}
+}
+
+// Translation matching keeps the first row at duplicate or tied timestamps.
+func TestTranslationsKeepEarlierTimestamp(t *testing.T) {
+	lines := Build("[00:01.00]First\n[00:01.00]Duplicate\n[00:03.00]Second\n[00:06.00]Third",
+		"[00:02.00]Tie\n[00:03.10]Near second\n[00:04.50]Outside window\n[00:06.20]Near third", "")
+	want := []string{"Tie", "", "Near second", "Near third"}
+	for i, line := range lines {
+		if line.Translation != want[i] {
+			t.Errorf("line %d translation = %q, want %q", i, line.Translation, want[i])
+		}
 	}
 }
 

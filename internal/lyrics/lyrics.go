@@ -160,6 +160,10 @@ func parseYRC(yrc string) []Line {
 // word-timed lyrics where there are some, else the timed lines, with the
 // translation of each.
 func Build(lrc, translation, yrc string) []Line {
+	return build(lrc, parseLRC(translation), yrc)
+}
+
+func build(lrc string, translations []Line, yrc string) []Line {
 	var lines []Line
 	if yrc != "" {
 		lines = parseYRC(yrc)
@@ -179,27 +183,39 @@ func Build(lrc, translation, yrc string) []Line {
 			lines[i].Words = SpreadWords(lines[i].Text, lines[i].At, end)
 		}
 	}
+	attachTranslations(lines, translations)
+	return lines
+}
+
+func attachTranslations(lines, translations []Line) {
+	if len(lines) == 0 {
+		return
+	}
 	// Translations go to the line nearest their time: word-timed lines
 	// start a little off the timed lines the translation follows.
-	for _, t := range parseLRC(translation) {
+	// Both sources are sorted. Visit each timestamp at most once, and
+	// keep the earlier row when distances or timestamps are equal.
+	best := 0
+	next := 1
+	for _, t := range translations {
 		if t.Text == "" {
 			continue
 		}
-		best, bestGap := -1, 1500*time.Millisecond
-		for i := range lines {
-			gap := lines[i].At - t.At
-			if gap < 0 {
-				gap = -gap
+		for next < len(lines) {
+			if lines[next].At == lines[best].At {
+				next++
+				continue
 			}
-			if gap < bestGap {
-				best, bestGap = i, gap
+			if t.At-lines[best].At <= lines[next].At-t.At {
+				break
 			}
+			best, next = next, next+1
 		}
-		if best >= 0 && lines[best].Translation == "" {
+		gap := lines[best].At - t.At
+		if gap > -1500*time.Millisecond && gap < 1500*time.Millisecond && lines[best].Translation == "" {
 			lines[best].Translation = t.Text
 		}
 	}
-	return lines
 }
 
 // mergeLyrics pairs timed lines with their translations, without words'
