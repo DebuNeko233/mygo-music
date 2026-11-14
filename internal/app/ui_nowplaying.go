@@ -542,7 +542,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, closeBound
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	style := linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage(), immersive: a.settings.LyricEdgeFade}
+	style := linesStyle{size: 30, weight: 600, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage(), immersive: a.settings.LyricEdgeFade}
 	style.introLine = display.FirstSung()
 	if style.immersive {
 		style.closeBounds = closeBounds
@@ -659,6 +659,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		return
 	}
 	var active, hovered, firstSung, intro, content, body ui.Element
+	var firstCredit, lastCredit ui.Element
 	viewport := scroll.LayoutBounds()
 	var textH, introHeight, introOpacity float32
 	draw := func() {
@@ -678,6 +679,12 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 					intro = ui.Box(c.Key("intro")).Height(0).Shrink(0)
 				}
 				line := a.timedLine(c.Key(i), &lines[i], i-cur, width, st)
+				if st.immersive && cur < 0 && i < st.introLine && lines[i].Kind == lyrics.Credit {
+					if !firstCredit.Valid() {
+						firstCredit = line
+					}
+					lastCredit = line
+				}
 				if st.immersive && line.Hovered() {
 					hovered = line
 				}
@@ -767,7 +774,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		if introHeight == 0 {
 			intro = ui.Element{}
 		}
-		a.lyricEdges(scroll, active, hovered, intro, firstSung, introOpacity, st.browsing)
+		a.lyricEdges(scroll, active, hovered, intro, firstSung, introOpacity, st.browsing, [2]ui.Element{firstCredit, lastCredit})
 	}
 	if waitForLayout {
 		// Wait for the new padding or wrapping before following the line.

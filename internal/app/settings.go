@@ -55,7 +55,7 @@ type settings struct {
 	// on.
 	Fog bool `json:"fog"`
 	// LyricEdgeFade enables the experimental effects in the scrolling lyrics pane.
-	LyricEdgeFade bool `json:"lyricEdgeFade,omitempty"`
+	LyricEdgeFade bool `json:"lyricEdgeFade"`
 	// AppIcon is where the app's icon shows on macOS (appIcons); elsewhere
 	// it is always in the notification area.
 	AppIcon string `json:"appIcon"`
@@ -160,7 +160,7 @@ func defaultSettings() settings {
 		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
 		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true, BackdropOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
-		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
+		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2, LyricEdgeFade: true,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
 	}
 }

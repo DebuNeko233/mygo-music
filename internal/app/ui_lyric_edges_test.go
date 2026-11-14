@@ -155,7 +155,7 @@ func TestLyricHoverRestoresClearRow(t *testing.T) {
 						}
 					}
 				})
-				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, 0, browsing)
+				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, 0, browsing, [2]ui.Element{})
 			}, 64, 96)
 			before := tt.Image().RGBAAt(32, 4).R
 			tt.Move(32, 4)
@@ -174,6 +174,54 @@ func TestLyricHoverRestoresClearRow(t *testing.T) {
 	}
 }
 
+// Opening credits fade by position while scrolling, without blurring their strokes.
+func TestLyricIntroCreditsFadeWhileScrolling(t *testing.T) {
+	for _, browsing := range []bool{false, true} {
+		t.Run(fmt.Sprint(browsing), func(t *testing.T) {
+			a := newTestApp()
+			opening := true
+			y := float32(32)
+			tt := ui.NewTester(func(c *ui.Context) {
+				c.Root().Background(ui.RGB(0, 0, 0))
+				viewport := ui.Box(c).Fill()
+				var credits [2]ui.Element
+				viewport.Children(func() {
+					for i, top := range []float32{y, y + 9, 91} {
+						row := ui.Box(c.Key(i)).Absolute().Top(top - 2).Width(64).Height(5).
+							Draw(func(p *ui.Painter, r ui.Rect) {
+								p.Fill(ui.Rect{X: r.X, Y: r.Y + 2, W: r.W, H: 1}, white, 0)
+							})
+						if opening && i < len(credits) {
+							credits[i] = row
+						}
+					}
+				})
+				a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, browsing, credits)
+			}, 64, 96)
+			if tt.Image().RGBAAt(32, 32).R != 255 {
+				t.Fatal("credits should be fully visible away from the edges")
+			}
+			y = 4
+			tt.Frame()
+			frame := tt.Image()
+			outer, inner := frame.RGBAAt(32, 4).R, frame.RGBAAt(32, 13).R
+			if outer == 0 || outer >= inner || inner >= 255 || frame.RGBAAt(32, 91).R >= 255 {
+				t.Fatalf("expected a gradual fade at both edges, credits outer=%d inner=%d", outer, inner)
+			}
+			if frame.RGBAAt(32, 5).R != 0 || frame.RGBAAt(32, 12).R != 0 {
+				t.Fatal("fading credits spread into neighboring pixels")
+			}
+			if !browsing {
+				opening = false
+				tt.Frame()
+				if tt.Image().RGBAAt(32, 4).R >= outer {
+					t.Fatal("credits did not return to the normal blur after the intro")
+				}
+			}
+		})
+	}
+}
+
 // Manual scrolling fades both edges without spreading strokes into adjacent pixels.
 func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 	a := newTestApp()
@@ -185,7 +233,7 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
 			}
 		})
-		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, true)
+		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, true, [2]ui.Element{})
 	}, 64, 96)
 	frame := tt.Image()
 	if middle := frame.RGBAAt(32, 48).R; middle != 255 {

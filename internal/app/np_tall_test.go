@@ -20,6 +20,7 @@ func tallLyricsApp(t *testing.T) *app {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
+	a.settings.LyricEdgeFade = false
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "高窗口布局", Duration: 150000}})
 	var lines []lyrics.Line
 	for i := range 30 {

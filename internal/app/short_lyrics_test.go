@@ -16,6 +16,7 @@ import (
 func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
 	a := newTestApp()
 	a.settings = defaultSettings()
+	a.settings.LyricEdgeFade = false
 	a.settings.HotComments = false
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 200000}})
 	a.pl.SetLyrics(lines)
