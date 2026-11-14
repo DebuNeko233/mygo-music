@@ -654,6 +654,7 @@ type linesStyle struct {
 // viewport changes; cur -1 precedes the first line. Clicking a line seeks
 // to it. foot, if set, follows the lines.
 func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, cur int, st linesStyle, foot func()) {
+	initialFollow := st.centerShort && a.lyricAt == -2
 	// Bounds below belong to the last layout. A width-only window resize
 	// may leave the cover and pane top unchanged: schedule a pass after the
 	// new text wrapping is laid out, even if this pass sees the old viewport.
@@ -749,6 +750,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		// only the lines, so long lyrics' trailing scroll space cannot make
 		// a short block look too tall to center.
 		if box.H <= 0 || textH <= 0 {
+			// Keep the measurement pass out of view. Until it runs, a new
+			// song's rows can sit at the top of an unmeasured viewport.
+			body.Invisible()
 			c.AnimationFrame()
 			return
 		}
@@ -786,6 +790,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		// Wait for the new padding or wrapping before following the line.
 		// Recompute the destination without treating reflow as a new song.
 		a.lyricViewportW, a.lyricViewportH = 0, 0
+		if initialFollow {
+			body.Invisible()
+		}
 		c.AnimationFrame()
 		return
 	}
@@ -812,16 +819,22 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 				}
 				target = lyricHeadroom(box.H, st) + lb.Y - content.LayoutBounds().Y - inset
 			} else {
+				if initialFollow {
+					body.Invisible()
+				}
 				c.AnimationFrame()
 				return // not laid out yet: the next frame scrolls
 			}
 		}
-		snap := st.immersive && (introHeight > 0 || a.lyricAt == -2 || !a.lyricGlide.posed ||
+		snap := initialFollow || st.immersive && (introHeight > 0 || !a.lyricGlide.posed ||
 			a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
 		a.lyricAt = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
 		target = min(max(0, target), a.lyricScroll.MaxY)
 		if snap && abs32(target-a.lyricScroll.Y) > 0.5 {
+			if initialFollow {
+				body.Invisible()
+			}
 			a.lyricScroll.Y, a.lyricGlide = target, lyricGlide{}
 			c.AnimationFrame()
 		} else if !snap {

@@ -164,10 +164,27 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	}
 }
 
-// Switching tracks must never paint the instrumental notice at the top while measuring its new viewport.
-func TestInstrumentalNoticeDoesNotFlashAtTop(t *testing.T) {
+// Switching tracks must never paint a short lyric block at the top while measuring its new viewport.
+func TestShortLyricsDoNotFlashAtTop(t *testing.T) {
+	for _, line := range []lyrics.Line{
+		{At: 5 * time.Second, Text: lyrics.InstrumentalText},
+		{Text: "A short sung line"},
+	} {
+		t.Run(line.Text, func(t *testing.T) {
+			for _, immersive := range []bool{false, true} {
+				t.Run(fmt.Sprint(immersive), func(t *testing.T) {
+					checkLyricSwitchPaintsCentered(t, line, immersive)
+				})
+			}
+		})
+	}
+}
+
+func checkLyricSwitchPaintsCentered(t *testing.T, line lyrics.Line, immersive bool) {
+	t.Helper()
 	const w, h = 300, 360
 	a := newTestApp()
+	a.settings.LyricEdgeFade = immersive
 	a.pl.Cue([]netease.Track{{ID: 1}})
 	a.pl.SetLyrics(nil)
 	var tt *ui.Tester
@@ -177,7 +194,7 @@ func TestInstrumentalNoticeDoesNotFlashAtTop(t *testing.T) {
 		for y := 0; y < h/4; y++ {
 			for x := 0; x < w; x++ {
 				if frame.RGBAAt(x, y).R != 0 {
-					t.Fatal("the notice painted at the top during the track switch")
+					t.Fatal("the lyric painted at the top during the track switch")
 				}
 			}
 		}
@@ -192,12 +209,12 @@ func TestInstrumentalNoticeDoesNotFlashAtTop(t *testing.T) {
 	}, w, h)
 
 	a.pl.Cue([]netease.Track{{ID: 2}})
-	a.pl.SetLyrics([]lyrics.Line{{At: 5 * time.Second, Text: lyrics.InstrumentalText}})
+	a.pl.SetLyrics([]lyrics.Line{line})
 	tt.Frame()
 	checkTop()
-	row, ok := tt.Find(lyrics.InstrumentalText)
-	if !ok || abs32(row.Y+row.H/2-h/2) > 1 {
-		t.Fatalf("instrumental notice did not appear centered: %+v", row)
+	row, ok := tt.Find(line.Text)
+	if !ok || abs32(row.Y+row.H/2-h/2) > 2 {
+		t.Fatalf("the lyric did not appear centered: %+v", row)
 	}
 }
 
