@@ -19,16 +19,17 @@ var (
 // commentState is the comments of the song or episode Now Playing shows:
 // the hot ones, and the latest, loaded a page at a time as they scroll.
 type commentState struct {
-	track   int64
-	thread  string // whose comments they are, as NetEase names it
-	hot     []netease.Comment
-	latest  []netease.Comment
-	total   int
-	more    bool
-	loaded  bool
-	loading bool
-	err     string
-	scroll  ui.ScrollState
+	track    int64
+	thread   string // whose comments they are, as NetEase names it
+	hot      []netease.Comment
+	quietHot []*netease.Comment
+	latest   []netease.Comment
+	total    int
+	more     bool
+	loaded   bool
+	loading  bool
+	err      string
+	scroll   ui.ScrollState
 }
 
 // commentPage is how many comments a page loads.
@@ -67,7 +68,7 @@ func (a *app) loadComments() {
 			}
 			cs.loaded = true
 			if offset == 0 {
-				cs.hot = page.Hot
+				cs.setHot(page.Hot)
 			}
 			// New comments shift the pages: those already shown come again.
 			seen := make(map[int64]bool, len(cs.latest))

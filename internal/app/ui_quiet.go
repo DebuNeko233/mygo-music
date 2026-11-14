@@ -29,9 +29,25 @@ const (
 // comment shown in one, kept as it fades away.
 type quietState struct {
 	track  int64
-	lines  int // how many lines they were found among
+	first  *lyrics.Line
+	lines  int
+	length time.Duration
+	loaded bool
 	quiets []lyrics.Quiet
 	cm     *netease.Comment
+}
+
+// setHot picks comments short enough to read in the gaps between lyrics.
+// Keep pointers to the originals so the card reflects likes made in the list.
+func (cs *commentState) setHot(hot []netease.Comment) {
+	clear(cs.quietHot)
+	cs.quietHot = cs.quietHot[:0]
+	cs.hot = hot
+	for i := range hot {
+		if n := utf8.RuneCountInString(hot[i].Content); n > 0 && n <= quietRunes {
+			cs.quietHot = append(cs.quietHot, &hot[i])
+		}
+	}
 }
 
 // quietComment returns the hot comment to show at pos, nil for none, and
@@ -40,27 +56,23 @@ func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, 
 	if !a.settings.HotComments {
 		return nil, 0
 	}
-	qs := &a.quiet
-	if qs.track != tr.ID || qs.lines != len(lines) || qs.quiets == nil {
-		qs.track, qs.lines = tr.ID, len(lines)
-		qs.quiets = lyrics.Quiets(lines, tr.Length(), quietLeast)
-		if len(lines) == 0 && loaded && tr.Length() >= quietLeast {
-			qs.quiets = []lyrics.Quiet{{From: 0, To: tr.Length()}}
-		}
-		if qs.quiets == nil {
-			qs.quiets = []lyrics.Quiet{}
-		}
-	}
-	var hot []*netease.Comment
-	if cs := &a.comments; cs.track == tr.ID {
-		for i := range cs.hot {
-			if n := utf8.RuneCountInString(cs.hot[i].Content); n > 0 && n <= quietRunes {
-				hot = append(hot, &cs.hot[i])
-			}
-		}
-	}
-	if len(hot) == 0 {
+	cs := &a.comments
+	if cs.track != tr.ID || len(cs.quietHot) == 0 {
 		return nil, 0
+	}
+	qs := &a.quiet
+	// A lyric refresh replaces the slice even when the line count matches.
+	var first *lyrics.Line
+	if len(lines) > 0 {
+		first = &lines[0]
+	}
+	length := tr.Length()
+	if qs.track != tr.ID || qs.first != first || qs.lines != len(lines) || qs.loaded != loaded || qs.length != length {
+		qs.track, qs.first, qs.lines, qs.loaded, qs.length = tr.ID, first, len(lines), loaded, length
+		qs.quiets = lyrics.Quiets(lines, length, quietLeast)
+		if len(lines) == 0 && loaded && length >= quietLeast {
+			qs.quiets = []lyrics.Quiet{{From: 0, To: length}}
+		}
 	}
 	shown := 0 // the comments the quiets before showed
 	for _, q := range qs.quiets {
@@ -77,7 +89,7 @@ func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, 
 			if slot+1 < slots {
 				next = from + time.Duration(slot+1)*each
 			}
-			return hot[(shown+slot)%len(hot)], next - pos
+			return cs.quietHot[(shown+slot)%len(cs.quietHot)], next - pos
 		}
 		shown += slots
 	}
