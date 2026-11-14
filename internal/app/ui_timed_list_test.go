@@ -57,6 +57,27 @@ func TestLongLyricsWindow(t *testing.T) {
 	}
 }
 
+// Toggling immersive mode preserves the reading position in a virtualized lyric list.
+func TestLongLyricsKeepAnchorWhenTogglingImmersive(t *testing.T) {
+	lines := make([]lyrics.Line, 100)
+	for i := range lines {
+		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Line %d", i)}
+	}
+	const height = 240
+	a, tt := shortLyricsApp(lines, 200, height)
+	active := lines[len(lines)/2]
+	a.pl.Hold(active.At)
+	for _, immersive := range []bool{false, true, false} {
+		a.settings.LyricEdgeFade = immersive
+		tt.Frame()
+		tt.Advance(time.Second)
+		row, ok := tt.AccessByRole(ui.RoleButton, active.Text)
+		if !ok || row.Offscreen || abs32(row.Bounds.Y-height*0.3) > 2 {
+			t.Fatalf("immersive=%v: active lyric lost its reading position: %+v", immersive, row)
+		}
+	}
+}
+
 // A long transcript can seek to a distant caption and still click the nearby lines.
 func TestLongCaptionsWindow(t *testing.T) {
 	a := captionsTestApp(t, true)

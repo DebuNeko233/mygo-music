@@ -61,7 +61,7 @@ var lyricNotices = map[string]LineKind{
 	"纯音乐": Instrumental, "纯音乐请欣赏": Instrumental, "请欣赏纯音乐": Instrumental,
 	"純音樂": Instrumental, "純音樂請欣賞": Instrumental, "請欣賞純音樂": Instrumental,
 	"instrumental": Instrumental, "instrumentalonly": Instrumental, "インストゥルメンタル": Instrumental, "歌詞なし": unavailable,
-	"暂无歌词": unavailable, "暫無歌詞": unavailable,
+	UnavailableText: unavailable, "暫無歌詞": unavailable,
 }
 
 func compactField(text string) string {

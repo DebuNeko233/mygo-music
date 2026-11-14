@@ -124,7 +124,7 @@ func lyricScrollFixture(n int) (*ui.Tester, *int, func(time.Duration)) {
 				seekTime = time.Time{}
 			}
 		}
-		a.lyricsPane(c, a.pl.Current(), 520, ui.Rect{})
+		a.lyricsPane(c, a.pl.Current(), 520, ui.Rect{}, 0)
 	}, 480, 520)
 	tt.Advance(2 * time.Second)
 	seek := func(pos time.Duration) {
@@ -454,7 +454,7 @@ func TestImmersiveLRCStaysIdleBetweenLines(t *testing.T) {
 	paints := 0
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		c.Root().Draw(func(*ui.Painter, ui.Rect) { paints++ })
-		a.lyricsPane(c, a.pl.Current(), 110, ui.Rect{})
+		a.lyricsPane(c, a.pl.Current(), 110, ui.Rect{}, 0)
 	}, 180, 110, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	before := paints
 	tt.Advance(time.Second)

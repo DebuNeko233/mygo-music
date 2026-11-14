@@ -154,7 +154,7 @@ func TestStaticLyricsQuietCard(t *testing.T) {
 			a, _, _ := quietApp(0)
 			a.pl.SetLyrics([]lyrics.Line{{At: 10 * time.Second, Text: text}})
 			tt := ui.NewTesterWith(func(c *ui.Context) {
-				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{})
+				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
 			}, 320, 360, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			const comment = "刮风这天，我试过握着你手"
 			if tt.HasText(comment) {

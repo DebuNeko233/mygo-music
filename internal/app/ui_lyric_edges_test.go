@@ -38,6 +38,42 @@ func TestLyricBlurIgnoresCanvasPadding(t *testing.T) {
 	}
 }
 
+// The scrollbar gutter keeps the original pixels in both automatic and manual scrolling.
+func TestLyricScrollbarGutterStaysClear(t *testing.T) {
+	for _, browsing := range []bool{false, true} {
+		t.Run(fmt.Sprint(browsing), func(t *testing.T) {
+			const width, height, gutter = 80, 100, 16
+			var pass *ui.Canvas
+			enabled := false
+			tt := ui.NewTester(func(c *ui.Context) {
+				c.Root().Background(ui.RGB(0, 0, 0))
+				viewport := ui.Box(c).Fill()
+				viewport.Children(func() {
+					ui.Box(c.Key("thumb")).Absolute().Right(3).Top(1).Size(6, 42).Radius(3).Background(white)
+					ui.Box(c.Key("ink")).Absolute().Right(gutter).Top(0).Size(14, 14).Background(white)
+				})
+				if enabled {
+					viewport.Effect(lyricEdgeFade{pass: &pass, browsing: browsing, gutter: gutter})
+				}
+			}, width, height)
+			plain := tt.Image()
+			enabled = true
+			tt.Frame()
+			filtered := tt.Image()
+			for y := 0; y < height; y++ {
+				for x := width - gutter; x < width; x++ {
+					if plain.RGBAAt(x, y) != filtered.RGBAAt(x, y) {
+						t.Fatalf("gutter pixel changed at %d,%d", x, y)
+					}
+				}
+			}
+			if filtered.RGBAAt(width-gutter-6, 1).R >= plain.RGBAAt(width-gutter-6, 1).R {
+				t.Fatal("lyric ink next to the gutter did not fade")
+			}
+		})
+	}
+}
+
 // The active row stays sharp while adjacent rows spread and fade near the viewport edges.
 func TestLyricEdgeFadeCoverage(t *testing.T) {
 	const w, h = 64, 150
@@ -155,7 +191,7 @@ func TestLyricHoverKeepsEdgeFade(t *testing.T) {
 						}
 					}
 				})
-				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, 0, browsing, [2]ui.Element{})
+				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, 0, browsing, [2]ui.Element{}, 0)
 			}, 64, 96)
 			before := tt.Image().RGBAAt(32, 4).R
 			tt.Move(32, 4)
@@ -200,7 +236,7 @@ func TestLyricIntroCreditsFadeWhileScrolling(t *testing.T) {
 						}
 					}
 				})
-				a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, browsing, credits)
+				a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, browsing, credits, 0)
 			}, 64, 96)
 			if tt.Image().RGBAAt(32, 32).R != 255 {
 				t.Fatal("credits should be fully visible away from the edges")
@@ -237,7 +273,7 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
 			}
 		})
-		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, true, [2]ui.Element{})
+		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, true, [2]ui.Element{}, 0)
 	}, 64, 96)
 	frame := tt.Image()
 	if middle := frame.RGBAAt(32, 48).R; middle != 255 {
@@ -323,7 +359,7 @@ func TestLyricCanvasAcrossTrackChanges(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 60000}})
 	a.pl.SetLyrics(lines)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), 180, ui.Rect{}) })
+		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), 180, ui.Rect{}, 0) })
 	}, 160, 180, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for i, text := range []string{lyrics.InstrumentalText, "A short lyric"} {
 		if a.lyricBlurPass == nil {
@@ -358,7 +394,7 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				_, h := c.Size()
 				c.Root().Background(ui.Hex("#22384b"))
-				ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}) })
+				ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
 			}, 280, 320, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			before := a.lyricScroll.Y
 			if before <= 0 {

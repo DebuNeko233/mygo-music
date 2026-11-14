@@ -1,6 +1,7 @@
 package app
 
 import (
+	"math"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -19,7 +20,12 @@ func withinRow(y float, row vec3) bool {
 `
 
 const lyricBrowseFadeSource = "package main\n" + lyricEdgeMask + `
+var Gutter float
+
 func ColorEffect(pos vec2, color vec4) vec4 {
+	if Gutter > 0 && pos.x >= rectSize().x-Gutter {
+		return color
+	}
 	return color*(1.0-edge(pos.y, rectSize().y))
 }
 `
@@ -37,6 +43,7 @@ var Height float
 var Top float
 var Scale float
 var ContentSize vec2
+var TextRight float
 var Hover vec3
 var Credits vec3
 
@@ -55,7 +62,7 @@ func blurSigma(pos vec2) float {
 func sampleContent(pos vec2) vec4 {
 	// The intermediate canvas can be larger than the painted viewport.
 	// Clamp to the actual content in both passes, independent of allocation.
-	return image0Sample(clamp(pos, vec2(0.5), ContentSize-vec2(0.5)))
+	return image0Sample(clamp(pos, vec2(0.5), vec2(TextRight, ContentSize.y)-vec2(0.5)))
 }
 
 func gaussian(pos, stride vec2) vec4 {
@@ -71,6 +78,10 @@ func gaussian(pos, stride vec2) vec4 {
 
 const lyricGaussianHorizontal = "package main\n" + lyricGaussianKernel + `
 func Fragment(dst vec4, pos vec2) vec4 {
+	// The scrollbar stays in the source layer and never enters the blur pass.
+	if pos.x >= TextRight {
+		return vec4(0)
+	}
 	stride := blurSigma(pos)*Scale/2.8
 	// Skip the interior of each clear band, leaving more than the
 	// vertical kernel's maximum reach for samples from its neighbors.
@@ -86,6 +97,9 @@ func Fragment(dst vec4, pos vec2) vec4 {
 
 const lyricGaussianVertical = "package main\n" + lyricGaussianKernel + `
 func LayerEffect(pos vec2) vec4 {
+	if Gutter > 0 && pos.x >= rectSize().x-Gutter {
+		return layerAt(pos)
+	}
 	y := pos.y*Scale+Top
 	if withinRow(y, Active) {
 		return layerAt(pos)
@@ -101,6 +115,7 @@ func LayerEffect(pos vec2) vec4 {
 }
 
 var Left float
+var Gutter float
 `
 
 var lyricGaussian = sync.OnceValue(func() [2]*shader.Shader {
@@ -116,6 +131,7 @@ type lyricEdgeFade struct {
 	creditBand func(scale, insetY float32) [3]float32
 	pass       **ui.Canvas
 	browsing   bool
+	gutter     float32
 }
 
 func addLyricCreditRow(rows *[2]ui.Element, row ui.Element) {
@@ -125,14 +141,14 @@ func addLyricCreditRow(rows *[2]ui.Element, row ui.Element) {
 	rows[1] = row
 }
 
-func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introOpacity float32, browsing bool, credits [2]ui.Element) {
+func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introOpacity float32, browsing bool, credits [2]ui.Element, gutter float32) {
 	var incoming ui.Element
 	var blend float32
 	if intro.Valid() {
 		// Move the clear band from the dots to the first line as they fade.
 		active, incoming, blend = intro, first, 1-introOpacity
 	}
-	fx := lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass, browsing: browsing}
+	fx := lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass, browsing: browsing, gutter: gutter}
 	if !browsing && hovered.Valid() {
 		fx.hoverBand = lyricClearBand(scroll, hovered, ui.Element{}, 0)
 	}
@@ -193,7 +209,7 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 	var hover, credits [3]float32
 	if fx.browsing {
 		// The manual fade works in DIPs and needs no Gaussian canvas.
-		lyricBrowseFade().Effect(shader.Options{}).PaintEffect(p, box, bitmap, inset)
+		lyricBrowseFade().Effect(shader.Options{Uniforms: map[string]any{"Gutter": fx.gutter}}).PaintEffect(p, box, bitmap, inset)
 		return
 	}
 	scale := p.Scale()
@@ -202,6 +218,10 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 		active = fx.clearBand(scale, inset.Y)
 	}
 	w, h := bitmap.Size()
+	textRight := float32(w)
+	if fx.gutter > 0 {
+		textRight = max(1, min(textRight, float32(math.Floor(float64((box.W-fx.gutter)*scale+inset.X)))))
+	}
 	pass := *fx.pass
 	// Reuse the intermediate texture during live resize.
 	pw, ph := (w+63)/64*64, (h+63)/64*64
@@ -223,7 +243,7 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 	uniforms := map[string]any{
 		"Active": active, "Height": box.H, "Top": inset.Y, "Scale": scale,
 		"Hover": hover, "Credits": credits,
-		"ContentSize": [2]float32{float32(w), float32(h)},
+		"ContentSize": [2]float32{float32(w), float32(h)}, "TextRight": textRight,
 	}
 	pass.Draw(p, func(cp *ui.Painter) {
 		kernel[0].Draw(cp, ui.Rect{W: float32(w), H: float32(h)}, shader.Options{
@@ -231,6 +251,7 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 		})
 	})
 	uniforms["Left"] = inset.X
+	uniforms["Gutter"] = fx.gutter
 	kernel[1].Effect(shader.Options{Uniforms: uniforms, Images: [4]*ui.Bitmap{pass.Bitmap()}}).
 		PaintEffect(p, box, bitmap, inset)
 }

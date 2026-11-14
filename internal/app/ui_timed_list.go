@@ -140,7 +140,8 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		anchor = min(m.rowAt(max(0, s.Y-previousLead)), len(lines)-1)
 		inset = max(0, s.Y-previousLead-m.offsets[anchor])
 	}
-	m.reset(c, lines, timedLineWidth(box.W), st, revision)
+	lineWidth := st.lineWidth(box.W)
+	m.reset(c, lines, lineWidth, st, revision)
 	if !hadMeasurements && !follow {
 		anchor = m.rowAt(s.Y)
 	}
@@ -176,11 +177,11 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	}
 	lead := head
 	m.leading = lead
-	if st.immersive && !st.browsing && (lead != previousLead || introHeight > 0) {
+	if !m.manual && (lead != previousLead || introHeight > 0) {
 		follow = true
 	}
 	maxY := max(0, total-box.H)
-	scroll.Padding(0, timedPaneInsetRight, 0, 0)
+	scroll.Padding(0, max(st.rightInset, timedPaneInsetRight), 0, 0)
 	if !replaced {
 		if m.manual && (resized || s.Y > previousLead && lead != previousLead) {
 			s.Y = min(maxY, lead+m.offsets[anchor]+min(inset, m.offsets[anchor+1]-m.offsets[anchor]-1))
@@ -264,7 +265,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 					a.paintLyricInterlude(c, intro, st.intro, introOpacity)
 				}
 				height := m.offsets[i+1] - m.offsets[i] - timedLineGap
-				row := a.timedLine(c.Key(i), &lines[i], i-cur, timedLineWidth(box.W), st).Height(height).Shrink(0)
+				row := a.timedLine(c.Key(i), &lines[i], i-cur, lineWidth, st).Height(height).Shrink(0)
 				if st.immersive && !st.browsing && cur < 0 && i < st.introLine && lines[i].Kind == lyrics.Credit {
 					addLyricCreditRow(&credits, row)
 				}
@@ -298,7 +299,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		g.place(c, s, scroll, content, st.browsing)
 		if st.immersive {
 			if maxY > 0 {
-				a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing, credits)
+				a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing, credits, st.rightInset)
 			} else {
 				a.lyricBlurPass = nil
 			}

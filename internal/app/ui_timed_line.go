@@ -119,11 +119,11 @@ type paintedLyric struct {
 	height    float32
 }
 
-func timedLineWidth(viewport float32) float32 {
+func (st linesStyle) lineWidth(viewport float32) float32 {
 	if viewport <= 0 {
 		return 0
 	}
-	return max(1, viewport-timedPaneInsetRight-2*timedLineInsetX)
+	return max(1, viewport-max(st.rightInset, timedPaneInsetRight)-2*timedLineInsetX)
 }
 
 func lyricFont(c *ui.Context, st linesStyle) ui.Font {

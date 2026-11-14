@@ -89,6 +89,28 @@ func TestDisplayFallsBackToLRCBody(t *testing.T) {
 	}
 }
 
+// A word-timed release note beside an instrumental notice must not hide sung LRC lyrics.
+func TestDisplayFallsBackWhenYRCContainsInstrumentalNotes(t *testing.T) {
+	const lrc = "[00:10.00]First sung line\n[00:12.00]Second sung line"
+	const translation = "[00:10.00]第一句"
+	const note = "[1000,500](1000,500,0)这首歌的名字叫《示例》"
+	for _, tc := range []struct{ name, notice string }{
+		{"timed", "[500,500](500,500,0)纯音乐，请欣赏"},
+		{"json", `{"t":500,"c":[{"tx":"纯音乐，请欣赏"}]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, view := BuildDisplay(lrc, translation, tc.notice+"\n"+note)
+			if len(view.Lines) != 4 || view.Lines[0].Kind != Instrumental || view.Lines[1].Kind != Credit {
+				t.Fatalf("display did not keep the notice and note as metadata: %+v", view.Lines)
+			}
+			current, next := view.Position(10 * time.Second)
+			if current != 2 || next != 3 || view.Lines[current].Text != "First sung line" || view.Lines[current].Translation != "第一句" || view.Lines[current].Timed {
+				t.Fatalf("fallback lost the timed LRC and its translation: current=%d next=%d lines=%+v", current, next, view.Lines)
+			}
+		})
+	}
+}
+
 // The cache includes joined bilingual credit names and alternative instrumental notices.
 func TestDisplayDictionaryAliases(t *testing.T) {
 	lrc := "[00:00.00]作曲Composer：A\n[00:01.00]指挥Conductor：B\n[00:02.00]母带制作 Mastering Engineer：C\n" +
@@ -107,9 +129,24 @@ func TestDisplayDictionaryLeavesSungTextAlone(t *testing.T) {
 	if !view.HasSinging() || len(view.Lines) != 3 || view.Lines[0].At != 3*time.Second {
 		t.Fatalf("a notice or a credit-like prefix changed the sung lines: %+v", view)
 	}
-	_, empty := BuildDisplay("[00:00.00]暂无歌词", "", "")
-	if len(empty.Lines) != 0 {
-		t.Fatalf("missing lyrics became a timed line: %+v", empty)
+}
+
+// Empty data keeps the instrumental fallback, while an explicit notice stays outside the timeline.
+func TestDisplayEmptyNotice(t *testing.T) {
+	for _, tc := range []struct{ name, lrc, yrc, want string }{
+		{"empty", "", "", InstrumentalText},
+		{"blank rows", "[00:00.00]\n [00:01.00]  ", "", InstrumentalText},
+		{"plain LRC", "\ufeff 暂无歌词。\n", "", UnavailableText},
+		{"timed LRC", "[00:00.00]暂无歌词", "", UnavailableText},
+		{"timed YRC", "", "[0,500](0,500,0)暂无歌词", UnavailableText},
+		{"JSON YRC", "", `{"t":0,"c":[{"tx":"暫無歌詞"}]}`, UnavailableText},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, display := BuildDisplay(tc.lrc, "", tc.yrc)
+			if len(display.Lines) != 0 || display.HasSinging() || display.EmptyText() != tc.want {
+				t.Fatalf("notice = %q, rows = %+v, want %q with no rows", display.EmptyText(), display.Lines, tc.want)
+			}
+		})
 	}
 }
 

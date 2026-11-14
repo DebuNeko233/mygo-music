@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"image"
 	"image/png"
 	"math"
 	"os"
@@ -40,6 +41,63 @@ func settleTallLyrics(tt *ui.Tester) {
 		tt.Advance(time.Second)
 		tt.Frame()
 		tt.Frame()
+	}
+}
+
+// The visible lyric thumb mirrors the cover's left edge and can drag the pane in either mode.
+func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
+			a := tallLyricsApp(t)
+			a.settings.LyricEdgeFade = immersive
+			tt := ui.NewTesterWith(func(c *ui.Context) {
+				if immersive {
+					// This test exercises dragging. The small gutter test covers the Gaussian pass.
+					a.lyricBrowseUntil = c.Now().Add(lyricBrowseDelay)
+				}
+				a.view(c)
+			}, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			// Scale only the software raster, so full-screen layout tests stay inexpensive.
+			const scale = 0.5
+			tt.SetScale(scale)
+			for _, size := range [][2]int{{1600, 550}, {1728, 1117}} {
+				w, h := size[0], size[1]
+				tt.SetSize(w, h)
+				a.pl.Hold(77 * time.Second)
+				a.seekLyricFollow()
+				tt.Frame()
+				cover, ok := tt.Find("专辑封面")
+				if !ok {
+					t.Fatal("cover missing")
+				}
+				wantRight := float32(w) - cover.X
+				want := int(math.Round(float64(wantRight * scale)))
+				// The native thumb appears when the pointer enters the scroll pane.
+				tt.Move(1, 1)
+				hidden := tt.Image()
+				tt.Move(wantRight-4, float32(h)/2)
+				visible := tt.Image()
+				changed := image.Rectangle{}
+				for y := 0; y < visible.Bounds().Dy(); y++ {
+					for x := want - 8; x < want+8; x++ {
+						if hidden.RGBAAt(x, y) != visible.RGBAAt(x, y) {
+							changed = changed.Union(image.Rect(x, y, x+1, y+1))
+						}
+					}
+				}
+				if changed.Dy() < 12 || abs32(float32(changed.Max.X-want)) > 1 {
+					t.Fatalf("%dx%d: cover left %.1f, want scrollbar right %d, got %v", w, h, cover.X, want, changed)
+				}
+				before := a.lyricScroll.Y
+				x, y := float32(changed.Min.X+changed.Max.X)/(2*scale), float32(changed.Min.Y+changed.Max.Y)/(2*scale)
+				tt.Press(x, y)
+				tt.Move(x, y+32)
+				tt.Release(x, y+32)
+				if a.lyricScroll.Y <= before {
+					t.Fatalf("%dx%d: dragging the thumb did not scroll: %.1f → %.1f", w, h, before, a.lyricScroll.Y)
+				}
+			}
+		})
 	}
 }
 

@@ -23,7 +23,7 @@ func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
 	a.pl.Hold(0)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		_, height := c.Size()
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), height, ui.Rect{}) })
+		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), height, ui.Rect{}, 0) })
 	}, w, h, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	return a, tt
 }
@@ -104,6 +104,28 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	checkShortLyricsCenter(t, tt, a, replaced, 900)
 }
 
+// Empty lyric responses and explicit missing-lyric notices show different messages in both modes.
+func TestNowPlayingEmptyLyricNotice(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
+			a, tt := shortLyricsApp(nil, 320, 240)
+			a.settings.LyricEdgeFade = immersive
+			for _, tc := range []struct{ source, want, other string }{
+				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
+				{"[00:00.00]暂无歌词", lyrics.UnavailableText, lyrics.InstrumentalText},
+				{"暂无歌词", lyrics.UnavailableText, lyrics.InstrumentalText},
+				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
+			} {
+				a.pl.RefreshLyrics(1, tc.source, "", "")
+				tt.Frame()
+				if !tt.HasText(tc.want) || tt.HasText(tc.other) {
+					t.Fatalf("lyrics source %q: expected %q alone, got %q", tc.source, tc.want, tt.Texts())
+				}
+			}
+		})
+	}
+}
+
 // Static metadata centers or scrolls manually in either lyric mode, regardless of its timestamps.
 func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 	for _, immersive := range []bool{false, true} {
@@ -111,10 +133,6 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 			const w, h = 480, 360
 			a, tt := shortLyricsApp(nil, w, h)
 			a.settings.LyricEdgeFade = immersive
-			tt.Frame()
-			if !tt.HasText("暂无歌词") {
-				t.Fatal("empty lyrics should show the missing-lyrics message")
-			}
 			a.pl.RefreshLyrics(1, "[00:00.00]作曲 : A\n[00:05.00]纯音乐，请欣赏\n[01:47.50]指挥 Conductor : C", "", "")
 			tt.Frame()
 			first, ok := tt.Find(lyrics.InstrumentalText)
@@ -205,7 +223,7 @@ func checkLyricSwitchPaintsCentered(t *testing.T, line lyrics.Line, immersive bo
 			checkTop()
 		}
 		c.Root().Background(ui.RGB(0, 0, 0))
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}) })
+		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
 	}, w, h)
 
 	a.pl.Cue([]netease.Track{{ID: 2}})
