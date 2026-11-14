@@ -25,6 +25,13 @@ type Display struct {
 
 func (d Display) HasSinging() bool { return len(d.sung) > 0 }
 
+func (d Display) FirstSung() int {
+	if !d.HasSinging() {
+		return -1
+	}
+	return d.sung[0]
+}
+
 // Position returns row indices, with -1 for a missing current or next row.
 func (d Display) Position(pos time.Duration) (current, next int) {
 	i := sort.Search(len(d.sung), func(i int) bool { return d.Lines[d.sung[i]].At > pos })

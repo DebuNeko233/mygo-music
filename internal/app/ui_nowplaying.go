@@ -543,6 +543,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, closeBound
 	}
 	defer a.quietCard(c, dim, h*0.18)
 	style := linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage(), immersive: a.settings.LyricEdgeFade}
+	style.introLine = display.FirstSung()
 	if style.immersive {
 		style.closeBounds = closeBounds
 		scroll.HandleInput(func(ev ui.InputEvent) bool {
@@ -557,7 +558,6 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, closeBound
 		case gap.to > pos && pos >= gap.from && !quiet:
 			if gap.intro {
 				style.intro = gap
-				style.introLine = next
 			} else if !style.browsing {
 				defer func() {
 					dots := ui.Box(c.Key("interlude")).Absolute().Right(12).Bottom(8).Size(54, 12)
@@ -658,7 +658,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		a.longTimedLines(c, scroll, lines, cur, st, foot)
 		return
 	}
-	var active, hovered, first, firstSung, intro, content, body ui.Element
+	var active, hovered, firstSung, intro, content, body ui.Element
 	viewport := scroll.LayoutBounds()
 	var textH, introHeight, introOpacity float32
 	draw := func() {
@@ -667,16 +667,19 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			// New lyrics need a fresh measurement, even at the same line index.
 			key = c.Key(&lines[0])
 		}
-		content = ui.Column(key).Gap(timedLineGap).Shrink(0)
+		content = ui.Column(key).Shrink(0)
+		if !st.immersive {
+			content.Gap(timedLineGap)
+		}
 		content.Children(func() {
 			width := timedLineWidth(viewport.W)
 			for i := range lines {
+				if st.immersive && i == st.introLine {
+					intro = ui.Box(c.Key("intro")).Height(0).Shrink(0)
+				}
 				line := a.timedLine(c.Key(i), &lines[i], i-cur, width, st)
 				if st.immersive && line.Hovered() {
 					hovered = line
-				}
-				if i == 0 {
-					first = line
 				}
 				if i == st.introLine {
 					firstSung = line
@@ -687,24 +690,22 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 				if i == cur {
 					active = line
 				}
+				if st.immersive && i+1 < len(lines) {
+					ui.Box(c.Key(timedLineAfter(i))).Height(timedLineGap).Shrink(0)
+				}
 			}
 		})
 		if st.centerShort {
 			// Measure just the lyrics, subtracting any previous intro padding.
-			prev := content.LayoutBounds()
-			row := first.LayoutBounds()
-			if row.H > 0 {
-				textH = prev.H - (row.Y - prev.Y)
+			textH = content.LayoutBounds().H
+			if intro.Valid() {
+				textH -= intro.LayoutBounds().H
 			}
 			if viewport.H > 0 && textH > viewport.H {
 				introHeight, introOpacity = a.lyricIntro(c, st.intro)
 				if introHeight > 0 {
-					// Padding lets the gap close with the dots all the way to zero.
-					content.Padding(introHeight, 0, 0, 0)
-					content.Children(func() {
-						intro = ui.Box(c.Key("intro")).Absolute().Top(0).Left(0).Right(0).Height(introHeight)
-						a.paintLyricInterlude(c, intro, st.intro, introOpacity)
-					})
+					intro.Height(introHeight)
+					a.paintLyricInterlude(c, intro, st.intro, introOpacity)
 				}
 			}
 		}
@@ -752,13 +753,20 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		waitForLayout = math.Abs(float64(body.LayoutBounds().H-content.LayoutBounds().H-head-h*0.5)) > 1
 		// On the intro-to-lyric frame, the first row still reports its
 		// old position below the dots. Follow after they leave layout.
-		firstBox := first.LayoutBounds()
-		if st.immersive && introHeight == 0 && firstBox.H > 0 && firstBox.Y-content.LayoutBounds().Y > 1 {
+		if intro.Valid() && introHeight == 0 && intro.LayoutBounds().H > 1 {
 			waitForLayout = true
 		}
 	}
-	a.lyricGlide.place(c, &a.lyricScroll, scroll, moving, st.browsing)
+	if introHeight > 0 && !st.browsing {
+		// The slot animates in layout. Do not also animate its scroll offset.
+		a.lyricGlide = lyricGlide{offset: a.lyricScroll.Y, posed: true}
+	} else {
+		a.lyricGlide.place(c, &a.lyricScroll, scroll, moving, st.browsing)
+	}
 	if st.immersive {
+		if introHeight == 0 {
+			intro = ui.Element{}
+		}
 		a.lyricEdges(scroll, active, hovered, intro, firstSung, introOpacity, st.browsing)
 	}
 	if waitForLayout {
@@ -770,27 +778,38 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
 	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
-	if !st.browsing && (cur != a.lyricAt || resized) {
+	if !st.browsing && (cur != a.lyricAt || resized || introHeight > 0) {
 		target := float32(0)
-		if active.Valid() {
+		followRow := active
+		if introHeight > 0 {
+			followRow = firstSung
+		}
+		if followRow.Valid() {
 			// Where the glide is going, without where it still is.
-			if lb := active.LayoutBounds(); lb.H > 0 && box.H > 0 {
+			if lb := followRow.LayoutBounds(); lb.H > 0 && box.H > 0 {
 				// The line and its column share the same layout offset,
 				// even when the listener scrolls during this frame.
-				target = lyricHeadroom(box.H, st) + lb.Y - content.LayoutBounds().Y - lyricReadInset(box.H, lb.H)
+				inset := lyricReadInset(box.H, lb.H)
+				if introHeight > 0 {
+					// Anchor the dots where the first line will land. The
+					// shrinking slot then moves the lyric without a second glide.
+					lb.Y -= intro.LayoutBounds().H
+					inset = lerp(inset, lyricHeadroom(box.H, st), introOpacity)
+				}
+				target = lyricHeadroom(box.H, st) + lb.Y - content.LayoutBounds().Y - inset
 			} else {
 				c.AnimationFrame()
 				return // not laid out yet: the next frame scrolls
 			}
 		}
-		snap := st.immersive && (a.lyricAt == -2 || resized || a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
+		snap := st.immersive && (introHeight > 0 || a.lyricAt == -2 || resized || a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
 		a.lyricAt = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
 		target = min(max(0, target), a.lyricScroll.MaxY)
-		if snap {
+		if snap && abs32(target-a.lyricScroll.Y) > 0.5 {
 			a.lyricScroll.Y, a.lyricGlide = target, lyricGlide{}
 			c.AnimationFrame()
-		} else {
+		} else if !snap {
 			a.lyricGlide.to(c, a.lyricScroll.Y, target)
 		}
 	}

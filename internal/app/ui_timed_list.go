@@ -145,8 +145,12 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		anchor = m.rowAt(s.Y)
 	}
 	front, back := anchor, anchor
+	followRow := cur
+	if st.intro.intro {
+		followRow = st.introLine
+	}
 	if follow {
-		row := max(0, cur)
+		row := max(0, followRow)
 		front, back = row, row
 		if !resized && !replaced && abs32(m.offsets[row]-s.Y) < box.H*1.3 {
 			front, back = min(anchor, row), max(anchor, row)
@@ -170,9 +174,9 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		head = lyricHeadroom(box.H, st)
 		total += head + introHeight + h*0.5
 	}
-	lead := head + introHeight
+	lead := head
 	m.leading = lead
-	if st.immersive && !st.browsing && lead != previousLead {
+	if st.immersive && !st.browsing && (lead != previousLead || introHeight > 0) {
 		follow = true
 	}
 	maxY := max(0, total-box.H)
@@ -199,9 +203,13 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	target := s.Y
 	if follow {
 		target = 0
-		if cur >= 0 {
-			lineHeight := m.offsets[cur+1] - m.offsets[cur] - timedLineGap
-			target = min(max(0, lead+m.offsets[cur]-lyricReadInset(box.H, lineHeight)), maxY)
+		if followRow >= 0 {
+			lineHeight := m.offsets[followRow+1] - m.offsets[followRow] - timedLineGap
+			inset := lyricReadInset(box.H, lineHeight)
+			if introHeight > 0 {
+				inset = lerp(inset, head, introOpacity)
+			}
+			target = min(max(0, lead+m.offsets[followRow]-inset), maxY)
 		}
 	}
 	if !st.browsing {
@@ -209,7 +217,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	}
 	a.lyricViewportW, a.lyricViewportH = box.W, box.H
 	// A distant seek jumps directly to its newly measured neighborhood.
-	snap := follow && (resized || replaced || abs32(target-s.Y) > box.H || c.Preferences().ReduceMotion || target > s.MaxY)
+	snap := follow && (resized || replaced || abs32(target-s.Y) > box.H || c.Preferences().ReduceMotion || target > s.MaxY || introHeight > 0 && abs32(target-s.Y) > 0.5)
 	if snap {
 		s.Y, *g = target, lyricGlide{}
 		m.poseKey++
@@ -231,7 +239,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		}
 		// Retain both ends of the glide plus nearby lines for manual input.
 		padding := box.H * 0.5
-		lo := max(0, min(shown, destination)-padding-lead)
+		lo := max(0, min(shown, destination)-padding-lead-introHeight)
 		hi := max(shown, destination) + box.H + padding - lead
 		first := sort.Search(len(lines), func(i int) bool { return m.offsets[i+1] > lo })
 		last := sort.Search(len(lines), func(i int) bool { return m.offsets[i] >= hi })
@@ -241,14 +249,17 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 				ui.Box(c.Key("head")).Height(head).Shrink(0)
 			}
 			before := m.offsets[first]
-			if introHeight > 0 {
-				intro = ui.Box(c.Key("intro")).Height(introHeight).Shrink(0)
-				a.paintLyricInterlude(c, intro, st.intro, introOpacity)
+			if st.introLine < first {
+				before += introHeight
 			}
 			if before > 0 {
 				ui.Box(c.Key("before-rows")).Height(before).Shrink(0)
 			}
 			for i := first; i < last; i++ {
+				if introHeight > 0 && i == st.introLine {
+					intro = ui.Box(c.Key("intro")).Height(introHeight).Shrink(0)
+					a.paintLyricInterlude(c, intro, st.intro, introOpacity)
+				}
 				height := m.offsets[i+1] - m.offsets[i] - timedLineGap
 				row := a.timedLine(c.Key(i), &lines[i], i-cur, timedLineWidth(box.W), st).Height(height).Shrink(0)
 				if st.immersive && row.Hovered() {
@@ -265,6 +276,9 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 				}
 			}
 			bottom := m.offsets[last]
+			if st.introLine < last {
+				bottom += introHeight
+			}
 			if last == len(lines) {
 				bottom -= timedLineGap
 			}

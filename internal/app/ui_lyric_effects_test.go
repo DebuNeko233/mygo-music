@@ -122,7 +122,7 @@ func TestLyricNearCloseDoesNotSeek(t *testing.T) {
 	}
 }
 
-// Removing the dots used to jump the first line to its final position in one frame.
+// Intro dots reserve space directly above the first sung line, even after opening credits.
 func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 	const firstAt = 6 * time.Second
 	for _, tc := range []struct {
@@ -133,8 +133,11 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%d-lines-%d-high", tc.count, tc.height), func(t *testing.T) {
 			lines := make([]lyrics.Line, tc.count)
-			for i := range lines {
-				lines[i] = lyrics.Line{At: firstAt + time.Duration(i)*time.Second, Text: fmt.Sprintf("Lyric %02d", i)}
+			lines[0] = lyrics.Line{Text: "作词：A"}
+			lines[1] = lyrics.Line{At: time.Second, Text: "作曲：B"}
+			const first = 2
+			for i := first; i < len(lines); i++ {
+				lines[i] = lyrics.Line{At: firstAt + time.Duration(i-first)*time.Second, Text: fmt.Sprintf("Lyric %02d", i)}
 			}
 			a, tt := shortLyricsApp(lines, 200, tc.height)
 			a.settings.LyricEdgeFade = true
@@ -143,7 +146,7 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 				t.Helper()
 				a.pl.Hold(firstAt - left)
 				tt.Frame()
-				row, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text)
+				row, ok := tt.AccessByRole(ui.RoleButton, lines[first].Text)
 				if !ok {
 					t.Fatal("first line missing during the transition")
 				}
@@ -153,7 +156,7 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 			mid := firstY(lyricIntroExit / 2)
 			near := firstY(10 * time.Millisecond)
 			end := firstY(0)
-			if !(start > mid && mid > near) || abs32(near-end) > 1 {
+			if !(start > mid && mid > near) || abs32(near-end) > 1 || abs32(end-float32(tc.height)*0.3) > 2 {
 				t.Fatalf("the first row jumped during the intro: start %.2f, middle %.2f, near %.2f, end %.2f", start, mid, near, end)
 			}
 		})
