@@ -148,6 +148,9 @@ type app struct {
 	npPane                         int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
 	lyricScroll                    ui.ScrollState
 	lyricGlide                     lyricGlide
+	lyricBrowseUntil               time.Time
+	lyricResizeAnchor              lyricReadingAnchor
+	lyricBlurPass                  *ui.Canvas
 	paintedLyric                   paintedLyric
 	timedList                      timedListLayout
 	lyricAt                        int

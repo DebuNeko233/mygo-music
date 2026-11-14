@@ -50,12 +50,13 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 	switch {
 	case pressed:
 		st.active = true
-	case st.active:
+	case st.active || s.Changed():
 		// Let go: there, but not right at the end, which would end the
 		// song as it begins to play.
 		st.active = false
-		pl.Seek(secs(min(st.v, max(0, dur-1))))
-	case s.Changed():
+		if a.settings.LyricEdgeFade {
+			a.seekLyricFollow()
+		}
 		pl.Seek(secs(min(st.v, max(0, dur-1))))
 	}
 	hot := s.Hovered() || pressed

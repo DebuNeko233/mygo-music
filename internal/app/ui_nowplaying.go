@@ -61,6 +61,7 @@ func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 		a.queueAt, a.wallState.track = -1, 0
 		a.npCoverState.previous = nil
 		a.npCoverState.switching = false
+		a.lyricBlurPass = nil
 		return
 	}
 	if !open {
@@ -68,6 +69,10 @@ func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 		layer.PassThrough()
 	}
 	layer.Children(func() { a.nowPlayingView(c) })
+	if a.npPane != paneLyrics || !a.settings.LyricEdgeFade {
+		// The framebuffer is only reused while the effect is in view.
+		a.lyricBlurPass = nil
+	}
 }
 
 // nowPlayingView fills the window with what plays: its cover over a slow
@@ -161,7 +166,18 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		coverSize, coverSunk := npCoverLayout(w, h)
 		side := max(coverSize, 280)
 		padX := npSideX(w)
-		ui.Row(c).Grow(1).Padding(0, padX, 44, padX).Gap(72).AlignItems(ui.Stretch).Children(func() {
+		immersiveLyrics := a.npPane == paneLyrics && a.settings.LyricEdgeFade
+		columns := ui.Row(c).Gap(72).AlignItems(ui.Stretch)
+		tabsTop := topBar(c) + coverSunk
+		if immersiveLyrics {
+			// The controls determine the height, from the tabs through the
+			// volume row. The lyric viewport extends past both ends.
+			columns.Padding(coverSunk, padX, 0, padX)
+			coverSunk = 0
+		} else {
+			columns.Grow(1).Padding(0, padX, 44, padX)
+		}
+		columns.Children(func() {
 			// Navigation, cover and controls share one column. Keep its
 			// center even when the cover shrinks below the controls' width.
 			ui.Column(c).Width(side).Padding(coverSunk, 0, 0, 0).Gap(0).Children(func() {
@@ -207,6 +223,15 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 
 			pane := ui.Column(c.Key("pane")).Grow(1).Basis(0).MinWidth(0)
 			pane.Children(func() {
+				if immersiveLyrics {
+					// Extend past the controls toward both window edges,
+					// targeting 32 DIPs of clearance and keeping at least 16.
+					lyricTop := max(npLyricOverscan, min(tabsTop-npLyricOverscan, 2*npLyricOverscan))
+					ui.Column(c.Key("lyric-viewport")).Absolute().Top(lyricTop - tabsTop).Left(0).Right(0).Bottom(-npLyricOverscan).
+						MinHeight(max(0, h-lyricTop-2*npLyricOverscan)).MaxHeight(max(0, h-lyricTop-npLyricOverscan)).
+						Children(func() { a.lyricsPane(c, tr, h) })
+					return
+				}
 				// Only the cover column sinks in tall windows; this pane keeps
 				// the height above it for lyrics, comments and the queue.
 				ui.Box(c).Height(npTabsHeight + npTabsGap)
@@ -243,6 +268,9 @@ const npTabsHeight = 28
 
 // npTabsGap is the clear space between the tabs and the cover, in DIPs.
 const npTabsGap = 24
+
+// npLyricOverscan gives the lyric fade room past the control column, in DIPs.
+const npLyricOverscan = 16
 
 // npCoverLayout leaves room for navigation and playback controls, then
 // puts 35% of the spare height above the group for an upper visual center.
@@ -477,18 +505,90 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		c.After(lines[cur+1].At - pos + 20*time.Millisecond)
 	}
 	if a.lyricTrack != tr.ID {
-		a.lyricTrack, a.lyricAt = tr.ID, -2
-		a.lyricScroll, a.lyricGlide = ui.ScrollState{}, lyricGlide{}
+		a.lyricTrack = tr.ID
+		a.lyricScroll = ui.ScrollState{}
+		a.seekLyricFollow()
 	}
 
-	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, timedPaneInsetRight, 0, 0)
+	scroll := ui.Scroll(c.Key("lyrics")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, timedPaneInsetRight, 0, 0).Label("歌词")
 	dim, quiet := a.quietShown(c, scroll, tr, lines, loaded)
 	if dim > 0.98 {
 		// Under the hot comment, gone, not drawn faint.
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, cur, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage()}, nil)
+	style := linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage(), immersive: a.settings.LyricEdgeFade}
+	if style.immersive {
+		scroll.HandleInput(func(ev ui.InputEvent) bool {
+			if ev.Kind == ui.InputScroll && ev.DY != 0 && ev.Mods&ui.Shift == 0 && a.lyricScroll.MaxY > 0 {
+				a.lyricBrowseUntil = ev.Time.Add(lyricBrowseDelay)
+			}
+			return false
+		})
+		style.browsing = a.lyricBrowsing(c)
+		gap := lyricInterludeAt(lines, cur)
+		switch {
+		case gap.to > pos && pos >= gap.from && !quiet:
+			if gap.intro {
+				style.intro = gap
+				height, opacity, next := lyricIntroPose(gap.to-pos, c.Preferences().ReduceMotion)
+				style.introHeight, style.introOpacity = height, opacity
+				if next > 0 && pl.Playing() {
+					c.After(next)
+				}
+			} else if !style.browsing {
+				defer func() {
+					dots := ui.Box(c.Key("interlude")).Absolute().Right(12).Bottom(8).Size(54, 12)
+					a.paintLyricInterlude(c, dots, gap, 1)
+				}()
+			}
+		case gap.to > gap.from && pos < gap.from && pl.Playing():
+			c.After(gap.from - pos)
+		}
+	} else {
+		a.lyricBrowseUntil = time.Time{}
+		a.lyricResizeAnchor = lyricReadingAnchor{}
+	}
+	a.timedLines(c, scroll, lines, cur, style, nil)
+}
+
+const lyricBrowseDelay = 4 * time.Second
+
+// The scroll state's offset differs from the one we applied when the
+// listener moves the wheel, touchpad, or scrollbar.
+func (a *app) lyricBrowsing(c *ui.Context) bool {
+	if a.lyricGlide.posed && a.lyricScroll.Y != a.lyricGlide.offset {
+		a.lyricBrowseUntil = c.Now().Add(lyricBrowseDelay)
+	}
+	if a.lyricBrowseUntil.IsZero() {
+		return false
+	}
+	if !a.pl.Playing() {
+		return true
+	}
+	if left := a.lyricBrowseUntil.Sub(c.Now()); left > 0 {
+		c.After(left)
+		return true
+	}
+	a.lyricBrowseUntil = time.Time{}
+	a.lyricResizeAnchor = lyricReadingAnchor{}
+	a.lyricAt = lyricResumeFollow
+	return false
+}
+
+// Resume following even if playback is still on the same line.
+const lyricResumeFollow = -3
+
+func (a *app) seekLyricFollow() {
+	a.lyricBrowseUntil = time.Time{}
+	a.lyricResizeAnchor = lyricReadingAnchor{}
+	a.lyricGlide = lyricGlide{}
+	a.lyricAt = -2
+}
+
+type lyricReadingAnchor struct {
+	line  *lyrics.Line
+	inset float32
 }
 
 // Both lyric layouts share the same recovery action and settled error state.
@@ -505,12 +605,16 @@ func (a *app) lyricsNotice(c *ui.Context, size float32) {
 // linesStyle is how timedLines sets its lines: the size, weight and
 // leading of their type; quiet nearly hides them, under a hot comment.
 type linesStyle struct {
-	size        float32
-	weight      int
-	lineHeight  float32
-	quiet       bool
-	lang        string
-	centerShort bool // center a whole lyric block that fits; captions keep their growing list
+	size                      float32
+	weight                    int
+	lineHeight                float32
+	quiet                     bool
+	lang                      string
+	centerShort               bool // center a whole lyric block that fits; captions keep their growing list
+	immersive                 bool
+	browsing                  bool
+	intro                     lyricInterlude
+	introHeight, introOpacity float32
 }
 
 // timedLines lights cur at pos, centering short lyrics when requested.
@@ -522,7 +626,8 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	// may leave the cover and pane top unchanged: schedule a pass after the
 	// new text wrapping is laid out, even if this pass sees the old viewport.
 	w, h := c.Size()
-	if w != a.lyricWindowW || h != a.lyricWindowH {
+	windowChanged := w != a.lyricWindowW || h != a.lyricWindowH
+	if windowChanged {
 		a.lyricWindowW, a.lyricWindowH = w, h
 		c.AnimationFrame()
 	}
@@ -530,23 +635,49 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		a.longTimedLines(c, scroll, lines, cur, st, foot)
 		return
 	}
-	var active, content, body ui.Element
+	var active, first, intro, content, body ui.Element
+	viewport := scroll.LayoutBounds()
+	introHeight := st.introHeight
 	draw := func() {
 		key := c
 		if st.centerShort {
 			// New lyrics need a fresh measurement, even at the same line index.
 			key = c.Key(&lines[0])
 		}
-		content = ui.Column(key).Gap(6).Shrink(0)
+		content = ui.Column(key).Gap(timedLineGap).Shrink(0)
 		content.Children(func() {
+			if introHeight > 0 {
+				intro = ui.Box(c.Key("intro")).Absolute().Top(0).Left(0).Right(0)
+			}
+			width := timedLineWidth(viewport.W)
 			for i := range lines {
-				on := i == cur
-				line := a.timedLine(c.Key(i), &lines[i], on, timedLineWidth(scroll.LayoutBounds().W), st)
-				if on {
+				line := a.timedLine(c.Key(i), &lines[i], i-cur, width, st)
+				if i == 0 {
+					first = line
+				}
+				if st.browsing {
+					a.keepLyricReadingPosition(c, &lines[i], line.LayoutBounds(), viewport, windowChanged)
+				}
+				if i == cur {
 					active = line
 				}
 			}
 		})
+		if intro.Valid() {
+			// Keep the centered layout when only the dots would make it
+			// overflow. The last first-row offset is the previous padding.
+			prev := content.LayoutBounds()
+			if row := first.LayoutBounds(); row.H > 0 && viewport.H > 0 {
+				rows := prev.H - (row.Y - prev.Y)
+				if rows <= viewport.H {
+					introHeight = min(float32(lyricIntroHeight+timedLineGap), viewport.H-rows) * st.introOpacity
+				}
+			}
+			// Padding lets the gap close with the dots all the way to zero.
+			content.Padding(introHeight, 0, 0, 0)
+			intro.Height(introHeight)
+			a.paintLyricInterlude(c, intro, st.intro, st.introOpacity)
+		}
 	}
 	var moving ui.Element
 	scroll.Children(func() {
@@ -564,6 +695,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			})
 		}
 	})
+	if !windowChanged {
+		a.lyricResizeAnchor = lyricReadingAnchor{}
+	}
 	box := scroll.LayoutBounds()
 	waitForLayout := false
 	if st.centerShort {
@@ -578,14 +712,26 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		if textH <= box.H {
 			a.lyricAt = cur
 			a.lyricViewportW, a.lyricViewportH = box.W, box.H
-			a.lyricScroll.Y, a.lyricGlide = 0, lyricGlide{}
+			a.lyricScroll.Y, a.lyricGlide, a.lyricBrowseUntil = 0, lyricGlide{}, time.Time{}
+			a.lyricResizeAnchor = lyricReadingAnchor{}
 			return
 		}
-		// Only overflowing lyrics need room to bring the last line up.
-		body.Padding(0, 0, h*0.5, 0)
-		waitForLayout = math.Abs(float64(body.LayoutBounds().H-textH-h*0.5)) > 1
+		// Reserve headroom so the first line can reach the reading
+		// position with a nonnegative scroll offset.
+		head := lyricHeadroom(box.H, st)
+		body.Padding(head, 0, h*0.5, 0)
+		waitForLayout = math.Abs(float64(body.LayoutBounds().H-textH-head-h*0.5)) > 1
+		// On the intro-to-lyric frame, the first row still reports its
+		// old position below the dots. Follow after they leave layout.
+		firstBox := first.LayoutBounds()
+		if st.immersive && introHeight == 0 && firstBox.H > 0 && firstBox.Y-content.LayoutBounds().Y > 1 {
+			waitForLayout = true
+		}
 	}
-	a.lyricGlide.place(c, &a.lyricScroll, scroll, moving)
+	a.lyricGlide.place(c, &a.lyricScroll, scroll, moving, st.browsing)
+	if st.immersive && !st.browsing {
+		a.lyricEdges(scroll, active, intro, first, st.introOpacity)
+	}
 	if waitForLayout {
 		// Wait for the new padding or wrapping before following the line.
 		a.lyricAt = -2
@@ -595,23 +741,59 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
 	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
-	if cur != a.lyricAt || resized {
+	if !st.browsing && (cur != a.lyricAt || resized) {
 		target := float32(0)
 		if active.Valid() {
 			// Where the glide is going, without where it still is.
 			if lb := active.LayoutBounds(); lb.H > 0 && box.H > 0 {
 				// The line and its column share the same layout offset,
 				// even when the listener scrolls during this frame.
-				target = lb.Y - content.LayoutBounds().Y - box.H*0.3
+				target = lyricHeadroom(box.H, st) + lb.Y - content.LayoutBounds().Y - lyricReadInset(box.H, lb.H)
 			} else {
 				c.AnimationFrame()
 				return // not laid out yet: the next frame scrolls
 			}
 		}
+		snap := st.immersive && (a.lyricAt == -2 || resized || a.lyricAt != lyricResumeFollow && abs32(target-a.lyricScroll.Y) > box.H || c.Preferences().ReduceMotion)
 		a.lyricAt = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
-		a.lyricGlide.to(c, a.lyricScroll.Y, min(max(0, target), a.lyricScroll.MaxY))
+		target = min(max(0, target), a.lyricScroll.MaxY)
+		if snap {
+			a.lyricScroll.Y, a.lyricGlide = target, lyricGlide{}
+			c.AnimationFrame()
+		} else {
+			a.lyricGlide.to(c, a.lyricScroll.Y, target)
+		}
 	}
+}
+
+// On resize, retain the first visible lyric and its offset through reflow.
+func (a *app) keepLyricReadingPosition(c *ui.Context, line *lyrics.Line, row, viewport ui.Rect, windowChanged bool) {
+	anchor := &a.lyricResizeAnchor
+	if row.H <= 0 {
+		return
+	}
+	if windowChanged {
+		if anchor.line == nil && row.Y+row.H > viewport.Y {
+			*anchor = lyricReadingAnchor{line: line, inset: max(0, viewport.Y-row.Y)}
+		}
+	} else if anchor.line == line {
+		inset := min(anchor.inset, row.H-1)
+		a.lyricScroll.Y = max(0, min(a.lyricScroll.MaxY, a.lyricScroll.Y+row.Y-viewport.Y+inset))
+		a.lyricGlide = lyricGlide{}
+		c.AnimationFrame()
+	}
+}
+
+func lyricReadInset(viewport, line float32) float32 {
+	return min(viewport*0.3, max(0, viewport-line))
+}
+
+func lyricHeadroom(viewport float32, st linesStyle) float32 {
+	if st.immersive {
+		return viewport * 0.3
+	}
+	return 0
 }
 
 // lyricGlide puts the scroll layout at its destination in one build. A
@@ -634,8 +816,8 @@ func (g *lyricGlide) to(c *ui.Context, offset, target float32) {
 	c.AnimationFrame()
 }
 
-func (g *lyricGlide) place(c *ui.Context, s *ui.ScrollState, scroll, content ui.Element) {
-	if g.posed && s.Y != g.offset {
+func (g *lyricGlide) place(c *ui.Context, s *ui.ScrollState, scroll, content ui.Element, browsing bool) {
+	if g.posed && (s.Y != g.offset || browsing && content.Transitioning()) {
 		// A wheel, trackpad or scrollbar moved the layout offset. Take over
 		// at the currently painted position, including that input's delta.
 		if box := content.LayoutBounds(); box.H > 0 && content.Transitioning() {
@@ -643,6 +825,9 @@ func (g *lyricGlide) place(c *ui.Context, s *ui.ScrollState, scroll, content ui.
 		}
 		*g = lyricGlide{}
 		return
+	}
+	if browsing {
+		g.pending = false
 	}
 	if g.pending {
 		s.Y, g.pending = min(g.target, s.MaxY), false

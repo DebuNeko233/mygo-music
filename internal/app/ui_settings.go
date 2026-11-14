@@ -777,6 +777,11 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
+		row("沉浸式歌词", "边缘渐隐、逐字扫亮与间奏提示", func() {
+			if ui.Switch(c.Key("lyric-edge-fade"), &s.LyricEdgeFade).Label("沉浸式歌词").Changed() {
+				a.changed()
+			}
+		})
 
 	})
 
