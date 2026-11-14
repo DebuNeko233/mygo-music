@@ -2,6 +2,8 @@
 
 ## 0.2.10
 
+**此版本有问题，不要更新！**
+
 ### What's Changed
 * chore: 切回官方 MyGo，避免封面刷新时闪回占位图 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/60
 * 更新 Go 至 1.27.4 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/61
