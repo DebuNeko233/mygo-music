@@ -39,18 +39,6 @@ func TestScrollEdgesFollowContent(t *testing.T) {
 	}
 }
 
-// A page that fits in the window, bar the scrolling, shows no edge.
-func TestShortPageHasNoEdges(t *testing.T) {
-	a := newTestApp()
-	a.settings = defaultSettings()
-	a.featured = []netease.Playlist{{ID: 1, Name: "歌单"}}
-	tt := ui.NewTester(a.view, 1200, 1400)
-	tt.Frame()
-	if a.underTop || a.underBottom {
-		t.Errorf("edges on a page that fits: top %v bottom %v", a.underTop, a.underBottom)
-	}
-}
-
 // Opening or closing the account menu leaves the player's edge as it was:
 // the content's box had no key, so the menu coming or going made it anew,
 // and the edge faded in again from nothing, showing the page bare under

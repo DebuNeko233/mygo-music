@@ -280,7 +280,9 @@ const npLyricOverscan = 16
 // All panes use it so switching panes cannot move the navigation.
 func npCoverLayout(w, h float32) (size, sunk float32) {
 	room := max(1, h-436)
-	size = min(w*0.36, 440, room)
+	// Windows gives a minimized window a zero-sized content area. The cover
+	// still builds in the hidden frame, and its gestures divide by this size.
+	size = max(1, min(w*0.36, 440, room))
 	return size, (room - size) * 0.35
 }
 
