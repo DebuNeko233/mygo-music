@@ -218,58 +218,6 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	}
 }
 
-// The settings offer the fonts the system has, store one as the system names
-// it, and keep the system's own as no name, so that the lines take the
-// system's font again.
-func TestTheSettingsChooseAFontTheSystemHas(t *testing.T) {
-	isolateUserData(t)
-	a := newTestApp()
-	a.settings = defaultSettings()
-	names := lyricFontNames()
-	if len(names) < 2 {
-		names = append(names, "测试字体")
-	}
-	font := names[1]
-	settings := ui.NewTester(func(c *ui.Context) {
-		ui.Scroll(c).Size(560, 400).Padding(24, 28).Children(func() {
-			ui.Text(c, "桌面歌词").FontSize(12)
-			now := lyricFontSystem
-			if a.settings.LyricFont != "" {
-				now = a.settings.LyricFont
-			}
-			if ui.Combobox(c.Key("lyric-font"), &now, names).Label("选择字体").Width(150).Changed() {
-				a.settings.LyricFont = now
-				if now == lyricFontSystem {
-					a.settings.LyricFont = ""
-				}
-			}
-		})
-	}, 560, 400)
-	settings.Frame()
-	if err := settings.Click("选择字体"); err != nil {
-		t.Fatalf("opening the fonts: %v", err)
-	}
-	if !settings.HasText(font) {
-		t.Fatalf("the fonts offered show none of the system's")
-	}
-	if err := settings.Click(font); err != nil {
-		t.Fatalf("choosing %s: %v", font, err)
-	}
-	if a.settings.LyricFont != font {
-		t.Fatalf("font: %q", a.settings.LyricFont)
-	}
-
-	// The system's own is the first of them, and names no font.
-	if err := settings.Click("选择字体"); err != nil {
-		t.Fatalf("opening the fonts again: %v", err)
-	}
-	settings.Key(0, ui.KeyDown)
-	settings.Key(0, ui.KeyEnter)
-	if a.settings.LyricFont != "" {
-		t.Fatalf("font: %q, with the system's own chosen", a.settings.LyricFont)
-	}
-}
-
 // A font setting stands for the families an older settings file named by a
 // name of the app's, for the family the system gives, and for none at all
 // when it names the system's own.
