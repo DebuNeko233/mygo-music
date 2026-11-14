@@ -27,11 +27,11 @@ type lyricInterlude struct {
 	intro    bool
 }
 
-func lyricInterludeAt(lines []lyrics.Line, cur int) lyricInterlude {
-	if cur+1 >= len(lines) {
+func lyricInterludeAt(lines []lyrics.Line, cur, next int) lyricInterlude {
+	if next < 0 {
 		return lyricInterlude{}
 	}
-	to := lines[cur+1].At
+	to := lines[next].At
 	if cur < 0 {
 		if to >= 4*time.Second {
 			return lyricInterlude{to: to, intro: true}

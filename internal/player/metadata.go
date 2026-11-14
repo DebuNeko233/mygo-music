@@ -51,12 +51,13 @@ func (p *Player) retryMetadata(manual bool) {
 	}
 	go func() {
 		var lines []lyrics.Line
+		var display lyrics.Display
 		var success bool
 		var failure error
 		for try := 1; try <= lyricTries; try++ {
 			lrc, trans, yrc, err := words(t.ID)
 			if err == nil {
-				lines = lyrics.Build(lrc, trans, yrc)
+				lines, display = lyrics.BuildDisplay(lrc, trans, yrc)
 				success = true
 				break
 			}
@@ -75,7 +76,7 @@ func (p *Player) retryMetadata(manual bool) {
 			p.lyricBusy = false
 			p.lyricFailure = failure
 			if success && p.lyricRevision == revision {
-				p.setLyrics(lines)
+				p.setLyrics(lines, display)
 				p.lyricsErr = ""
 				p.offlineLyricsError = false
 			} else if !p.lyricsLoaded {
@@ -99,11 +100,12 @@ func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
 	p.offlineLyricsError = false
 	p.lyricFailure = nil
 	p.lyricRevision++
-	p.setLyrics(lyrics.Build(original, translation, words))
+	p.setLyrics(lyrics.BuildDisplay(original, translation, words))
 }
 
-func (p *Player) setLyrics(lines []lyrics.Line) {
+func (p *Player) setLyrics(lines []lyrics.Line, display lyrics.Display) {
 	p.lyrics, p.lyricsLoaded, p.lyricLanguage = lines, true, lyrics.Lang(lines)
+	p.lyricDisplay = display
 }
 
 func (p *Player) MetadataLoading() bool { return p.lyricBusy || p.coverBusy }

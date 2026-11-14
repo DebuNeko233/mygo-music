@@ -23,19 +23,23 @@ func TestLyricInterludeTiming(t *testing.T) {
 		{At: 20 * time.Second, End: 22 * time.Second, Timed: true},
 		{At: 24 * time.Second, End: 28 * time.Second},
 	}
-	if got := lyricInterludeAt(lines, -1); !got.intro || got.to != lines[0].At {
+	if got := lyricInterludeAt(lines, -1, 0); !got.intro || got.to != lines[0].At {
 		t.Fatalf("intro: %+v", got)
 	}
-	if got := lyricInterludeAt(lines, 0); got.from != 8*time.Second || got.to != lines[1].At {
+	if got := lyricInterludeAt(lines, 0, 1); got.from != 8*time.Second || got.to != lines[1].At {
 		t.Fatalf("interlude: %+v", got)
 	}
 	for _, i := range []int{1, 2, 3} {
-		if got := lyricInterludeAt(lines, i); got.to != 0 {
+		next := i + 1
+		if next >= len(lines) {
+			next = -1
+		}
+		if got := lyricInterludeAt(lines, i, next); got.to != 0 {
 			t.Errorf("line %d unexpectedly has an interlude: %+v", i, got)
 		}
 	}
 	lrc := lyrics.Build("[00:05.00]First\n[00:17.00]Second", "", "")
-	if got := lyricInterludeAt(lrc, 0); got.to != 0 {
+	if got := lyricInterludeAt(lrc, 0, 1); got.to != 0 {
 		t.Fatalf("estimated LRC end produced an interlude: %+v", got)
 	}
 }
@@ -153,6 +157,29 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 				t.Fatalf("the first row jumped during the intro: start %.2f, middle %.2f, near %.2f, end %.2f", start, mid, near, end)
 			}
 		})
+	}
+}
+
+// Immersive lyrics light LRC as a whole line and reserve the sweep for real word timestamps.
+func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 10000}})
+	a.pl.Hold(1500 * time.Millisecond)
+	line := lyrics.Build("[00:01.00]Hello world\n[00:05.00]Next line", "", "")[0]
+	if len(line.Words) == 0 {
+		t.Fatal("the LRC fixture needs estimated words")
+	}
+	st := linesStyle{size: 24, weight: 800, lineHeight: 1.25, immersive: true}
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.timedLine(c, &line, 0, 256, st)
+	}, 280, 80)
+	if !tt.HasText(line.Text) || a.paintedLyric.line != nil {
+		t.Fatal("LRC should render as one line without scheduling word highlights")
+	}
+	line.Timed = true
+	tt.Frame()
+	if a.paintedLyric.line != &line || len(a.paintedLyric.sweep) != len(line.Words) {
+		t.Fatal("word-timed lyrics should use the sweep")
 	}
 }
 

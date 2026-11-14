@@ -12,10 +12,19 @@ func edge(y, height float) float {
 	band := min(96.0, height*0.20)
 	return 1.0-smoothstep(0.0, band, min(y, height-y))
 }
+
+func withinRow(y float, row vec3) bool {
+	return row.z > 0 && y >= row.x && y <= row.y
+}
 `
 
 const lyricBrowseFadeSource = "package main\n" + lyricEdgeMask + `
+var Hover vec3
+
 func ColorEffect(pos vec2, color vec4) vec4 {
+	if withinRow(pos.y, Hover) {
+		return color
+	}
 	return color*(1.0-edge(pos.y, rectSize().y))
 }
 `
@@ -75,9 +84,11 @@ func Fragment(dst vec4, pos vec2) vec4 {
 `
 
 const lyricGaussianVertical = "package main\n" + lyricGaussianKernel + `
+var Hover vec3
+
 func LayerEffect(pos vec2) vec4 {
 	y := pos.y*Scale+Top
-	if Active.z > 0 && y >= Active.x && y <= Active.y {
+	if withinRow(y, Active) || withinRow(y, Hover) {
 		return layerAt(pos)
 	}
 	pixel := vec2(pos.x*Scale+Left, y)
@@ -98,22 +109,23 @@ var lyricGaussian = sync.OnceValue(func() [2]*shader.Shader {
 
 type lyricEdgeFade struct {
 	clearBand func(scale, insetY float32) [3]float32
+	hoverBand func(scale, insetY float32) [3]float32
 	pass      **ui.Canvas
+	browsing  bool
 }
 
-func (a *app) lyricEdges(scroll, active, intro, first ui.Element, introOpacity float32, browsing bool) {
-	if browsing {
-		// Fade the same edges without a Gaussian pass during manual scrolling.
-		scroll.Effect(lyricBrowseFade().Effect(shader.Options{}))
-		return
-	}
+func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introOpacity float32, browsing bool) {
 	var incoming ui.Element
 	var blend float32
 	if intro.Valid() {
 		// Move the clear band from the dots to the first line as they fade.
 		active, incoming, blend = intro, first, 1-introOpacity
 	}
-	scroll.Effect(lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass})
+	fx := lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass, browsing: browsing}
+	if hovered.Valid() {
+		fx.hoverBand = lyricClearBand(scroll, hovered, ui.Element{}, 0)
+	}
+	scroll.Effect(fx)
 }
 
 func (lyricEdgeFade) EffectMargin() ui.Point {
@@ -156,6 +168,15 @@ func lyricClearBand(viewport, active, incoming ui.Element, blend float32) func(f
 }
 
 func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitmap, inset ui.Point) {
+	var hover [3]float32
+	if fx.browsing {
+		// The manual fade works in DIPs and needs no Gaussian canvas.
+		if fx.hoverBand != nil {
+			hover = fx.hoverBand(1, 0)
+		}
+		lyricBrowseFade().Effect(shader.Options{Uniforms: map[string]any{"Hover": hover}}).PaintEffect(p, box, bitmap, inset)
+		return
+	}
 	scale := p.Scale()
 	var active [3]float32
 	if fx.clearBand != nil {
@@ -184,6 +205,10 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 		})
 	})
 	uniforms["Left"] = inset.X
+	if fx.hoverBand != nil {
+		hover = fx.hoverBand(scale, inset.Y)
+	}
+	uniforms["Hover"] = hover
 	kernel[1].Effect(shader.Options{Uniforms: uniforms, Images: [4]*ui.Bitmap{pass.Bitmap()}}).
 		PaintEffect(p, box, bitmap, inset)
 }

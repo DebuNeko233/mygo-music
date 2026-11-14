@@ -11,6 +11,9 @@ import (
 )
 
 func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float32, st linesStyle) ui.Element {
+	if l.Kind != lyrics.Sung {
+		return lyricInfoRow(c, l, st.lang)
+	}
 	line := ui.ButtonBase(c).Column().AlignItems(ui.Start).Padding(timedLineInsetY, timedLineInsetX).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
 	// Use the painted bounds so scrolling a line near the close button
 	// protects the entire row, including its translation and padding.
@@ -25,6 +28,9 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		}
 	}
 	on := relative == 0
+	// LRC supplies a line timestamp. Its estimated word times are useful
+	// elsewhere, but here the whole line should light at the same time.
+	lineTimed := (st.centerShort || st.immersive) && !l.Timed
 	hovered := !nearClose && line.Hovered()
 	alpha := float32(0.28)
 	if on {
@@ -51,12 +57,14 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		// than building the view at the display's rate as it does.
 		text := ui.Column(c).AlignItems(ui.Start).Gap(6)
 		fade := ui.Animation{Duration: 380 * time.Millisecond}
-		if st.immersive && !st.browsing && !st.quiet && !hovered && relative > 1 {
+		if lineTimed && on {
+			fade.Duration = 180 * time.Millisecond
+		} else if st.immersive && !st.browsing && !st.quiet && !hovered && relative > 1 {
 			fade.Delay = time.Duration(min(relative-1, 3)) * 35 * time.Millisecond
 		}
 		text.AnimatePose(ui.Pose{Fade: 1 - alpha}, fade)
 		text.Children(func() {
-			if on && len(l.Words) > 0 && width > 0 {
+			if on && !lineTimed && len(l.Words) > 0 && width > 0 {
 				a.paintLyricWords(c, l, width, st)
 			} else {
 				ui.Text(c, l.Text).Lang(st.lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
@@ -74,6 +82,29 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		a.pl.Seek(l.At)
 	}
 	return line
+}
+
+func lyricInfoFont(kind lyrics.LineKind) (size float32, weight int) {
+	if kind == lyrics.Instrumental {
+		return 24, 700
+	}
+	return 16, 500
+}
+
+func lyricInfoRow(c *ui.Context, l *lyrics.Line, lang string) ui.Element {
+	row := ui.Column(c).Padding(timedLineInsetY, timedLineInsetX).Gap(timedLineGap)
+	size, weight := lyricInfoFont(l.Kind)
+	color := white.Alpha(0.68)
+	if l.Kind == lyrics.Instrumental {
+		color = white.Alpha(0.85)
+	}
+	row.Children(func() {
+		ui.Text(c, l.Text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(color)
+		if l.Translation != "" && l.Kind != lyrics.Instrumental {
+			ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.55))
+		}
+	})
+	return row
 }
 
 type paintedLyric struct {

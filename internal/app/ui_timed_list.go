@@ -44,8 +44,9 @@ func (m *timedListLayout) reset(c *ui.Context, lines []lyrics.Line, width float3
 		m.first = nil
 	}
 	for i := len(m.offsets) - 1; i < len(lines); i++ {
-		height := font.Size*font.LineHeight + 2*timedLineInsetY + timedLineGap
-		if lines[i].Translation != "" {
+		rowFont := timedRowFont(font, lines[i].Kind)
+		height := rowFont.Size*rowFont.LineHeight + 2*timedLineInsetY + timedLineGap
+		if lines[i].Translation != "" && lines[i].Kind != lyrics.Instrumental {
 			height += 24 + timedLineGap
 		}
 		m.offsets = append(m.offsets, m.offsets[i]+height)
@@ -53,6 +54,14 @@ func (m *timedListLayout) reset(c *ui.Context, lines []lyrics.Line, width float3
 	}
 	m.offsets = m.offsets[:len(lines)+1]
 	m.measured = m.measured[:len(lines)]
+}
+
+func timedRowFont(font ui.Font, kind lyrics.LineKind) ui.Font {
+	if kind != lyrics.Sung {
+		font.Size, font.Weight = lyricInfoFont(kind)
+		font.LineHeight = 1.25
+	}
+	return font
 }
 
 func (m *timedListLayout) rowAt(y float32) int {
@@ -71,14 +80,20 @@ func (m *timedListLayout) measure(lines []lyrics.Line, first, last int) {
 			continue
 		}
 		l := &lines[i]
-		_, height := shapeLyric(l.Text, m.font, m.width, m.direction).Size()
+		font := timedRowFont(m.font, l.Kind)
+		var height float32
+		if l.Kind == lyrics.Sung {
+			_, height = shapeLyric(l.Text, font, m.width, m.direction).Size()
+		} else {
+			_, height = ui.ShapeRichTextWith([]ui.Span{{Text: l.Text}}, font, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
+		}
 		if len(l.Words) > 0 {
 			if text := lyricWordsText(l.Words); text != l.Text {
 				_, sung := shapeLyric(text, m.font, m.width, m.direction).Size()
 				height = max(height, sung)
 			}
 		}
-		if l.Translation != "" {
+		if l.Translation != "" && l.Kind != lyrics.Instrumental {
 			_, trans := ui.ShapeRichTextWith([]ui.Span{{Text: l.Translation}}, ui.Font{Family: m.font.Family, Size: 17, Weight: 600}, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
 			height += timedLineGap + trans
 		}
@@ -220,7 +235,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		hi := max(shown, destination) + box.H + padding - lead
 		first := sort.Search(len(lines), func(i int) bool { return m.offsets[i+1] > lo })
 		last := sort.Search(len(lines), func(i int) bool { return m.offsets[i] >= hi })
-		var active, intro, firstLine ui.Element
+		var active, hovered, intro, firstLine ui.Element
 		content.Children(func() {
 			if head > 0 {
 				ui.Box(c.Key("head")).Height(head).Shrink(0)
@@ -236,7 +251,10 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 			for i := first; i < last; i++ {
 				height := m.offsets[i+1] - m.offsets[i] - timedLineGap
 				row := a.timedLine(c.Key(i), &lines[i], i-cur, timedLineWidth(box.W), st).Height(height).Shrink(0)
-				if i == 0 {
+				if st.immersive && row.Hovered() {
+					hovered = row
+				}
+				if st.intro.intro && i == st.introLine {
 					firstLine = row
 				}
 				if i == cur {
@@ -259,7 +277,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		})
 		g.place(c, s, scroll, content, st.browsing)
 		if st.immersive && maxY > 0 {
-			a.lyricEdges(scroll, active, intro, firstLine, introOpacity, st.browsing)
+			a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing)
 		}
 	})
 }

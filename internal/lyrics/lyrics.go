@@ -18,6 +18,7 @@ type Line struct {
 	Text        string
 	Translation string
 	Words       []Word
+	Kind        LineKind // presentation role assigned by NewDisplay
 	// Timed says the words carry their own times, as NetEase's word-timed
 	// lyrics give them; else they share the line's time evenly.
 	Timed bool
@@ -297,7 +298,7 @@ func Quiets(lines []Line, length, least time.Duration) []Quiet {
 	at := time.Duration(0)
 	sung := false
 	for _, l := range lines {
-		if IsCredit(l.Text) {
+		if l.Kind != Sung || IsCredit(l.Text) {
 			continue
 		}
 		add(at, l.At)
@@ -307,24 +308,4 @@ func Quiets(lines []Line, length, least time.Duration) []Quiet {
 		add(at, length)
 	}
 	return out
-}
-
-// creditNames are what credit lines begin with.
-var creditNames = []string{"作词", "作曲", "编曲", "制作", "监制", "混音", "录音", "母带", "和声", "吉他", "贝斯", "鼓", "键盘", "弦乐", "出品", "发行", "OP", "SP", "词", "曲", "Lyrics", "Music", "Composer", "Arranger", "Producer"}
-
-// IsCredit reports whether a line names who made the song, as "作词 :
-// 林夕", rather than being sung.
-func IsCredit(text string) bool {
-	i := strings.IndexAny(text, ":：")
-	if i <= 0 || utf8.RuneCountInString(text[:i]) > 12 {
-		return false
-	}
-	head := strings.TrimSpace(text[:i])
-	for _, n := range creditNames {
-		// A name of one character, as 词, is the whole of the head.
-		if head == n || utf8.RuneCountInString(n) > 1 && strings.HasPrefix(head, n) {
-			return true
-		}
-	}
-	return false
 }

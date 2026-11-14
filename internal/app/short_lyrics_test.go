@@ -49,7 +49,7 @@ func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.
 // their whole measured block, including wrapped text and translations.
 func TestShortLyricsCenterAndSeek(t *testing.T) {
 	for _, lines := range [][]lyrics.Line{
-		{{At: 10 * time.Second, Text: "纯音乐，请欣赏"}},
+		{{At: 10 * time.Second, Text: "A one-line song"}},
 		{{Text: "第一句"}, {At: 10 * time.Second, Text: "第二句"}, {At: 20 * time.Second, Text: "第三句"}},
 		{{Text: "春日影", Translation: strings.Repeat("这是一句会换行的翻译", 3)}, {At: 10 * time.Second, Text: "次の歌詞", Translation: "下一句歌词"}},
 	} {
@@ -101,4 +101,42 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	tt.Advance(2 * time.Second)
 	replaced, _ := a.pl.Lyrics()
 	checkShortLyricsCenter(t, tt, a, replaced, 900)
+}
+
+// Static metadata centers or scrolls manually in either lyric mode, regardless of its timestamps.
+func TestNowPlayingStaticLyricMetadata(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
+			const w, h = 480, 360
+			a, tt := shortLyricsApp(nil, w, h)
+			a.settings.LyricEdgeFade = immersive
+			tt.Frame()
+			if !tt.HasText("暂无歌词") {
+				t.Fatal("empty lyrics should show the missing-lyrics message")
+			}
+			a.pl.RefreshLyrics(1, "[00:00.00]作曲 : A\n[00:05.00]纯音乐，请欣赏\n[01:47.50]指挥 Conductor : C", "", "")
+			tt.Frame()
+			first, ok := tt.Find(lyrics.InstrumentalText)
+			last, lastOK := tt.Find("指挥 Conductor : C")
+			if !ok || !lastOK || first.Y >= last.Y || abs32((first.Y+last.Y+last.H)/2-h/2) > 3 {
+				t.Fatalf("static credits did not center together: %v, %v", first, last)
+			}
+			if _, ok := tt.AccessByRole(ui.RoleButton, "作曲 : A"); ok {
+				t.Fatal("credit is a seek target")
+			}
+			tt.SetSize(w, 96)
+			before, _ := tt.Find("指挥 Conductor : C")
+			tt.Scroll(160, 70, 0, 40)
+			scrolled, _ := tt.Find("指挥 Conductor : C")
+			if scrolled.Y >= before.Y {
+				t.Fatalf("credits did not scroll: %v -> %v", before, scrolled)
+			}
+			a.pl.Hold(110 * time.Second)
+			tt.Frame()
+			held, _ := tt.Find("指挥 Conductor : C")
+			if abs32(held.Y-scrolled.Y) > 1 {
+				t.Fatalf("static block followed playback: %v -> %v", scrolled, held)
+			}
+		})
+	}
 }

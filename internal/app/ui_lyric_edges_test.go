@@ -132,6 +132,48 @@ func TestLyricBlurRampsFromActiveRow(t *testing.T) {
 	}
 }
 
+// Hovering restores a faded row without replacing the active row's clear band.
+func TestLyricHoverRestoresClearRow(t *testing.T) {
+	for _, browsing := range []bool{false, true} {
+		t.Run(fmt.Sprint(browsing), func(t *testing.T) {
+			a := newTestApp()
+			tt := ui.NewTester(func(c *ui.Context) {
+				c.Root().Background(ui.RGB(0, 0, 0))
+				viewport := ui.Box(c).Fill()
+				var active, hovered ui.Element
+				viewport.Children(func() {
+					for _, y := range []int{4, 48, 91} {
+						row := ui.ButtonBase(c.Key(y)).Absolute().Top(float32(y - 3)).Width(64).Height(7).
+							Draw(func(p *ui.Painter, r ui.Rect) {
+								p.Fill(ui.Rect{X: r.X, Y: r.Y + 3, W: r.W, H: 1}, white, 0)
+							})
+						if y == 48 {
+							active = row
+						}
+						if row.Hovered() {
+							hovered = row
+						}
+					}
+				})
+				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, 0, browsing)
+			}, 64, 96)
+			before := tt.Image().RGBAAt(32, 4).R
+			tt.Move(32, 4)
+			frame := tt.Image()
+			if before >= 255 || frame.RGBAAt(32, 4).R != 255 || frame.RGBAAt(32, 5).R != 0 {
+				t.Fatal("hover did not restore the sharp edge row")
+			}
+			if frame.RGBAAt(32, 48).R != 255 || frame.RGBAAt(32, 91).R >= 255 {
+				t.Fatal("hover changed the active row or cleared the other edge")
+			}
+			tt.Move(32, 30)
+			if got := tt.Image().RGBAAt(32, 4).R; got != before {
+				t.Fatalf("leaving the row did not restore its fade: got %d, want %d", got, before)
+			}
+		})
+	}
+}
+
 // Manual scrolling fades both edges without spreading strokes into adjacent pixels.
 func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 	a := newTestApp()
@@ -143,7 +185,7 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
 			}
 		})
-		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, 0, true)
+		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, true)
 	}, 64, 96)
 	frame := tt.Image()
 	if middle := frame.RGBAAt(32, 48).R; middle != 255 {
