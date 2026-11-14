@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"netease-music-mygo/internal/netease"
@@ -154,67 +155,66 @@ func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 // A slow start request cannot delay later input, and closing its queue cannot
 // panic when that request subsequently finishes.
 func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
-	a := newTestApp()
-	a.profile = &netease.Profile{}
-	started := make(chan struct{})
-	release := make(chan struct{})
-	requestFinished := make(chan struct{})
-	oldDawnEnd := reportDawnEnd
-	oldEnd := make(chan struct{})
-	var endOnce sync.Once
-	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
-		endOnce.Do(func() { close(oldEnd) })
-		return oldDawnEnd(track, played, end, bitrate, level, source)
-	}
-	var once sync.Once
-	reportPlayStart = func(id int64, source netease.PlaySource) error {
-		once.Do(func() { close(started) })
-		<-release
-		return nil
-	}
-	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
-		select {
-		case <-requestFinished:
-		default:
-			close(requestFinished)
+	synctest.Test(t, func(t *testing.T) {
+		a := newTestApp()
+		a.profile = &netease.Profile{}
+		started := make(chan struct{})
+		release := make(chan struct{})
+		letGo := sync.OnceFunc(func() { close(release) })
+		var workers []<-chan struct{}
+		var once sync.Once
+		reportPlayStart = func(id int64, source netease.PlaySource) error {
+			once.Do(func() { close(started) })
+			<-release
+			return nil
 		}
-		return nil
-	}
-	t.Cleanup(func() {
-		reportPlayStart = netease.ReportPlayStart
-		reportDawnStart = netease.ReportDawnStart
-		reportDawnEnd = netease.ReportDawnEnd
-	})
-	track := netease.Track{ID: 7}
-	a.playback(player.PlaybackEvent{Track: track, Started: true})
-	<-started
-	for range 64 {
-		a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+		reportDawnStart = func(netease.Track, int, string, netease.PlaySource) error { return nil }
+		reportDawnEnd = func(netease.Track, time.Duration, string, int, string, netease.PlaySource) error { return nil }
+		t.Cleanup(func() {
+			reportPlayStart = netease.ReportPlayStart
+			reportDawnStart = netease.ReportDawnStart
+			reportDawnEnd = netease.ReportDawnEnd
+		})
+		defer func() {
+			letGo()
+			if done := a.stopPlayReports(); done != nil {
+				<-done
+			}
+			for _, done := range workers {
+				<-done
+			}
+			synctest.Wait()
+		}()
+
+		track := netease.Track{ID: 7}
 		a.playback(player.PlaybackEvent{Track: track, Started: true})
-	}
-	finished := make(chan struct{})
-	go func() { a.flushPlayReports(); close(finished) }()
-	select {
-	case <-finished:
-	case <-time.After(3 * time.Second):
-		t.Fatal("flush did not respect its deadline")
-	}
-	close(release)
-	<-requestFinished
-	// The old worker's final queued report observes the end stub before cleanup.
-	<-oldEnd
-	a.playback(player.PlaybackEvent{Track: track, Started: true})
-	a.flushPlayReports()
-	if a.reportQueue != nil || a.reportDone != nil {
-		t.Fatal("the queue outlived the flush that ended it")
-	}
-	// An event after the flush starts a queue of its own instead of sending on
-	// the closed one.
-	a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
-	if a.reportQueue == nil {
-		t.Fatal("the event after the flush went nowhere")
-	}
-	a.flushPlayReports()
+		workers = append(workers, a.reportDone)
+		<-started
+		for range 64 {
+			a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+			a.playback(player.PlaybackEvent{Track: track, Started: true})
+		}
+		finished := make(chan struct{})
+		go func() { a.flushPlayReports(); close(finished) }()
+		select {
+		case <-finished:
+		case <-time.After(3 * time.Second):
+			letGo()
+			<-finished
+			t.Fatal("flush did not respect its deadline")
+		}
+		if a.reportQueue != nil || a.reportDone != nil {
+			t.Fatal("the queue outlived the flush that ended it")
+		}
+		// While the old worker is blocked, an event starts a fresh queue.
+		a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+		if a.reportQueue == nil {
+			t.Fatal("the event after the flush went nowhere")
+		}
+		workers = append(workers, a.reportDone)
+		letGo()
+		a.flushPlayReports()
+	})
 }
 
 // A started event must not finish the new session through a stale player pointer.
