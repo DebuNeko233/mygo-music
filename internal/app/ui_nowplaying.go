@@ -495,6 +495,10 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, closeBound
 		a.lyricScroll = ui.ScrollState{}
 		a.seekLyricFollow()
 	}
+	hasSinging := display.HasSinging()
+	if !hasSinging {
+		a.lyricBlurPass = nil
+	}
 	if len(lines) == 0 {
 		col := ui.Column(c).Grow(1).Center()
 		dim, _ := a.quietShown(c, col, tr, lines, loaded)
@@ -513,10 +517,14 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, closeBound
 		a.quietCard(c, dim, h*0.18)
 		return
 	}
-	if !display.HasSinging() {
+	if !hasSinging {
 		// A static block centers when short and remains readable by scrolling
 		// when long. It has no playback position or automatic scrolling.
 		scroll := ui.Scroll(c.Key("lyric-info")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, timedPaneInsetRight, 0, 0).Label("歌词")
+		// Credits and instrumental notices leave the whole song eligible for hot comments.
+		dim, _ := a.quietShown(c, scroll, tr, nil, loaded)
+		quietUnder(scroll, dim)
+		defer a.quietCard(c, dim, h*0.18)
 		viewport := scroll.LayoutBounds()
 		if viewport.H <= 0 {
 			// Measure the empty viewport first. Painting before that would
@@ -757,6 +765,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			return
 		}
 		if textH <= box.H {
+			a.lyricBlurPass = nil
 			a.lyricAt = cur
 			a.lyricViewportW, a.lyricViewportH = box.W, box.H
 			a.lyricScroll.Y, a.lyricGlide, a.lyricBrowseUntil = 0, lyricGlide{}, time.Time{}

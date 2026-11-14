@@ -296,8 +296,12 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 			}
 		})
 		g.place(c, s, scroll, content, st.browsing)
-		if st.immersive && maxY > 0 {
-			a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing, credits)
+		if st.immersive {
+			if maxY > 0 {
+				a.lyricEdges(scroll, active, hovered, intro, firstLine, introOpacity, st.browsing, credits)
+			} else {
+				a.lyricBlurPass = nil
+			}
 		}
 	})
 }

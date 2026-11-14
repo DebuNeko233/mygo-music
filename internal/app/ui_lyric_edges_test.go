@@ -298,10 +298,6 @@ func TestImmersiveLyricReleasesCanvas(t *testing.T) {
 	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
 	tt := ui.NewTesterWith(a.view, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	a.lyricBlurPass = ui.NewCanvas(1, 1)
-	tt.Frame()
-	if a.lyricBlurPass == nil {
-		t.Fatal("canvas was discarded while immersive lyrics were open")
-	}
 	a.settings.LyricEdgeFade = false
 	tt.Frame()
 	if a.lyricBlurPass != nil {
@@ -313,6 +309,37 @@ func TestImmersiveLyricReleasesCanvas(t *testing.T) {
 	tt.Frame()
 	if a.lyricBlurPass != nil {
 		t.Fatal("canvas was retained after switching panes")
+	}
+}
+
+// Switching to lyrics that need no blur releases the canvas while the pane stays open.
+func TestLyricCanvasAcrossTrackChanges(t *testing.T) {
+	a := newTestApp()
+	a.settings.LyricEdgeFade = true
+	lines := make([]lyrics.Line, 12)
+	for i := range lines {
+		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Lyric %d", i)}
+	}
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 60000}})
+	a.pl.SetLyrics(lines)
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), 180, ui.Rect{}) })
+	}, 160, 180, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	for i, text := range []string{lyrics.InstrumentalText, "A short lyric"} {
+		if a.lyricBlurPass == nil {
+			t.Fatal("scrolling lyrics did not allocate a canvas")
+		}
+		a.pl.Cue([]netease.Track{{ID: int64(i) + 2, Duration: 60000}})
+		a.pl.SetLyrics([]lyrics.Line{{Text: text}})
+		tt.Frame()
+		if a.lyricBlurPass != nil {
+			t.Fatalf("canvas was held while displaying %q", text)
+		}
+		a.pl.SetLyrics(lines)
+		tt.Frame()
+	}
+	if a.lyricBlurPass == nil {
+		t.Fatal("canvas was not recreated for scrolling lyrics")
 	}
 }
 
