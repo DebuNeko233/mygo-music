@@ -42,7 +42,7 @@ type imageCache struct {
 	familyMu sync.Mutex
 	sem      chan struct{}
 	store    imageStore
-	changed  func(string)
+	changed  func(url string, replacement bool)
 	mu       sync.Mutex
 	flights  map[string]*imageFlight
 }
@@ -64,7 +64,8 @@ func NewArtworkStore(dir string, limit int64) *diskcache.Store {
 
 // UseImageCache installs the shared byte cache for UI and system media covers.
 // Requests retain their complete URL and cookie identity; neither is persisted.
-func UseImageCache(store *diskcache.Store, changed func(string)) {
+// The change callback distinguishes a new cached image from a revoked entry.
+func UseImageCache(store *diskcache.Store, changed func(url string, replacement bool)) {
 	if store == nil {
 		images.Store(nil)
 		return
@@ -104,7 +105,18 @@ func (c *imageCache) fetch(req *http.Request) ([]byte, error) {
 // another request's registration or completion. Stale bytes remain available
 // through ready while the same flight revalidates them in the background.
 func (c *imageCache) lookup(req *http.Request, key string, f *imageFlight) {
-	defer func() { c.mu.Lock(); delete(c.flights, key); close(f.done); c.mu.Unlock() }()
+	var change imageChange
+	defer func() {
+		c.mu.Lock()
+		delete(c.flights, key)
+		close(f.done)
+		c.mu.Unlock()
+		// A reader started by this notification must see the new record,
+		// rather than joining the completed flight for stale bytes.
+		if change != imageUnchanged && c.changed != nil && c.store.Epoch() == f.epoch {
+			c.changed(req.URL.String(), change == imageReplaced)
+		}
+	}()
 	var record imageRecord
 	raw, _ := c.store.Read("requests", key)
 	var body []byte
@@ -137,10 +149,18 @@ func (c *imageCache) lookup(req *http.Request, key string, f *imageFlight) {
 		f.cached = body
 	}
 	close(f.ready)
-	c.refresh(req, key, record, body, f)
+	change = c.refresh(req, key, record, body, f)
 }
 
-func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, previous []byte, f *imageFlight) {
+type imageChange uint8
+
+const (
+	imageUnchanged imageChange = iota
+	imageReplaced
+	imageRevoked
+)
+
+func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, previous []byte, f *imageFlight) imageChange {
 	c.sem <- struct{}{}
 	defer func() { <-c.sem }()
 	epoch := f.epoch
@@ -155,7 +175,7 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 	response, err := DoRequest(httpClient, req)
 	if err != nil {
 		f.err = err
-		return
+		return imageUnchanged
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNotModified {
@@ -163,17 +183,15 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 		switch response.StatusCode {
 		case 401, 403, 404, 410:
 			if c.store.Epoch() != epoch {
-				return
+				return imageUnchanged
 			}
 			c.store.Forget("requests", key)
 			if family, _, ok := imageFamily(req); ok {
 				c.store.Forget("families", family)
 			}
-			if c.changed != nil {
-				c.changed(req.URL.String())
-			}
+			return imageRevoked
 		}
-		return
+		return imageUnchanged
 	}
 	body := previous
 	width, height := old.Width, old.Height
@@ -192,12 +210,12 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 		}
 		if err != nil {
 			f.err = err
-			return
+			return imageUnchanged
 		}
 	}
 	if body == nil {
 		f.err = errors.New("304 without a cached cover")
-		return
+		return imageUnchanged
 	}
 	sum := sha256.Sum256(body)
 	record := imageRecord{Width: width, Height: height, Content: hex.EncodeToString(sum[:]), ETag: response.Header.Get("ETag"), Modified: response.Header.Get("Last-Modified")}
@@ -234,14 +252,18 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 		if family, _, ok := imageFamily(req); ok {
 			c.store.Forget("families", family)
 		}
-		if previous != nil && c.changed != nil {
-			c.changed(req.URL.String())
-		}
 	}
 	f.body = body
-	if previous != nil && !bytes.Equal(previous, body) && c.changed != nil && c.store.Epoch() == epoch {
-		c.changed(req.URL.String())
+	if previous == nil {
+		return imageUnchanged
 	}
+	if !allowed {
+		return imageRevoked
+	}
+	if !bytes.Equal(previous, body) {
+		return imageReplaced
+	}
+	return imageUnchanged
 }
 
 // Cache freshness is distinct from offline reuse. no-store/private/Vary:*

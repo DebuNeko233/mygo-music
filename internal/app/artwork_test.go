@@ -38,7 +38,7 @@ func TestArtJobsBoundPendingResults(t *testing.T) {
 	// Invalidating a queued result must still release its slot and cannot
 	// bring its pixels back after the invalidation.
 	for i := range artJobs {
-		c.invalidate(fmt.Sprint("cover-", i))
+		c.invalidate(fmt.Sprint("cover-", i), false)
 	}
 	for _, post := range ready {
 		post()
@@ -73,8 +73,8 @@ func TestArtResultsRespectByteBudget(t *testing.T) {
 		if len(posts) != 0 {
 			t.Fatal("posted a second result over the byte budget")
 		}
-		c.invalidate("first")
-		c.invalidate("second")
+		c.invalidate("first", false)
+		c.invalidate("second", false)
 		first()
 		(<-posts)()
 	})
@@ -271,6 +271,77 @@ func TestSidebarRefreshKeepsVisibleCover(t *testing.T) {
 			if len(c.busy) != 0 || c.size != size {
 				t.Fatal("refresh retried immediately or miscounted the cover")
 			}
+		})
+	}
+}
+
+// A disk replacement must keep the visible cover even when an older decode is already queued.
+func TestArtworkReplacementKeepsVisibleCover(t *testing.T) {
+	for _, succeeds := range []bool{true, false} {
+		t.Run(fmt.Sprintf("decode=%t", succeeds), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				posts := make(chan func(), artJobs)
+				requests := make(chan chan *ui.Bitmap, artJobs)
+				stop := make(chan struct{})
+				defer close(stop)
+				c := newArtCache(func(fn func()) { posts <- fn })
+				defer c.close()
+				now := time.Unix(1e9, 0)
+				c.now = func() time.Time { return now }
+				const url = "https://fixture.invalid/side?param=80y80"
+				img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+				old, outdated, fresh := ui.NewBitmap(img), ui.NewBitmap(img), ui.NewBitmap(img)
+				size := pixelBytes(old)
+				c.add(url, &artwork{bmp: old, loaded: now, used: now, size: size})
+
+				load := loadArt
+				defer func() { loadArt = load }()
+				loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+					result := make(chan *ui.Bitmap, 1)
+					requests <- result
+					select {
+					case bmp := <-result:
+						if bmp != nil {
+							return bmp, img, 0, nil
+						}
+					case <-stop:
+					}
+					return nil, nil, 0, errors.New("invalid replacement image")
+				}
+				get := func(want *ui.Bitmap) {
+					t.Helper()
+					if got := bitmap(c.get(url, false)); got != want {
+						t.Fatalf("visible bitmap = %p, want %p", got, want)
+					}
+				}
+
+				// A notification must also refresh images loaded less than 24 hours ago.
+				c.invalidate(url, true)
+				get(old)
+				(<-requests) <- outdated
+				oldPost := <-posts
+
+				c.invalidate(url, true)
+				get(old)
+				next := <-requests
+				oldPost()
+				get(old)
+				if succeeds {
+					next <- fresh
+				} else {
+					next <- nil
+				}
+				(<-posts)()
+				if succeeds {
+					get(fresh)
+				} else {
+					get(old)
+				}
+				synctest.Wait()
+				if len(requests) != 0 || len(c.busy) != 0 || c.size != size {
+					t.Fatal("replacement left queued work, retried immediately or miscounted the cache")
+				}
+			})
 		})
 	}
 }

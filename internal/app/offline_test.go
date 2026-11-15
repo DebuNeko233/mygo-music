@@ -422,7 +422,7 @@ func TestOfflineArtworkInvalidationRejectsOldLoad(t *testing.T) {
 	c := newArtCache(func(f func()) { posts <- f })
 	c.get("cover", false)
 	<-entered
-	c.invalidate("cover")
+	c.invalidate("cover", false)
 	c.get("cover", false)
 	<-entered
 	refreshPost(t, posts)
