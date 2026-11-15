@@ -37,10 +37,11 @@ func (a *app) openSettings() {
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TitleBarHeight:       buttonsHeight,
 		TrafficLightPosition: &mygo.Point{X: 20, Y: 20},
-		// Keep the old narrow window's saved dimensions out of this layout.
-		StateKey:        "settings-pages",
-		DisableMaximize: true,
-		DisableMinimize: true,
+		// Older saved states can restore fullscreen even when it is disabled.
+		StateKey:          "settings-pages-windowed",
+		DisableFullScreen: true,
+		DisableMaximize:   true,
+		DisableMinimize:   true,
 		// The app's menu has nothing for this window: on Linux and
 		// Windows it stays out of sight until Alt shows it.
 		AutoHideMenuBar: true,
