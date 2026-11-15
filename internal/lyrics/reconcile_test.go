@@ -1,6 +1,7 @@
 package lyrics
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -248,6 +249,108 @@ func TestReconcileDenseRepetitionsKeepTranslations(t *testing.T) {
 		if !line.Timed || line.Translation != "Verse" {
 			t.Fatalf("row %d lost word timing or translation: %+v", i, line)
 		}
+	}
+}
+
+// Only an unambiguous nearby text variant may borrow an LRC translation cue.
+func TestReconcileVariantTranslationClock(t *testing.T) {
+	const lrc = "[00:08]LRC only\n[00:10]不要忘记我"
+	const variant = "[10050,500](10050,500,0)请不要忘记我"
+	for _, tc := range []struct {
+		name, lrc, yrc, translation, want string
+	}{
+		{"single insertion", lrc, variant, "[00:10]Remember me", "Remember me"},
+		{"single omission", "[00:10]请不要忘记我", "[10050,500](10050,500,0)不要忘记我", "[00:10]Remember me", "Remember me"},
+		{"ambiguous LRC", lrc + "\n[00:10.09]请不要忘记", variant, "[00:10]Remember me", ""},
+		{"ambiguous YRC", lrc, variant + "\n[10060,500](10060,500,0)你不要忘记我", "[00:10]Remember me", ""},
+		{"ambiguous LRC translation", lrc, variant, "[00:10]First\n[00:10]Second", ""},
+		{"substitution", "[00:10]你不要忘记我", variant, "[00:10]Remember me", ""},
+		{"outside timing window", "[00:09.90]不要忘记我", variant, "[00:09.90]Remember me", ""},
+		{"exact YRC translation", lrc, variant, "[00:10]LRC translation\n[00:10.05]YRC translation", "YRC translation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := parseYRC(tc.yrc)
+			lines, _ := BuildDisplay(tc.lrc, tc.translation, tc.yrc)
+			if len(lines) != len(original) || lines[0].Translation != tc.want {
+				t.Fatalf("incorrect translation or row count: %+v", lines)
+			}
+			for i, line := range lines {
+				if line.Text != original[i].Text || line.At != original[i].At || !line.Timed {
+					t.Fatalf("translation matching changed the selected source: %+v", line)
+				}
+			}
+			if len(lines) > 1 && lines[1].Translation != "" {
+				t.Fatalf("ambiguous variant got a translation: %+v", lines[1])
+			}
+		})
+	}
+}
+
+// Timing alone cannot decide between credits that share a cue.
+func TestReconcileCreditTranslationsByRole(t *testing.T) {
+	const lrc = "[00:10]作曲：甲\n[00:10]作词：乙"
+	for _, tc := range []struct {
+		translation, composer, lyricist string
+	}{
+		{"[00:10]Lyrics: B\n[00:10]Composer: A", "Composer: A", "Lyrics: B"},
+		{"[00:10]Lyrics: B\n[00:10]Composed by A", "Composed by A", "Lyrics: B"},
+		{"[00:10]Composed by A", "", ""},
+		{"[00:10]Arranger: C", "", ""},
+	} {
+		_, display := BuildDisplay(lrc+"\n[00:11]Sung line", tc.translation, "")
+		if len(display.Lines) != 3 || display.Lines[0].Translation != tc.composer ||
+			display.Lines[1].Translation != tc.lyricist || display.Lines[2].Translation != "" {
+			t.Fatalf("translations %q were assigned to the wrong role: %+v", tc.translation, display.Lines)
+		}
+	}
+}
+
+// A timed punctuation placeholder cannot suppress sung LRC, but punctuation stays in usable YRC.
+func TestReconcilePunctuationOnlyYRCFallsBackToLRC(t *testing.T) {
+	const lrc = "[00:10]First line"
+	const punctuation = "[9000,500](9000,500,0)…"
+	lines, _ := BuildDisplay(lrc, "[00:10]Translation", punctuation)
+	if len(lines) != 1 || lines[0].Text != "First line" || lines[0].At != 10*time.Second ||
+		lines[0].Timed || lines[0].Translation != "Translation" {
+		t.Fatalf("punctuation-only YRC displaced LRC: %+v", lines)
+	}
+	lines, _ = BuildDisplay(lrc, "", punctuation+"\n[11000,500](11000,500,0)第二句")
+	if len(lines) != 2 || lines[0].Text != "…" || lines[1].Text != "第二句" || !lines[1].Timed {
+		t.Fatalf("usable YRC did not keep its own punctuation and sung rows: %+v", lines)
+	}
+}
+
+// A dense repeat group followed by a distinct lyric still pairs past the candidate limit.
+func TestReconcileDenseRepetitionsWithinSong(t *testing.T) {
+	const count = 128
+	for _, tc := range []struct {
+		name string
+		step int
+	}{
+		{"same timestamps", 0},
+		{"distinct timestamps", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var lrc, yrc, translation strings.Builder
+			for i := range count {
+				ms := i * tc.step
+				fmt.Fprintf(&lrc, "[00:10.%03d]Repeated\n", ms)
+				fmt.Fprintf(&yrc, "[%d,500](%d,500,0)Repeated\n", 10200+ms, 10200+ms)
+				fmt.Fprintf(&translation, "[00:10.%03d]Verse %d\n", ms, i)
+			}
+			lrc.WriteString("[00:16]Ending")
+			yrc.WriteString("[16200,500](16200,500,0)Ending")
+			translation.WriteString("[00:16]Closing")
+			lines, _ := BuildDisplay(lrc.String(), translation.String(), yrc.String())
+			if len(lines) != count+1 || lines[count].Translation != "Closing" {
+				t.Fatalf("repeat group or ending changed: %d lines", len(lines))
+			}
+			for i, line := range lines[:count] {
+				if line.Translation != fmt.Sprintf("Verse %d", i) {
+					t.Fatalf("repeat %d lost its translation: %+v", i, line)
+				}
+			}
+		})
 	}
 }
 

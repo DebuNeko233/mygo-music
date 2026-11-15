@@ -42,7 +42,12 @@ func buildDisplay(lrc, translation, yrc string, metadata []Line, includeMetadata
 	}
 	classifyInstrumentalNotes(original, words, metadata)
 
-	lines := selectLyricSource(original, words, translations)
+	lines, alternate := original, words
+	useYRC := preferYRC(original, words)
+	if useYRC {
+		lines, alternate = words, original
+	}
+	lines = appendMetadata(lines, alternate)
 	end := maxLyricTime
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := &lines[i]
@@ -57,21 +62,24 @@ func buildDisplay(lrc, translation, yrc string, metadata []Line, includeMetadata
 	if includeMetadata {
 		lines = append(lines, metadata...)
 	}
+	var translationClock []Line
+	if useYRC {
+		translationClock = original
+	}
+	attachTranslations(lines, translationClock, translations)
 	return withPlainNotice(newDisplay(lines), lrc, yrc)
 }
 
-// Pick one singing timeline. Keep static credits and notices from either
-// source, and let display construction deduplicate them.
-func selectLyricSource(original, words, translations []Line) []Line {
-	sung := func(line Line) bool { return line.Kind == Sung }
-	useWords := slices.ContainsFunc(words, func(line Line) bool { return sung(line) && line.Timed }) ||
-		(!slices.ContainsFunc(original, sung) && slices.ContainsFunc(words, sung))
-	if !useWords {
-		attachTranslations(original, nil, translations)
-		return appendMetadata(original, words)
+// Punctuation alone cannot displace usable LRC. Once a source is selected,
+// keep all its rows, including punctuation and lines without word timings.
+func preferYRC(original, words []Line) bool {
+	usable := func(line Line) bool {
+		return line.Kind == Sung && strings.ContainsFunc(line.Text, func(r rune) bool {
+			return unicode.IsLetter(r) || unicode.IsNumber(r)
+		})
 	}
-	attachTranslations(words, original, translations)
-	return appendMetadata(words, original)
+	return slices.ContainsFunc(words, func(line Line) bool { return line.Timed && usable(line) }) ||
+		!slices.ContainsFunc(original, usable) && slices.ContainsFunc(words, func(line Line) bool { return line.Kind == Sung })
 }
 
 func appendMetadata(lines, other []Line) []Line {
@@ -93,8 +101,8 @@ type translationCue struct {
 	anchor     int // one-based translation index for an exact match
 }
 
-// The selected source fixes the on-screen rows. Exact LRC text may supply
-// an alternate clock for translations of YRC rows, without supplying text.
+// The selected source fixes the on-screen rows. LRC can supply an
+// alternate translation clock for corresponding YRC rows.
 func attachTranslations(lines, original, translations []Line) {
 	if len(translations) == 0 {
 		return
@@ -125,6 +133,17 @@ func attachTranslations(lines, original, translations []Line) {
 		cue.sourceTime = original[pair.right].At
 		matchExact(cue, cue.sourceTime)
 	}
+	variants := matchVariantClocks(cues, original, pairs, exact)
+	for _, pair := range variants {
+		cue := &cues[pair.left]
+		cue.sourceTime = original[pair.right].At
+		matchExact(cue, cue.sourceTime)
+	}
+	if len(variants) > 0 {
+		pairs = append(pairs, variants...)
+		slices.SortFunc(pairs, func(a, b lyricPair) int { return cmp.Compare(a.right, b.right) })
+	}
+
 	// The translation endpoint supplies LRC-time cues. Reserve the exact
 	// translations of omitted LRC rows before matching the YRC clock.
 	last := 0
@@ -136,9 +155,7 @@ func attachTranslations(lines, original, translations []Line) {
 	for i := range cues {
 		matchExact(&cues[i], cues[i].line.At)
 	}
-	// Credits with unrecognized labels can have exact translations too.
 	attachCreditTranslations(lines, translations, used)
-	attachCreditTranslations(original, translations, used)
 	attachNearbyTranslations(cues, translations, used)
 }
 
@@ -148,7 +165,14 @@ func reserveOmittedTranslations(lines []Line, exact map[time.Duration][]int, use
 			continue
 		}
 		if indices := exact[line.At]; len(indices) > 0 {
-			used[indices[0]] = true
+			// At most one cue per omitted row is withheld from exact YRC
+			// matches. Any surplus at this clock is unsafe for proximity.
+			for _, j := range indices {
+				if used[j] {
+					break
+				}
+				used[j] = true
+			}
 			exact[line.At] = indices[1:]
 		}
 	}
@@ -200,21 +224,61 @@ func attachNearbyTranslations(cues []translationCue, translations []Line, used [
 	}
 }
 
-// A translated credit can have an unrecognized field name. Require an exact
-// timestamp for that case and let the singing timeline claim its pairs first.
+// Match credit aliases before considering unlabeled translations at the
+// same time. A remaining unlabeled translation needs a unique credit.
 func attachCreditTranslations(lines, translations []Line, used []bool) {
+	credits := make(map[time.Duration][]int)
 	for i, line := range lines {
-		if line.Kind != Credit || line.Translation != "" {
-			continue
+		if line.Kind == Credit {
+			credits[line.At] = append(credits[line.At], i)
 		}
-		start := sort.Search(len(translations), func(j int) bool { return translations[j].At >= line.At })
-		for j := start; j < len(translations) && translations[j].At == line.At; j++ {
+	}
+	for at, rows := range credits {
+		start := sort.Search(len(translations), func(j int) bool { return translations[j].At >= at })
+		roles := make(map[string][]int)
+		var unlabeled []int
+		for j := start; j < len(translations) && translations[j].At == at; j++ {
 			tr := translations[j]
 			if used[j] || tr.Text == "" || tr.Kind == Instrumental || tr.Kind == unavailable {
 				continue
 			}
-			lines[i].Translation, used[j] = tr.Text, true
-			break
+			if role, _, ok := creditField(tr.Text); ok {
+				roles[role] = append(roles[role], j)
+			} else {
+				unlabeled = append(unlabeled, j)
+			}
+		}
+		if len(roles) == 0 && len(unlabeled) == 0 {
+			continue
+		}
+		seen := make(map[string]bool, len(rows))
+		unmatched, remaining := -1, 0
+		for _, i := range rows {
+			line := &lines[i]
+			key := metadataKey(line.Text)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			role, _, _ := creditField(line.Text)
+			indices := roles[role]
+			if len(indices) == 0 {
+				unmatched = i
+				remaining++
+				continue
+			}
+			j := indices[0]
+			line.Translation, used[j] = translations[j].Text, true
+			roles[role] = indices[1:]
+		}
+		if remaining == 1 && len(unlabeled) == 1 {
+			lines[unmatched].Translation = translations[unlabeled[0]].Text
+		}
+		if remaining > 0 {
+			// Keep ambiguous credit translations out of nearby sung rows.
+			for _, j := range unlabeled {
+				used[j] = true
+			}
 		}
 	}
 }
@@ -242,38 +306,116 @@ func matchTranslationClocks(cues []translationCue, original []Line) []lyricPair 
 			}
 		}
 	}
-	const window = 5 * time.Second
-	// Equal timestamps and identical text carry no distinguishing timing
-	// information. Use source order for this dense case.
-	if len(byText) == 1 {
-		key := lyricMatchKey(cues[0].line.Text)
-		indices := byText[key]
-		if len(indices) != 0 &&
-			distance(cues[0].line.At, original[indices[0]].At) < window &&
-			original[indices[0]].At == original[indices[len(indices)-1]].At &&
-			slices.IndexFunc(cues, func(c translationCue) bool {
-				return c.line.At != cues[0].line.At || lyricMatchKey(c.line.Text) != key
-			}) < 0 {
-			pairs := make([]lyricPair, min(len(cues), len(indices)))
-			for i := range pairs {
-				pairs[i] = lyricPair{i, indices[i]}
-			}
-			return pairs
+	keys := make([]string, len(cues))
+	cueIndices := make(map[string][]int)
+	ordinals := make([]int, len(cues))
+	for i, cue := range cues {
+		key := lyricMatchKey(cue.line.Text)
+		keys[i] = key
+		if len(byText[key]) > lyricCandidatesPerRow {
+			ordinals[i] = len(cueIndices[key])
+			cueIndices[key] = append(cueIndices[key], i)
 		}
 	}
+	const window = 5 * time.Second
 	return orderedLyricPairs(len(cues), len(original), func(i int, add func(int, time.Duration) bool) {
 		at := cues[i].line.At
-		indices := byText[lyricMatchKey(cues[i].line.Text)]
+		key := keys[i]
+		indices := byText[key]
 		start := sort.Search(len(indices), func(j int) bool { return original[indices[j]].At > at-window })
-		for _, j := range indices[start:] {
-			if original[j].At >= at+window || !add(j, distance(at, original[j].At)) {
-				break
-			}
+		end := sort.Search(len(indices), func(j int) bool { return original[indices[j]].At >= at+window })
+		limit := min(start+lyricCandidatesPerRow, end)
+		fromStart, fromEnd := end, end
+		if end > limit {
+			// Keep candidates counted from both ends of the window so
+			// repeated lines can reach past the first 64 cues.
+			peers := cueIndices[key]
+			first, last := original[indices[start]].At, original[indices[end-1]].At
+			before := ordinals[i] - sort.Search(len(peers), func(j int) bool {
+				return cues[peers[j]].line.At > first-window
+			})
+			after := sort.Search(len(peers), func(j int) bool {
+				return cues[peers[j]].line.At >= last+window
+			}) - ordinals[i] - 1
+			a, b := min(start+before, end-1), max(start, end-1-after)
+			fromStart, fromEnd = min(a, b), max(a, b)
+			limit -= 2
+		}
+		// Visit in source order so tied paths still favor earlier rows.
+		for _, j := range indices[start:limit] {
+			add(j, distance(at, original[j].At))
+		}
+		if fromStart >= limit && fromStart < end {
+			j := indices[fromStart]
+			add(j, distance(at, original[j].At))
+		}
+		if fromEnd >= limit && fromEnd < end && fromEnd != fromStart {
+			j := indices[fromEnd]
+			add(j, distance(at, original[j].At))
 		}
 	})
 }
 
+// Only borrow a clock when the two rows are mutual, unique neighbors between
+// exact text matches. The LRC row must have its own exact translation.
+func matchVariantClocks(cues []translationCue, original []Line, anchors []lyricPair, exact map[time.Duration][]int) []lyricPair {
+	const tolerance = 100 * time.Millisecond
+	var pairs []lyricPair
+	left, right := 0, 0
+	for n := 0; n <= len(anchors); n++ {
+		end := lyricPair{len(cues), len(original)}
+		if n < len(anchors) {
+			end = anchors[n]
+		}
+		for i := left; i < end.left && right < end.right; i++ {
+			at := cues[i].line.At
+			if len(exact[at]) != 0 {
+				continue
+			}
+			j := right + sort.Search(end.right-right, func(k int) bool {
+				return original[right+k].At >= at-tolerance
+			})
+			if j == end.right || original[j].Kind != Sung || original[j].At > at+tolerance ||
+				(j+1 < end.right && original[j+1].At <= at+tolerance) {
+				continue
+			}
+			other := original[j].At
+			if len(exact[other]) != 1 ||
+				(j > 0 && original[j-1].At == other) ||
+				(j+1 < len(original) && original[j+1].At == other) ||
+				(i > 0 && distance(cues[i-1].line.At, other) <= tolerance) ||
+				(i+1 < len(cues) && distance(cues[i+1].line.At, other) <= tolerance) {
+				continue
+			}
+			if oneLyricInsertion(lyricMatchKey(cues[i].line.Text), lyricMatchKey(original[j].Text)) {
+				pairs = append(pairs, lyricPair{i, j})
+			}
+		}
+		left, right = end.left+1, end.right+1
+	}
+	return pairs
+}
+
+// Accept a single inserted or omitted letter or number in otherwise identical
+// text. Short interjections and one-character substitutions are too ambiguous.
+func oneLyricInsertion(a, b string) bool {
+	shorter, longer := []rune(a), []rune(b)
+	if len(shorter) > len(longer) {
+		shorter, longer = longer, shorter
+	}
+	if len(shorter) < 4 || len(longer) != len(shorter)+1 {
+		return false
+	}
+	i := 0
+	for i < len(shorter) && shorter[i] == longer[i] {
+		i++
+	}
+	return (unicode.IsLetter(longer[i]) || unicode.IsNumber(longer[i])) && slices.Equal(shorter[i:], longer[i+1:])
+}
+
 type lyricPair struct{ left, right int }
+
+const lyricCandidatesPerRow = 64
 
 // Choose the most one-to-one pairs in source order, then the smallest total
 // time difference. Each candidate extends the best path ending to its left
@@ -298,11 +440,9 @@ func orderedLyricPairs(left, right int, candidates func(int, func(int, time.Dura
 	}
 	var i int
 	// Limit candidates per row to keep dense input linear in row count.
-	// Candidates arrive in source order so repeated rows keep their pairing.
-	const candidatesPerRow = 64
 	var rowStart int
 	add := func(j int, cost time.Duration) bool {
-		if len(paths)-rowStart == candidatesPerRow {
+		if len(paths)-rowStart == lyricCandidatesPerRow {
 			return false
 		}
 		previous := 0
