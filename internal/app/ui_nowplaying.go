@@ -75,6 +75,8 @@ func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 func (a *app) nowPlayingView(c *ui.Context) {
 	pl := a.pl
 	tr := pl.Current()
+	// The player bar, with its timer, stops building once this page settles.
+	a.tickTimes(c)
 	w, h := c.Size()
 	art := a.playbackArtwork(tr.Album.PicURL, nowPlayingCoverRequest)
 	if cs := &a.npCoverState; a.npPane == paneStage || a.npPane == paneWall {

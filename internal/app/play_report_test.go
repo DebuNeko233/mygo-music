@@ -192,6 +192,7 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 		a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
 		a.playback(player.PlaybackEvent{Track: track, Started: true})
 	}
+	oldDone := a.reportDone
 	finished := make(chan struct{})
 	go func() { a.flushPlayReports(); close(finished) }()
 	select {
@@ -203,6 +204,10 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 	<-requestFinished
 	// The old worker's final queued report observes the end stub before cleanup.
 	<-oldEnd
+	// Wait for the timed-out worker too; restoring its stubs during cleanup
+	// raced the requests that had outlived the first flush. Its queue is no
+	// longer reachable through the app after stopPlayReports.
+	<-oldDone
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
 	a.flushPlayReports()
 	if a.reportQueue != nil || a.reportDone != nil {
