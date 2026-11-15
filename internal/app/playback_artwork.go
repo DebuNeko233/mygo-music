@@ -33,7 +33,7 @@ func (a *app) playbackArtwork(url string, cover playbackCover) *artwork {
 		}
 		key := netease.Sized(tr.Album.PicURL, cover.pixels)
 		if key != current && key != seen {
-			a.art.get(key, cover.backdrop)
+			a.art.prefetch(key, cover.backdrop)
 			seen = key
 		}
 	}

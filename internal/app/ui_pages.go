@@ -173,8 +173,8 @@ func (a *app) coverCard(c *ui.Context, name, cover string, playCount float64, su
 // The cover rounds itself rather than its parent clipping it: a clip moved
 // by a transform, as a card lifting under the pointer, is drawn on the CPU.
 func (a *app) coverFill(c *ui.Context, url string, px int, radius float32) {
-	bmp := bitmap(a.art.get(netease.Sized(url, px), false))
 	box := ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(radius)
+	bmp := bitmap(a.art.getInView(netease.Sized(url, px), false, box))
 	in := artIn(box, bmp)
 	if in < 1 {
 		box.Background(a.pal.hover)
