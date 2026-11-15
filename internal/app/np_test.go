@@ -74,7 +74,9 @@ func TestNowPlayingClockTicksEverySecond(t *testing.T) {
 		}, 1200, 800)
 		tt.Advance(npSettle)
 		before := builds
-		tt.Advance(time.Second)
+		// The silent source stays at zero, so tickTimes schedules its
+		// next build one second plus the 10 ms boundary allowance later.
+		tt.Advance(time.Second + 10*time.Millisecond)
 		if got := builds - before; got == 0 {
 			t.Errorf("pane %d did not rebuild its times for a second", pane)
 		}

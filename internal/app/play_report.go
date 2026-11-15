@@ -2,7 +2,6 @@ package app
 
 import (
 	"log"
-	"sync"
 	"time"
 
 	"netease-music-mygo/internal/netease"
@@ -12,9 +11,11 @@ import (
 // playWorth is how long a song must be heard before NetEase's desktop count.
 const playWorth = 30 * time.Second
 
-var reportPlayStart func(int64, netease.PlaySource) error = netease.ReportPlayStart
-var reportDawnStart = netease.ReportDawnStart
-var reportDawnEnd = netease.ReportDawnEnd
+type playReporter interface {
+	PlayStart(int64, netease.PlaySource) error
+	DawnStart(netease.Track, int, string, netease.PlaySource) error
+	DawnEnd(netease.Track, time.Duration, string, int, string, netease.PlaySource) error
+}
 
 // heardPlay is the one actual audio session waiting for its final play log.
 type heardPlay struct {
@@ -27,10 +28,6 @@ type heardPlay struct {
 // or discard a report. These callbacks run on the app's main thread.
 func (a *app) playback(event player.PlaybackEvent) {
 	if event.Started {
-		if a.reportRestore != nil {
-			a.reportRestore()
-			a.reportRestore = nil
-		}
 		if event.Track.ProgramID != 0 || a.profile == nil {
 			return
 		}
@@ -38,11 +35,11 @@ func (a *app) playback(event player.PlaybackEvent) {
 		track := event.Track
 		bitrate, level := event.Bitrate, event.Level
 		a.heard = heardPlay{id: track.ID, active: true}
-		a.enqueueReport(func() {
-			if err := reportPlayStart(track.ID, source); err != nil {
+		a.enqueueReport(func(reporter playReporter) {
+			if err := reporter.PlayStart(track.ID, source); err != nil {
 				log.Printf("play report: recent play %d: %v", track.ID, err)
 			}
-			if err := reportDawnStart(track, bitrate, level, source); err != nil {
+			if err := reporter.DawnStart(track, bitrate, level, source); err != nil {
 				log.Printf("play report: start %d: %v", track.ID, err)
 			}
 		})
@@ -59,8 +56,8 @@ func (a *app) playback(event player.PlaybackEvent) {
 	source := netease.PlaySource{Source: event.Source.Source, ID: event.Source.ID, Alg: event.Source.Alg}
 	end := string(event.End)
 	played, bitrate, level := event.Played, event.Bitrate, event.Level
-	a.enqueueReport(func() {
-		if err := reportDawnEnd(track, played, end, bitrate, level, source); err != nil {
+	a.enqueueReport(func(reporter playReporter) {
+		if err := reporter.DawnEnd(track, played, end, bitrate, level, source); err != nil {
 			log.Printf("play report: end %d: %v", event.Track.ID, err)
 		}
 	})
@@ -68,26 +65,26 @@ func (a *app) playback(event player.PlaybackEvent) {
 
 // enqueueReport keeps each session's startplay before its play, and different
 // sessions in playback order. A failed request is logged rather than lost silently.
-func (a *app) enqueueReport(send func()) {
-	a.reportOnce.Do(func() {
-		// The worker keeps its own queue and done channel: a later session
-		// takes the fields, and the one it ends must still finish.
-		queue := make(chan func(), 64)
+func (a *app) enqueueReport(send func(playReporter)) {
+	if a.reportQueue == nil {
+		var reporter playReporter
+		if a.newPlayReporter == nil {
+			reporter = netease.NewPlayReporter()
+		} else {
+			reporter = a.newPlayReporter()
+		}
+		queue := make(chan func(playReporter), 64)
 		done := make(chan struct{})
 		a.reportQueue, a.reportDone = queue, done
 		go func() {
+			defer close(done)
 			for send := range queue {
-				send()
+				send(reporter)
 			}
-			close(done)
 		}()
-	})
-	queue := a.reportQueue
-	if queue == nil {
-		return
 	}
 	select {
-	case queue <- send:
+	case a.reportQueue <- send:
 	default:
 		// Reporting must never stall input or rendering. Ordinary listening
 		// cannot fill this queue; a stalled network must not change that.
@@ -98,38 +95,16 @@ func (a *app) enqueueReport(send func()) {
 // reportPlayStopped closes a session on account changes and application exit.
 func (a *app) reportPlayStopped() { a.pl.Finish() }
 
-// stopPlayReports ends the session's queue without waiting for it, and returns
-// the channel closed once its requests are done and the global cookies are
-// back, or nil when there was nothing to send. Its caller runs on the thread
-// that draws: the requests finish on the goroutine that sends them, under the
-// cookies the account had while it was signed in, so neither signing in nor
-// signing out waits for the network. A later login creates a fresh queue.
+// stopPlayReports detaches the current login's queue. Its worker drains
+// independently, using the login captured when the queue was started.
 func (a *app) stopPlayReports() <-chan struct{} {
 	a.reportPlayStopped()
 	queue, done := a.reportQueue, a.reportDone
-	if queue == nil {
-		return nil
+	if queue != nil {
+		a.reportQueue, a.reportDone = nil, nil
+		close(queue)
 	}
-	a.reportQueue = nil
-	a.reportDone = nil
-	a.reportOnce = sync.Once{}
-	// The queue outlives the account that filled it: it sends with that
-	// account's cookies, not with those of whoever signs in next.
-	restore := a.reportRestore
-	if restore == nil {
-		restore = netease.SnapshotPlayReports()
-	}
-	a.reportRestore = nil
-	close(queue)
-	finished := make(chan struct{})
-	go func() {
-		<-done
-		// The window has no part in the jar, so it is given back here,
-		// once nothing is left to send with it.
-		restore()
-		close(finished)
-	}()
-	return finished
+	return done
 }
 
 // flushPlayReports finishes the ordered start/end requests before the process

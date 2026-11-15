@@ -10,19 +10,48 @@ import (
 	"netease-music-mygo/internal/lyrics"
 )
 
-func (a *app) timedLine(c *ui.Context, l *lyrics.Line, on bool, width float32, st linesStyle) ui.Element {
+// wholeLineHighlight keeps estimated LRC word times out of the lyric pane.
+func (st linesStyle) wholeLineHighlight(line *lyrics.Line) bool {
+	return (st.centerShort || st.immersive) && !line.Timed
+}
+
+func (st linesStyle) showsTimedWords(line *lyrics.Line) bool {
+	return line.Kind == lyrics.Sung && !st.wholeLineHighlight(line) && len(line.Words) > 0
+}
+
+func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float32, st linesStyle) (ui.Element, bool) {
+	if l.Kind != lyrics.Sung {
+		row := lyricInfoRow(c, l, st.lang)
+		return row, st.immersive && !st.browsing && row.Hovered()
+	}
 	line := ui.ButtonBase(c).Column().AlignItems(ui.Start).Padding(timedLineInsetY, timedLineInsetX).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
+	// Use the painted bounds so scrolling a line near the close button
+	// protects the entire row, including its translation and padding.
+	nearClose := false
+	if close := st.closeBounds; close.W > 0 {
+		row := line.Bounds()
+		const guard = 16
+		nearClose = row.W > 0 && row.H > 0 && row.X < close.X+close.W+guard && row.X+row.W > close.X-guard &&
+			row.Y < close.Y+close.H+guard && row.Y+row.H > close.Y-guard
+		if nearClose {
+			line.PassThrough().AccessDisabled(true)
+		}
+	}
+	on := relative == 0
+	hovered := !nearClose && line.Hovered()
 	alpha := float32(0.28)
 	if on {
 		alpha = 1
-	} else if line.Hovered() {
+	} else if hovered {
 		alpha = 0.55
+	} else if st.immersive {
+		alpha = lyricLineOpacity(relative, st.browsing)
 	}
 	if st.quiet {
 		// Nearly gone under a hot comment.
 		alpha *= quietFaded
 	}
-	if line.Hovered() {
+	if hovered {
 		line.Background(white.Alpha(0.06))
 	}
 	scale := float32(0.94)
@@ -34,9 +63,15 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, on bool, width float32, s
 		// The line fades as a pose, in frames that only paint, rather
 		// than building the view at the display's rate as it does.
 		text := ui.Column(c).AlignItems(ui.Start).Gap(6)
-		text.AnimatePose(ui.Pose{Fade: 1 - alpha}, ui.Animation{Duration: 380 * time.Millisecond})
+		fade := ui.Animation{Duration: 380 * time.Millisecond}
+		if on && st.wholeLineHighlight(l) {
+			fade.Duration = 180 * time.Millisecond
+		} else if st.immersive && !st.browsing && !st.quiet && !hovered && relative > 1 {
+			fade.Delay = time.Duration(min(relative-1, 3)) * 35 * time.Millisecond
+		}
+		text.AnimatePose(ui.Pose{Fade: 1 - alpha}, fade)
 		text.Children(func() {
-			if on && len(l.Words) > 0 && width > 0 {
+			if on && width > 0 && st.showsTimedWords(l) {
 				a.paintLyricWords(c, l, width, st)
 			} else {
 				ui.Text(c, l.Text).Lang(st.lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
@@ -46,10 +81,42 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, on bool, width float32, s
 			}
 		})
 	})
-	if line.Clicked() {
+	if line.Clicked() && !nearClose {
 		a.pl.Seek(l.At)
+		if st.centerShort {
+			a.lyricClickSeekRevision = a.pl.SeekRevision()
+			c.AnimationFrame()
+		}
 	}
-	return line
+	return line, hovered
+}
+
+func lyricInfoFont(kind lyrics.LineKind) (size float32, weight int) {
+	if kind == lyrics.Instrumental {
+		return 24, 600
+	}
+	return 16, 500
+}
+
+func lyricStaticNotice(c *ui.Context, text, lang string) ui.Element {
+	size, weight := lyricInfoFont(lyrics.Instrumental)
+	return ui.Text(c, text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(white.Alpha(0.85))
+}
+
+func lyricInfoRow(c *ui.Context, l *lyrics.Line, lang string) ui.Element {
+	row := ui.Column(c).Padding(timedLineInsetY, timedLineInsetX).Gap(timedLineGap)
+	row.Children(func() {
+		if l.Kind == lyrics.Instrumental {
+			lyricStaticNotice(c, l.Text, lang)
+			return
+		}
+		size, weight := lyricInfoFont(l.Kind)
+		ui.Text(c, l.Text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(white.Alpha(0.68))
+		if l.Translation != "" {
+			ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.55))
+		}
+	})
+	return row
 }
 
 type paintedLyric struct {
@@ -62,11 +129,11 @@ type paintedLyric struct {
 	height    float32
 }
 
-func timedLineWidth(viewport float32) float32 {
+func (st linesStyle) lineWidth(viewport float32) float32 {
 	if viewport <= 0 {
 		return 0
 	}
-	return max(1, viewport-timedPaneInsetRight-2*timedLineInsetX)
+	return max(1, viewport-max(st.rightInset, timedPaneInsetRight)-2*timedLineInsetX)
 }
 
 func lyricFont(c *ui.Context, st linesStyle) ui.Font {

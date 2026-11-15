@@ -7,6 +7,27 @@ import (
 	"testing"
 )
 
+// Turning immersive lyrics off must survive a reload with the feature enabled by default.
+func TestSaveKeepsImmersiveLyricsDisabled(t *testing.T) {
+	s := defaultSettings()
+	s.path = filepath.Join(t.TempDir(), "settings.json")
+	s.LyricEdgeFade = false
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded := defaultSettings()
+	if err := json.Unmarshal(b, &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.LyricEdgeFade {
+		t.Fatal("immersive lyrics were re-enabled after saving them as disabled")
+	}
+}
+
 // TestSaveSoonKeepsTheLastOfABurst checks that settings kept off the drawing
 // goroutine still reach the disk, and as they stand when the last one is taken:
 // holding a shortcut that steps the lyric size takes them on every repeat.

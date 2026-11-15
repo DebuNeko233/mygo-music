@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"testing"
@@ -131,22 +132,42 @@ func TestReportPlayStartUsesWeblogIdentity(t *testing.T) {
 	}
 }
 
-// Reports that outlive a login retain the old identity until the next session
-// restores the live jar.
+// Each queued reporter keeps its login even when requests from two logins interleave.
 func TestPlayReportsKeepTheirLoginCookies(t *testing.T) {
-	old := reportCookieJar
-	t.Cleanup(func() { reportCookieJar = old })
-	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{{Name: "MUSIC_U", Value: "old"}})
-	restore := SnapshotPlayReports()
-	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{{Name: "MUSIC_U", Value: "new"}})
-	cookies := playCookieJar().Cookies(siteURL)
-	if len(cookies) != 1 || cookies[0].Value != "old" {
-		t.Fatalf("queued report cookies changed account: %+v", cookies)
+	oldJar := httpClient.Jar
+	httpClient.Jar, _ = cookiejar.New(nil)
+	t.Cleanup(func() { httpClient.Jar = oldJar })
+	responseCookie := ""
+	var seen string
+	oldTransport := httpClient.Transport
+	httpClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		seen = req.Header.Get("Cookie")
+		header := make(http.Header)
+		if responseCookie != "" {
+			header.Add("Set-Cookie", "MUSIC_U="+responseCookie)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: header,
+			Body: io.NopCloser(strings.NewReader(`{"code":200}`))}, nil
+	})
+	t.Cleanup(func() { httpClient.Transport = oldTransport })
+	setLogin := func(value string) {
+		httpClient.Jar.SetCookies(siteURL, []*http.Cookie{{Name: "MUSIC_U", Value: value}})
 	}
-	restore()
-	cookies = playCookieJar().Cookies(siteURL)
-	if len(cookies) != 1 || cookies[0].Value != "new" {
-		t.Fatalf("next login did not restore live cookies: %+v", cookies)
+	setLogin("old")
+	old := NewPlayReporter()
+	setLogin("new")
+	current := NewPlayReporter()
+	for _, tc := range []struct {
+		reporter       playReporter
+		want, response string
+	}{{current, "new", ""}, {old, "old", "renewed-old"}, {current, "new", ""}, {old, "renewed-old", ""}, {playReporter{}, "new", ""}} {
+		responseCookie = tc.response
+		if err := tc.reporter.PlayStart(7, PlaySource{}); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(seen, "MUSIC_U="+tc.want) {
+			t.Fatalf("request used the wrong login: %s", seen)
+		}
 	}
 }
 

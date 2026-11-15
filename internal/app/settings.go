@@ -54,6 +54,8 @@ type settings struct {
 	// rising and swelling with the bass: an experiment the listener turns
 	// on.
 	Fog bool `json:"fog"`
+	// LyricEdgeFade enables the experimental effects in the scrolling lyrics pane.
+	LyricEdgeFade bool `json:"lyricEdgeFade"`
 	// AppIcon is where the app's icon shows on macOS (appIcons); elsewhere
 	// it is always in the notification area.
 	AppIcon string `json:"appIcon"`
@@ -159,7 +161,7 @@ func defaultSettings() settings {
 		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true,
 		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
-		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
+		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2, LyricEdgeFade: true,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
 	}
 }

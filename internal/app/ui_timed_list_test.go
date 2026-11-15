@@ -57,6 +57,67 @@ func TestLongLyricsWindow(t *testing.T) {
 	}
 }
 
+// Toggling immersive mode preserves the reading position in a virtualized lyric list.
+func TestLongLyricsKeepAnchorWhenTogglingImmersive(t *testing.T) {
+	lines := make([]lyrics.Line, 100)
+	for i := range lines {
+		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Line %d", i)}
+	}
+	const height = 240
+	a, tt := shortLyricsApp(lines, 200, height)
+	active := lines[len(lines)/2]
+	a.pl.Hold(active.At)
+	for _, immersive := range []bool{false, true, false} {
+		a.settings.LyricEdgeFade = immersive
+		tt.Frame()
+		tt.Advance(time.Second)
+		row, ok := tt.AccessByRole(ui.RoleButton, active.Text)
+		if !ok || row.Offscreen || abs32(row.Bounds.Y-height*0.3) > 2 {
+			t.Fatalf("immersive=%v: active lyric lost its reading position: %+v", immersive, row)
+		}
+	}
+}
+
+// Virtualized lyric rows size only the word text they can display, while captions still size their word highlight.
+func TestTimedListMeasuresOnlyRenderedWordText(t *testing.T) {
+	const width = 120
+	estimated := lyrics.Line{
+		Text:  "Short line",
+		Words: []lyrics.Word{{Text: strings.Repeat("Word text wraps. ", 6)}},
+	}
+	for _, tc := range []struct {
+		name                                    string
+		lyric, immersive, timed, wantWordHeight bool
+	}{
+		{"ordinary LRC", true, false, false, false},
+		{"immersive LRC", true, true, false, false},
+		{"ordinary YRC", true, false, true, true},
+		{"immersive YRC", true, true, true, true},
+		{"podcast captions", false, false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			line := estimated
+			line.Timed = tc.timed
+			rows := []lyrics.Line{line}
+			ui.NewTester(func(c *ui.Context) {
+				st := linesStyle{size: 22, weight: 600, lineHeight: 1.25, centerShort: tc.lyric, immersive: tc.immersive}
+				var layout timedListLayout
+				layout.reset(c, rows, width, st, 0)
+				layout.measure(rows, 0, len(rows), st)
+				text := line.Text
+				if tc.wantWordHeight {
+					text = line.Words[0].Text
+				}
+				_, height := shapeLyric(text, lyricFont(c, st), width, c.Direction()).Size()
+				want := height + 2*timedLineInsetY + timedLineGap
+				if got := layout.offsets[1]; abs32(got-want) > 0.5 {
+					t.Fatalf("row height = %.1f, want %.1f for the displayed text", got, want)
+				}
+			}, 200, 220)
+		})
+	}
+}
+
 // A long transcript can seek to a distant caption and still click the nearby lines.
 func TestLongCaptionsWindow(t *testing.T) {
 	a := captionsTestApp(t, true)
