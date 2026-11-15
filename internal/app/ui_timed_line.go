@@ -10,9 +10,19 @@ import (
 	"netease-music-mygo/internal/lyrics"
 )
 
-func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float32, st linesStyle) ui.Element {
+// wholeLineHighlight keeps estimated LRC word times out of the lyric pane.
+func (st linesStyle) wholeLineHighlight(line *lyrics.Line) bool {
+	return (st.centerShort || st.immersive) && !line.Timed
+}
+
+func (st linesStyle) showsTimedWords(line *lyrics.Line) bool {
+	return line.Kind == lyrics.Sung && !st.wholeLineHighlight(line) && len(line.Words) > 0
+}
+
+func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float32, st linesStyle) (ui.Element, bool) {
 	if l.Kind != lyrics.Sung {
-		return lyricInfoRow(c, l, st.lang)
+		row := lyricInfoRow(c, l, st.lang)
+		return row, st.immersive && !st.browsing && row.Hovered()
 	}
 	line := ui.ButtonBase(c).Column().AlignItems(ui.Start).Padding(timedLineInsetY, timedLineInsetX).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
 	// Use the painted bounds so scrolling a line near the close button
@@ -28,9 +38,6 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		}
 	}
 	on := relative == 0
-	// LRC supplies a line timestamp. Its estimated word times are useful
-	// elsewhere, but here the whole line should light at the same time.
-	lineTimed := (st.centerShort || st.immersive) && !l.Timed
 	hovered := !nearClose && line.Hovered()
 	alpha := float32(0.28)
 	if on {
@@ -57,14 +64,14 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		// than building the view at the display's rate as it does.
 		text := ui.Column(c).AlignItems(ui.Start).Gap(6)
 		fade := ui.Animation{Duration: 380 * time.Millisecond}
-		if lineTimed && on {
+		if on && st.wholeLineHighlight(l) {
 			fade.Duration = 180 * time.Millisecond
 		} else if st.immersive && !st.browsing && !st.quiet && !hovered && relative > 1 {
 			fade.Delay = time.Duration(min(relative-1, 3)) * 35 * time.Millisecond
 		}
 		text.AnimatePose(ui.Pose{Fade: 1 - alpha}, fade)
 		text.Children(func() {
-			if on && !lineTimed && len(l.Words) > 0 && width > 0 {
+			if on && width > 0 && st.showsTimedWords(l) {
 				a.paintLyricWords(c, l, width, st)
 			} else {
 				ui.Text(c, l.Text).Lang(st.lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
@@ -81,7 +88,7 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		}
 		a.pl.Seek(l.At)
 	}
-	return line
+	return line, hovered
 }
 
 func lyricInfoFont(kind lyrics.LineKind) (size float32, weight int) {

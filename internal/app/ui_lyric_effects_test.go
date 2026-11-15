@@ -41,6 +41,16 @@ func TestLyricInterludeTiming(t *testing.T) {
 	}
 }
 
+// A YRC row's declared end keeps the interlude from starting during the tail of the line.
+func TestLyricInterludeUsesYRCLineEnd(t *testing.T) {
+	const yrc = "[5000,3000](5000,1000,0)First\n[15000,1000](15000,1000,0)Second"
+	_, display := lyrics.BuildDisplay("[00:10]作曲：甲", "", yrc)
+	cur, next := display.Position(8 * time.Second)
+	if got := lyricInterludeAt(display.Lines, cur, next); got.from != 9*time.Second || got.to != 15*time.Second {
+		t.Fatalf("gap used the last word or an intervening credit instead of the sung line cues: %+v", got)
+	}
+}
+
 // A lyric block that fits stays centered before and after the first timestamp.
 func TestLyricIntroSkipsFittingLyrics(t *testing.T) {
 	lines := []lyrics.Line{
@@ -85,35 +95,42 @@ func TestLyricIntroFollowsReflow(t *testing.T) {
 	checkShortLyricsCenter(t, tt, a, lines, height)
 }
 
-// A lyric near the close button ignores clicks and becomes clickable again when it moves away.
+// A lyric near the close button ignores clicks and highlight hover until it moves away.
 func TestLyricNearCloseDoesNotSeek(t *testing.T) {
 	a := newTestApp()
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 30000}})
 	line := lyrics.Line{At: 5 * time.Second, Text: "Lyric"}
 	y := float32(35)
+	var hovered bool
 	tt := ui.NewTester(func(c *ui.Context) {
 		st := linesStyle{size: 20, immersive: true, closeBounds: ui.Rect{X: 60, Y: 0, W: 38, H: 38}}
 		ui.Column(c).Absolute().Top(y).Left(75).Width(180).Children(func() {
-			a.timedLine(c, &line, 0, 156, st)
+			_, hovered = a.timedLine(c, &line, 0, 156, st)
 		})
 	}, 280, 180)
 	tt.Frame()
-	clickLyric := func() {
+	clickLyric := func(wantHover bool) {
 		t.Helper()
 		row, ok := tt.AccessByRole(ui.RoleButton, line.Text)
 		if !ok {
 			t.Fatal("lyric row is missing")
 		}
-		tt.ClickAt(row.Bounds.X+45, row.Bounds.Y+row.Bounds.H/2)
+		x, y := row.Bounds.X+45, row.Bounds.Y+row.Bounds.H/2
+		tt.Move(x, y)
+		tt.Frame()
+		if hovered != wantHover {
+			t.Fatalf("hover available = %v, want %v", hovered, wantHover)
+		}
+		tt.ClickAt(x, y)
 	}
-	clickLyric()
+	clickLyric(false)
 	if got := a.pl.Position(); got != 0 {
 		t.Fatalf("clicking the protected row sought to %v", got)
 	}
 	y = 100
 	tt.Frame()
 	tt.Frame()
-	clickLyric()
+	clickLyric(true)
 	if got := a.pl.Position(); got != line.At {
 		t.Fatalf("clicking below the protected area sought to %v, want %v", got, line.At)
 	}

@@ -36,17 +36,10 @@ func lyricInterludeAt(lines []lyrics.Line, cur, next int) lyricInterlude {
 		return lyricInterlude{}
 	}
 	line := lines[cur]
-	// Leave room to read the line after its last word finishes. A line
-	// with no end timestamp cannot tell us where a break begins.
-	if !line.Timed || lyrics.IsCredit(line.Text) {
-		return lyricInterlude{}
-	}
-	end := line.End
-	for _, word := range line.Words {
-		end = max(end, word.End)
-	}
-	if end > line.At && to-end > 4*time.Second {
-		return lyricInterlude{from: end + time.Second, to: to}
+	// The playback index only includes sung rows. Valid YRC word times
+	// fit inside the line, so its end is the boundary for a real gap.
+	if line.Timed && line.End > line.At && to-line.End > 4*time.Second {
+		return lyricInterlude{from: line.End + time.Second, to: to}
 	}
 	return lyricInterlude{}
 }

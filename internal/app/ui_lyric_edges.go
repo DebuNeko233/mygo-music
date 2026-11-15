@@ -6,6 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/shader"
+
+	"netease-music-mygo/internal/lyrics"
 )
 
 const lyricEdgeMask = `
@@ -134,11 +136,34 @@ type lyricEdgeFade struct {
 	gutter     float32
 }
 
-func addLyricCreditRow(rows *[2]ui.Element, row ui.Element) {
-	if !rows[0].Valid() {
-		rows[0] = row
+// Both list layouts use the same rows for following and for the clear bands.
+type lyricRows struct {
+	active, hovered, firstSung ui.Element
+	credits                    [2]ui.Element
+}
+
+func (r *lyricRows) observe(row ui.Element, hovered bool, i, current int, kind lyrics.LineKind, st linesStyle) {
+	if i == current {
+		r.active = row
 	}
-	rows[1] = row
+	if !st.immersive {
+		return
+	}
+	if i == st.introLine {
+		r.firstSung = row
+	}
+	if st.browsing {
+		return
+	}
+	if hovered {
+		r.hovered = row
+	}
+	if current < 0 && i < st.introLine && kind == lyrics.Credit {
+		if !r.credits[0].Valid() {
+			r.credits[0] = row
+		}
+		r.credits[1] = row
+	}
 }
 
 func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introOpacity float32, browsing bool, credits [2]ui.Element, gutter float32) {
