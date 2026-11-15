@@ -588,7 +588,12 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	}
 	if revision := pl.SeekRevision(); revision != a.lyricSeekRevision {
 		a.lyricSeekRevision = revision
-		if a.settings.LyricEdgeFade {
+		if revision == a.lyricClickSeekRevision && a.lyricAt != lyricInitialFollow {
+			// A clicked row is already in view. Follow it from the visible
+			// position, including when the listener had scrolled manually.
+			a.lyricGlide.offset = a.lyricScroll.Y
+			a.resumeLyricFollow()
+		} else if a.settings.LyricEdgeFade {
 			a.seekLyricFollow()
 		}
 	}
@@ -726,20 +731,26 @@ func (a *app) lyricBrowsing(c *ui.Context) bool {
 		c.After(left)
 		return true
 	}
-	a.lyricBrowseUntil = time.Time{}
-	a.lyricResizeAnchor = lyricReadingAnchor{}
-	a.lyricAt = lyricResumeFollow
+	a.resumeLyricFollow()
 	return false
 }
 
+const lyricInitialFollow = -2
+
 // Resume following even if playback is still on the same line.
 const lyricResumeFollow = -3
+
+func (a *app) resumeLyricFollow() {
+	a.lyricBrowseUntil = time.Time{}
+	a.lyricResizeAnchor = lyricReadingAnchor{}
+	a.lyricAt = lyricResumeFollow
+}
 
 func (a *app) seekLyricFollow() {
 	a.lyricBrowseUntil = time.Time{}
 	a.lyricResizeAnchor = lyricReadingAnchor{}
 	a.lyricGlide = lyricGlide{}
-	a.lyricAt = -2
+	a.lyricAt = lyricInitialFollow
 }
 
 type lyricReadingAnchor struct {
@@ -782,7 +793,7 @@ type linesStyle struct {
 // viewport changes; cur -1 precedes the first line. Clicking a line seeks
 // to it. foot, if set, follows the lines.
 func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, cur int, st linesStyle, foot func()) {
-	initialFollow := st.centerShort && a.lyricAt == -2
+	initialFollow := st.centerShort && a.lyricAt == lyricInitialFollow
 	// Bounds below belong to the last layout. A width-only window resize
 	// may leave the cover and pane top unchanged: schedule a pass after the
 	// new text wrapping is laid out, even if this pass sees the old viewport.

@@ -158,6 +158,7 @@ type app struct {
 	lyricAt                        int
 	lyricTrack                     int64
 	lyricSeekRevision              uint64
+	lyricClickSeekRevision         uint64
 	lyricFirst                     *lyrics.Line
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
 	lyricWindowW, lyricWindowH     float32 // window size whose reflow has been scheduled

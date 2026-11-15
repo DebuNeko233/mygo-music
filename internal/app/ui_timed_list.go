@@ -123,7 +123,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		replaced = m.first != &lines[0]
 	}
 	changedLine := cur != a.lyricAt
-	initialFollow := st.centerShort && a.lyricAt == -2
+	initialFollow := st.centerShort && a.lyricAt == lyricInitialFollow
 	userMoved := g.posed && s.Y != g.offset
 	if replaced || changedLine {
 		m.manual = false

@@ -82,10 +82,11 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		})
 	})
 	if line.Clicked() && !nearClose {
-		if st.immersive {
+		a.pl.Seek(l.At)
+		if st.centerShort {
+			a.lyricClickSeekRevision = a.pl.SeekRevision()
 			c.AnimationFrame()
 		}
-		a.pl.Seek(l.At)
 	}
 	return line, hovered
 }

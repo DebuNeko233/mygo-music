@@ -285,6 +285,59 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 	}
 }
 
+// Clicking a visible lyric resumes following with a glide, even after scrolling manually.
+func TestLyricClickGlidesToReadingPosition(t *testing.T) {
+	for _, count := range []int{20, timedListThreshold} {
+		for _, immersive := range []bool{false, true} {
+			for _, browse := range []bool{false, true} {
+				t.Run(fmt.Sprintf("rows=%d/immersive=%t/browse=%t", count, immersive, browse), func(t *testing.T) {
+					lines := make([]lyrics.Line, count)
+					for i := range lines {
+						lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Line %02d", i)}
+					}
+					a, tt := shortLyricsApp(lines, 240, 300)
+					tt.SetScale(0.25)
+					a.settings.LyricEdgeFade = immersive
+					a.pl.Hold(lines[6].At)
+					tt.Frame()
+					target := lines[8]
+					if browse {
+						tt.Scroll(120, 120, 0, 70)
+						target = lines[9]
+					}
+					if immersive && browse && a.lyricBrowseUntil.IsZero() {
+						t.Fatal("manual scrolling did not enter browsing mode")
+					}
+					tt.SetPreferences(ui.Preferences{})
+					rowY := func() float32 {
+						t.Helper()
+						row, ok := tt.AccessByRole(ui.RoleButton, target.Text)
+						if !ok || row.Offscreen {
+							t.Fatalf("clicked lyric left the viewport: %+v", row)
+						}
+						return row.Bounds.Y
+					}
+					before := rowY()
+					if err := tt.Click(target.Text); err != nil {
+						t.Fatal(err)
+					}
+					if a.pl.Position() != target.At || !a.lyricBrowseUntil.IsZero() {
+						t.Fatalf("click did not seek and resume following: position %v", a.pl.Position())
+					}
+					start := rowY()
+					tt.Advance(90 * time.Millisecond)
+					middle := rowY()
+					tt.Advance(1100 * time.Millisecond)
+					end := rowY()
+					if abs32(start-before) > 2 || start-middle < 2 || middle-end < 2 || abs32(end-90) > 2 {
+						t.Fatalf("want a glide to y=90, got %.1f before click, then %.1f → %.1f → %.1f", before, start, middle, end)
+					}
+				})
+			}
+		}
+	}
+}
+
 // Immersive lyrics light LRC as a whole line and reserve progressive highlights for real word timestamps.
 func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
 	a := newTestApp()
