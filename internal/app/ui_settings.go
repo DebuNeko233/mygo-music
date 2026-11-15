@@ -37,10 +37,11 @@ func (a *app) openSettings() {
 		TitleBarStyle:        mygo.TitleBarHidden,
 		TitleBarHeight:       buttonsHeight,
 		TrafficLightPosition: &mygo.Point{X: 20, Y: 20},
-		// Keep the old narrow window's saved dimensions out of this layout.
-		StateKey:        "settings-pages",
-		DisableMaximize: true,
-		DisableMinimize: true,
+		// Older saved states can restore fullscreen even when it is disabled.
+		StateKey:          "settings-pages-windowed",
+		DisableFullScreen: true,
+		DisableMaximize:   true,
+		DisableMinimize:   true,
 		// The app's menu has nothing for this window: on Linux and
 		// Windows it stays out of sight until Alt shows it.
 		AutoHideMenuBar: true,
@@ -70,7 +71,7 @@ func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string)
 			a.addPictures(dropped, paths)
 		}
 		line.Children(func() {
-			if ui.Button(c.Key(key+"-add"), "选择图片…").Clicked() {
+			if ui.Button(c.Key(key+"-add"), "选择图片…").Tooltip("选择多张图片时，切歌会轮换背景").Clicked() {
 				files, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 					Title:    "选择背景图片",
 					Filters:  []mygo.FileFilter{{Name: "图片", Extensions: pictureExts}},
@@ -84,7 +85,11 @@ func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string)
 				*paths = nil
 				a.changed()
 			}
-			ui.Text(c, pictureList(*paths)).FontSize(12).TextColor(p.muted)
+			summary := pictureList(*paths)
+			status := ui.Text(c, summary).FontSize(12).TextColor(p.muted).SingleLine().Shrink(1).MinWidth(0)
+			if len(*paths) != 0 {
+				status.Tooltip(summary)
+			}
 		})
 	})
 }
@@ -529,20 +534,19 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	add("appearance", "外观", iconPalette, func(row settingsRow, block settingsBlock) {
 
-		// A row whose control needs the width under its label.
-		wide := func(label, desc string, control func()) {
-			block(label+" "+desc, func() {
-
+		background := func(key, label string, paths *[]string, opacity *float64) {
+			block(label+" 背景图片 透明度", func() {
 				ui.Column(c).Padding(12, 16).Gap(10).Children(func() {
-					ui.Column(c).Gap(3).Children(func() {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, label).FontSize(13.5).FontWeight(500)
-						if desc != "" {
-							ui.Text(c, desc).FontSize(12).TextColor(p.muted).LineHeight(1.4)
+						ui.Spacer(c)
+						ui.Text(c, "透明度").FontSize(12).TextColor(p.muted)
+						if ui.Slider(c.Key(key+"-opacity"), opacity, 0.05, 0.9).Width(150).Label("调整" + label + "透明度").Changed() {
+							a.changed()
 						}
 					})
-					control()
+					a.backdropRow(c, p, key, paths)
 				})
-
 			})
 		}
 
@@ -569,23 +573,8 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				}
 			})
 		})
-		wide("主页面背景", "主页的底色换成一张或多张图片，切歌时切换一张背景图", func() {
-			a.backdropRow(c, p, "home", &s.BackdropHome)
-		})
-		wide("播放页背景", "播放页的最后一层底色换成一张或多张图片，切歌时切换一张背景图", func() {
-			a.backdropRow(c, p, "playing", &s.BackdropPlaying)
-		})
-		row("背景透明度", "低透明度对比度更好", func() {
-			v := s.BackdropOpacity
-			// A Slider, never a SliderBase: the base draws nothing of
-			// its own, and a settings page has no look to give it.
-			slider := ui.Slider(c.Key("backdrop-opacity"), &v, 0.05, 0.9).Width(150).Label("调整背景透明度")
-			if slider.Changed() {
-				s.BackdropOpacity = v
-				a.changed()
-			}
-		})
-
+		background("home", "主页面背景", &s.BackdropHome, &s.BackdropHomeOpacity)
+		background("playing", "播放页背景", &s.BackdropPlaying, &s.BackdropPlayingOpacity)
 	})
 
 	add("lyrics", "桌面歌词", iconDeskLyrics, func(row settingsRow, block settingsBlock) {

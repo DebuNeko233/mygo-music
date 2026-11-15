@@ -236,6 +236,8 @@ func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 		workers = append(workers, a.reportDone)
 		letGo()
 		a.flushPlayReports()
+		// The timed-out worker is detached from the app; wait for it too
+		// before closing the reports channel or releasing the test stubs.
 		for _, done := range workers {
 			<-done
 		}

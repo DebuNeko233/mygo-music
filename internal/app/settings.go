@@ -77,9 +77,9 @@ type settings struct {
 	// Playing's. Empty for pages that stand on none.
 	BackdropHome    []string `json:"backdropHome,omitempty"`
 	BackdropPlaying []string `json:"backdropPlaying,omitempty"`
-	// BackdropOpacity is how much of those pictures shows over the page's
-	// own colour, from 0 to 1.
-	BackdropOpacity float64 `json:"backdropOpacity,omitempty"`
+	// Each page blends its pictures over its own colour, from 0 to 1.
+	BackdropHomeOpacity    float64 `json:"backdropHomeOpacity"`
+	BackdropPlayingOpacity float64 `json:"backdropPlayingOpacity"`
 	// LyricWindow shows the lyrics in a window of their own, over every
 	// other window: the listener turns it on.
 	LyricWindow bool `json:"lyricWindow,omitempty"`
@@ -158,7 +158,8 @@ func (k shortcutKeys) filled() shortcutKeys {
 func defaultSettings() settings {
 	return settings{
 		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
-		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true, BackdropOpacity: 0.4,
+		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true,
+		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
 		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2, LyricEdgeFade: true,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
@@ -226,12 +227,28 @@ func loadSettings() settings {
 	// background conversion has copied every cache and saved the new layout.
 	decoded := s
 	decoded.CacheLayout = 0
-	if err := json.Unmarshal(b, &decoded); err != nil {
+	// Track which opacity values were present so explicit zero and split
+	// values take precedence over the old shared setting.
+	file := struct {
+		*settings
+		Shared  *float64 `json:"backdropOpacity"`
+		Home    *float64 `json:"backdropHomeOpacity"`
+		Playing *float64 `json:"backdropPlayingOpacity"`
+	}{settings: &decoded}
+	if err := json.Unmarshal(b, &file); err != nil {
 		// Unmarshal may partially fill decoded before failing. Never use its
 		// cache path or layout to start a migration from rejected settings.
 		return s
 	}
-	// Clamp values to valid ranges
+	if file.Shared != nil {
+		decoded.BackdropHomeOpacity, decoded.BackdropPlayingOpacity = *file.Shared, *file.Shared
+	}
+	if file.Home != nil {
+		decoded.BackdropHomeOpacity = *file.Home
+	}
+	if file.Playing != nil {
+		decoded.BackdropPlayingOpacity = *file.Playing
+	}
 	decoded.clamp()
 	return decoded
 }
@@ -240,7 +257,8 @@ func loadSettings() settings {
 func (s *settings) clamp() {
 	s.Volume = max(0, min(1, s.Volume))
 	s.CacheMB = max(0, s.CacheMB)
-	s.BackdropOpacity = max(0, min(1, s.BackdropOpacity))
+	s.BackdropHomeOpacity = max(0, min(1, s.BackdropHomeOpacity))
+	s.BackdropPlayingOpacity = max(0, min(1, s.BackdropPlayingOpacity))
 	s.LyricSize = max(12, min(72, s.LyricSize))
 	s.LyricWeight = max(100, min(900, s.LyricWeight))
 	s.LyricOutlineWidth = max(0, min(2.5, s.LyricOutlineWidth))

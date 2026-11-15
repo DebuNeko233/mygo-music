@@ -50,7 +50,7 @@ func (a *app) view(c *ui.Context) {
 		if pic := backdropShown(home, a.pl.Current()); pic != nil {
 			ui.Box(c.Key("backdrop")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().
 				Draw(func(painter *ui.Painter, r ui.Rect) {
-					drawPicture(painter, r, pic, float32(a.settings.BackdropOpacity))
+					drawPicture(painter, r, pic, float32(a.settings.BackdropHomeOpacity))
 				})
 		}
 		page := ui.Row(c).Fill().AlignItems(ui.Stretch)

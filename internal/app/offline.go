@@ -53,7 +53,9 @@ func (a *app) initOffline() {
 	if paths, err := cachePaths(a.settings); err == nil {
 		a.browseCache = diskcache.New(paths.Browse, 64<<20)
 		a.imageCache = netease.NewArtworkStore(paths.Artwork, 256<<20)
-		netease.UseImageCache(a.imageCache, func(url string) { a.post(func() { a.art.invalidate(url) }) })
+		netease.UseImageCache(a.imageCache, func(url string, replacement bool) {
+			a.post(func() { a.art.invalidate(url, replacement) })
+		})
 	}
 	if root, err := mygo.App.Path(mygo.PathUserData); err == nil {
 		a.identityCache = diskcache.New(filepath.Join(root, "offline-account"), 64<<10)
