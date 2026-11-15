@@ -306,14 +306,15 @@ func (a *app) npTabsRow(c *ui.Context, anchor ui.Element, pointerIn bool) ui.Ele
 	row := ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
 		Width(width).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
 	playing := a.pl.Playing()
-	idle := a.npTabsIdle(c, playing)
+	autoHide := playing && (a.npPane == paneLyrics || a.npPane == paneStage)
+	idle := a.npTabsIdle(c, autoHide)
 	return reveal(row, !playing || (pointerIn && !idle)).IgnoreInput(idle).AccessHidden(idle)
 }
 
-const npTabsIdleDelay = 3 * time.Second
+const npTabsIdleDelay = 2 * time.Second
 
-func (a *app) npTabsIdle(c *ui.Context, playing bool) bool {
-	if !playing {
+func (a *app) npTabsIdle(c *ui.Context, enabled bool) bool {
+	if !enabled {
 		a.npTabsUntil = time.Time{}
 		return false
 	}

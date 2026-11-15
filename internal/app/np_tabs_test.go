@@ -51,7 +51,7 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 	}
 }
 
-// Navigation hides only during playback. Pausing reveals it and resuming starts a new idle period.
+// Navigation hides while playing lyrics or stage. Pausing or leaving those panes resets the idle period.
 func TestNowPlayingTabsHideWhenPlayingAndPointerIsIdle(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -59,7 +59,6 @@ func TestNowPlayingTabsHideWhenPlayingAndPointerIsIdle(t *testing.T) {
 	}{
 		{"lyrics", paneLyrics},
 		{"stage", paneStage},
-		{"wall", paneWall},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
@@ -88,11 +87,11 @@ func TestNowPlayingTabsHideWhenPlayingAndPointerIsIdle(t *testing.T) {
 			box := button(true)
 			x, y := box.X+box.W/2, box.Y+box.H/2
 			tt.Move(x, y)
-			tt.Advance(2 * time.Second)
+			tt.Advance(time.Second)
 			button(true)
 			x++
 			tt.Move(x, y)
-			tt.Advance(2900 * time.Millisecond)
+			tt.Advance(1900 * time.Millisecond)
 			button(true)
 			tt.Advance(100 * time.Millisecond)
 			button(false)
@@ -107,7 +106,20 @@ func TestNowPlayingTabsHideWhenPlayingAndPointerIsIdle(t *testing.T) {
 			button(true)
 			a.pl.TogglePlay()
 			tt.Frame()
-			tt.Advance(2900 * time.Millisecond)
+			tt.Advance(1900 * time.Millisecond)
+			button(true)
+			tt.Advance(100 * time.Millisecond)
+			button(false)
+			for _, pane := range []int{paneQueue, paneWall, paneComments} {
+				a.npPane = pane
+				tt.Frame()
+				button(true)
+				tt.Advance(3 * time.Second)
+				button(true)
+			}
+			a.npPane = tc.pane
+			tt.Frame()
+			tt.Advance(1900 * time.Millisecond)
 			button(true)
 			tt.Advance(100 * time.Millisecond)
 			button(false)
