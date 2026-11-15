@@ -1,7 +1,9 @@
 package player
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
@@ -113,5 +115,42 @@ func TestCachedLyricsRefreshRejectsEarlierLoadOfSameTrack(t *testing.T) {
 	oldRefresh(lyrics.BuildDisplay("[00:01]Old", "", ""))
 	if len(p.lyrics) != 1 || p.lyrics[0].Text != "Current" {
 		t.Fatalf("a stale revalidation replaced the current lyrics: %+v", p.lyrics)
+	}
+}
+
+// Switching sources cancels the old request, even if its server still returns lyrics.
+func TestLyricSourceSwitchRejectsLateResult(t *testing.T) {
+	posts := make(chan func(), 4)
+	p := New(func(f func()) { posts <- f })
+	p.track = &netease.Track{ID: 42}
+	request := make(chan context.Context, 1)
+	finish := make(chan struct{})
+	p.FetchLyricDisplay = func(ctx context.Context, _ netease.Track, _ func(lyrics.Display)) (lyrics.Display, error) {
+		request <- ctx
+		<-finish
+		_, display := lyrics.BuildDisplay("[00:01]Old source", "", "")
+		return display, nil
+	}
+	p.ReloadLyrics()
+	ctx := <-request
+	p.FetchLyricDisplay = func(context.Context, netease.Track, func(lyrics.Display)) (lyrics.Display, error) {
+		_, display := lyrics.BuildDisplay("[00:01]New source", "", "")
+		return display, nil
+	}
+	p.ReloadLyrics()
+	if ctx.Err() == nil {
+		t.Error("old source still downloading")
+	}
+	close(finish)
+	for range 2 {
+		select {
+		case apply := <-posts:
+			apply()
+		case <-time.After(time.Second):
+			t.Fatal("lyrics request did not finish")
+		}
+	}
+	if len(p.lyrics) != 1 || p.lyrics[0].Text != "New source" || p.lyricBusy {
+		t.Fatal("old request changed lyrics or their loading state")
 	}
 }

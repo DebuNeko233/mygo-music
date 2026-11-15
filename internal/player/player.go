@@ -2,6 +2,7 @@ package player
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"math"
 	"math/rand/v2"
@@ -85,6 +86,8 @@ type Player struct {
 	// FetchCachedLyrics may post fresher lyrics while returning the cached source.
 	// Its refresh callback runs on the player thread.
 	FetchCachedLyrics func(int64, func([]lyrics.Line, lyrics.Display)) (string, string, string, error)
+	// FetchLyricDisplay returns native lyrics and may revalidate a cached result.
+	FetchLyricDisplay func(context.Context, netease.Track, func(lyrics.Display)) (lyrics.Display, error)
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -144,6 +147,8 @@ type Player struct {
 	lyricsLoaded                      bool
 	lyricLanguage                     string
 	lyricRevision                     uint64
+	lyricRequestID                    uint64
+	lyricCancel                       context.CancelFunc
 	lyricDisplay                      lyrics.Display
 	lyricBusy, coverBusy, coverLoaded bool
 	lyricFailure, coverFailure        error
@@ -812,6 +817,7 @@ func (p *Player) stop() {
 	p.out, p.stream, p.info = nil, nil, nil
 	p.seeking = false
 	p.fade.attach(nil, 1)
+	p.cancelLyricRequest()
 	p.gen++ // Invalidate all pending callbacks.
 	// Invalidated metadata callbacks cannot clear their own busy flags later.
 	p.lyricBusy, p.coverBusy = false, false

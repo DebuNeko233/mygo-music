@@ -200,7 +200,7 @@ func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h
 	}
 	f *= 0.8
 	grow := 1 + 0.05*(1-fade)
-	ui.Column(c.Key(l.At)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().
+	ui.Column(c.Key(l)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().
 		Opacity(fade).Scale(grow, grow).PassThrough().Children(func() {
 		for ri, row := range rows {
 			words := l.Words[row.from:row.to]
@@ -389,7 +389,7 @@ func tiltLine(c *ui.Context, l *lyrics.Line, pos time.Duration, w, fade float32,
 		size *= max(0.5, avail/m)
 	}
 
-	ui.Column(c.Key(l.At)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(14).
+	ui.Column(c.Key(l)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(14).
 		Translate(0, -12*(1-fade)).Opacity(fade).PassThrough().Children(func() {
 		for pi, part := range parts {
 			tiltPartView(c.Key(pi), l.Words[part.from:part.to], part, pos, size, accent, sparks, pi == len(parts)-1)

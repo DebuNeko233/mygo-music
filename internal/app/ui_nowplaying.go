@@ -147,6 +147,12 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		// showing only while the pointer is in the window, as the pane tabs do.
 		var closeBounds ui.Rect
 		barHeight := topBar(c)
+		if tr.ProgramID == 0 && (a.npPane == paneLyrics || a.npPane == paneStage) {
+			defer func() {
+				ui.Row(c.Key("lyric-source-slot")).Absolute().Top(0).Right(npSideX(w)).Height(barHeight).AlignItems(ui.Center).
+					Children(func() { a.lyricSourceButton(c, tr.ID) })
+			}()
+		}
 		ui.Row(c).Height(barHeight).Justify(ui.Center).AlignItems(ui.Center).DragWindow().Children(func() {
 			reveal(ui.Box(c.Key("close-reveal")), pointerIn).Children(func() {
 				close := iconButton(c.Key("close"), iconDown, 22, white.Alpha(0.7), "关闭")
@@ -673,6 +679,10 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	defer a.quietCard(c, dim, h*0.18)
 	style := linesStyle{size: 30, weight: 600, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage(), immersive: a.settings.LyricEdgeFade, rightInset: gutter}
 	style.viewportHeight = height
+	if display.Source == lyrics.AMLL {
+		style.overlap, style.position = true, pos
+		style.leadAgent = lines[display.FirstSung()].Agent
+	}
 	if style.immersive {
 		// The volume row can extend the viewport beyond its minimum.
 		// Keep that extension when resizing until layout measures it again.
@@ -774,6 +784,9 @@ func (a *app) lyricsNotice(c *ui.Context, size float32) {
 // linesStyle is how timedLines sets its lines: the size, weight and
 // leading of their type; quiet nearly hides them, under a hot comment.
 type linesStyle struct {
+	overlap            bool
+	position           time.Duration
+	leadAgent          string
 	size               float32
 	weight             int
 	lineHeight         float32

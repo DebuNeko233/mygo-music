@@ -66,6 +66,7 @@ func (p *Player) SuspendCache() func() {
 	p.cacheChanging = true
 	// Old callbacks may refer to the moving directory. Invalidate their
 	// generation and settle busy flags even if resume does not reload audio.
+	p.cancelLyricRequest()
 	p.gen++
 	p.lyricBusy, p.coverBusy = false, false
 	if p.stream != nil {

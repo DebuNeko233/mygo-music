@@ -394,6 +394,18 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 	}
 
 	add("general", "通用", iconSettings, func(row settingsRow, block settingsBlock) {
+		row("歌词来源", "", func() {
+			if value, changed := lyricChoice(c.Key("default-lyric-source"), "歌词来源", s.LyricSource, lyricSources); changed {
+				s.LyricSource = value
+				a.applyLyricSource()
+			}
+		})
+		row("AMLL 节点", "", func() {
+			if value, changed := lyricChoice(c.Key("amll-mirror"), "AMLL 节点", s.AMLLMirror, lyricMirrors); changed {
+				s.AMLLMirror = value
+				a.applyLyricSource()
+			}
+		})
 		row("用本应用打开网易云链接", "", func() {
 			label := "设为默认打开"
 			if a.links.registered {

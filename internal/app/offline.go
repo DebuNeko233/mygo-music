@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"path/filepath"
 	"slices"
 	"time"
@@ -14,6 +17,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // A snapshot belongs to the account that requested it. It is serialized on
@@ -105,7 +109,45 @@ func (a *app) cachedLyricsFor(scope string) func(int64, func([]lyrics.Line, lyri
 // Bind the loader on the main thread when the account changes; the player
 // captures it when choosing a track, rather than reading UI state on a worker.
 func (a *app) bindOfflineLyrics() {
-	a.pl.FetchCachedLyrics = a.cachedLyricsFor(fmt.Sprint(a.listenerID()))
+	store := a.browseCache
+	scope := fmt.Sprint(a.listenerID())
+	cached := a.cachedLyricsFor(scope)
+	preferred, mirror := a.settings.LyricSource, a.settings.AMLLMirror
+	overrides := maps.Clone(a.settings.SongLyricSources)
+	a.pl.FetchLyricDisplay = func(ctx context.Context, track netease.Track, refresh func(lyrics.Display)) (lyrics.Display, error) {
+		source := preferred
+		if selected := overrides[track.ID]; selected != "" {
+			source = selected
+		}
+		if source != "netease" && track.ProgramID == 0 {
+			display, err := loadAMLL(ctx, store, mirror, track.ID, refresh)
+			switch {
+			case err == nil:
+				return display, nil
+			case ctx.Err() != nil:
+				return lyrics.Display{}, ctx.Err()
+			case source == "amll":
+				switch {
+				case errors.Is(err, errAMLLMissing):
+					return lyrics.Display{}, &player.LyricsUnavailable{Message: "AMLL 未收录"}
+				case errors.Is(err, netease.ErrOffline):
+					return lyrics.Display{}, err
+				default:
+					return lyrics.Display{}, &player.LyricsUnavailable{Message: "AMLL 加载失败"}
+				}
+			}
+		}
+		var revalidate func([]lyrics.Line, lyrics.Display)
+		if refresh != nil {
+			revalidate = func(_ []lyrics.Line, d lyrics.Display) { refresh(d) }
+		}
+		lrc, translation, yrc, err := cached(track.ID, revalidate)
+		if err != nil {
+			return lyrics.Display{}, err
+		}
+		_, display := lyrics.BuildDisplay(lrc, translation, yrc)
+		return display, nil
+	}
 }
 
 type recoveryState struct {

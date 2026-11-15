@@ -13,6 +13,10 @@ import (
 // settings are the listener's choices, kept in settings.json in the user
 // data directory.
 type settings struct {
+	LyricSource      string           `json:"lyricSource,omitempty"`
+	AMLLMirror       string           `json:"amllMirror,omitempty"`
+	SongLyricSources map[int64]string `json:"songLyricSources,omitempty"`
+
 	// Notch shows the quick player around the notch: the listener turns
 	// it on.
 	Notch bool `json:"notch"`

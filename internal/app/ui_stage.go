@@ -257,7 +257,7 @@ func stageNextFrame(c *ui.Context, lines []lyrics.Line, cur int, pos, lead time.
 // stageLine shows the words of l as they are at pos, the whole line at
 // opacity fade.
 func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent ui.Color) {
-	if c.Preferences().ReduceMotion {
+	if c.Preferences().ReduceMotion || len(l.Words) == 0 {
 		stageStillLine(c, l, pos, f, w, accent)
 		return
 	}
@@ -276,7 +276,7 @@ func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, 
 	justify := []ui.Align{ui.Start, ui.Center, ui.End}[((int(seed)%3)+3)%3]
 	lift := []float32{-0.14, 0, 0.12}[((int(seed*2)%3)+3)%3] * h
 
-	ui.Row(c.Key(l.At)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(0, w*0.1).
+	ui.Row(c.Key(l)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(0, w*0.1).
 		Wrap().Justify(justify).AlignContent(ui.Center).AlignItems(ui.Center).Translate(0, lift).
 		Opacity(fade).PassThrough().Children(func() {
 		for i, word := range l.Words {
@@ -289,7 +289,7 @@ func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, 
 // Motion. Whole words change color at their timing boundaries: no flight,
 // swelling, rotation, glow, sparks, or fading of the previous line remains.
 func stageStillLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w float32, accent ui.Color) {
-	ui.Row(c.Key(l.At)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(0, w*0.1).
+	ui.Row(c.Key(l)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Padding(0, w*0.1).
 		Wrap().Justify(ui.Center).AlignContent(ui.Center).AlignItems(ui.Center).PassThrough().Children(func() {
 		if len(l.Words) == 0 {
 			ui.Text(c, l.Text).FontSize(f).FontWeight(800).TextColor(white)

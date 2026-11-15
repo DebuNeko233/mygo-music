@@ -20,9 +20,19 @@ const (
 	UnavailableText  = "暂无歌词"
 )
 
+type Source string
+
+const (
+	AMLL    Source = "amll"
+	NetEase Source = "netease"
+)
+
 // Display keeps the reading order and the playback timeline separate.
 type Display struct {
 	Lines       []Line
+	Source      Source
+	Language    string
+	Authors     []string
 	sung        []int
 	unavailable bool
 }
@@ -180,5 +190,6 @@ func withPlainNotice(display Display, lrc, yrc string) Display {
 // BuildDisplay returns the shared singing timeline and the reading order with credits.
 func BuildDisplay(lrc, translation, yrc string) ([]Line, Display) {
 	display := buildDisplay(lrc, translation, yrc, yrcCredits(yrc), true)
+	display.Source = NetEase
 	return display.SungLines(), display
 }

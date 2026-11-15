@@ -49,6 +49,17 @@ func (m *timedListLayout) reset(c *ui.Context, lines []lyrics.Line, width float3
 		if lines[i].Translation != "" && lines[i].Kind != lyrics.Instrumental {
 			height += 24 + timedLineGap
 		}
+		if lines[i].Roman != "" && lines[i].Roman != lines[i].Translation {
+			height += 24 + timedLineGap
+		}
+		for _, bg := range lines[i].Background {
+			height += 25 + timedLineGap
+			for _, text := range []string{bg.Translation, bg.Roman} {
+				if text != "" {
+					height += 24 + timedLineGap
+				}
+			}
+		}
 		m.offsets = append(m.offsets, m.offsets[i]+height)
 		m.measured = append(m.measured, false)
 	}
@@ -81,21 +92,37 @@ func (m *timedListLayout) measure(lines []lyrics.Line, first, last int, st lines
 		}
 		l := &lines[i]
 		font := timedRowFont(m.font, l.Kind)
+		width := m.width - st.voiceInset(l, m.width)
 		var height float32
 		if l.Kind == lyrics.Sung {
-			_, height = shapeLyric(l.Text, font, m.width, m.direction).Size()
+			_, height = shapeLyric(l.Text, font, width, m.direction).Size()
 		} else {
 			_, height = ui.ShapeRichTextWith([]ui.Span{{Text: l.Text}}, font, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
 		}
 		if st.showsTimedWords(l) {
 			if text := lyricWordsText(l.Words); text != l.Text {
-				_, sung := shapeLyric(text, m.font, m.width, m.direction).Size()
+				_, sung := shapeLyric(text, m.font, width, m.direction).Size()
 				height = max(height, sung)
 			}
 		}
-		if l.Translation != "" && l.Kind != lyrics.Instrumental {
-			_, trans := ui.ShapeRichTextWith([]ui.Span{{Text: l.Translation}}, ui.Font{Family: m.font.Family, Size: 17, Weight: 600}, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
-			height += timedLineGap + trans
+		auxHeight := func(line *lyrics.Line) float32 {
+			var h float32
+			for i, text := range []string{line.Translation, line.Roman} {
+				if text == "" || i == 1 && text == line.Translation {
+					continue
+				}
+				_, wrapped := ui.ShapeRichTextWith([]ui.Span{{Text: text}}, ui.Font{Family: m.font.Family, Size: 17, Weight: 600}, ui.TextShape{Width: width, Direction: m.direction}).Size()
+				h += timedLineGap + wrapped
+			}
+			return h
+		}
+		if l.Kind != lyrics.Instrumental {
+			height += auxHeight(l)
+		}
+		font.Size = 20
+		for i := range l.Background {
+			_, bgHeight := shapeLyric(l.Background[i].Text, font, width, m.direction).Size()
+			height += timedLineGap + bgHeight + auxHeight(&l.Background[i])
 		}
 		delta += height + 2*timedLineInsetY + timedLineGap - oldHeight
 		m.measured[i] = true

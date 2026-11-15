@@ -17,6 +17,9 @@ type Line struct {
 	End         time.Duration
 	Text        string
 	Translation string
+	Roman       string
+	Agent       string
+	Background  []Line
 	Words       []Word
 	Kind        LineKind // presentation role assigned by NewDisplay
 	classified  bool
@@ -29,6 +32,7 @@ type Line struct {
 // with when it is sung.
 type Word struct {
 	Text       string
+	Ruby       string
 	Start, End time.Duration
 }
 

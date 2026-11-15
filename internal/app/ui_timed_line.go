@@ -38,6 +38,12 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		}
 	}
 	on := relative == 0
+	if st.overlap && relative < 0 && st.position < l.End {
+		on = true
+		if a.pl.Playing() {
+			c.After(l.End - st.position)
+		}
+	}
 	hovered := !nearClose && line.Hovered()
 	alpha := float32(0.28)
 	if on {
@@ -63,6 +69,10 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		// The line fades as a pose, in frames that only paint, rather
 		// than building the view at the display's rate as it does.
 		text := ui.Column(c).AlignItems(ui.Start).Gap(6)
+		if inset := st.voiceInset(l, width); inset > 0 {
+			text.Margin(0, 0, 0, inset)
+			width -= inset
+		}
 		fade := ui.Animation{Duration: 380 * time.Millisecond}
 		if on && st.wholeLineHighlight(l) {
 			fade.Duration = 180 * time.Millisecond
@@ -76,8 +86,28 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 			} else {
 				ui.Text(c, l.Text).Lang(st.lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
 			}
-			if l.Translation != "" {
-				ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
+			lyricAuxiliary(c, l)
+			for i := range l.Background {
+				bg := &l.Background[i]
+				ui.Column(c.Key(i)).AlignItems(ui.Start).Gap(6).Children(func() {
+					bgStyle := st
+					bgStyle.size = 20
+					active := st.position >= bg.At && st.position < bg.End
+					if a.pl.Playing() {
+						for _, boundary := range []time.Duration{bg.At, bg.End} {
+							if boundary > st.position {
+								c.After(boundary - st.position)
+							}
+						}
+					}
+					if active && width > 0 && st.showsTimedWords(bg) {
+						a.paintLyricWords(c, bg, width, bgStyle)
+					} else {
+						ui.Text(c, bg.Text).Lang(st.lang).FontSize(bgStyle.size).FontWeight(st.weight).
+							LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white.Alpha(0.62))
+					}
+					lyricAuxiliary(c, bg)
+				})
 			}
 		})
 	})
@@ -89,6 +119,33 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 		}
 	}
 	return line, hovered
+}
+
+func (st linesStyle) voiceInset(line *lyrics.Line, width float32) float32 {
+	if st.leadAgent != "" && line.Agent != "" && line.Agent != st.leadAgent && width > 48 {
+		return 20
+	}
+	return 0
+}
+
+func lyricAuxiliary(c *ui.Context, line *lyrics.Line) {
+	if line.Roman != "" {
+		ui.Text(c, line.Roman).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.65))
+	}
+	if line.Translation != "" && line.Translation != line.Roman {
+		ui.Text(c, line.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
+	}
+}
+
+func (a *app) amllPaintCache(line *lyrics.Line) *paintedLyric {
+	for i := range a.amllPaintedLyrics {
+		if a.amllPaintedLyrics[i].line == line {
+			return &a.amllPaintedLyrics[i]
+		}
+	}
+	i := a.amllPaintSlot
+	a.amllPaintSlot = (i + 1) % len(a.amllPaintedLyrics)
+	return &a.amllPaintedLyrics[i]
 }
 
 func lyricInfoFont(kind lyrics.LineKind) (size float32, weight int) {
@@ -156,6 +213,9 @@ func (a *app) paintLyricWords(c *ui.Context, line *lyrics.Line, width float32, s
 	font := lyricFont(c, st)
 	direction := c.Direction()
 	cache := &a.paintedLyric
+	if st.overlap {
+		cache = a.amllPaintCache(line)
+	}
 	if cache.line != line || cache.width != width || cache.font != font || cache.direction != direction {
 		layout := shapeLyric(lyricWordsText(line.Words), font, width, direction)
 		_, height := layout.Size()
