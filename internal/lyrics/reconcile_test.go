@@ -65,6 +65,51 @@ func TestReconcileUsesSingingOverUnavailableNotice(t *testing.T) {
 	}
 }
 
+// A timed blank prefix in the cached Slow Down YRC pulled the first sung cue ahead of the credits.
+func TestReconcileTimedBlankPrefixKeepsIntroBeforeFirstLyric(t *testing.T) {
+	// Keep the cache's cue and word boundaries and substitute sample text.
+	const lrc = "[00:00.00]作词：甲\n[00:00.75]作曲：乙\n[00:08.50]First line\n[00:13.82]Second line"
+	const yrc = "[0,13950](0,8610,0) (8610,270,0)First (8880,5070,0)line\n" +
+		"[13950,4950](13950,4950,0)Second line"
+	const translation = "[00:08.50]第一句\n[00:13.82]第二句"
+	lines, display := BuildDisplay(lrc, translation, yrc)
+	if len(lines) != 2 || len(display.Lines) != 4 || display.FirstSung() != 2 ||
+		display.Lines[0].Kind != Credit || display.Lines[1].Kind != Credit {
+		t.Fatalf("first sung row should follow both opening credits: %+v", display.Lines)
+	}
+	first := lines[0]
+	if first.At != 8610*time.Millisecond || first.End != 13950*time.Millisecond ||
+		!first.Timed || first.Words[0].Start != first.At || first.Translation != "第一句" {
+		t.Fatalf("first row lost its visible word timing or translation: %+v", first)
+	}
+	for _, tc := range []struct {
+		ms, cur, next int
+	}{
+		{0, -1, 2}, {8500, -1, 2}, {8609, -1, 2}, {8610, 2, 3}, {13949, 2, 3}, {13950, 3, -1},
+	} {
+		if cur, next := display.Position(time.Duration(tc.ms) * time.Millisecond); cur != tc.cur || next != tc.next {
+			t.Errorf("at %d ms: got %d, %d, want %d, %d", tc.ms, cur, next, tc.cur, tc.next)
+		}
+	}
+}
+
+// A delayed first word only changes its row's cue when a valid timed blank explicitly marks the gap.
+func TestReconcilePreservesOtherYRCLineStarts(t *testing.T) {
+	for _, tc := range []struct {
+		yrc   string
+		timed bool
+	}{
+		{"[10000,800](10300,300,0)First line", true},
+		{"[10000,800](10000,0,0) (10300,300,0)First line", true},
+		{"[10000,800](10000,300,0) (10300,900,0)First line", false},
+	} {
+		lines, _ := BuildDisplay("", "", tc.yrc)
+		if len(lines) != 1 || lines[0].Text != "First line" || lines[0].At != 10*time.Second || lines[0].Timed != tc.timed {
+			t.Errorf("%q: unexpectedly changed the original cue: %+v", tc.yrc, lines)
+		}
+	}
+}
+
 // Equal timestamps pair in input order so the displayed lyric keeps its translation.
 func TestReconcileDuplicateTimestamps(t *testing.T) {
 	lines, display := BuildDisplay("[00:10]First\n[00:10]Second", "[00:10]One\n[00:10]Two", "")

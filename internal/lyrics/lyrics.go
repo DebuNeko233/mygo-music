@@ -120,6 +120,7 @@ func parseYRC(yrc string) []Line {
 		}
 		l := Line{At: at, End: at + length, Timed: true}
 		var previous time.Duration
+		leadingSilence := false
 		// Each word runs from the mark before it to the mark of the next,
 		// brackets and all: a word's own text is as it is sung.
 		body := raw[len(m[0]):]
@@ -151,6 +152,8 @@ func parseYRC(yrc string) []Line {
 				if n := len(l.Words); n > 0 {
 					l.Words[n-1].Text += " "
 					text.WriteByte(' ')
+				} else if start == at && duration > 0 {
+					leadingSilence = true
 				}
 				continue
 			}
@@ -158,6 +161,11 @@ func parseYRC(yrc string) []Line {
 			l.Words = append(l.Words, word)
 		}
 		l.Text = strings.TrimSpace(text.String())
+		if l.Timed && leadingSilence && len(l.Words) > 0 {
+			// NetEase can encode the instrumental intro as an empty word
+			// at the start of the first line. Follow the first visible word.
+			l.At = l.Words[0].Start
+		}
 		if !l.Timed {
 			l.Words = nil
 			if l.End > l.At {
