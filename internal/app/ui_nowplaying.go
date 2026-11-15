@@ -724,8 +724,8 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		a.longTimedLines(c, scroll, lines, cur, st, foot)
 		return
 	}
-	var intro, content, body ui.Element
-	var rows lyricRows
+	var active, hover, firstSung, intro, content, body ui.Element
+	var credits [2]ui.Element
 	viewport := scroll.LayoutBounds()
 	var textH, introHeight, introOpacity float32
 	draw := func() {
@@ -745,7 +745,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 					intro = ui.Box(c.Key("intro")).Height(0).Shrink(0)
 				}
 				line, hovered := a.timedLine(c.Key(i), &lines[i], i-cur, width, st)
-				rows.observe(line, hovered, i, cur, lines[i].Kind, st)
+				st.collectLyricRow(line, hovered, i, cur, lines[i].Kind, &active, &hover, &firstSung, &credits)
 				if st.browsing {
 					a.keepLyricReadingPosition(c, &lines[i], line.LayoutBounds(), viewport, windowChanged)
 				}
@@ -830,7 +830,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		if introHeight == 0 {
 			intro = ui.Element{}
 		}
-		a.lyricEdges(scroll, rows.active, rows.hovered, intro, rows.firstSung, introOpacity, st.browsing, rows.credits, st.rightInset)
+		a.lyricEdges(scroll, active, hover, intro, firstSung, introOpacity, st.browsing, credits, st.rightInset)
 	}
 	if waitForLayout {
 		// Wait for the new padding or wrapping before following the line.
@@ -847,9 +847,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
 	if st.shouldFollow(cur != a.lyricAt, resized, introHeight > 0) {
 		target := float32(0)
-		followRow := rows.active
+		followRow := active
 		if st.followRow(cur, introHeight > 0) != cur {
-			followRow = rows.firstSung
+			followRow = firstSung
 		}
 		if followRow.Valid() {
 			// Where the glide is going, without where it still is.

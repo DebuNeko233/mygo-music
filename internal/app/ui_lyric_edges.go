@@ -136,33 +136,30 @@ type lyricEdgeFade struct {
 	gutter     float32
 }
 
-// Both list layouts use the same rows for following and for the clear bands.
-type lyricRows struct {
-	active, hovered, firstSung ui.Element
-	credits                    [2]ui.Element
-}
-
-func (r *lyricRows) observe(row ui.Element, hovered bool, i, current int, kind lyrics.LineKind, st linesStyle) {
+// Both layouts collect the same rows for following and for the clear bands.
+func (st linesStyle) collectLyricRow(row ui.Element, hovered bool, i, current int, kind lyrics.LineKind,
+	active, hover, firstSung *ui.Element, credits *[2]ui.Element,
+) {
 	if i == current {
-		r.active = row
+		*active = row
 	}
 	if !st.immersive {
 		return
 	}
 	if i == st.introLine {
-		r.firstSung = row
+		*firstSung = row
 	}
 	if st.browsing {
 		return
 	}
 	if hovered {
-		r.hovered = row
+		*hover = row
 	}
 	if current < 0 && i < st.introLine && kind == lyrics.Credit {
-		if !r.credits[0].Valid() {
-			r.credits[0] = row
+		if !credits[0].Valid() {
+			credits[0] = row
 		}
-		r.credits[1] = row
+		credits[1] = row
 	}
 }
 
