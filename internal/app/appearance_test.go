@@ -206,7 +206,8 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.BackdropHome = []string{path}
-	a.settings.BackdropOpacity = 1
+	a.settings.BackdropHomeOpacity = 1
+	a.settings.BackdropPlayingOpacity = 0
 	// Read, as the app reads them: off the main thread, kept here.
 	a.pics = map[string]*backdropPicture{path: decodePicture(path)}
 	tt := ui.NewTester(a.view, 900, 600)
@@ -216,7 +217,7 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 		t.Fatalf("the picture covers %d of %d pixels at full depth", got, w*h)
 	}
 	// As faint as the slider goes, the page's own colour shows instead.
-	a.settings.BackdropOpacity = 0.05
+	a.settings.BackdropHomeOpacity = 0.05
 	tt.Frame()
 	if got := redPixels(tt.Image()); got > w*h/10 {
 		t.Errorf("the picture covers %d of %d pixels at the faintest", got, w*h)
@@ -232,7 +233,7 @@ func TestHomeBackdropLandsAfterTheWindowIsMade(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.BackdropHome = []string{path}
-	a.settings.BackdropOpacity = 1
+	a.settings.BackdropHomeOpacity = 1
 	const w, h = 900, 600
 	tt := ui.NewTester(a.view, w, h)
 	// The window is still being made here: the page asks for the picture and
@@ -265,7 +266,8 @@ func TestPlayingBackdropCoversTheStage(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.BackdropPlaying = []string{path}
-	a.settings.BackdropOpacity = 1
+	a.settings.BackdropHomeOpacity = 0
+	a.settings.BackdropPlayingOpacity = 1
 	a.pics = map[string]*backdropPicture{path: decodePicture(path)}
 	const w, h = 400, 300
 	tt := ui.NewTester(func(c *ui.Context) {
@@ -286,7 +288,7 @@ func TestSettingsSlidersPaintTheirTrack(t *testing.T) {
 	a.settings = defaultSettings()
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()
-	for _, label := range []string{"调整背景透明度", "调整歌词字号"} {
+	for _, label := range []string{"调整主页面背景透明度", "调整播放页背景透明度", "调整歌词字号"} {
 		page := "外观"
 		if label == "调整歌词字号" {
 			page = "桌面歌词"
@@ -387,5 +389,46 @@ func TestBackdropPicturesKeepOnlyThoseChosen(t *testing.T) {
 	}
 	if a.pics["playing.png"] != nil {
 		t.Error("kept the other page's pictures over the limit")
+	}
+}
+
+// Each backdrop slider changes and saves only the opacity of its own page.
+func TestBackdropSlidersSetIndependentOpacity(t *testing.T) {
+	isolateUserData(t)
+	old := accentChosen
+	defer func() { accentChosen = old }()
+	a := newTestApp()
+	a.settings = loadSettings()
+	a.settings.BackdropHomeOpacity = 0.4
+	a.settings.BackdropPlayingOpacity = 0.4
+	a.settings.BackdropHome = []string{"这里是一张用来确认长文件名不会把外观设置内容挤出去的主页面背景图片.jpg"}
+	a.settings.BackdropPlaying = []string{"这里是一张用来确认长文件名不会把外观设置内容挤出去的播放页背景图片.jpg"}
+	tt := ui.NewTester(a.settingsView, 640, 420)
+	showSettingsPage(t, tt, "外观")
+
+	set := func(label string, progress float32) {
+		t.Helper()
+		slider, ok := tt.AccessByRole(ui.RoleSlider, label)
+		if !ok || slider.Offscreen {
+			t.Fatalf("%s is not visible", label)
+		}
+		r := slider.Bounds
+		tt.ClickAt(r.X+r.W*progress, r.Y+r.H/2)
+		tt.Frame()
+	}
+	set("调整主页面背景透明度", 0.8)
+	home := a.settings.BackdropHomeOpacity
+	if home <= 0.4 || a.settings.BackdropPlayingOpacity != 0.4 {
+		t.Fatalf("home slider left opacity at %v, %v", home, a.settings.BackdropPlayingOpacity)
+	}
+	set("调整播放页背景透明度", 0.2)
+	playing := a.settings.BackdropPlayingOpacity
+	if playing >= 0.4 || a.settings.BackdropHomeOpacity != home {
+		t.Fatalf("playing slider left opacity at %v, %v", a.settings.BackdropHomeOpacity, playing)
+	}
+	settingsWrites.wait()
+	kept := loadSettings()
+	if kept.BackdropHomeOpacity != home || kept.BackdropPlayingOpacity != playing {
+		t.Fatalf("reload left opacity at %v, %v, want %v, %v", kept.BackdropHomeOpacity, kept.BackdropPlayingOpacity, home, playing)
 	}
 }

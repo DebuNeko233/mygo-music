@@ -184,7 +184,7 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		a.backdropCache.still, a.backdropCache.previousStill = nil, nil
 		a.backdropCache.speed, a.backdropCache.level, a.backdropCache.last = 0, barState{}, time.Time{}
 		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
-			drawPicture(p, r, pic, float32(a.settings.BackdropOpacity))
+			drawPicture(p, r, pic, float32(a.settings.BackdropPlayingOpacity))
 			// Darker toward the foot, under the controls.
 			p.FillGradient(r, ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
 				{Color: ui.RGBA(0, 0, 0, 0), At: 0.55}, {Color: ui.RGBA(0, 0, 0, 0.18), At: 1},
