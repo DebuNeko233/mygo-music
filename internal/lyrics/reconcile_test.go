@@ -401,7 +401,7 @@ func TestReconcileCreditTranslationsByRole(t *testing.T) {
 	}{
 		{"[00:10]Lyrics: B\n[00:10]Composer: A", "Composer: A", "Lyrics: B"},
 		{"[00:10]Lyrics: B\n[00:10]Composed by A", "Composed by A", "Lyrics: B"},
-		{"[00:10]Composed by A", "", ""},
+		{"[00:10]Composed by A", "Composed by A", ""},
 		{"[00:10]Arranger: C", "", ""},
 	} {
 		_, display := BuildDisplay(lrc+"\n[00:11]Sung line", tc.translation, "")

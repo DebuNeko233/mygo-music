@@ -41,7 +41,7 @@ func (d Display) SungLines() []Line {
 	return lines
 }
 
-// EmptyText is the notice for a loaded display with no rows.
+// EmptyText is the notice for a loaded display without sung lyrics.
 func (d Display) EmptyText() string {
 	if d.unavailable {
 		return UnavailableText
@@ -103,12 +103,13 @@ func yrcCredits(source string) []Line {
 func NewDisplay(lines []Line, supplemental ...Line) Display {
 	all := make([]Line, 0, len(lines)+len(supplemental))
 	for _, source := range [][]Line{lines, supplemental} {
+		start := len(all)
 		for _, line := range source {
 			if strings.TrimSpace(line.Text) != "" {
-				line.Kind = lineKind(line.Text)
 				all = append(all, line)
 			}
 		}
+		classifyLines(all[start:])
 	}
 	classifyInstrumentalNotes(all)
 	return newDisplay(all)
@@ -156,22 +157,12 @@ func newDisplay(lines []Line) Display {
 			d.sung = append(d.sung, i)
 		}
 	}
-	if !d.HasSinging() {
-		// For static content the instrumental notice heads the credits.
-		for i, line := range d.Lines {
-			if line.Kind == Instrumental {
-				copy(d.Lines[1:i+1], d.Lines[:i])
-				d.Lines[0] = line
-				break
-			}
-		}
-	}
 	return d
 }
 
 // Some sources provide a plain notice without timestamps.
 func withPlainNotice(display Display, lrc, yrc string) Display {
-	if len(display.Lines) != 0 || display.unavailable {
+	if display.HasSinging() || display.unavailable {
 		return display
 	}
 	for _, source := range []string{lrc, yrc} {

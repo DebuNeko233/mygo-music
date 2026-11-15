@@ -251,7 +251,7 @@ func TestOfflineLyricsFromDisk(t *testing.T) {
 		return "", "", "", netease.ErrOffline
 	}
 	a.browseCache.Put("7", "lyrics/1", cacheBytes(keptLyrics{"[00:01]Cached", "translation", "words"}), 0)
-	l, tr, w, err := a.cachedLyricsFor("7")(1)
+	l, tr, w, err := a.cachedLyricsFor("7")(1, nil)
 	if err != nil || l != "[00:01]Cached" || tr != "translation" || w != "words" {
 		t.Fatal("did not restore all lyric formats")
 	}

@@ -48,6 +48,14 @@ func (p *Player) retryMetadata(manual bool) {
 	words := lyricsOf
 	if p.FetchLyrics != nil {
 		words = p.FetchLyrics
+	} else if cached := p.FetchCachedLyrics; cached != nil {
+		words = func(id int64) (string, string, string, error) {
+			return cached(id, func(lines []lyrics.Line, display lyrics.Display) {
+				if p.gen == gen && p.lyricRevision == revision {
+					p.applyRefreshedLyrics(id, lines, display)
+				}
+			})
+		}
 	}
 	go func() {
 		var lines []lyrics.Line
@@ -74,8 +82,11 @@ func (p *Player) retryMetadata(manual bool) {
 				return
 			}
 			p.lyricBusy = false
+			if p.lyricRevision != revision {
+				return
+			}
 			p.lyricFailure = failure
-			if success && p.lyricRevision == revision {
+			if success {
 				p.setLyrics(lines, display)
 				p.lyricsErr = ""
 				p.offlineLyricsError = false
@@ -96,11 +107,19 @@ func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
 	if p.track == nil || p.track.ID != id {
 		return
 	}
+	lines, display := lyrics.BuildDisplay(original, translation, words)
+	p.applyRefreshedLyrics(id, lines, display)
+}
+
+func (p *Player) applyRefreshedLyrics(id int64, lines []lyrics.Line, display lyrics.Display) {
+	if p.track == nil || p.track.ID != id {
+		return
+	}
 	p.lyricsErr = ""
 	p.offlineLyricsError = false
 	p.lyricFailure = nil
 	p.lyricRevision++
-	p.setLyrics(lyrics.BuildDisplay(original, translation, words))
+	p.setLyrics(lines, display)
 }
 
 func (p *Player) setLyrics(lines []lyrics.Line, display lyrics.Display) {

@@ -10,7 +10,7 @@ func TestDisplayMultilingualCredits(t *testing.T) {
 	lrc := "[00:00.00]和声编写：A\n[00:01.00]Lead Guitar: B\n[00:02.00]作曲／編曲：C\n" +
 		"[00:03.00]作詞：D\n[00:04.00]Lyricsby: D\n[00:05.00]インストゥルメンタル"
 	_, view := BuildDisplay(lrc, "", "")
-	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[0].Kind != Instrumental {
+	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[4].Kind != Instrumental {
 		t.Fatalf("multilingual credits were not grouped or deduplicated: %+v", view)
 	}
 	for _, text := range []string{"合：一起唱", "歌手の名前：歌う", "Alice: Sing along"} {
@@ -23,13 +23,17 @@ func TestDisplayMultilingualCredits(t *testing.T) {
 // Cache records can give a pure-music notice a time and put credits on both sides of it.
 func TestDisplayInstrumentalWithCredits(t *testing.T) {
 	_, view := BuildDisplay("[00:00.00]作曲 : A\n[00:01.00]编曲 : B\n[00:05.00]纯音乐，请欣赏\n[01:47.50]企划 : C\n[01:48.50]出品 : D", "", "")
-	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[0].Text != InstrumentalText || view.Lines[0].At != 5*time.Second {
+	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[2].Kind != Instrumental ||
+		view.Lines[2].Text != InstrumentalText || view.Lines[2].At != 5*time.Second {
 		t.Fatalf("instrumental display: %+v", view.Lines)
 	}
 	if cur, next := view.Position(110 * time.Second); cur != -1 || next != -1 {
 		t.Fatalf("static rows entered the playback timeline: %d, %d", cur, next)
 	}
-	for _, line := range view.Lines[1:] {
+	for i, line := range view.Lines {
+		if i == 2 {
+			continue
+		}
 		if line.Kind != Credit || len(line.Words) != 0 {
 			t.Fatalf("credit treated as singing: %+v", line)
 		}
@@ -119,16 +123,117 @@ func TestDisplayDictionaryAliases(t *testing.T) {
 	lrc := "[00:00.00]作曲Composer：A\n[00:01.00]指挥Conductor：B\n[00:02.00]母带制作 Mastering Engineer：C\n" +
 		"[00:03.00]请欣赏～纯音乐\n[00:04.00]合作联系："
 	_, view := BuildDisplay(lrc, "", `{"t":1000,"c":[{"tx":"指挥: "},{"tx":"B"}]}`)
-	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[0].Text != InstrumentalText {
+	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[3].Text != InstrumentalText {
 		t.Fatalf("cache aliases were not grouped as static metadata: %+v", view)
 	}
 }
 
-// Keep observed bilingual fields while avoiding generated cross-language combinations.
+// Accept bilingual aliases only when both languages describe the same role.
 func TestDisplayCreditAliasesAreExplicit(t *testing.T) {
-	_, view := BuildDisplay("[00:00]录音师 Recording Engineer：A\n[00:01]制作人 Producer：B\n[00:02]作詞 Lyricist：唱下去", "", "")
+	_, view := BuildDisplay("[00:00]录音师 Recording Engineer：A\n[00:01]制作人 Producer：B\n[00:02]作詞 Drums：唱下去", "", "")
 	if len(view.Lines) != 3 || view.Lines[0].Kind != Credit || view.Lines[1].Kind != Credit || view.Lines[2].Kind != Sung {
 		t.Fatalf("field aliases misclassified the original text: %+v", view.Lines)
+	}
+}
+
+// Cache excerpts preserve credits at both ends of a song and deduplicate bilingual roles.
+func TestDisplayCachedCreditFields(t *testing.T) {
+	for _, tc := range []struct {
+		name, lrc, yrc string
+		credits        int
+	}{
+		{
+			name: "opening credits",
+			lrc: "[00:01.68]编曲 : A\n[00:02.52]和音 : B\n[00:03.36]和声编唱 : A\n" +
+				"[00:04.20]琵琶 : C\n[00:05.05]唱词",
+			credits: 4,
+		},
+		{
+			name: "closing credits with blank cues and narration",
+			lrc: "[05:15.30]唱词\n[05:26.85]\n[05:30.23]字音指导：A\n[05:30.94]\n" +
+				"[05:31.65]念白：A\n[05:32.37]\n[05:33.08]绘图：B\n[05:34.51]PV：C",
+			credits: 4,
+		},
+		{
+			name: "bilingual aliases",
+			lrc: "[02:04.00]唱词\n[02:05.971]舞台监督 Orchestra Stage Manager：A\n" +
+				"[02:06.304]乐团经理 Orchestra Manager：B\n[02:06.637]录音现场指导 Scoring Sessions Director：C",
+			yrc:     `{"t":126304,"c":[{"tx":"Orchestra Manager: B"}]}`,
+			credits: 3,
+		},
+		{
+			name:    "compound aliases",
+			lrc:     "[00:17.553]唱词\n[00:21.301]词／曲：A\n[00:23.801]cover/翻译润色 by：B",
+			yrc:     `{"t":21301,"c":[{"tx":"Lyrics ＆ Music: A"}]}`,
+			credits: 2,
+		},
+		{
+			name:    "standalone song title containing a colon",
+			lrc:     "[00:00]歌名：Re:dreaming Angel\n[00:01]作词：A\n[00:12]唱词",
+			credits: 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Use the cached cue times and role labels with sample names and lyrics.
+			lines, view := BuildDisplay(tc.lrc, "", tc.yrc)
+			if len(lines) != 1 || lines[0].Text != "唱词" || len(view.Lines) != tc.credits+1 {
+				t.Fatalf("want one sung row and %d credits, got %+v", tc.credits, view.Lines)
+			}
+			for _, line := range view.Lines {
+				if line.Text != "唱词" && (line.Kind != Credit || len(line.Words) != 0) {
+					t.Fatalf("credit is still part of the sung timeline: %+v", line)
+				}
+			}
+		})
+	}
+}
+
+// Cached speaker labels and the title Re:dreaming Angel within a lyric stay on the playback timeline.
+func TestDisplayCachedColonLyricsStayActive(t *testing.T) {
+	for _, tc := range []struct {
+		name, lrc, yrc, text string
+		at                   time.Duration
+		timed                bool
+	}{
+		{
+			name: "word-timed rap",
+			lrc:  "[01:04.296]说唱：甲乙丙丁戊",
+			yrc: "[62730,1940](62730,240,0)说(62970,240,0)唱(63210,240,0)：(63450,240,0)甲" +
+				"(63690,240,0)乙(63930,240,0)丙(64170,240,0)丁(64410,260,0)戊",
+			text: "说唱：甲乙丙丁戊", at: 62730 * time.Millisecond, timed: true,
+		},
+		{
+			name: "song title appears in the first verse",
+			lrc:  "[00:49.324]上句\n[00:54.699]歌词（Re:dreaming Angel)\n[01:01.573]下句",
+			text: "歌词（Re:dreaming Angel)", at: 54699 * time.Millisecond,
+		},
+		{
+			name: "song title reappears later",
+			lrc:  "[00:54.699]歌词（Re:dreaming Angel)\n[02:21.012]另一句（Re:dreaming Angel)",
+			text: "另一句（Re:dreaming Angel)", at: 141012 * time.Millisecond,
+		},
+		{
+			name: "spoken lyric within a verse",
+			lrc:  "[00:00]作词：A\n[00:05]上句\n[00:06]念白：继续唱\n[00:07]下句",
+			text: "念白：继续唱", at: 6 * time.Second,
+		},
+		{
+			name: "word-timed narration after credits",
+			yrc:  "[0,1000](0,1000,0)作词：A\n[1000,1000](1000,1000,0)念白：继续唱",
+			text: "念白：继续唱", at: time.Second, timed: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, view := BuildDisplay(tc.lrc, "", tc.yrc)
+			current, _ := view.Position(tc.at)
+			if current < 0 {
+				t.Fatalf("no active lyric at %v: %+v", tc.at, view.Lines)
+			}
+			line := view.Lines[current]
+			if line.Kind != Sung || line.At != tc.at || line.Text != tc.text || line.Timed != tc.timed {
+				t.Fatalf("wrong active lyric at %v: %+v", tc.at, line)
+			}
+		})
 	}
 }
 
@@ -166,7 +271,7 @@ func TestDisplayInstrumentalReleaseNotes(t *testing.T) {
 	lrc := "[00:03.50]这首歌的名字叫《示例》，\n[00:04.00]如果你喜欢，希望你能点击红心，收藏它，\n" +
 		"[00:04.50]并能与你的朋友分享，谢谢！\n[00:05.00]纯音乐，请欣赏\n[01:37.00]合作联系："
 	_, view := BuildDisplay(lrc, "", "")
-	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[0].Kind != Instrumental {
+	if view.HasSinging() || len(view.Lines) != 5 || view.Lines[3].Kind != Instrumental {
 		t.Fatalf("instrumental release notes became sung lines: %+v", view)
 	}
 }

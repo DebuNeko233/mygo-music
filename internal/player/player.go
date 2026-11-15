@@ -82,6 +82,9 @@ type Player struct {
 	Cache *Cache
 	// FetchLyrics optionally supplies persistent lyrics; captured per load.
 	FetchLyrics func(int64) (string, string, string, error)
+	// FetchCachedLyrics may post fresher lyrics while returning the cached source.
+	// Its refresh callback runs on the player thread.
+	FetchCachedLyrics func(int64, func([]lyrics.Line, lyrics.Display)) (string, string, string, error)
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -149,9 +152,10 @@ type Player struct {
 	pending time.Duration
 	// A seek playing fades out, then lands, then fades in: meanwhile the
 	// position is where it goes.
-	seeking bool
-	seekTo  time.Duration
-	seekGen int
+	seeking      bool
+	seekTo       time.Duration
+	seekGen      int
+	seekRevision uint64
 }
 
 // ahead is a track's download, fetched while the one before it plays: the
@@ -681,10 +685,15 @@ func (p *Player) TogglePlay() {
 // two it sends the system.
 const seekGap = 30 * time.Millisecond
 
+// SeekRevision changes for explicit seeks, including media controls and
+// seeks made before the audio output is available.
+func (p *Player) SeekRevision() uint64 { return p.seekRevision }
+
 // Seek moves to t. Playing, it pauses and plays again around the jump,
 // which the audio player fades over a few milliseconds, rather than
 // cutting from one sound to the other with a click.
 func (p *Player) Seek(t time.Duration) {
+	p.seekRevision++
 	if p.out == nil {
 		p.pending = t
 		return

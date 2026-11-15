@@ -36,11 +36,21 @@ func buildDisplay(lrc, translation, yrc string, metadata []Line, includeMetadata
 	words := parseYRC(yrc)
 	translations := parseLRC(translation)
 	for _, source := range [][]Line{original, words, translations} {
-		for i := range source {
-			source[i].Kind = lineKind(source[i].Text)
-		}
+		classifyLines(source)
 	}
 	classifyInstrumentalNotes(original, words, metadata)
+	confirmTimedCredits(original, words)
+	// A word-timed source consisting entirely of explicit credit shapes
+	// cannot displace sung LRC. In isolation those rows may still be sung.
+	if slices.ContainsFunc(original, usableSungLine) && !slices.ContainsFunc(words, func(line Line) bool {
+		return line.Kind == Sung && !IsCredit(line.Text)
+	}) {
+		for i := range words {
+			if words[i].Kind == Sung {
+				words[i].Kind = Credit
+			}
+		}
+	}
 
 	lines, alternate := original, words
 	useYRC := preferYRC(original, words)
@@ -289,7 +299,7 @@ func attachCreditTranslations(lines, translations []Line, used []bool) {
 			if used[j] || tr.Text == "" || tr.Kind == Instrumental || tr.Kind == unavailable {
 				continue
 			}
-			if role, _, ok := creditField(tr.Text); ok {
+			if role, _, ok := creditField(tr.Text, tr.Kind == Credit); ok {
 				roles[role] = append(roles[role], j)
 			} else {
 				unlabeled = append(unlabeled, j)
@@ -307,7 +317,7 @@ func attachCreditTranslations(lines, translations []Line, used []bool) {
 				continue
 			}
 			seen[key] = true
-			role, _, _ := creditField(line.Text)
+			role, _, _ := creditField(line.Text, true)
 			indices := roles[role]
 			if len(indices) == 0 {
 				unmatched = i

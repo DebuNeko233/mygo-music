@@ -114,6 +114,7 @@ func TestNowPlayingEmptyLyricNotice(t *testing.T) {
 				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
 				{"[00:00.00]暂无歌词", lyrics.UnavailableText, lyrics.InstrumentalText},
 				{"暂无歌词", lyrics.UnavailableText, lyrics.InstrumentalText},
+				{"暂无歌词\n[00:01]作曲：A", lyrics.UnavailableText, lyrics.InstrumentalText},
 				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
 			} {
 				a.pl.RefreshLyrics(1, tc.source, "", "")
@@ -165,12 +166,13 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	const w, h = 230, 164
 	const last = "マスタリング：最後の担当者"
 	a, tt := shortLyricsApp(nil, w, h)
-	a.settings.LyricEdgeFade = true
 	long := "Lead Guitar: " + strings.Repeat("Long Performer Name / ", 6)
 	a.pl.RefreshLyrics(1, "[00:00.00]和声编写：A\n[00:01.00]"+long+
-		"\n[00:02.00]作曲／編曲：C\n[00:05.00]纯音乐，请欣赏\n[01:30.00]"+last, "", "")
+		"\n[00:02.00]作曲／編曲：C\n[01:30.00]"+last, "", "")
 	tt.Frame()
-	// Five single-line rows would leave less than 90 points to scroll.
+	if title, ok := tt.Find(lyrics.InstrumentalText); !ok || title.Y < 16 || title.Y+title.H >= h {
+		t.Fatalf("overflowing credits must start with the notice in view: %+v", title)
+	}
 	if a.lyricScroll.MaxY < 90 || a.lyricScroll.MaxX > 0 {
 		t.Fatalf("long credit did not wrap vertically: %+v", a.lyricScroll)
 	}
@@ -180,25 +182,37 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	if !ok || end.Y < 0 || end.Y+end.H > h+1 {
 		t.Fatalf("last credit was clipped at the end of the scroll: %+v", end)
 	}
+	a.pl.Cue([]netease.Track{{ID: 2}})
+	a.pl.SetLyrics(nil)
+	tt.Frame()
+	title, ok := tt.Find(lyrics.InstrumentalText)
+	if !ok || a.lyricScroll.Y != 0 || abs32(title.Y+title.H/2-h/2) > 2 {
+		t.Fatalf("next track inherited the scroll position: %+v, offset %.1f", title, a.lyricScroll.Y)
+	}
 }
 
 // Switching tracks must never paint a short lyric block at the top while measuring its new viewport.
 func TestShortLyricsDoNotFlashAtTop(t *testing.T) {
-	for _, line := range []lyrics.Line{
-		{At: 5 * time.Second, Text: lyrics.InstrumentalText},
-		{Text: "A short sung line"},
+	for _, tc := range []struct {
+		name, first, last string
+		lines             []lyrics.Line
+	}{
+		{"empty", lyrics.InstrumentalText, lyrics.InstrumentalText, nil},
+		{"timed instrumental notice", lyrics.InstrumentalText, lyrics.InstrumentalText, []lyrics.Line{{At: 5 * time.Second, Text: lyrics.InstrumentalText}}},
+		{"credits only", lyrics.InstrumentalText, "作曲：A", []lyrics.Line{{At: time.Second, Text: "作曲：A"}}},
+		{"sung line", "A short sung line", "A short sung line", []lyrics.Line{{Text: "A short sung line"}}},
 	} {
-		t.Run(line.Text, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			for _, immersive := range []bool{false, true} {
 				t.Run(fmt.Sprint(immersive), func(t *testing.T) {
-					checkLyricSwitchPaintsCentered(t, line, immersive)
+					checkLyricSwitchPaintsCentered(t, tc.lines, tc.first, tc.last, immersive)
 				})
 			}
 		})
 	}
 }
 
-func checkLyricSwitchPaintsCentered(t *testing.T, line lyrics.Line, immersive bool) {
+func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, last string, immersive bool) {
 	t.Helper()
 	const w, h = 300, 360
 	a := newTestApp()
@@ -227,12 +241,13 @@ func checkLyricSwitchPaintsCentered(t *testing.T, line lyrics.Line, immersive bo
 	}, w, h)
 
 	a.pl.Cue([]netease.Track{{ID: 2}})
-	a.pl.SetLyrics([]lyrics.Line{line})
+	a.pl.SetLyrics(lines)
 	tt.Frame()
 	checkTop()
-	row, ok := tt.Find(line.Text)
-	if !ok || abs32(row.Y+row.H/2-h/2) > 2 {
-		t.Fatalf("the lyric did not appear centered: %+v", row)
+	top, topOK := tt.Find(first)
+	bottom, bottomOK := tt.Find(last)
+	if !topOK || !bottomOK || abs32((top.Y+bottom.Y+bottom.H)/2-h/2) > 2 {
+		t.Fatalf("the lyric block did not appear centered: %+v, %+v", top, bottom)
 	}
 }
 

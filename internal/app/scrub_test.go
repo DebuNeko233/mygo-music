@@ -88,3 +88,25 @@ func TestNowPlayingTimeForLongAndUnknownDuration(t *testing.T) {
 		})
 	}
 }
+
+// The visible clocks refresh at playback boundaries even if the scrubber does not rebuild the view.
+func TestNowPlayingTimeRefreshesWithoutScrubber(t *testing.T) {
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 7, Duration: 10_500}})
+	a.pl.Hold(2*time.Second + 250*time.Millisecond)
+	tt := ui.NewTester(a.nowPlayingTime, 300, 24)
+	check := func(elapsed, remaining string) {
+		t.Helper()
+		texts := tt.Texts()
+		if !slices.Contains(texts, elapsed) || !slices.Contains(texts, remaining) {
+			t.Fatalf("progress labels should show %q and %q, got %q", elapsed, remaining, texts)
+		}
+	}
+	check("0:02", "−0:09")
+	a.pl.Hold(2*time.Second + 500*time.Millisecond)
+	tt.Advance(250 * time.Millisecond)
+	check("0:02", "−0:08")
+	a.pl.Hold(3 * time.Second)
+	tt.Advance(500 * time.Millisecond)
+	check("0:03", "−0:08")
+}

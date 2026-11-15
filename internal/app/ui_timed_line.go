@@ -83,7 +83,6 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 	})
 	if line.Clicked() && !nearClose {
 		if st.immersive {
-			a.seekLyricFollow()
 			c.AnimationFrame()
 		}
 		a.pl.Seek(l.At)
@@ -93,21 +92,26 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 
 func lyricInfoFont(kind lyrics.LineKind) (size float32, weight int) {
 	if kind == lyrics.Instrumental {
-		return 24, 700
+		return 24, 600
 	}
 	return 16, 500
 }
 
+func lyricStaticNotice(c *ui.Context, text, lang string) ui.Element {
+	size, weight := lyricInfoFont(lyrics.Instrumental)
+	return ui.Text(c, text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(white.Alpha(0.85))
+}
+
 func lyricInfoRow(c *ui.Context, l *lyrics.Line, lang string) ui.Element {
 	row := ui.Column(c).Padding(timedLineInsetY, timedLineInsetX).Gap(timedLineGap)
-	size, weight := lyricInfoFont(l.Kind)
-	color := white.Alpha(0.68)
-	if l.Kind == lyrics.Instrumental {
-		color = white.Alpha(0.85)
-	}
 	row.Children(func() {
-		ui.Text(c, l.Text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(color)
-		if l.Translation != "" && l.Kind != lyrics.Instrumental {
+		if l.Kind == lyrics.Instrumental {
+			lyricStaticNotice(c, l.Text, lang)
+			return
+		}
+		size, weight := lyricInfoFont(l.Kind)
+		ui.Text(c, l.Text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(white.Alpha(0.68))
+		if l.Translation != "" {
 			ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.55))
 		}
 	})

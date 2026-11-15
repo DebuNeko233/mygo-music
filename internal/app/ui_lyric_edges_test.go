@@ -95,7 +95,7 @@ func TestLyricEdgeFadeCoverage(t *testing.T) {
 			}
 		})
 		if enabled {
-			viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, 0), pass: &pass})
+			viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, nil), pass: &pass})
 		}
 	}, w, h)
 	for _, scale := range []int{1, 2} {
@@ -160,7 +160,7 @@ func TestLyricBlurRampsFromActiveRow(t *testing.T) {
 				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
 			}
 		})
-		viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, 0), pass: &pass})
+		viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, nil), pass: &pass})
 	}, 64, 150)
 	frame := tt.Image()
 	if past, upcoming := frame.RGBAAt(32, 30).R, frame.RGBAAt(32, 78).R; past >= upcoming {
@@ -191,7 +191,7 @@ func TestLyricHoverKeepsEdgeFade(t *testing.T) {
 						}
 					}
 				})
-				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, 0, browsing, [2]ui.Element{}, 0)
+				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, nil, browsing, [2]ui.Element{}, 0)
 			}, 64, 96)
 			before := tt.Image().RGBAAt(32, 4).R
 			tt.Move(32, 4)
@@ -236,7 +236,7 @@ func TestLyricIntroCreditsFadeWhileScrolling(t *testing.T) {
 						}
 					}
 				})
-				a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, browsing, credits, 0)
+				a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, nil, browsing, credits, 0)
 			}, 64, 96)
 			if tt.Image().RGBAAt(32, 32).R != 255 {
 				t.Fatal("credits should be fully visible away from the edges")
@@ -273,7 +273,7 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
 			}
 		})
-		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, 0, true, [2]ui.Element{}, 0)
+		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, nil, true, [2]ui.Element{}, 0)
 	}, 64, 96)
 	frame := tt.Image()
 	if middle := frame.RGBAAt(32, 48).R; middle != 255 {
@@ -526,5 +526,43 @@ func TestLyricManualResizeKeepsReadingPosition(t *testing.T) {
 	tt.SetSize(260, 400)
 	if got := firstVisible(); got != before {
 		t.Fatalf("resize moved the reading position from row %d to %d", before, got)
+	}
+}
+
+// Player-level seeks restore lyric following in both list layouts, even while paused.
+func TestImmersiveLyricsFollowPlayerSeekWhileBrowsing(t *testing.T) {
+	for _, count := range []int{20, 120} {
+		for _, playing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%d/playing=%v", count, playing), func(t *testing.T) {
+				lines := make([]lyrics.Line, count)
+				for i := range lines {
+					lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Lyric %03d", i)}
+				}
+				a, tt := shortLyricsApp(lines, 240, 220)
+				tt.SetScale(0.25)
+				a.settings.LyricEdgeFade = true
+				if !playing {
+					// shortLyricsApp pins a running clock; use a fresh paused player.
+					paused := newTestApp().pl
+					paused.Cue([]netease.Track{{ID: 1, Duration: 200000}})
+					paused.SetLyrics(lines)
+					a.pl = paused
+				}
+				a.pl.Seek(lines[6].At)
+				tt.Frame()
+				tt.Scroll(120, 120, 0, 80)
+				if a.lyricBrowseUntil.IsZero() {
+					t.Fatal("manual scroll did not enter browsing mode")
+				}
+				// System media controls call this same player entry point.
+				target := count - 3
+				a.pl.Seek(lines[target].At)
+				tt.Frame()
+				row, ok := tt.AccessByRole(ui.RoleButton, lines[target].Text)
+				if !a.lyricBrowseUntil.IsZero() || a.lyricAt != target || !ok || row.Offscreen {
+					t.Fatalf("seek did not restore following: row=%+v, active=%d", row, a.lyricAt)
+				}
+			})
+		}
 	}
 }

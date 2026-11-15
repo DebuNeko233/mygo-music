@@ -99,11 +99,10 @@ type app struct {
 	recentTab int
 
 	// heard is the actual audio session; reports leave in playback order.
-	heard         heardPlay
-	reportOnce    sync.Once
-	reportQueue   chan func()
-	reportDone    chan struct{}
-	reportRestore func()
+	heard           heardPlay
+	reportQueue     chan func(playReporter)
+	reportDone      chan struct{}
+	newPlayReporter func() playReporter
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
@@ -158,6 +157,7 @@ type app struct {
 	timedList                      timedListLayout
 	lyricAt                        int
 	lyricTrack                     int64
+	lyricSeekRevision              uint64
 	lyricFirst                     *lyrics.Line
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
 	lyricWindowW, lyricWindowH     float32 // window size whose reflow has been scheduled

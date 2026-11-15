@@ -44,6 +44,95 @@ func settleTallLyrics(tt *ui.Tester) {
 	}
 }
 
+// Instrumental credits use the same reading area when immersive lyrics is toggled.
+func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
+	a := tallLyricsApp(t)
+	a.settings.HotComments = false
+	const credit = "作曲：A"
+	a.pl.RefreshLyrics(1, "[00:01]"+credit, "", "")
+	tt := ui.NewTesterWith(a.view, 960, 700, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	tt.SetScale(0.25)
+	bounds := func(text string) ui.Rect {
+		t.Helper()
+		r, ok := tt.Find(text)
+		if !ok {
+			t.Fatalf("missing %q in the instrumental panel", text)
+		}
+		return r
+	}
+	title, creditRow := bounds(lyrics.InstrumentalText), bounds(credit)
+	if title.X != creditRow.X || title.Y >= creditRow.Y {
+		t.Fatalf("title and credit do not share a left edge: %+v, %+v", title, creditRow)
+	}
+	a.settings.LyricEdgeFade = true
+	tt.Frame()
+	if bounds(lyrics.InstrumentalText) != title || bounds(credit) != creditRow {
+		t.Fatal("toggling immersive lyrics moved the instrumental panel")
+	}
+	tt.SetSize(680, 500)
+	if title := bounds(lyrics.InstrumentalText); title.H > 31 {
+		t.Fatalf("the cover's scrollbar inset squeezed the notice in a narrow window: %+v", title)
+	}
+}
+
+// Opening at the end of a song puts the current lyric at the same inset as a middle verse.
+func TestNowPlayingOpensAtLastLyric(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		for _, count := range []int{30, 120} {
+			t.Run(fmt.Sprintf("immersive=%t/rows=%d", immersive, count), func(t *testing.T) {
+				a := tallLyricsApp(t)
+				a.nowPlaying = false
+				a.settings.LyricEdgeFade = immersive
+				a.settings.HotComments = false
+				lines := make([]lyrics.Line, count)
+				for i := range lines {
+					lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("第 %d 句", i)}
+					if i%3 == 1 {
+						lines[i].Translation = strings.Repeat("换行测试 ", 15)
+					}
+				}
+				last, middle := lines[count-1], lines[count/2]
+				a.pl.Cue([]netease.Track{{ID: 1, Duration: int64(count+2) * 1000}})
+				a.pl.SetLyrics(lines)
+				// Exercise the animated remount that used to enter browsing
+				// mode in long immersive lyrics.
+				reduceMotion := !immersive || count < timedListThreshold
+				tt := ui.NewTesterWith(a.view, 750, 1330, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduceMotion}})
+				tt.SetScale(0.1) // The test inspects layout, so keep software rasterization small.
+				visibleY := func(line lyrics.Line) float32 {
+					t.Helper()
+					row, ok := tt.AccessByRole(ui.RoleButton, line.Text)
+					if !ok || row.Offscreen || !a.lyricBrowseUntil.IsZero() {
+						t.Fatalf("playback lost %q after opening: visible=%t offset=%.1f browsing=%t",
+							line.Text, ok && !row.Offscreen, a.lyricScroll.Y, !a.lyricBrowseUntil.IsZero())
+					}
+					return row.Bounds.Y
+				}
+				openAtEnd := func() float32 {
+					a.pl.Hold(last.At + 2*time.Second)
+					a.nowPlaying = true
+					tt.Frame()
+					visibleY(last)
+					tt.Advance(npSettle)
+					return visibleY(last)
+				}
+				firstOpen := openAtEnd()
+				a.pl.Hold(middle.At)
+				tt.Frame()
+				tt.Advance(time.Second)
+				want := visibleY(middle)
+				a.nowPlaying = false
+				tt.Frame()
+				tt.Advance(npSettle)
+				reopened := openAtEnd()
+				if abs32(firstOpen-want) > 2 || abs32(reopened-want) > 2 {
+					t.Fatalf("last lyric at %.1f on first open and %.1f on reopen, want %.1f", firstOpen, reopened, want)
+				}
+			})
+		}
+	}
+}
+
 // The visible lyric thumb mirrors the cover's left edge and can drag the pane in either mode.
 func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
 	for _, immersive := range []bool{false, true} {

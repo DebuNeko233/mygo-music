@@ -89,10 +89,10 @@ func eapiPostContext(ctx context.Context, path string, data map[string]any, out 
 }
 
 func eapiPostDomain(ctx context.Context, domain, path string, data map[string]any, out any) error {
-	return eapiPostEndpoint(ctx, domain+"/eapi/"+strings.TrimPrefix(path, "/api/"), path, data, out)
+	return eapiPostEndpoint(ctx, domain+"/eapi/"+strings.TrimPrefix(path, "/api/"), path, data, out, httpClient.Jar)
 }
 
-func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[string]any, out any) error {
+func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[string]any, out any, jar http.CookieJar) error {
 	client := eapiClient
 	ua := eapiUA
 	if strings.Contains(endpoint, "://clientlog.music.163.com/") {
@@ -112,10 +112,6 @@ func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[strin
 		"channel":     client["channel"],
 		"requestId":   fmt.Sprintf("%d_%04d", time.Now().UnixMilli(), time.Now().Nanosecond()%1000),
 		"__csrf":      "",
-	}
-	jar := httpClient.Jar
-	if strings.Contains(endpoint, "://clientlog.music.163.com/") {
-		jar = playCookieJar()
 	}
 	for _, c := range jar.Cookies(siteURL) {
 		switch c.Name {
@@ -162,7 +158,7 @@ func eapiPostEndpoint(ctx context.Context, endpoint, path string, data map[strin
 			c.Domain = ""
 			c.Path = "/"
 		}
-		httpClient.Jar.SetCookies(siteURL, set)
+		jar.SetCookies(siteURL, set)
 	}
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -178,12 +174,12 @@ func eapiOK(path string, data map[string]any) error {
 }
 
 func eapiOKDomain(domain, path string, data map[string]any) error {
-	return eapiOKEndpoint(domain+"/eapi/"+strings.TrimPrefix(path, "/api/"), path, data)
+	return eapiOKEndpoint(domain+"/eapi/"+strings.TrimPrefix(path, "/api/"), path, data, httpClient.Jar)
 }
 
-func eapiOKEndpoint(endpoint, path string, data map[string]any) error {
+func eapiOKEndpoint(endpoint, path string, data map[string]any, jar http.CookieJar) error {
 	var res apiError
-	if err := eapiPostEndpoint(context.Background(), endpoint, path, data, &res); err != nil {
+	if err := eapiPostEndpoint(context.Background(), endpoint, path, data, &res, jar); err != nil {
 		return err
 	}
 	if res.Code != 200 {

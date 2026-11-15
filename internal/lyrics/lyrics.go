@@ -19,6 +19,7 @@ type Line struct {
 	Translation string
 	Words       []Word
 	Kind        LineKind // presentation role assigned by NewDisplay
+	classified  bool
 	// Timed says the words carry their own times, as NetEase's word-timed
 	// lyrics give them; else they share the line's time evenly.
 	Timed bool
@@ -272,6 +273,19 @@ type Quiet struct {
 // Quiets returns the stretches of a song length long, of at least least,
 // in which none of lines is sung. Credits, as 作词 and 作曲, are not sung.
 func Quiets(lines []Line, length, least time.Duration) []Quiet {
+	for _, line := range lines {
+		if line.Kind == Sung && !line.classified {
+			parsed := append([]Line(nil), lines...)
+			classifyLines(parsed)
+			for i, original := range lines {
+				if original.classified || original.Kind != Sung {
+					parsed[i].Kind = original.Kind
+				}
+			}
+			lines = parsed
+			break
+		}
+	}
 	var out []Quiet
 	add := func(from, to time.Duration) {
 		if to-from >= least {
@@ -281,7 +295,7 @@ func Quiets(lines []Line, length, least time.Duration) []Quiet {
 	at := time.Duration(0)
 	sung := false
 	for _, l := range lines {
-		if l.Kind != Sung || IsCredit(l.Text) {
+		if l.Kind != Sung {
 			continue
 		}
 		add(at, l.At)

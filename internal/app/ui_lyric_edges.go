@@ -149,13 +149,18 @@ func (st linesStyle) collectLyricRow(row ui.Element, hovered bool, i, current in
 	if i == st.introLine {
 		*firstSung = row
 	}
+	openingCredit := i < st.introLine && kind == lyrics.Credit
+	if openingCredit && st.hideOpeningCredits {
+		row.Invisible()
+		return
+	}
 	if st.browsing {
 		return
 	}
 	if hovered {
 		*hover = row
 	}
-	if current < 0 && i < st.introLine && kind == lyrics.Credit {
+	if current < 0 && openingCredit {
 		if !credits[0].Valid() {
 			credits[0] = row
 		}
@@ -163,20 +168,19 @@ func (st linesStyle) collectLyricRow(row ui.Element, hovered bool, i, current in
 	}
 }
 
-func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introOpacity float32, browsing bool, credits [2]ui.Element, gutter float32) {
+func (a *app) lyricEdges(scroll, active, hovered, intro, first ui.Element, introRemaining func() float32, browsing bool, credits [2]ui.Element, gutter float32) {
 	var incoming ui.Element
-	var blend float32
 	if intro.Valid() {
 		// Move the clear band from the dots to the first line as they fade.
-		active, incoming, blend = intro, first, 1-introOpacity
+		active, incoming = intro, first
 	}
-	fx := lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, blend), pass: &a.lyricBlurPass, browsing: browsing, gutter: gutter}
+	fx := lyricEdgeFade{clearBand: lyricClearBand(scroll, active, incoming, introRemaining), pass: &a.lyricBlurPass, browsing: browsing, gutter: gutter}
 	if !browsing && hovered.Valid() {
-		fx.hoverBand = lyricClearBand(scroll, hovered, ui.Element{}, 0)
+		fx.hoverBand = lyricClearBand(scroll, hovered, ui.Element{}, nil)
 	}
 	if !browsing && credits[0].Valid() {
-		top := lyricClearBand(scroll, credits[0], ui.Element{}, 0)
-		bottom := lyricClearBand(scroll, credits[1], ui.Element{}, 0)
+		top := lyricClearBand(scroll, credits[0], ui.Element{}, nil)
+		bottom := lyricClearBand(scroll, credits[1], ui.Element{}, nil)
 		fx.creditBand = func(scale, insetY float32) [3]float32 {
 			band := top(scale, insetY)
 			if end := bottom(scale, insetY); end[2] != 0 {
@@ -196,7 +200,7 @@ func (lyricEdgeFade) EffectMargin() ui.Point {
 
 // Bind the lookup to this viewport's paint pass so it follows the live pose
 // on repaint-only scroll frames.
-func lyricClearBand(viewport, active, incoming ui.Element, blend float32) func(float32, float32) [3]float32 {
+func lyricClearBand(viewport, active, incoming ui.Element, introRemaining func() float32) func(float32, float32) [3]float32 {
 	return func(scale, insetY float32) [3]float32 {
 		row := func(e ui.Element) [3]float32 {
 			bounds := e.LayoutBounds()
@@ -213,7 +217,10 @@ func lyricClearBand(viewport, active, incoming ui.Element, blend float32) func(f
 			return [3]float32{}
 		}
 		band := row(active)
-		if blend > 0 {
+		if introRemaining != nil {
+			remaining := introRemaining()
+			band[1] = lerp(band[0], band[1], remaining)
+			blend := 1 - remaining
 			coming := row(incoming)
 			if band[2] == 0 {
 				band = coming

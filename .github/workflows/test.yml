@@ -70,6 +70,7 @@ jobs:
           names=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app)
           pattern=$(printf '%s\n' "$names" | awk -v shard="$SHARD" -v app_shards="$((TOTAL_JOBS - 1))" '
             BEGIN {
+              if (app_shards < 1 || shard < 1 || shard > app_shards) exit 1
               heavy["TestNowPlayingFrameBudget"] = 1
               heavy["TestLyricEdgeFadeScrolling"] = 2
               heavy["TestNowPlayingLyricScrollbarAlignmentAndDrag"] = 3
@@ -78,7 +79,9 @@ jobs:
               heavy["TestLyricIntroEasesIntoFirstLine"] = 6
             }
             /^(Test|Example|Fuzz)[[:alnum:]_]+$/ {
-              assigned = ($0 in heavy) ? heavy[$0] : (count++ % app_shards) + 1
+              if (seen[$0]++) exit 1
+              assigned = ($0 in heavy) ? (heavy[$0] - 1) % app_shards + 1 : count++ % app_shards + 1
+              if (assigned < 1 || assigned > app_shards) exit 1
               if (assigned == shard) {
                 printf "%s%s", sep, $0
                 sep = "|"

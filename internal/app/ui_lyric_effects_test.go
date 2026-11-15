@@ -168,13 +168,81 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 				return row.Bounds.Y
 			}
 			start := firstY(lyricIntroExit)
+			tt.Advance(lyricIntroExit / 2)
 			mid := firstY(lyricIntroExit / 2)
+			tt.Advance(lyricIntroExit/2 - 10*time.Millisecond)
 			near := firstY(10 * time.Millisecond)
+			tt.Advance(10 * time.Millisecond)
 			end := firstY(0)
 			if !(start > mid && mid > near) || abs32(near-end) > 1 || abs32(end-float32(tc.height)*0.3) > 2 {
 				t.Fatalf("the first row jumped during the intro: start %.2f, middle %.2f, near %.2f, end %.2f", start, mid, near, end)
 			}
 		})
+	}
+}
+
+// The intro exit must move the first row between refreshes without rebuilding its layout.
+func TestLyricIntroExitReusesLayout(t *testing.T) {
+	const firstAt = time.Second
+	a := newTestApp()
+	var start time.Time
+	var builds int
+	tt := ui.NewTester(func(c *ui.Context) {
+		if start.IsZero() {
+			start = c.Now()
+		}
+		builds++
+		gap := lyricInterlude{to: firstAt, intro: c.Now().Sub(start) < firstAt}
+		ui.Column(c).Fill().Background(ui.Hex("#000000")).Children(func() {
+			box := ui.Column(c.Key("lyrics"))
+			motion := prepareLyricIntro(c, box, gap, c.Now().Sub(start), true)
+			if motion.gap.intro {
+				motion.move(box, lyricIntroSpace)
+			}
+			box.Children(func() {
+				if motion.gap.intro {
+					slot, dots := lyricIntroDots(c)
+					a.introDots(c, slot, dots, motion)
+				}
+				ui.Button(c.Key("first"), "First lyric").Margin(0, 0, 0, 80)
+			})
+		})
+	}, 180, 120)
+	y := func() float32 {
+		t.Helper()
+		row, ok := tt.AccessByRole(ui.RoleButton, "First lyric")
+		if !ok {
+			t.Fatal("the moving row is missing")
+		}
+		return row.Bounds.Y
+	}
+	dotLight := func() int {
+		img := tt.Image()
+		light := 0
+		for y := range lyricIntroHeight {
+			for x := range 60 {
+				light += int(img.RGBAAt(x, y).R)
+			}
+		}
+		return light
+	}
+	tt.Advance(firstAt - lyricIntroExit)
+	before, top := builds, y()
+	startDots := dotLight()
+	tt.Advance(lyricIntroExit / 2)
+	if middle := y(); middle <= 5 || middle >= top-5 {
+		t.Fatalf("first row did not move through the exit: start %.2f, mid %.2f", top, middle)
+	}
+	if builds != before {
+		t.Fatalf("the exit rebuilt the view %d times before the first cue", builds-before)
+	}
+	midDots := dotLight()
+	tt.Advance(lyricIntroExit / 2)
+	if end := y(); end > 1 {
+		t.Fatalf("first row did not settle at its layout position: %.2f", end)
+	}
+	if endDots := dotLight(); !(startDots > midDots && midDots > endDots) {
+		t.Fatalf("the dots did not fade with the row: start %d, mid %d, end %d", startDots, midDots, endDots)
 	}
 }
 
