@@ -15,6 +15,7 @@ import (
 	"weak"
 
 	"github.com/egoist/mygo/ui"
+	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 
 	"netease-music-mygo/internal/netease"
@@ -52,7 +53,8 @@ type artCache struct {
 	size        int // the bytes the covers in art keep
 	limit       int
 	serial      uint64
-	seen        map[string]struct{}
+	seen        map[string]struct{} // covers the most recent view asked to paint
+	rejected    map[string]int      // decoded sizes that did not fit beside visible covers
 	results     *sync.Cond
 	resultBytes int
 	closed      bool // guarded by results.L
@@ -63,14 +65,14 @@ const artResultLimit = 16 << 20
 const artRefreshAfter = 24 * time.Hour
 const artRefreshRetry = time.Minute
 
-// artLimit is how many bytes of covers the cache keeps. A cover keeps its
-// data, some 50–100 KB for Now Playing's and a few for a row's, so this
-// is thousands: going back to a page shows its covers as they were,
-// however long ago it showed them, rather than loading them again.
+// artLimit bounds encoded data and estimated decoded pixels in the cache.
 const artLimit = 64 << 20
 
 func newArtCache(post func(func())) *artCache {
-	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{}, sem: make(chan struct{}, artJobs), post: post, now: time.Now, limit: artLimit, seen: map[string]struct{}{}, results: sync.NewCond(&sync.Mutex{})}
+	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{},
+		sem: make(chan struct{}, artJobs), post: post, now: time.Now, limit: artLimit,
+		seen: map[string]struct{}{}, rejected: map[string]int{},
+		results: sync.NewCond(&sync.Mutex{})}
 }
 
 // Bound bytes already posted to the UI. A single large result may exceed
@@ -106,17 +108,23 @@ func (c *artCache) close() {
 	c.results.L.Unlock()
 }
 
-// add keeps a cover, and drops those asked for least recently once the
-// covers take more than the limit, down to three quarters of it, so that
-// it sorts them seldom. Those showing were asked for last, and stay.
-func (c *artCache) add(key string, a *artwork) {
-	if previous := c.art[key]; previous != nil {
-		c.size -= previous.size
+// add gives the incoming cover space by dropping offscreen entries first.
+// Reject it if it would displace a visible cover or exceed the hard limit.
+func (c *artCache) add(key string, a *artwork) bool {
+	previous := c.art[key]
+	size := c.size + a.size
+	if previous != nil {
+		size -= previous.size
 	}
+	if size > c.limit && !c.fitsVisible(key, a.size) {
+		c.rejected[key] = a.size
+		return false
+	}
+	delete(c.rejected, key)
 	c.art[key] = a
-	c.size += a.size
+	c.size = size
 	if c.size <= c.limit {
-		return
+		return true
 	}
 	for key, p := range c.gone {
 		if p.Value() == nil {
@@ -124,8 +132,10 @@ func (c *artCache) add(key string, a *artwork) {
 		}
 	}
 	keys := make([]string, 0, len(c.art))
-	for key := range c.art {
-		keys = append(keys, key)
+	for candidate, held := range c.art {
+		if _, visible := c.seen[candidate]; !visible && candidate != key && held.size > 0 {
+			keys = append(keys, candidate)
+		}
 	}
 	slices.SortFunc(keys, func(x, y string) int { return c.art[x].used.Compare(c.art[y].used) })
 	for _, key := range keys {
@@ -137,19 +147,55 @@ func (c *artCache) add(key string, a *artwork) {
 		c.size -= a.size
 		c.gone[key] = weak.Make(a)
 	}
+	return true
+}
+
+func (c *artCache) fitsVisible(key string, size int) bool {
+	for visible := range c.seen {
+		if a := c.art[visible]; visible != key && a != nil {
+			size += a.size
+		}
+	}
+	return size <= c.limit
+}
+
+func artworkKey(url string, backdrop bool) string {
+	if backdrop {
+		return url + "#backdrop"
+	}
+	return url
 }
 
 // get returns the cover at url, or nil while it loads.
 func (c *artCache) get(url string, backdrop bool) *artwork {
+	return c.request(url, backdrop, true)
+}
+
+// Use the previous layout's clipping to avoid loading offscreen scroll
+// content. MyGo rebuilds when InView changes, and a warm cover can paint
+// on the first frame without waiting for that measurement.
+func (c *artCache) getInView(url string, backdrop bool, box ui.Element) *artwork {
+	if box.InView() {
+		return c.get(url, backdrop)
+	}
+	return c.art[artworkKey(url, backdrop)]
+}
+
+func (c *artCache) prefetch(url string, backdrop bool) {
+	if c.size < c.limit*3/4 && len(c.sem) < cap(c.sem)-1 {
+		c.request(url, backdrop, false)
+	}
+}
+
+func (c *artCache) request(url string, backdrop, visible bool) *artwork {
 	if url == "" {
 		return nil
 	}
-	key := url
-	if backdrop {
-		key += "#backdrop"
+	key := artworkKey(url, backdrop)
+	if visible {
+		c.seen[key] = struct{}{}
 	}
 	now := c.now()
-	c.seen[key] = struct{}{}
 	current := c.art[key]
 	if current == nil {
 		if held := c.gone[key].Value(); held != nil {
@@ -160,12 +206,14 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 		}
 	}
 	if a := current; a != nil {
-		a.used = now
+		if visible {
+			a.used = now
+		}
 		if a.failed || now.Before(a.retryAt) || !a.stale && (a.loaded.IsZero() || now.Sub(a.loaded) < artRefreshAfter) {
 			return a
 		}
 	}
-	if c.busy[key] != 0 {
+	if c.busy[key] != 0 || c.rejected[key] > 0 && !c.fitsVisible(key, c.rejected[key]) {
 		return current
 	}
 	// Do not queue a goroutine for every URL scrolled past. A completion
@@ -204,6 +252,10 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			}
 			delete(c.busy, key)
 			if err != nil {
+				if netease.CoverRevoked(err) {
+					c.imageChanged(url, netease.ImageRevoked)
+					return
+				}
 				if old := c.art[key]; old != nil && old.bmp != nil {
 					old.retryAt = c.now().Add(artRefreshRetry)
 					return
@@ -218,7 +270,9 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 			if blurred != nil {
 				a.backdrop = ui.NewBitmap(blurred)
 			}
-			c.add(key, a)
+			if !c.add(key, a) {
+				return
+			}
 			// Shown by the frame post draws, the cover drops its pixels,
 			// which its data decodes again if they are needed.
 			ref := weak.Make(bmp)
@@ -256,20 +310,33 @@ var loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	bmp, img, err := decodeArt(b)
-	return bmp, img, len(b), err
+	return decodeArtSized(b, netease.CoverRequestSize(url))
 }
 
 // decodeArt decodes a cover twice: as a bitmap, which keeps the data to
 // decode its pixels again after it drops them, and as an image.
 func decodeArt(b []byte) (*ui.Bitmap, image.Image, error) {
+	bmp, img, _, err := decodeArtSized(b, 0)
+	return bmp, img, err
+}
+
+func decodeArtSized(b []byte, limit int) (*ui.Bitmap, image.Image, int, error) {
 	b = stillCover(b)
 	img, _, err := image.Decode(bytes.NewReader(b))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
+	}
+	bounds := img.Bounds()
+	if w, h := bounds.Dx(), bounds.Dy(); limit > 0 && max(w, h) > limit {
+		long := max(w, h)
+		small := image.NewRGBA(image.Rect(0, 0, max(1, w*limit/long), max(1, h*limit/long)))
+		xdraw.ApproxBiLinear.Scale(small, small.Bounds(), img, bounds, xdraw.Src, nil)
+		// The small bitmap owns its pixels. It need not keep the large
+		// encoded download around to reconstruct them.
+		return ui.NewBitmap(small), small, 0, nil
 	}
 	bmp, err := ui.DecodeBitmap(b)
-	return bmp, img, err
+	return bmp, img, len(b), err
 }
 
 func fetchImage(url string) (image.Image, error) {
@@ -504,6 +571,11 @@ func (c *artCache) beginFrame() {
 			}
 		}
 	}
+	for key := range c.rejected {
+		if _, seen := c.seen[key]; !seen {
+			delete(c.rejected, key)
+		}
+	}
 	clear(c.seen)
 }
 func (c *artCache) hasFailed(manual bool) bool {
@@ -527,6 +599,7 @@ func (c *artCache) invalidate(url string, replacement bool) {
 	for _, key := range []string{url, url + "#backdrop"} {
 		// A queued result may still contain the previous bytes.
 		delete(c.busy, key)
+		delete(c.rejected, key)
 		current := c.art[key]
 		if replacement {
 			held := current
@@ -544,6 +617,18 @@ func (c *artCache) invalidate(url string, replacement bool) {
 			delete(c.art, key)
 		}
 		delete(c.gone, key)
+	}
+}
+
+func (c *artCache) imageChanged(url string, change netease.ImageChange) {
+	c.invalidate(url, change == netease.ImageReplaced)
+	if change == netease.ImageRevoked {
+		// The disk revalidation may finish before or after a UI decode.
+		// Both orders must leave a missing cover, with explicit retry.
+		now := c.now()
+		for _, backdrop := range []bool{false, true} {
+			c.add(artworkKey(url, backdrop), &artwork{failed: true, loaded: now, used: now})
+		}
 	}
 }
 

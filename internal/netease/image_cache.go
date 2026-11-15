@@ -13,6 +13,7 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,7 +43,7 @@ type imageCache struct {
 	familyMu sync.Mutex
 	sem      chan struct{}
 	store    imageStore
-	changed  func(url string, replacement bool)
+	changed  func(url string, change ImageChange)
 	mu       sync.Mutex
 	flights  map[string]*imageFlight
 }
@@ -65,7 +66,7 @@ func NewArtworkStore(dir string, limit int64) *diskcache.Store {
 // UseImageCache installs the shared byte cache for UI and system media covers.
 // Requests retain their complete URL and cookie identity; neither is persisted.
 // The change callback distinguishes a new cached image from a revoked entry.
-func UseImageCache(store *diskcache.Store, changed func(url string, replacement bool)) {
+func UseImageCache(store *diskcache.Store, changed func(url string, change ImageChange)) {
 	if store == nil {
 		images.Store(nil)
 		return
@@ -105,7 +106,7 @@ func (c *imageCache) fetch(req *http.Request) ([]byte, error) {
 // another request's registration or completion. Stale bytes remain available
 // through ready while the same flight revalidates them in the background.
 func (c *imageCache) lookup(req *http.Request, key string, f *imageFlight) {
-	var change imageChange
+	var change ImageChange
 	defer func() {
 		c.mu.Lock()
 		delete(c.flights, key)
@@ -114,7 +115,7 @@ func (c *imageCache) lookup(req *http.Request, key string, f *imageFlight) {
 		// A reader started by this notification must see the new record,
 		// rather than joining the completed flight for stale bytes.
 		if change != imageUnchanged && c.changed != nil && c.store.Epoch() == f.epoch {
-			c.changed(req.URL.String(), change == imageReplaced)
+			c.changed(req.URL.String(), change)
 		}
 	}()
 	var record imageRecord
@@ -152,15 +153,16 @@ func (c *imageCache) lookup(req *http.Request, key string, f *imageFlight) {
 	change = c.refresh(req, key, record, body, f)
 }
 
-type imageChange uint8
+type ImageChange uint8
 
 const (
-	imageUnchanged imageChange = iota
-	imageReplaced
-	imageRevoked
+	imageUnchanged ImageChange = iota
+	ImageReplaced
+	ImageRevoked
+	ImageUncacheable
 )
 
-func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, previous []byte, f *imageFlight) imageChange {
+func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, previous []byte, f *imageFlight) ImageChange {
 	c.sem <- struct{}{}
 	defer func() { <-c.sem }()
 	epoch := f.epoch
@@ -180,16 +182,16 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusNotModified {
 		f.err = responseError{response.StatusCode, response.Status}
-		switch response.StatusCode {
-		case 401, 403, 404, 410:
-			if c.store.Epoch() != epoch {
-				return imageUnchanged
-			}
+		if coverRevokedCode(response.StatusCode) && c.store.Epoch() == epoch {
 			c.store.Forget("requests", key)
-			if family, _, ok := imageFamily(req); ok {
-				c.store.Forget("families", family)
+			// A cold failure is returned to the waiting loader. Notifying
+			// it as a revocation would discard that same failure.
+			if previous != nil {
+				if family, _, ok := imageFamily(req); ok {
+					c.store.Forget("families", family)
+				}
+				return ImageRevoked
 			}
-			return imageRevoked
 		}
 		return imageUnchanged
 	}
@@ -258,10 +260,10 @@ func (c *imageCache) refresh(req *http.Request, key string, old imageRecord, pre
 		return imageUnchanged
 	}
 	if !allowed {
-		return imageRevoked
+		return ImageUncacheable
 	}
 	if !bytes.Equal(previous, body) {
-		return imageReplaced
+		return ImageReplaced
 	}
 	return imageUnchanged
 }
@@ -329,6 +331,30 @@ func imageFamily(req *http.Request) (string, int, bool) {
 	base := *req.URL
 	base.RawQuery = ""
 	return base.String(), n, true
+}
+
+// CoverRequestSize is the requested pixel size for a canonical CDN variant.
+func CoverRequestSize(raw string) int {
+	address, err := url.Parse(raw)
+	if err != nil {
+		return 0
+	}
+	_, size, _ := imageFamily(&http.Request{URL: address})
+	return size
+}
+
+func coverRevokedCode(code int) bool {
+	switch code {
+	case 401, 403, 404, 410:
+		return true
+	}
+	return false
+}
+
+// CoverRevoked reports a definitive HTTP refusal or removal of a cover.
+func CoverRevoked(err error) bool {
+	var response responseError
+	return errors.As(err, &response) && coverRevokedCode(response.code)
 }
 
 // RetryableCoverError keeps the cover loader's existing classification API.

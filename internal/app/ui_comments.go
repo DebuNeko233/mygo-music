@@ -367,8 +367,8 @@ func (cs *commentState) setLiked(id int64, like bool) {
 
 // avatar shows a listener's picture, round, over empty while it loads.
 func (a *app) avatar(c *ui.Context, url string, size float32, empty ui.Color) {
-	bmp := bitmap(a.art.get(netease.Sized(url, int(size*3)), false))
 	box := ui.Box(c).Size(size, size).Radius(size / 2).Shrink(0)
+	bmp := bitmap(a.art.getInView(netease.Sized(url, int(size*3)), false, box))
 	in := artIn(box, bmp)
 	if in < 1 {
 		box.Background(empty)

@@ -147,26 +147,59 @@ func TestImageCacheNotifiesAfterReplacementIsReadable(t *testing.T) {
 	store.Put("requests", imageIdentity(req), data, 0)
 
 	type notification struct {
-		url         string
-		replacement bool
-		body        []byte
-		err         error
+		url    string
+		change ImageChange
+		body   []byte
+		err    error
 	}
 	notified := make(chan notification, 1)
-	UseImageCache(store, func(url string, replacement bool) {
+	UseImageCache(store, func(url string, change ImageChange) {
 		b, err := Fetch(url)
-		notified <- notification{url, replacement, b, err}
+		notified <- notification{url, change, b, err}
 	})
 	if b, err := Fetch(url); err != nil || !bytes.Equal(b, old) {
 		t.Errorf("did not serve old cover while validating: %v", err)
 	}
 	select {
 	case update := <-notified:
-		if update.url != url || !update.replacement || update.err != nil || !bytes.Equal(update.body, fresh.Bytes()) {
-			t.Fatalf("notification did not expose the replacement: %q, %v, %v", update.url, update.replacement, update.err)
+		if update.url != url || update.change != ImageReplaced || update.err != nil || !bytes.Equal(update.body, fresh.Bytes()) {
+			t.Fatalf("notification did not expose the replacement: %q, %v, %v", update.url, update.change, update.err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no replacement notification")
+	}
+}
+
+// Only a rejection of an existing cached cover emits a revocation.
+func TestImageCache404NotifiesOnlyForExistingCover(t *testing.T) {
+	body := coverBytes(t)
+	server, store := imageFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
+	req, _ := http.NewRequest("GET", server.URL+"/cover", nil)
+	req.Header.Set("User-Agent", UserAgent)
+	key := imageIdentity(req)
+	var changes []ImageChange
+	UseImageCache(store, func(_ string, change ImageChange) { changes = append(changes, change) })
+	cache := images.Load()
+	fetch := func() {
+		t.Helper()
+		flight := &imageFlight{ready: make(chan struct{}), done: make(chan struct{}), epoch: store.Epoch()}
+		cache.lookup(req, key, flight)
+		if !CoverRevoked(flight.err) {
+			t.Fatalf("want HTTP rejection, got %v", flight.err)
+		}
+	}
+	fetch()
+	content := sha256.Sum256(body)
+	hash := hex.EncodeToString(content[:])
+	store.Put("content", hash, body, 0)
+	record, _ := json.Marshal(imageRecord{Content: hash, Expires: time.Unix(1, 0)})
+	store.Put("requests", key, record, 0)
+	fetch()
+	fetch()
+	if len(changes) != 1 || changes[0] != ImageRevoked {
+		t.Fatalf("want exactly one revocation for the existing cover, got %v", changes)
 	}
 }
 

@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"image"
+	"image/png"
 	"os"
 	"runtime"
 	"testing"
@@ -11,6 +13,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/netease"
 )
 
 // Slow UI callbacks must keep their slots: scrolling past more covers
@@ -120,6 +124,108 @@ func TestArtCacheDropsLeastRecentCovers(t *testing.T) {
 			t.Errorf("dropped %q, asked for last", key)
 		}
 	}
+}
+
+// Offscreen completions must leave visible artwork intact and stay within the budget.
+func TestVisibleArtworkSurvivesOffscreenCompletions(t *testing.T) {
+	c := newArtCache(func(func()) {})
+	now := time.Unix(100, 0)
+	c.now, c.limit = func() time.Time { return now }, 100
+	visible := &artwork{size: 35, used: now}
+	c.add("visible", visible)
+	c.get("visible", false)
+	now = now.Add(time.Second)
+	c.add("offscreen", &artwork{size: 35, used: now})
+	now = now.Add(time.Second)
+	if !c.add("new", &artwork{size: 60, used: now}) || c.art["offscreen"] != nil || c.size != 95 {
+		t.Fatalf("wanted offscreen eviction with 95 bytes in cache, got %d", c.size)
+	}
+	if c.add("oversized", &artwork{size: 70, used: now}) || c.art["visible"] != visible || c.size != 95 {
+		t.Fatal("admitting artwork would displace the visible cover")
+	}
+	c.get("oversized", false)
+	if c.busy["oversized"] != 0 {
+		t.Fatal("a rejected cover immediately restarted decoding")
+	}
+	c.beginFrame()
+	if !c.add("oversized", &artwork{size: 70, used: now}) || c.size > c.limit {
+		t.Fatal("an offscreen cover still prevented admission")
+	}
+}
+
+// A revocation hides the image, cancels old results and retains a manual-retry failure.
+func TestRevokedCoverLeavesFailure(t *testing.T) {
+	url := "https://fixture.invalid/cover"
+	c := newArtCache(func(func()) {})
+	for _, blur := range []bool{false, true} {
+		key := artworkKey(url, blur)
+		c.add(key, &artwork{size: 8})
+		c.busy[key] = 1
+	}
+	c.imageChanged(url, netease.ImageRevoked)
+	for _, blur := range []bool{false, true} {
+		key := artworkKey(url, blur)
+		if got := c.get(url, blur); got == nil || !got.failed || c.busy[key] != 0 {
+			t.Fatalf("revoked variant %q did not retain its failure", key)
+		}
+	}
+	c.retryFailed(false)
+	if c.size != 0 || len(c.art) != 2 {
+		t.Fatal("automatic recovery cleared definitive image failures")
+	}
+	c.retryFailed(true)
+	if len(c.art) != 0 {
+		t.Fatal("manual refresh could not retry the revoked variants")
+	}
+}
+
+// A small cover must not keep the full pixels of a larger disk-cache variant.
+func TestArtworkVariantDecodesToRequestedSize(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 600, 300))); err != nil {
+		t.Fatal(err)
+	}
+	bmp, _, encoded, err := decodeArtSized(buf.Bytes(), 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, h := bmp.Size(); w != 80 || h != 40 || encoded != 0 {
+		t.Fatalf("small variant retained %d×%d pixels and %d encoded bytes", w, h, encoded)
+	}
+}
+
+// Built rows outside the viewport must leave decode slots for the visible rows.
+func TestCoverRequestsFollowTheViewport(t *testing.T) {
+	a := newTestApp()
+	post := make(chan func(), artJobs)
+	a.art = newArtCache(func(fn func()) { post <- fn })
+	defer a.art.close()
+	requests := make(chan string, artJobs)
+	original := loadArt
+	loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
+		requests <- url
+		return nil, nil, 0, errors.New("fixture has no artwork")
+	}
+	defer func() { loadArt = original }()
+	const above = "https://fixture.invalid/above"
+	const below = "https://fixture.invalid/below"
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.art.beginFrame()
+		ui.Scroll(c).Fill().Children(func() {
+			a.cover(c.Key("above"), above, 80, 22, 4)
+			ui.Box(c).Height(400)
+			a.cover(c.Key("below"), below, 80, 22, 4)
+		})
+	}, 140, 120)
+	if got := wait(t, requests, "visible cover"); got != netease.Sized(above, 80) || len(a.art.busy) != 1 {
+		t.Fatalf("unexpected initial request %q (%d loads)", got, len(a.art.busy))
+	}
+	wait(t, post, "visible cover completion")()
+	tt.Scroll(10, 10, 0, 420)
+	if got := wait(t, requests, "cover after scrolling"); got != netease.Sized(below, 80) {
+		t.Fatalf("scroll requested %q, want the newly visible cover", got)
+	}
+	wait(t, post, "scrolled cover completion")()
 }
 
 // Covers stay under the limit however long since they showed. They went
