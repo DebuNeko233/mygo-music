@@ -108,7 +108,7 @@ func (m *timedListLayout) measure(lines []lyrics.Line, first, last int, st lines
 }
 
 func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, cur int, st linesStyle, foot func()) {
-	box := scroll.LayoutBounds()
+	box := st.viewport(scroll.LayoutBounds())
 	if box.W <= 0 || box.H <= 0 {
 		scroll.Children(func() { ui.Box(c).Height(1) })
 		c.AnimationFrame()
@@ -216,10 +216,12 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	if !st.browsing {
 		a.lyricAt = cur
 	}
+	heightChanged := st.centerShort && box.H != a.lyricViewportH
 	a.lyricViewportW, a.lyricViewportH = box.W, box.H
 	// A distant seek jumps directly to its newly measured neighborhood.
+	settledResize := heightChanged && !changedLine && !m.manual && !g.pending && g.settleAt.IsZero()
 	snap := follow && (initialFollow || replaced || resized && (!st.immersive || !g.posed) ||
-		lyricShouldSnap(c, target, s.Y, box.H, false) || target > s.MaxY ||
+		settledResize || lyricShouldSnap(c, target, s.Y, box.H, false) || target > s.MaxY ||
 		intro.gap.intro && abs32(target-s.Y) > 0.5)
 	if snap {
 		s.Y, *g = target, lyricGlide{}

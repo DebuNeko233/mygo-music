@@ -75,6 +75,70 @@ func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
 	}
 }
 
+// Entering or leaving a tall window must not paint lyrics at the previous height.
+func TestNowPlayingLyricsUseResizedHeightOnFirstFrame(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		for _, count := range []int{0, 1, 28, timedListThreshold + 1} {
+			t.Run(fmt.Sprintf("immersive=%t/rows=%d", immersive, count), func(t *testing.T) {
+				a := tallLyricsApp(t)
+				a.settings.LyricEdgeFade = immersive
+				a.settings.HotComments = false
+				text := lyrics.InstrumentalText
+				lines := make([]lyrics.Line, count)
+				for i := range lines {
+					lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("第%d句", i)}
+				}
+				if count > 0 {
+					row := lines[count/2]
+					a.pl.Hold(row.At)
+					text = row.Text
+				}
+				a.pl.SetLyrics(lines)
+
+				var tt *ui.Tester
+				findY := func() float32 {
+					t.Helper()
+					r, ok := tt.Find(text)
+					if !ok {
+						t.Fatalf("lyric %q was missing during resize", text)
+					}
+					return r.Y
+				}
+				var targetHeight float32
+				var resizedBuild bool
+				var painted []float32
+				tt = ui.NewTesterWith(func(c *ui.Context) {
+					_, h := c.Size()
+					if h == targetHeight {
+						// The tester still exposes the preceding paint when it
+						// starts the next build at the new size.
+						if resizedBuild {
+							painted = append(painted, findY())
+						}
+						resizedBuild = true
+					}
+					a.view(c)
+				}, 900, 650, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+				tt.SetScale(0.15)
+				for _, size := range [][2]int{{1728, 1117}, {900, 650}} {
+					targetHeight, resizedBuild, painted = float32(size[1]), false, painted[:0]
+					before := findY()
+					tt.SetSize(size[0], size[1])
+					settled := findY()
+					if abs32(settled-before) < 100 {
+						t.Fatalf("the resize did not move the lyric from %.1f", before)
+					}
+					for _, y := range painted {
+						if abs32(y-settled) > 1 {
+							t.Fatalf("at %v: painted lyric at %.1f before settling at %.1f", size, y, settled)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
 // Opening at the end of a song puts the current lyric at the same inset as a middle verse.
 func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 	for _, immersive := range []bool{false, true} {
