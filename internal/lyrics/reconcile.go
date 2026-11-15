@@ -73,13 +73,60 @@ func buildDisplay(lrc, translation, yrc string, metadata []Line, includeMetadata
 // Punctuation alone cannot displace usable LRC. Once a source is selected,
 // keep all its rows, including punctuation and lines without word timings.
 func preferYRC(original, words []Line) bool {
-	usable := func(line Line) bool {
-		return line.Kind == Sung && strings.ContainsFunc(line.Text, func(r rune) bool {
-			return unicode.IsLetter(r) || unicode.IsNumber(r)
-		})
+	if slices.ContainsFunc(words, func(line Line) bool { return line.Timed && usableSungLine(line) }) {
+		return !shortAndDriftedYRC(original, words)
 	}
-	return slices.ContainsFunc(words, func(line Line) bool { return line.Timed && usable(line) }) ||
-		!slices.ContainsFunc(original, usable) && slices.ContainsFunc(words, func(line Line) bool { return line.Kind == Sung })
+	return !slices.ContainsFunc(original, usableSungLine) && slices.ContainsFunc(words, func(line Line) bool { return line.Kind == Sung })
+}
+
+func usableSungLine(line Line) bool {
+	return line.Kind == Sung && strings.ContainsFunc(line.Text, func(r rune) bool {
+		return unicode.IsLetter(r) || unicode.IsNumber(r)
+	})
+}
+
+// A shorter YRC can be intentional. Fall back only when it omits at least
+// four rows and a quarter of the lyrics, and most of its rows are off by
+// at least three seconds from every LRC occurrence of the same text.
+func shortAndDriftedYRC(original, words []Line) bool {
+	countSung := func(lines []Line) int {
+		n := 0
+		for _, line := range lines {
+			if usableSungLine(line) {
+				n++
+			}
+		}
+		return n
+	}
+	nLRC, nYRC := countSung(original), countSung(words)
+	needed := max(4, nYRC/2+1)
+	if nYRC < needed || nLRC-nYRC < 4 || nYRC*4 > nLRC*3 {
+		return false
+	}
+
+	byText := make(map[string][]time.Duration)
+	for _, line := range original {
+		if usableSungLine(line) {
+			byText[line.Text] = append(byText[line.Text], line.At)
+		}
+	}
+	const drift = 3 * time.Second
+	for _, line := range words {
+		times := byText[line.Text]
+		if line.Kind != Sung || len(times) == 0 {
+			continue
+		}
+		// Repeated choruses can match any occurrence. Only count a row
+		// as drifted if no occurrence is close to its cue.
+		i := sort.Search(len(times), func(i int) bool { return times[i] > line.At-drift })
+		if i == len(times) || times[i] >= line.At+drift {
+			needed--
+			if needed == 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func appendMetadata(lines, other []Line) []Line {

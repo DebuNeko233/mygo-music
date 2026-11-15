@@ -1,7 +1,9 @@
 package lyrics
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +56,66 @@ func TestReconcileCachedPartialYRCUsesOnlyYRC(t *testing.T) {
 		if cur != tc.current || next != tc.next {
 			t.Errorf("position at %d ms = %d, %d, want %d, %d", tc.ms, cur, next, tc.current, tc.next)
 		}
+	}
+}
+
+// Blossom's cached YRC skipped the first line and was far out of sync with the complete LRC.
+func TestReconcileCachedBlossomFallsBackToLRC(t *testing.T) {
+	data, err := os.ReadFile("testdata/blossom.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cached struct{ LRC, Translation, YRC []string }
+	if err := json.Unmarshal(data, &cached); err != nil {
+		t.Fatal(err)
+	}
+	lrc, yrc := strings.Join(cached.LRC, "\n"), strings.Join(cached.YRC, "\n")
+	lines, display := BuildDisplay(lrc, strings.Join(cached.Translation, "\n"), yrc)
+	if len(lines) != 48 || display.FirstSung() != 4 {
+		t.Fatalf("want 48 LRC rows after four credits, got %d rows and first sung index %d", len(lines), display.FirstSung())
+	}
+	for i, want := range parseLRC(lrc)[4:] {
+		got := lines[i]
+		if got.At != want.At || got.Text != want.Text || got.Timed || got.Translation != fmt.Sprintf("Translation %02d", i+1) {
+			t.Fatalf("line %d lost its LRC text, cue or translation: %+v", i, got)
+		}
+	}
+	if cur, next := display.Position(24450 * time.Millisecond); cur != 4 || next != 5 {
+		t.Fatalf("at 24.45s got current %d, next %d, want the first and second LRC rows", cur, next)
+	}
+}
+
+// Missing rows and clock drift both need strong evidence before YRC loses to LRC.
+func TestReconcileRetainsYRCWithoutBothFallbackSignals(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		count, shift int
+		repeated     bool
+	}{
+		{"missing rows only", 10, 0, false},
+		{"drift only", 20, 4, false},
+		{"small drift", 10, 2, false},
+		{"small share of missing rows", 16, 4, false},
+		{"nearby repetition", 10, 20, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var lrc, yrc strings.Builder
+			for i := range 20 {
+				id, at := i, i*10
+				if tc.repeated {
+					id %= 2
+				}
+				fmt.Fprintf(&lrc, "[%02d:%02d]Line %d\n", at/60, at%60, id)
+				if i < tc.count {
+					ms := 1000 * (at + tc.shift)
+					fmt.Fprintf(&yrc, "[%d,750](%d,750,0)Line %d\n", ms, ms, id)
+				}
+			}
+			lines, _ := BuildDisplay(lrc.String(), "", yrc.String())
+			if len(lines) != tc.count || !lines[0].Timed || lines[0].At != time.Duration(tc.shift)*time.Second {
+				t.Fatalf("want %d YRC rows starting at %ds, got %d rows", tc.count, tc.shift, len(lines))
+			}
+		})
 	}
 }
 
