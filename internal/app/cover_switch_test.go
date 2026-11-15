@@ -100,7 +100,7 @@ func TestCoverPrefetchSkipsUnavailableNext(t *testing.T) {
 	a.network.offline = false
 	// Next would wrap to a different cover if the feed were absent.
 	a.pl.Next()
-	a.art.invalidate(netease.Sized(current, 600))
+	a.art.invalidate(netease.Sized(current, 600), false)
 	a.art.add(netease.Sized(a.pl.Current().Album.PicURL, 600)+"#backdrop", &artwork{})
 	a.pl.AttachRadio("radio", func(func([]netease.Track)) {})
 	a.playbackArtwork(a.pl.Current().Album.PicURL, nowPlayingCoverRequest)
@@ -368,7 +368,7 @@ func TestCoverSwitchAfterHiddenPane(t *testing.T) {
 func TestCoverWaitsForTheLatestArtwork(t *testing.T) {
 	a, tt, arts := paintedCoverApp(t, 4, false)
 	for _, tr := range a.pl.Queue()[1:] {
-		a.art.invalidate(netease.Sized(tr.Album.PicURL, 600))
+		a.art.invalidate(netease.Sized(tr.Album.PicURL, 600), false)
 		// Hold the requests without starting workers.
 		a.art.busy[netease.Sized(tr.Album.PicURL, 600)+"#backdrop"] = 1
 	}

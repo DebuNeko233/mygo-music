@@ -28,6 +28,7 @@ type artwork struct {
 	backdrop  *ui.Bitmap
 	tint      ui.Color // the cover's most vivid color
 	failed    bool
+	stale     bool      // newer image bytes are ready to load
 	used      time.Time // when it was last asked for
 	loaded    time.Time
 	retryAt   time.Time // next refresh attempt after a temporary failure
@@ -160,7 +161,7 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 	}
 	if a := current; a != nil {
 		a.used = now
-		if a.failed || a.loaded.IsZero() || now.Sub(a.loaded) < artRefreshAfter || now.Before(a.retryAt) {
+		if a.failed || now.Before(a.retryAt) || !a.stale && (a.loaded.IsZero() || now.Sub(a.loaded) < artRefreshAfter) {
 			return a
 		}
 	}
@@ -520,14 +521,29 @@ func (c *artCache) retryFailed(manual bool) {
 		}
 	}
 }
-func (c *artCache) invalidate(url string) {
+
+// A replacement keeps the old bitmap visible until its successor decodes.
+func (c *artCache) invalidate(url string, replacement bool) {
 	for _, key := range []string{url, url + "#backdrop"} {
-		if a := c.art[key]; a != nil {
-			c.size -= a.size
+		// A queued result may still contain the previous bytes.
+		delete(c.busy, key)
+		current := c.art[key]
+		if replacement {
+			held := current
+			if held == nil {
+				held = c.gone[key].Value()
+			}
+			if held != nil && held.bmp != nil {
+				held.stale = true
+				held.retryAt = time.Time{}
+				continue
+			}
+		}
+		if current != nil {
+			c.size -= current.size
 			delete(c.art, key)
 		}
 		delete(c.gone, key)
-		delete(c.busy, key)
 	}
 }
 

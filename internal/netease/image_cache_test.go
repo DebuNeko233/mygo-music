@@ -126,6 +126,50 @@ func TestImageCacheStaleThenConditionalRequest(t *testing.T) {
 	}
 }
 
+// A replacement notification must let its consumer load fresh bytes instead of joining the stale flight.
+func TestImageCacheNotifiesAfterReplacementIsReadable(t *testing.T) {
+	old := coverBytes(t)
+	var fresh bytes.Buffer
+	if err := png.Encode(&fresh, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	server, store := imageFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "max-age=3600")
+		w.Write(fresh.Bytes())
+	})
+	url := server.URL + "/cover"
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", UserAgent)
+	content := sha256.Sum256(old)
+	hash := hex.EncodeToString(content[:])
+	store.Put("content", hash, old, 0)
+	data, _ := json.Marshal(imageRecord{Content: hash, Expires: time.Unix(1, 0)})
+	store.Put("requests", imageIdentity(req), data, 0)
+
+	type notification struct {
+		url         string
+		replacement bool
+		body        []byte
+		err         error
+	}
+	notified := make(chan notification, 1)
+	UseImageCache(store, func(url string, replacement bool) {
+		b, err := Fetch(url)
+		notified <- notification{url, replacement, b, err}
+	})
+	if b, err := Fetch(url); err != nil || !bytes.Equal(b, old) {
+		t.Errorf("did not serve old cover while validating: %v", err)
+	}
+	select {
+	case update := <-notified:
+		if update.url != url || !update.replacement || update.err != nil || !bytes.Equal(update.body, fresh.Bytes()) {
+			t.Fatalf("notification did not expose the replacement: %q, %v, %v", update.url, update.replacement, update.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no replacement notification")
+	}
+}
+
 // Explicit HTTP prohibitions never become persistent image cache entries.
 func TestImageCacheHonorsHTTPPolicy(t *testing.T) {
 	for _, policy := range []string{"no-store", "private", "vary"} {
