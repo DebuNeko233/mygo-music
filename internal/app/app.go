@@ -147,6 +147,8 @@ type app struct {
 	npOpen                         bool      // Now Playing as it last showed: open or not
 	npChangedAt                    time.Time // when it last opened or closed
 	npPane                         int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
+	npTabsPointer                  ui.Point
+	npTabsUntil                    time.Time
 	lyricScroll                    ui.ScrollState
 	lyricGlide                     lyricGlide
 	lyricBrowseUntil               time.Time

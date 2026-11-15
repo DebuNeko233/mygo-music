@@ -26,6 +26,7 @@ func (a *app) npState(c *ui.Context) (open, settled bool) {
 	now := c.Now()
 	if open != a.npOpen {
 		a.npOpen, a.npChangedAt = open, now
+		a.npTabsUntil = time.Time{}
 		// A build once it is at rest: to stop painting what it covers, or
 		// itself once gone.
 		c.After(npSettle)
@@ -152,7 +153,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		if a.npPane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
-			reveal(a.npTabsRow(c, npTabsAnchor(c, w, h)), pointerIn).Children(func() { a.paneTabs(c) })
+			a.npTabsRow(c, npTabsAnchor(c, w, h), pointerIn).Children(func() { a.paneTabs(c) })
 			_, sunk := npCoverLayout(w, h)
 			reveal(ui.Row(c.Key("stage-style-row")).Absolute().Top(topBar(c)+sunk).Right(npSideX(w)).Height(npTabsHeight), pointerIn).
 				Children(func() { a.stageStyleButton(c) })
@@ -186,7 +187,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 			// center even when the cover shrinks below the controls' width.
 			ui.Column(c).Width(side).Padding(coverSunk, 0, 0, 0).Gap(0).Children(func() {
 				anchor := ui.Box(c.Key("tabs-anchor")).Height(npTabsHeight)
-				reveal(a.npTabsRow(c, anchor), pointerIn).Children(func() { a.paneTabs(c) })
+				a.npTabsRow(c, anchor, pointerIn).Children(func() { a.paneTabs(c) })
 				ui.Box(c).Height(npTabsGap)
 				a.npCover(c, tr, art, coverSize)
 
@@ -300,10 +301,39 @@ func (a *app) npTabsWidth(c *ui.Context) float32 {
 // npTabsRow follows the cover's axis, with a 6-DIP optical shift right.
 // Clamp the visible buttons, without spare width for the count; that
 // transparent space can push the group inward with wider Linux fonts.
-func (a *app) npTabsRow(c *ui.Context, anchor ui.Element) ui.Element {
+func (a *app) npTabsRow(c *ui.Context, anchor ui.Element, pointerIn bool) ui.Element {
 	width := a.npTabsWidth(c)
-	return ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
+	row := ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
 		Width(width).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
+	playing := a.pl.Playing()
+	idle := a.npTabsIdle(c, playing)
+	return reveal(row, !playing || (pointerIn && !idle)).IgnoreInput(idle).AccessHidden(idle)
+}
+
+const npTabsIdleDelay = 3 * time.Second
+
+func (a *app) npTabsIdle(c *ui.Context, playing bool) bool {
+	if !playing {
+		a.npTabsUntil = time.Time{}
+		return false
+	}
+	// Use window coordinates so animating the page or switching panes
+	// cannot look like pointer movement.
+	x, y, inWindow := c.Root().PointerPosition()
+	if !inWindow {
+		a.npTabsUntil = time.Time{}
+		return false
+	}
+	pointer := ui.Point{X: x, Y: y}
+	if a.npTabsUntil.IsZero() || pointer != a.npTabsPointer {
+		a.npTabsPointer = pointer
+		a.npTabsUntil = c.Now().Add(npTabsIdleDelay)
+	}
+	if left := a.npTabsUntil.Sub(c.Now()); left > 0 {
+		c.After(left)
+		return false
+	}
+	return true
 }
 
 // reveal fades e in while the pointer is in the window, and out when it
