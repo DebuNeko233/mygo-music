@@ -1,5 +1,26 @@
 # 更新日志
 
+## 0.2.12
+
+### What's Changed
+* fix: macOS 设置始终以普通窗口打开 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/72
+* feat: 分开设置主页面和播放页背景透明度 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/71
+* fix: 封面刷新时保留旧图直到新图解码完成 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/70
+* fix: 修复正在播放页时间未逐秒更新 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/74
+* feat: 沉浸式歌词与播放页滚动优化 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/69
+* fix: 避免封面反复请求和可见封面闪烁 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/75
+* feat: 桌面歌词支持逐字高亮 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/76
+* feat: 支持桌面歌词水平对齐设置 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/77
+* chore(deps): bump github.com/cloudflare/circl from 1.6.2 to 1.6.3 by @dependabot[bot] in https://github.com/zhangnjsd/mygo-music/pull/78
+* perf: preload backdrop images before first paint by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/79
+* fix: keep instrumental notices on one line in narrow windows by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/80
+* chore: upgrade MyGo to v0.9.2 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/81
+
+### New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/zhangnjsd/mygo-music/pull/78
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.11...v0.2.12
+
 ## 0.2.11
 
 ### What's Changed
