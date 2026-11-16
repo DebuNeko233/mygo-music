@@ -55,11 +55,11 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 // The idle timer must hide the same controls as leaving the window, including the close and stage-style buttons.
 func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		pane int
+		name, activeTab string
+		pane            int
 	}{
-		{"lyrics", paneLyrics},
-		{"stage", paneStage},
+		{"lyrics", "歌词", paneLyrics},
+		{"stage", "律动", paneStage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
@@ -79,17 +79,19 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			tt.Move(680, 260)
 			tt.Advance(npSettle)
 
-			labels := []string{"待播清单", "关闭"}
+			// The selected tab has a painted background even without CJK glyphs.
+			const closeLabel = "关闭"
+			labels := []string{tc.activeTab, closeLabel}
 			if tc.pane == paneStage {
 				labels = append(labels, "律动效果")
 			}
-			regions := make([]image.Rectangle, len(labels))
-			for i, label := range labels {
+			regions := make(map[string]image.Rectangle, len(labels))
+			for _, label := range labels {
 				box, ok := tt.Find(label)
 				if !ok {
 					t.Fatalf("can't locate %q", label)
 				}
-				regions[i] = image.Rect(int(box.X*scale), int(box.Y*scale), int((box.X+box.W)*scale), int((box.Y+box.H)*scale))
+				regions[label] = image.Rect(int(box.X*scale), int(box.Y*scale), int((box.X+box.W)*scale), int((box.Y+box.H)*scale))
 			}
 			shown := tt.Image()
 			tt.Move(-1, -1)
@@ -98,18 +100,19 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			check := func(want *image.RGBA) {
 				t.Helper()
 				frame := tt.Image()
-				for i, region := range regions {
-					if !sameNowPlayingRegion(frame, want, region) {
-						t.Errorf("%q differs from the expected pointer state", labels[i])
+				for _, label := range labels {
+					if !sameNowPlayingRegion(frame, want, regions[label]) {
+						t.Errorf("%q differs from the expected pointer state", label)
 					}
 				}
 			}
-			for i, region := range regions {
-				if sameNowPlayingRegion(shown, left, region) {
-					t.Fatalf("%q stayed visible after the pointer left", labels[i])
+			for _, label := range labels {
+				if sameNowPlayingRegion(shown, left, regions[label]) {
+					t.Errorf("%q did not change after the pointer left", label)
 				}
 			}
-			_, queueAccessibleOnLeave := tt.AccessByRole(ui.RoleButton, labels[0])
+			const queueLabel = "待播清单"
+			_, queueAccessibleOnLeave := tt.AccessByRole(ui.RoleButton, queueLabel)
 
 			tt.Move(680, 260)
 			tt.Advance(time.Second)
@@ -119,7 +122,7 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			check(shown)
 			tt.Advance(350 * time.Millisecond)
 			check(left)
-			if _, ok := tt.AccessByRole(ui.RoleButton, labels[0]); ok != queueAccessibleOnLeave {
+			if _, ok := tt.AccessByRole(ui.RoleButton, queueLabel); ok != queueAccessibleOnLeave {
 				t.Error("the queue tab is accessible in only one of the two hidden states")
 			}
 			tt.Move(682, 260)
@@ -135,7 +138,7 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			tt.Frame()
 			queueShown := tt.Image()
 			tt.Advance(3 * time.Second)
-			if !sameNowPlayingRegion(tt.Image(), queueShown, regions[1]) {
+			if !sameNowPlayingRegion(tt.Image(), queueShown, regions[closeLabel]) {
 				t.Error("the close button faded while idling on the queue")
 			}
 		})
