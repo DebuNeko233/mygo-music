@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -98,11 +99,10 @@ type app struct {
 	recentTab int
 
 	// heard is the actual audio session; reports leave in playback order.
-	heard         heardPlay
-	reportOnce    sync.Once
-	reportQueue   chan func()
-	reportDone    chan struct{}
-	reportRestore func()
+	heard           heardPlay
+	reportQueue     chan func(playReporter)
+	reportDone      chan struct{}
+	newPlayReporter func() playReporter
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
@@ -146,12 +146,20 @@ type app struct {
 	npOpen                         bool      // Now Playing as it last showed: open or not
 	npChangedAt                    time.Time // when it last opened or closed
 	npPane                         int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
+	npTabsPointer                  ui.Point
+	npTabsUntil                    time.Time
 	lyricScroll                    ui.ScrollState
 	lyricGlide                     lyricGlide
+	lyricBrowseUntil               time.Time
+	lyricResizeAnchor              lyricReadingAnchor
+	lyricBlurPass                  *ui.Canvas
 	paintedLyric                   paintedLyric
 	timedList                      timedListLayout
 	lyricAt                        int
 	lyricTrack                     int64
+	lyricSeekRevision              uint64
+	lyricClickSeekRevision         uint64
+	lyricFirst                     *lyrics.Line
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
 	lyricWindowW, lyricWindowH     float32 // window size whose reflow has been scheduled
 	queueList                      ui.ListState

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"netease-music-mygo/internal/netease"
@@ -17,6 +18,30 @@ type reportedPlay struct {
 	end    string
 	source netease.PlaySource
 	start  bool
+}
+
+type playReportStubs struct {
+	start     func(int64, netease.PlaySource) error
+	dawnStart func(netease.Track, int, string, netease.PlaySource) error
+	dawnEnd   func(netease.Track, time.Duration, string, int, string, netease.PlaySource) error
+}
+
+func stubPlayReports(a *app) *playReportStubs {
+	stubs := &playReportStubs{}
+	a.newPlayReporter = func() playReporter { return *stubs }
+	return stubs
+}
+
+func (s playReportStubs) PlayStart(id int64, source netease.PlaySource) error {
+	return s.start(id, source)
+}
+
+func (s playReportStubs) DawnStart(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
+	return s.dawnStart(track, bitrate, level, source)
+}
+
+func (s playReportStubs) DawnEnd(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+	return s.dawnEnd(track, played, end, bitrate, level, source)
 }
 
 // Playback transitions, not frames or position samples, decide when a play
@@ -76,15 +101,16 @@ func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 	a.profile = &netease.Profile{}
 	var sent []reportedPlay
 	done := make(chan struct{}, 2)
-	reportPlayStart = func(id int64, source netease.PlaySource) error {
+	stubs := stubPlayReports(a)
+	stubs.start = func(id int64, source netease.PlaySource) error {
 		sent = append(sent, reportedPlay{id: id, source: source, start: true})
 		done <- struct{}{}
 		return errors.New("offline")
 	}
-	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
+	stubs.dawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
 		return nil
 	}
-	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+	stubs.dawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
 		if len(sent) != 1 || !sent[0].start {
 			t.Errorf("play arrived before startplay completed: %+v", sent)
 		}
@@ -92,11 +118,6 @@ func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 		done <- struct{}{}
 		return nil
 	}
-	t.Cleanup(func() {
-		reportPlayStart = netease.ReportPlayStart
-		reportDawnStart = netease.ReportDawnStart
-		reportDawnEnd = netease.ReportDawnEnd
-	})
 	track := netease.Track{ID: 7}
 	source := player.PlaySource{Source: "list", ID: 42, Alg: "itembased"}
 	a.playback(player.PlaybackEvent{Track: track, Source: source, Started: true})
@@ -120,17 +141,13 @@ func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 	a := newTestApp()
 	a.profile = &netease.Profile{}
 	done := make(chan struct{})
-	reportPlayStart = func(id int64, source netease.PlaySource) error { return nil }
-	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
-	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+	stubs := stubPlayReports(a)
+	stubs.start = func(id int64, source netease.PlaySource) error { return nil }
+	stubs.dawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
+	stubs.dawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
 		close(done)
 		return nil
 	}
-	t.Cleanup(func() {
-		reportPlayStart = netease.ReportPlayStart
-		reportDawnStart = netease.ReportDawnStart
-		reportDawnEnd = netease.ReportDawnEnd
-	})
 	track := netease.Track{ID: 7}
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
 	a.playback(player.PlaybackEvent{Track: track, End: player.Playthrough, Played: 30 * time.Second})
@@ -154,72 +171,92 @@ func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 // A slow start request cannot delay later input, and closing its queue cannot
 // panic when that request subsequently finishes.
 func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
-	a := newTestApp()
-	a.profile = &netease.Profile{}
-	started := make(chan struct{})
-	release := make(chan struct{})
-	requestFinished := make(chan struct{})
-	oldDawnEnd := reportDawnEnd
-	oldEnd := make(chan struct{})
-	var endOnce sync.Once
-	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
-		endOnce.Do(func() { close(oldEnd) })
-		return oldDawnEnd(track, played, end, bitrate, level, source)
-	}
-	var once sync.Once
-	reportPlayStart = func(id int64, source netease.PlaySource) error {
-		once.Do(func() { close(started) })
-		<-release
-		return nil
-	}
-	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error {
-		select {
-		case <-requestFinished:
-		default:
-			close(requestFinished)
+	synctest.Test(t, func(t *testing.T) {
+		a := newTestApp()
+		a.profile = &netease.Profile{}
+		started := make(chan struct{})
+		sent := make(chan int64, 128)
+		release := make(chan struct{})
+		letGo := sync.OnceFunc(func() { close(release) })
+		var workers []<-chan struct{}
+		var once sync.Once
+		stubs := stubPlayReports(a)
+		stubs.start = func(id int64, source netease.PlaySource) error {
+			once.Do(func() { close(started) })
+			<-release
+			return nil
 		}
-		return nil
-	}
-	t.Cleanup(func() {
-		reportPlayStart = netease.ReportPlayStart
-		reportDawnStart = netease.ReportDawnStart
-		reportDawnEnd = netease.ReportDawnEnd
-	})
-	track := netease.Track{ID: 7}
-	a.playback(player.PlaybackEvent{Track: track, Started: true})
-	<-started
-	for range 64 {
-		a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+		stubs.dawnStart = func(netease.Track, int, string, netease.PlaySource) error { return nil }
+		stubs.dawnEnd = func(track netease.Track, _ time.Duration, _ string, _ int, _ string, _ netease.PlaySource) error {
+			sent <- track.ID
+			return nil
+		}
+		defer func() {
+			letGo()
+			if done := a.stopPlayReports(); done != nil {
+				<-done
+			}
+			for _, done := range workers {
+				<-done
+			}
+			synctest.Wait()
+		}()
+
+		track := netease.Track{ID: 7}
 		a.playback(player.PlaybackEvent{Track: track, Started: true})
-	}
-	oldDone := a.reportDone
-	finished := make(chan struct{})
-	go func() { a.flushPlayReports(); close(finished) }()
-	select {
-	case <-finished:
-	case <-time.After(3 * time.Second):
-		t.Fatal("flush did not respect its deadline")
-	}
-	close(release)
-	<-requestFinished
-	// The old worker's final queued report observes the end stub before cleanup.
-	<-oldEnd
-	// Wait for the timed-out worker too; restoring its stubs during cleanup
-	// raced the requests that had outlived the first flush. Its queue is no
-	// longer reachable through the app after stopPlayReports.
-	<-oldDone
-	a.playback(player.PlaybackEvent{Track: track, Started: true})
-	a.flushPlayReports()
-	if a.reportQueue != nil || a.reportDone != nil {
-		t.Fatal("the queue outlived the flush that ended it")
-	}
-	// An event after the flush starts a queue of its own instead of sending on
-	// the closed one.
-	a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
-	if a.reportQueue == nil {
-		t.Fatal("the event after the flush went nowhere")
-	}
-	a.flushPlayReports()
+		workers = append(workers, a.reportDone)
+		<-started
+		for range 64 {
+			a.playback(player.PlaybackEvent{Track: track, End: player.MovedOn, Played: 30 * time.Second})
+			a.playback(player.PlaybackEvent{Track: track, Started: true})
+		}
+		shutdownAt := time.Now()
+		finished := make(chan struct{})
+		go func() { a.flushPlayReports(); close(finished) }()
+		select {
+		case <-finished:
+		case <-time.After(3 * time.Second):
+			letGo()
+			<-finished
+			t.Fatal("flush did not respect its deadline")
+		}
+		if waited := time.Since(shutdownAt); waited < 2*time.Second {
+			t.Fatalf("flush abandoned the blocked worker after %v", waited)
+		}
+		if a.reportQueue != nil || a.reportDone != nil {
+			t.Fatal("the queue outlived the flush that ended it")
+		}
+		// While the old worker is blocked, an event starts a fresh queue.
+		next := netease.Track{ID: 8}
+		a.playback(player.PlaybackEvent{Track: next, Started: true})
+		a.playback(player.PlaybackEvent{Track: next, End: player.MovedOn, Played: 30 * time.Second})
+		if a.reportQueue == nil {
+			t.Fatal("the event after the flush went nowhere")
+		}
+		workers = append(workers, a.reportDone)
+		letGo()
+		a.flushPlayReports()
+		// The timed-out worker is detached from the app; wait for it too
+		// before closing the reports channel or releasing the test stubs.
+		for _, done := range workers {
+			<-done
+		}
+		close(sent)
+		var oldReports, newReports int
+		for id := range sent {
+			switch id {
+			case track.ID:
+				oldReports++
+			case next.ID:
+				newReports++
+			default:
+				t.Fatalf("unexpected report for track %d", id)
+			}
+		}
+		if oldReports == 0 || newReports != 1 {
+			t.Fatalf("sent %d old reports and %d new reports", oldReports, newReports)
+		}
+	})
 }
 
 // A started event must not finish the new session through a stale player pointer.
@@ -246,21 +283,17 @@ func TestAccountChangeDoesNotWaitForItsReports(t *testing.T) {
 	letGo := sync.OnceFunc(func() { close(release) })
 	started := make(chan struct{})
 	var once sync.Once
-	reportPlayStart = func(id int64, source netease.PlaySource) error {
+	stubs := stubPlayReports(a)
+	stubs.start = func(id int64, source netease.PlaySource) error {
 		once.Do(func() { close(started) })
 		<-release
 		return nil
 	}
-	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
-	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+	stubs.dawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
+	stubs.dawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
 		return nil
 	}
-	t.Cleanup(func() {
-		letGo()
-		reportPlayStart = netease.ReportPlayStart
-		reportDawnStart = netease.ReportDawnStart
-		reportDawnEnd = netease.ReportDawnEnd
-	})
+	t.Cleanup(letGo)
 	track := netease.Track{ID: 7}
 	a.playback(player.PlaybackEvent{Track: track, Started: true})
 	<-started
@@ -291,21 +324,17 @@ func reportFixture(t *testing.T) (*app, chan reportedPlay) {
 	a := newTestApp()
 	a.profile = &netease.Profile{}
 	sent := make(chan reportedPlay, 16)
-	reportPlayStart = func(id int64, source netease.PlaySource) error {
+	stubs := stubPlayReports(a)
+	stubs.start = func(id int64, source netease.PlaySource) error {
 		sent <- reportedPlay{id: id, source: source, start: true}
 		return nil
 	}
-	reportDawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
-	reportDawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
+	stubs.dawnStart = func(track netease.Track, bitrate int, level string, source netease.PlaySource) error { return nil }
+	stubs.dawnEnd = func(track netease.Track, played time.Duration, end string, bitrate int, level string, source netease.PlaySource) error {
 		sent <- reportedPlay{id: track.ID, played: played, end: end, source: source}
 		return nil
 	}
-	t.Cleanup(func() {
-		a.flushPlayReports()
-		reportPlayStart = netease.ReportPlayStart
-		reportDawnStart = netease.ReportDawnStart
-		reportDawnEnd = netease.ReportDawnEnd
-	})
+	t.Cleanup(a.flushPlayReports)
 	return a, sent
 }
 

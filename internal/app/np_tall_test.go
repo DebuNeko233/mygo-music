@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"image"
 	"image/png"
 	"math"
 	"os"
@@ -20,6 +21,7 @@ func tallLyricsApp(t *testing.T) *app {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
+	a.settings.LyricEdgeFade = false
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "高窗口布局", Duration: 150000}})
 	var lines []lyrics.Line
 	for i := range 30 {
@@ -39,6 +41,220 @@ func settleTallLyrics(tt *ui.Tester) {
 		tt.Advance(time.Second)
 		tt.Frame()
 		tt.Frame()
+	}
+}
+
+// Instrumental credits use the same reading area when immersive lyrics is toggled.
+func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
+	a := tallLyricsApp(t)
+	a.settings.HotComments = false
+	const credit = "作曲：A"
+	a.pl.RefreshLyrics(1, "[00:01]"+credit, "", "")
+	tt := ui.NewTesterWith(a.view, 960, 700, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	tt.SetScale(0.25)
+	bounds := func(text string) ui.Rect {
+		t.Helper()
+		r, ok := tt.Find(text)
+		if !ok {
+			t.Fatalf("missing %q in the instrumental panel", text)
+		}
+		return r
+	}
+	title, creditRow := bounds(lyrics.InstrumentalText), bounds(credit)
+	if title.X != creditRow.X || title.Y >= creditRow.Y {
+		t.Fatalf("title and credit do not share a left edge: %+v, %+v", title, creditRow)
+	}
+	a.settings.LyricEdgeFade = true
+	tt.Frame()
+	if bounds(lyrics.InstrumentalText) != title || bounds(credit) != creditRow {
+		t.Fatal("toggling immersive lyrics moved the instrumental panel")
+	}
+	tt.SetSize(680, 500)
+	if title := bounds(lyrics.InstrumentalText); title.H > 31 {
+		t.Fatalf("the cover's scrollbar inset squeezed the notice in a narrow window: %+v", title)
+	}
+}
+
+// Entering or leaving a tall window must not paint lyrics at the previous height.
+func TestNowPlayingLyricsUseResizedHeightOnFirstFrame(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		for _, count := range []int{0, 1, 28, timedListThreshold + 1} {
+			t.Run(fmt.Sprintf("immersive=%t/rows=%d", immersive, count), func(t *testing.T) {
+				a := tallLyricsApp(t)
+				a.settings.LyricEdgeFade = immersive
+				a.settings.HotComments = false
+				text := lyrics.InstrumentalText
+				lines := make([]lyrics.Line, count)
+				for i := range lines {
+					lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("第%d句", i)}
+				}
+				if count > 0 {
+					row := lines[count/2]
+					a.pl.Hold(row.At)
+					text = row.Text
+				}
+				a.pl.SetLyrics(lines)
+
+				var tt *ui.Tester
+				findY := func() float32 {
+					t.Helper()
+					r, ok := tt.Find(text)
+					if !ok {
+						t.Fatalf("lyric %q was missing during resize", text)
+					}
+					return r.Y
+				}
+				var targetHeight float32
+				var resizedBuild bool
+				var painted []float32
+				tt = ui.NewTesterWith(func(c *ui.Context) {
+					_, h := c.Size()
+					if h == targetHeight {
+						// The tester still exposes the preceding paint when it
+						// starts the next build at the new size.
+						if resizedBuild {
+							painted = append(painted, findY())
+						}
+						resizedBuild = true
+					}
+					a.view(c)
+				}, 900, 650, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+				tt.SetScale(0.15)
+				for _, size := range [][2]int{{1728, 1117}, {900, 650}} {
+					targetHeight, resizedBuild, painted = float32(size[1]), false, painted[:0]
+					before := findY()
+					tt.SetSize(size[0], size[1])
+					settled := findY()
+					if abs32(settled-before) < 100 {
+						t.Fatalf("the resize did not move the lyric from %.1f", before)
+					}
+					for _, y := range painted {
+						if abs32(y-settled) > 1 {
+							t.Fatalf("at %v: painted lyric at %.1f before settling at %.1f", size, y, settled)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+// Opening at the end of a song puts the current lyric at the same inset as a middle verse.
+func TestNowPlayingOpensAtLastLyric(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		for _, count := range []int{30, 120} {
+			t.Run(fmt.Sprintf("immersive=%t/rows=%d", immersive, count), func(t *testing.T) {
+				a := tallLyricsApp(t)
+				a.nowPlaying = false
+				a.settings.LyricEdgeFade = immersive
+				a.settings.HotComments = false
+				lines := make([]lyrics.Line, count)
+				for i := range lines {
+					lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("第 %d 句", i)}
+					if i%3 == 1 {
+						lines[i].Translation = strings.Repeat("换行测试 ", 15)
+					}
+				}
+				last, middle := lines[count-1], lines[count/2]
+				a.pl.Cue([]netease.Track{{ID: 1, Duration: int64(count+2) * 1000}})
+				a.pl.SetLyrics(lines)
+				// Exercise the animated remount that used to enter browsing
+				// mode in long immersive lyrics.
+				reduceMotion := !immersive || count < timedListThreshold
+				tt := ui.NewTesterWith(a.view, 750, 1330, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduceMotion}})
+				tt.SetScale(0.1) // The test inspects layout, so keep software rasterization small.
+				visibleY := func(line lyrics.Line) float32 {
+					t.Helper()
+					row, ok := tt.AccessByRole(ui.RoleButton, line.Text)
+					if !ok || row.Offscreen || !a.lyricBrowseUntil.IsZero() {
+						t.Fatalf("playback lost %q after opening: visible=%t offset=%.1f browsing=%t",
+							line.Text, ok && !row.Offscreen, a.lyricScroll.Y, !a.lyricBrowseUntil.IsZero())
+					}
+					return row.Bounds.Y
+				}
+				openAtEnd := func() float32 {
+					a.pl.Hold(last.At + 2*time.Second)
+					a.nowPlaying = true
+					tt.Frame()
+					visibleY(last)
+					tt.Advance(npSettle)
+					return visibleY(last)
+				}
+				firstOpen := openAtEnd()
+				a.pl.Hold(middle.At)
+				tt.Frame()
+				tt.Advance(time.Second)
+				want := visibleY(middle)
+				a.nowPlaying = false
+				tt.Frame()
+				tt.Advance(npSettle)
+				reopened := openAtEnd()
+				if abs32(firstOpen-want) > 2 || abs32(reopened-want) > 2 {
+					t.Fatalf("last lyric at %.1f on first open and %.1f on reopen, want %.1f", firstOpen, reopened, want)
+				}
+			})
+		}
+	}
+}
+
+// The visible lyric thumb mirrors the cover's left edge and can drag the pane in either mode.
+func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
+	for _, immersive := range []bool{false, true} {
+		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
+			a := tallLyricsApp(t)
+			tt := ui.NewTesterWith(a.view, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			// Scale only the software raster, so full-screen layout tests stay inexpensive.
+			const scale = 0.5
+			tt.SetScale(scale)
+			for _, size := range [][2]int{{1600, 550}, {1728, 1117}} {
+				w, h := size[0], size[1]
+				// Settle the viewport before entering manual mode. Resetting the
+				// song's scroll state would otherwise clear browsing and run
+				// the full-screen Gaussian, which has its own gutter test.
+				a.settings.LyricEdgeFade = false
+				tt.SetSize(w, h)
+				a.seekLyricFollow()
+				tt.Frame()
+				if immersive {
+					a.settings.LyricEdgeFade = true
+					a.lyricBrowseUntil = tt.Now().Add(lyricBrowseDelay)
+					tt.Frame()
+					if a.lyricBlurPass != nil {
+						t.Fatal("manual scrolling ran the automatic blur pass")
+					}
+				}
+				cover, ok := tt.Find("专辑封面")
+				if !ok {
+					t.Fatal("cover missing")
+				}
+				wantRight := float32(w) - cover.X
+				want := int(math.Round(float64(wantRight * scale)))
+				// The native thumb appears when the pointer enters the scroll pane.
+				tt.Move(1, 1)
+				hidden := tt.Image()
+				tt.Move(wantRight-4, float32(h)/2)
+				visible := tt.Image()
+				changed := image.Rectangle{}
+				for y := 0; y < visible.Bounds().Dy(); y++ {
+					for x := want - 8; x < want+8; x++ {
+						if hidden.RGBAAt(x, y) != visible.RGBAAt(x, y) {
+							changed = changed.Union(image.Rect(x, y, x+1, y+1))
+						}
+					}
+				}
+				if changed.Dy() < 12 || abs32(float32(changed.Max.X-want)) > 1 {
+					t.Fatalf("%dx%d: cover left %.1f, want scrollbar right %d, got %v", w, h, cover.X, want, changed)
+				}
+				before := a.lyricScroll.Y
+				x, y := float32(changed.Min.X+changed.Max.X)/(2*scale), float32(changed.Min.Y+changed.Max.Y)/(2*scale)
+				tt.Press(x, y)
+				tt.Move(x, y+32)
+				tt.Release(x, y+32)
+				if a.lyricScroll.Y <= before {
+					t.Fatalf("%dx%d: dragging the thumb did not scroll: %.1f → %.1f", w, h, before, a.lyricScroll.Y)
+				}
+			}
+		})
 	}
 }
 

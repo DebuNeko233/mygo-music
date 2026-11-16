@@ -4,8 +4,38 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/lyrics"
 )
+
+// All three lyric views choose YRC for the whole song and fall back to LRC together.
+func TestLyricViewsShareSelectedSource(t *testing.T) {
+	const lrc = "[00:24.406]Fallback\n[00:24.980]Chorus"
+	const translation = "[00:24.406]Opening translation\n[00:24.980]Shared translation"
+	for _, tc := range []struct{ name, yrc, text, translated, omitted string }{
+		{"YRC", "[25250,3930](25250,3930,0)Chorus", "Chorus", "Shared translation", "Fallback"},
+		{"LRC", "[999999999,500](999999999,500,0)Invalid YRC", "Chorus", "Shared translation", "Invalid YRC"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, pane := shortLyricsApp(nil, 360, 300)
+			a.pl.RefreshLyrics(1, lrc, translation, tc.yrc)
+			a.pl.Hold(26 * time.Second)
+			pane.Frame()
+			stage := ui.NewTesterWith(func(c *ui.Context) { a.stage(c, a.pl.Current(), white) }, 360, 300,
+				ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			desktop := ui.NewTester((&deskLyrics{a: a}).view, 480, 200)
+			for _, view := range []*ui.Tester{pane, stage, desktop} {
+				if !view.HasText(tc.text) || !view.HasText(tc.translated) || view.HasText(tc.omitted) {
+					t.Fatalf("view used the wrong source or lost its translation: %q", view.Texts())
+				}
+			}
+			if tc.name == "LRC" && !pane.HasText("Fallback") {
+				t.Fatal("whole-song fallback lost the LRC-only row")
+			}
+		})
+	}
+}
 
 // Choosing a style from the stage's menu sets its lyrics in it, and
 // choosing 流光 goes back to the classic.

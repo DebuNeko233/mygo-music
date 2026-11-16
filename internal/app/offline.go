@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -66,25 +67,26 @@ var lyricsRequest = netease.Lyrics
 
 type keptLyrics struct{ Original, Translation, Words string }
 
-func (a *app) cachedLyricsFor(scope string) func(int64) (string, string, string, error) {
+func (a *app) cachedLyricsFor(scope string) func(int64, func([]lyrics.Line, lyrics.Display)) (string, string, string, error) {
 	store := a.browseCache
 	fetch := lyricsRequest
-	return func(id int64) (string, string, string, error) {
+	return func(id int64, refresh func([]lyrics.Line, lyrics.Display)) (string, string, string, error) {
 		key := fmt.Sprintf("lyrics/%d", id)
 		epoch := store.Epoch()
 		var kept keptLyrics
 		b, at := store.Read(scope, key)
 		if b != nil && json.Unmarshal(b, &kept) == nil {
-			if time.Since(at) >= 7*24*time.Hour {
+			if refresh != nil && time.Since(at) >= 7*24*time.Hour {
 				go func() {
 					l, t, w, err := fetch(id)
 					if err != nil {
 						return
 					}
 					store.Put(scope, key, cacheBytes(keptLyrics{l, t, w}), epoch)
+					lines, display := lyrics.BuildDisplay(l, t, w)
 					a.post(func() {
 						if fmt.Sprint(a.listenerID()) == scope && store.Epoch() == epoch {
-							a.pl.RefreshLyrics(id, l, t, w)
+							refresh(lines, display)
 						}
 					})
 				}()
@@ -102,7 +104,9 @@ func (a *app) cachedLyricsFor(scope string) func(int64) (string, string, string,
 
 // Bind the loader on the main thread when the account changes; the player
 // captures it when choosing a track, rather than reading UI state on a worker.
-func (a *app) bindOfflineLyrics() { a.pl.FetchLyrics = a.cachedLyricsFor(fmt.Sprint(a.listenerID())) }
+func (a *app) bindOfflineLyrics() {
+	a.pl.FetchCachedLyrics = a.cachedLyricsFor(fmt.Sprint(a.listenerID()))
+}
 
 type recoveryState struct {
 	timer                       *time.Timer

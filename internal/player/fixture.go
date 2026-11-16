@@ -27,7 +27,8 @@ func (p *Player) Cue(tracks []netease.Track) {
 
 // SetLyrics gives the current track lines, as loaded.
 func (p *Player) SetLyrics(lines []lyrics.Line) {
-	p.setLyrics(lines)
+	display := lyrics.NewDisplay(lines)
+	p.setLyrics(display.SungLines(), display)
 }
 
 // Hold makes the player play at pos with nothing to play: its position

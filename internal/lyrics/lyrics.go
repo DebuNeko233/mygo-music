@@ -18,6 +18,8 @@ type Line struct {
 	Text        string
 	Translation string
 	Words       []Word
+	Kind        LineKind // presentation role assigned by NewDisplay
+	classified  bool
 	// Timed says the words carry their own times, as NetEase's word-timed
 	// lyrics give them; else they share the line's time evenly.
 	Timed bool
@@ -31,63 +33,57 @@ type Word struct {
 }
 
 var (
-	lrcTime   = regexp.MustCompile(`\[(\d+):(\d+)(?:[.:](\d+))?\]`)
-	lrcOffset = regexp.MustCompile(`\[offset:\s*([+-]?\d+)\s*\]`)
+	lrcTime   = regexp.MustCompile(`^\[(\d+):(\d+)(?:[.:](\d+))?\]`)
+	lrcOffset = regexp.MustCompile(`^\[offset:\s*([+-]?\d+)\s*\]$`)
 )
+
+const maxLyricTime = 24 * time.Hour
 
 // lrcOffsetOf is the shift the lyrics ask for, in milliseconds: with
 // [offset:+500] every line comes half a second later than it says, as for
 // a file that starts before the part of the recording the times count.
 func lrcOffsetOf(lrc string) time.Duration {
-	m := lrcOffset.FindStringSubmatch(lrc)
-	if m == nil {
-		return 0
+	for line := range strings.Lines(lrc) {
+		tag := lrcOffset.FindStringSubmatch(strings.TrimSpace(strings.TrimPrefix(line, "\ufeff")))
+		if tag == nil {
+			continue
+		}
+		n, err := strconv.ParseInt(tag[1], 10, 64)
+		if err == nil && n >= -maxLyricTime.Milliseconds() && n <= maxLyricTime.Milliseconds() {
+			return time.Duration(n) * time.Millisecond
+		}
 	}
-	n, err := strconv.Atoi(m[1])
-	if err != nil {
-		return 0
-	}
-	return time.Duration(n) * time.Millisecond
+	return 0
 }
 
-// parseLRC reads lyrics in the LRC format, as NetEase serves them: a line
-// may carry several times, and credits come as lines of their own.
+// parseLRC consumes only leading timestamps, leaving bracketed text in the lyric intact.
 func parseLRC(lrc string) []Line {
 	var out []Line
 	offset := lrcOffsetOf(lrc)
-	for _, raw := range strings.Split(lrc, "\n") {
-		times := lrcTime.FindAllStringSubmatchIndex(raw, -1)
-		if len(times) == 0 {
-			continue
-		}
-		text := strings.TrimSpace(raw[times[len(times)-1][1]:])
-		for _, m := range times {
-			min, err := strconv.Atoi(raw[m[2]:m[3]])
-			if err != nil || min < 0 {
-				continue // Skip malformed timestamps
+	for raw := range strings.Lines(lrc) {
+		text := strings.TrimSpace(strings.TrimPrefix(raw, "\ufeff"))
+		first := len(out)
+		for {
+			tag := lrcTime.FindStringSubmatch(text)
+			if tag == nil {
+				break
 			}
-			sec, err := strconv.Atoi(raw[m[4]:m[5]])
-			if err != nil || sec < 0 || sec > 59 {
-				continue // Skip malformed timestamps
-			}
-			var frac time.Duration
-			if m[6] >= 0 {
-				f := raw[m[6]:m[7]]
-				n, err := strconv.Atoi(f)
-				if err != nil || n < 0 {
-					continue // Skip malformed fractional seconds
-				}
-				frac = time.Duration(n) * time.Second
-				for range len(f) {
-					frac /= 10
-				}
-			}
-			at := time.Duration(min)*time.Minute + time.Duration(sec)*time.Second + frac + offset
-			// Prevent overflow: max 24 hours
-			if at > 24*time.Hour {
+			text = strings.TrimSpace(text[len(tag[0]):])
+			minutes, minErr := strconv.ParseUint(tag[1], 10, 64)
+			seconds, secErr := strconv.ParseUint(tag[2], 10, 64)
+			if minErr != nil || secErr != nil || minutes > 1440 || seconds >= 60 {
 				continue
 			}
-			out = append(out, Line{At: max(at, 0), Text: text})
+			fraction := tag[3]
+			fraction = fraction[:min(len(fraction), 9)]
+			nanos, _ := strconv.ParseInt(fraction+strings.Repeat("0", 9-len(fraction)), 10, 32)
+			at := time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second + time.Duration(nanos)
+			if at <= maxLyricTime && at+offset <= maxLyricTime {
+				out = append(out, Line{At: max(0, at+offset)})
+			}
+		}
+		for i := first; i < len(out); i++ {
+			out[i].Text = text
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At < out[j].At })
@@ -96,57 +92,87 @@ func parseLRC(lrc string) []Line {
 
 var (
 	yrcLine = regexp.MustCompile(`^\[(\d+),(\d+)\]`)
-	yrcWord = regexp.MustCompile(`\((\d+),(\d+),\d+\)`)
+	// Recognize signed fields so invalid timings never leak into the lyric text.
+	yrcWord = regexp.MustCompile(`\(([+-]?\d+),([+-]?\d+),[+-]?\d+\)`)
 )
 
 // parseYRC reads NetEase's word-timed lyrics: a line is
 // "[start,length](start,length,0)word(start,length,0)word…", in
 // milliseconds. Credits come as lines of JSON, which it leaves out.
 func parseYRC(yrc string) []Line {
-	ms := func(s string) time.Duration {
-		n, err := strconv.Atoi(s)
-		if err != nil || n < 0 {
-			return 0 // Invalid timestamps become 0
+	ms := func(s string) (time.Duration, bool) {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || n < 0 || n > maxLyricTime.Milliseconds() {
+			return 0, false
 		}
-		d := time.Duration(n) * time.Millisecond
-		// Prevent overflow: max 24 hours
-		if d > 24*time.Hour {
-			return 0
-		}
-		return d
+		return time.Duration(n) * time.Millisecond, true
 	}
 	var out []Line
-	for _, raw := range strings.Split(yrc, "\n") {
+	for raw := range strings.Lines(yrc) {
+		raw = strings.TrimSpace(strings.TrimPrefix(raw, "\ufeff"))
 		m := yrcLine.FindStringSubmatch(raw)
 		if m == nil {
 			continue
 		}
-		l := Line{At: ms(m[1]), Timed: true}
-		l.End = l.At + ms(m[2])
+		at, validStart := ms(m[1])
+		length, validLength := ms(m[2])
+		if !validStart || !validLength || at+length > maxLyricTime {
+			continue
+		}
+		l := Line{At: at, End: at + length, Timed: true}
+		var previous time.Duration
+		leadingSilence := false
 		// Each word runs from the mark before it to the mark of the next,
 		// brackets and all: a word's own text is as it is sung.
 		body := raw[len(m[0]):]
 		marks := yrcWord.FindAllStringSubmatchIndex(body, -1)
+		prefix := body
+		if len(marks) != 0 {
+			prefix = body[:marks[0][0]]
+		}
+		var text strings.Builder
+		text.Grow(len(body))
+		text.WriteString(prefix)
+		if len(marks) == 0 || strings.TrimSpace(prefix) != "" || l.End == l.At {
+			l.Timed = false
+		}
 		for i, w := range marks {
-			text := body[w[1]:]
+			part := body[w[1]:]
 			if i+1 < len(marks) {
-				text = body[w[1]:marks[i+1][0]]
+				part = body[w[1]:marks[i+1][0]]
 			}
-			start := ms(body[w[2]:w[3]])
-			word := Word{Text: text, Start: start, End: start + ms(body[w[4]:w[5]])}
+			start, validStart := ms(body[w[2]:w[3]])
+			duration, validDuration := ms(body[w[4]:w[5]])
+			if !validStart || !validDuration || start < l.At || start < previous || start+duration > l.End {
+				l.Timed = false
+			}
+			previous = start
+			word := Word{Text: part, Start: start, End: start + duration}
 			if strings.TrimSpace(word.Text) == "" {
 				// A space between words: it belongs to the word before.
 				if n := len(l.Words); n > 0 {
 					l.Words[n-1].Text += " "
+					text.WriteByte(' ')
+				} else if start == at && duration > 0 {
+					leadingSilence = true
 				}
 				continue
 			}
+			text.WriteString(part)
 			l.Words = append(l.Words, word)
 		}
-		for _, w := range l.Words {
-			l.Text += w.Text
+		l.Text = strings.TrimSpace(text.String())
+		if l.Timed && leadingSilence && len(l.Words) > 0 {
+			// NetEase can encode the instrumental intro as an empty word
+			// at the start of the first line. Follow the first visible word.
+			l.At = l.Words[0].Start
 		}
-		l.Text = strings.TrimSpace(l.Text)
+		if !l.Timed {
+			l.Words = nil
+			if l.End > l.At {
+				l.Words = SpreadWords(l.Text, l.At, l.End)
+			}
+		}
 		if l.Text != "" {
 			out = append(out, l)
 		}
@@ -155,54 +181,13 @@ func parseYRC(yrc string) []Line {
 	return out
 }
 
-// Build makes the lines to show from what NetEase serves: the
-// word-timed lyrics where there are some, else the timed lines, with the
-// translation of each.
+// Build returns lyrics from the selected source. Supplemental JSON credits can inform
+// classification but are only included as rows by BuildDisplay.
 func Build(lrc, translation, yrc string) []Line {
-	var lines []Line
-	if yrc != "" {
-		lines = parseYRC(yrc)
-	}
-	if len(lines) == 0 {
-		for _, l := range parseLRC(lrc) {
-			if l.Text != "" {
-				lines = append(lines, l)
-			}
-		}
-		for i := range lines {
-			end := lines[i].At + 6*time.Second
-			if i+1 < len(lines) {
-				end = min(end, lines[i+1].At)
-			}
-			lines[i].End = end
-			lines[i].Words = SpreadWords(lines[i].Text, lines[i].At, end)
-		}
-	}
-	// Translations go to the line nearest their time: word-timed lines
-	// start a little off the timed lines the translation follows.
-	for _, t := range parseLRC(translation) {
-		if t.Text == "" {
-			continue
-		}
-		best, bestGap := -1, 1500*time.Millisecond
-		for i := range lines {
-			gap := lines[i].At - t.At
-			if gap < 0 {
-				gap = -gap
-			}
-			if gap < bestGap {
-				best, bestGap = i, gap
-			}
-		}
-		if best >= 0 && lines[best].Translation == "" {
-			lines[best].Translation = t.Text
-		}
-	}
-	return lines
+	return buildDisplay(lrc, translation, yrc, yrcCredits(yrc), false).Lines
 }
 
-// mergeLyrics pairs timed lines with their translations, without words'
-// own times.
+// mergeLyrics pairs timed lines with their translations, without words' own times.
 func mergeLyrics(lrc, translation string) []Line {
 	return Build(lrc, translation, "")
 }
@@ -288,6 +273,19 @@ type Quiet struct {
 // Quiets returns the stretches of a song length long, of at least least,
 // in which none of lines is sung. Credits, as 作词 and 作曲, are not sung.
 func Quiets(lines []Line, length, least time.Duration) []Quiet {
+	for _, line := range lines {
+		if line.Kind == Sung && !line.classified {
+			parsed := append([]Line(nil), lines...)
+			classifyLines(parsed)
+			for i, original := range lines {
+				if original.classified || original.Kind != Sung {
+					parsed[i].Kind = original.Kind
+				}
+			}
+			lines = parsed
+			break
+		}
+	}
 	var out []Quiet
 	add := func(from, to time.Duration) {
 		if to-from >= least {
@@ -297,7 +295,7 @@ func Quiets(lines []Line, length, least time.Duration) []Quiet {
 	at := time.Duration(0)
 	sung := false
 	for _, l := range lines {
-		if IsCredit(l.Text) {
+		if l.Kind != Sung {
 			continue
 		}
 		add(at, l.At)
@@ -307,24 +305,4 @@ func Quiets(lines []Line, length, least time.Duration) []Quiet {
 		add(at, length)
 	}
 	return out
-}
-
-// creditNames are what credit lines begin with.
-var creditNames = []string{"作词", "作曲", "编曲", "制作", "监制", "混音", "录音", "母带", "和声", "吉他", "贝斯", "鼓", "键盘", "弦乐", "出品", "发行", "OP", "SP", "词", "曲", "Lyrics", "Music", "Composer", "Arranger", "Producer"}
-
-// IsCredit reports whether a line names who made the song, as "作词 :
-// 林夕", rather than being sung.
-func IsCredit(text string) bool {
-	i := strings.IndexAny(text, ":：")
-	if i <= 0 || utf8.RuneCountInString(text[:i]) > 12 {
-		return false
-	}
-	head := strings.TrimSpace(text[:i])
-	for _, n := range creditNames {
-		// A name of one character, as 词, is the whole of the head.
-		if head == n || utf8.RuneCountInString(n) > 1 && strings.HasPrefix(head, n) {
-			return true
-		}
-	}
-	return false
 }

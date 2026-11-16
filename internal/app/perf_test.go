@@ -124,7 +124,7 @@ func lyricScrollFixture(n int) (*ui.Tester, *int, func(time.Duration)) {
 				seekTime = time.Time{}
 			}
 		}
-		a.lyricsPane(c, a.pl.Current(), 520)
+		a.lyricsPane(c, a.pl.Current(), 520, ui.Rect{}, 0)
 	}, 480, 520)
 	tt.Advance(2 * time.Second)
 	seek := func(pos time.Duration) {
@@ -326,6 +326,8 @@ func framesAt(a *app, tt *ui.Tester, pos time.Duration) int {
 // the rest.
 func TestNowPlayingFrameBudget(t *testing.T) {
 	a, tt, _ := playingApp()
+	// Keep the desktop layout and frame cadence while reducing software raster work.
+	tt.SetScale(0.25)
 	if n := framesAt(a, tt, 12*time.Second); n > 3 {
 		t.Errorf("a page under the player: %d frames a second", n)
 	}
@@ -440,6 +442,26 @@ func TestShortLyricsFrameBudget(t *testing.T) {
 		if n := framesAt(a, tt, 30*time.Second); n > 3 {
 			t.Fatalf("%v: short lyrics requested %d idle frames", size, n)
 		}
+	}
+}
+
+// Whole-line highlighting stays idle between two LRC timestamps.
+func TestImmersiveLRCStaysIdleBetweenLines(t *testing.T) {
+	lines := lyrics.Build("[00:00.00]First line\n[00:10.00]Second line\n[00:20.00]Third line", "", "")
+	a := newTestApp()
+	a.settings.LyricEdgeFade = true
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 30000}})
+	a.pl.SetLyrics(lines)
+	a.pl.Hold(2 * time.Second)
+	paints := 0
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		c.Root().Draw(func(*ui.Painter, ui.Rect) { paints++ })
+		a.lyricsPane(c, a.pl.Current(), 110, ui.Rect{}, 0)
+	}, 180, 110, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	before := paints
+	tt.Advance(time.Second)
+	if paints != before {
+		t.Fatalf("a settled LRC line triggered %d extra paints", paints-before)
 	}
 }
 

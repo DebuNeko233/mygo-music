@@ -82,6 +82,9 @@ type Player struct {
 	Cache *Cache
 	// FetchLyrics optionally supplies persistent lyrics; captured per load.
 	FetchLyrics func(int64) (string, string, string, error)
+	// FetchCachedLyrics may post fresher lyrics while returning the cached source.
+	// Its refresh callback runs on the player thread.
+	FetchCachedLyrics func(int64, func([]lyrics.Line, lyrics.Display)) (string, string, string, error)
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -141,6 +144,7 @@ type Player struct {
 	lyricsLoaded                      bool
 	lyricLanguage                     string
 	lyricRevision                     uint64
+	lyricDisplay                      lyrics.Display
 	lyricBusy, coverBusy, coverLoaded bool
 	lyricFailure, coverFailure        error
 
@@ -148,9 +152,10 @@ type Player struct {
 	pending time.Duration
 	// A seek playing fades out, then lands, then fades in: meanwhile the
 	// position is where it goes.
-	seeking bool
-	seekTo  time.Duration
-	seekGen int
+	seeking      bool
+	seekTo       time.Duration
+	seekGen      int
+	seekRevision uint64
 }
 
 // ahead is a track's download, fetched while the one before it plays: the
@@ -494,6 +499,8 @@ func (p *Player) Repeat() RepeatMode { return p.repeat }
 // Lyrics returns the current track's lyrics, and whether they have loaded.
 func (p *Player) Lyrics() ([]lyrics.Line, bool) { return p.lyrics, p.lyricsLoaded }
 
+func (p *Player) LyricsDisplay() (lyrics.Display, bool) { return p.lyricDisplay, p.lyricsLoaded }
+
 // LyricLanguage is computed when the current lyrics change.
 func (p *Player) LyricLanguage() string { return p.lyricLanguage }
 
@@ -678,10 +685,15 @@ func (p *Player) TogglePlay() {
 // two it sends the system.
 const seekGap = 30 * time.Millisecond
 
+// SeekRevision changes for explicit seeks, including media controls and
+// seeks made before the audio output is available.
+func (p *Player) SeekRevision() uint64 { return p.seekRevision }
+
 // Seek moves to t. Playing, it pauses and plays again around the jump,
 // which the audio player fades over a few milliseconds, rather than
 // cutting from one sound to the other with a click.
 func (p *Player) Seek(t time.Duration) {
+	p.seekRevision++
 	if p.out == nil {
 		p.pending = t
 		return
@@ -918,6 +930,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.lyricsErr = ""
 	p.awaiting = false
 	p.lyrics, p.lyricsLoaded, p.lyricLanguage = nil, false, ""
+	p.lyricDisplay = lyrics.Display{}
 	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
 	p.lyricFailure, p.coverFailure = nil, nil
 	p.pending = from
