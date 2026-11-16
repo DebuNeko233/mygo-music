@@ -600,7 +600,17 @@ func (d *deskLyrics) view(c *ui.Context) {
 				if on {
 					tint = played
 				}
-				line := ui.Column(c).Gap(4).AlignItems(ui.Center).PassThrough()
+				alignment := ui.Center
+				choice := s.LyricAlign
+				if i > 0 {
+					choice = s.LyricNextAlign
+				}
+				if choice == 0 {
+					alignment = ui.Start
+				} else if choice == 2 {
+					alignment = ui.End
+				}
+				line := ui.Column(c).Gap(4).AlignItems(alignment).PassThrough()
 				line.Children(func() {
 					fontSize := size
 					if on {
