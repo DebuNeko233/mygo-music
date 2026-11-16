@@ -120,12 +120,14 @@ func (a *app) quietShown(c *ui.Context, el ui.Element, tr *netease.Track, lines 
 // quietFaded is how much of the lyrics shows under a hot comment.
 const quietFaded = 0.06
 
+const quietCardThreshold = 0.01
+
 // quietUnder fades e, the lyrics, under a hot comment as far in as dim,
 // and hides it once the comment is all in.
 func quietUnder(e ui.Element, dim float32) ui.Element {
 	if dim > 0.98 {
 		e.Invisible()
-	} else if dim > 0.01 {
+	} else if dim > quietCardThreshold {
 		e.Opacity(1 - (1-quietFaded)*dim)
 	}
 	return e
@@ -140,7 +142,7 @@ func (a *app) quietCard(c *ui.Context, dim, top float32) {
 // stageQuiet shows the hot comment kept in the middle of the stage, w
 // wide, its lines sung at f, as far in as dim.
 func (a *app) stageQuiet(c *ui.Context, dim, f, w float32) {
-	if dim <= 0.01 || a.quiet.cm == nil {
+	if dim <= quietCardThreshold || a.quiet.cm == nil {
 		return
 	}
 	ui.Column(c.Key("quiet-stage")).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().PassThrough().Children(func() {
@@ -152,7 +154,7 @@ func (a *app) stageQuiet(c *ui.Context, dim, f, w float32) {
 // place puts it where it goes.
 func (a *app) hotCard(c *ui.Context, dim, size float32, place func(ui.Element)) {
 	cm := a.quiet.cm
-	if dim <= 0.01 || cm == nil {
+	if dim <= quietCardThreshold || cm == nil {
 		return
 	}
 	card := ui.ButtonBase(c.Key("quiet")).Column().AlignItems(ui.Start).

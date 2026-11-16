@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -26,10 +25,33 @@ type PlaySource struct {
 
 // ReportPlayStart announces a song only after its audio actually starts.
 func ReportPlayStart(id int64, source PlaySource) error {
+	return playReporter{}.PlayStart(id, source)
+}
+
+type playReporter struct{ jar http.CookieJar }
+
+// NewPlayReporter binds the queued reports to the current login.
+func NewPlayReporter() playReporter {
+	jar, _ := cookiejar.New(nil)
+	if httpClient.Jar != nil {
+		jar.SetCookies(siteURL, httpClient.Jar.Cookies(siteURL))
+	}
+	return playReporter{jar: jar}
+}
+
+func (r playReporter) cookies() http.CookieJar {
+	if r.jar == nil {
+		return httpClient.Jar
+	}
+	return r.jar
+}
+
+// PlayStart records a start using this reporter's login.
+func (r playReporter) PlayStart(id int64, source PlaySource) error {
 	data := playFields(id, source)
 	data["mainsite"] = "1"
 	data["mainsiteWeb"] = "1"
-	return sendLog("startplay", data)
+	return r.sendLog("startplay", data)
 }
 
 func playFields(id int64, source PlaySource) map[string]any {
@@ -58,35 +80,7 @@ var playLogClient = map[string]string{
 	"channel": "netease",
 }
 
-// SnapshotPlayReports redirects the queued reports of the old login into a
-// private jar until the next login. Reporting functions then authenticate with
-// the session that created them, not whichever account the global jar holds.
-func SnapshotPlayReports() func() {
-	jar, _ := cookiejar.New(nil)
-	jar.SetCookies(siteURL, httpClient.Jar.Cookies(siteURL))
-	reportJarMu.Lock()
-	old := reportCookieJar
-	reportCookieJar = func() http.CookieJar { return jar }
-	reportJarMu.Unlock()
-	return func() {
-		reportJarMu.Lock()
-		reportCookieJar = old
-		reportJarMu.Unlock()
-	}
-}
-
-var (
-	reportJarMu     sync.RWMutex
-	reportCookieJar = func() http.CookieJar { return httpClient.Jar }
-)
-
-func playCookieJar() http.CookieJar {
-	reportJarMu.RLock()
-	defer reportJarMu.RUnlock()
-	return reportCookieJar()
-}
-
-func sendLog(action string, data map[string]any) error {
+func (r playReporter) sendLog(action string, data map[string]any) error {
 	// Every desktop log entry carries its own creation time in milliseconds.
 	data["logtime"] = time.Now().UnixMilli()
 	logs, err := json.Marshal([]map[string]any{{"action": action, "json": data}})
@@ -95,5 +89,5 @@ func sendLog(action string, data map[string]any) error {
 	}
 	const path = "/api/feedback/weblog"
 	endpoint := playLogDomain + "/eapi/feedback/weblog"
-	return eapiOKEndpoint(endpoint, path, map[string]any{"logs": string(logs)})
+	return eapiOKEndpoint(endpoint, path, map[string]any{"logs": string(logs)}, r.cookies())
 }

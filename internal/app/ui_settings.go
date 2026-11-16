@@ -658,6 +658,13 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		} else {
 			alignment("lyric-align", "当前行对齐", "当前行及其翻译的水平对齐方式", &s.LyricAlign)
 			alignment("lyric-next-align", "下一行对齐", "下一行及其翻译的水平对齐方式", &s.LyricNextAlign)
+			row("行距", "当前行与下一行之间的距离", func() {
+				gap := min(max(s.LyricLineGap, 0), 40)
+				if ui.Slider(c.Key("lyric-line-gap"), &gap, 0, 40).Width(150).Label("调整双行歌词行距").Changed() {
+					s.LyricLineGap = math.Round(gap)
+					a.changed()
+				}
+			})
 		}
 		row("字号", "歌词文字的大小", func() {
 			v := min(max(s.LyricSize, lyricSizeMin), lyricSizeMax)
@@ -781,6 +788,11 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		})
 		row("烟雾背景", "播放页的背景化作封面色调的烟雾，缓缓升起，随低音起伏；仍在打磨，会多用一些电量", func() {
 			if ui.Switch(c.Key("fog"), &s.Fog).Label("烟雾背景").Changed() {
+				a.changed()
+			}
+		})
+		row("沉浸式歌词", "播放时当前句随演唱整句或逐字点亮，上下边缘的歌词逐渐淡出", func() {
+			if ui.Switch(c.Key("lyric-edge-fade"), &s.LyricEdgeFade).Label("沉浸式歌词").Changed() {
 				a.changed()
 			}
 		})

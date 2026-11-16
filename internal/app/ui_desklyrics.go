@@ -555,7 +555,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 	if len(shown) > 0 {
 		// An absolute group, centered in the window itself: the controls
 		// hover above it, rather than making its padding uneven.
-		words = ui.Column(c).Absolute().Top(0).Bottom(0).WidthPercent(100).Justify(ui.Center).Gap(8).PassThrough()
+		words = ui.Column(c).Absolute().Top(0).Bottom(0).WidthPercent(100).Justify(ui.Center).
+			Gap(float32(s.LyricLineGap)).PassThrough()
 	}
 	if over {
 		if s.LyricLocked {
@@ -589,7 +590,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 		})
 	case len(lines) == 0 && loaded:
 		ui.Column(c).Fill().Center().Children(func() {
-			ui.Text(c, "纯音乐，请欣赏").FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
+			display, _ := pl.LyricsDisplay()
+			ui.Text(c, display.EmptyText()).FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
 		})
 	case len(shown) == 0:
 	default:

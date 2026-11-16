@@ -22,16 +22,26 @@ const (
 
 // ReportDawnStart records the beginning of an audible desktop play session.
 func ReportDawnStart(track Track, bitrate int, level string, source PlaySource) error {
+	return playReporter{}.DawnStart(track, bitrate, level, source)
+}
+
+// DawnStart records an audible start using this reporter's login.
+func (r playReporter) DawnStart(track Track, bitrate int, level string, source PlaySource) error {
 	plv := dawnFields(track, bitrate, level, source)
 	plv["app_mode"] = 2
 	now := time.Now()
 	dawnRefer(plv, now, track, source, 23, 933)
-	return uploadDawnRecord("_plv", plv, now)
+	return r.uploadDawnRecord("_plv", plv, now)
 }
 
 // ReportDawnEnd records how long audio was actually heard and why it ended.
 // These are BI log records, not entries in the older feedback weblog.
 func ReportDawnEnd(track Track, played time.Duration, end string, bitrate int, level string, source PlaySource) error {
+	return playReporter{}.DawnEnd(track, played, end, bitrate, level, source)
+}
+
+// DawnEnd records the end of audible playback using this reporter's login.
+func (r playReporter) DawnEnd(track Track, played time.Duration, end string, bitrate int, level string, source PlaySource) error {
 	pld := dawnFields(track, bitrate, level, source)
 	pld["app_mode"] = 1
 	now := time.Now()
@@ -42,15 +52,15 @@ func ReportDawnEnd(track Track, played time.Duration, end string, bitrate int, l
 	pld["musiceffect_id"] = "1001"
 	pld["lyriceffect"] = "default"
 	pld["displayMode"] = "classic"
-	return uploadDawnRecord("_pld", pld, now)
+	return r.uploadDawnRecord("_pld", pld, now)
 }
 
-func uploadDawnRecord(action string, fields map[string]any, at time.Time) error {
+func (r playReporter) uploadDawnRecord(action string, fields map[string]any, at time.Time) error {
 	data, err := json.Marshal(fields)
 	if err != nil {
 		return err
 	}
-	return uploadDawn(fmt.Appendf(nil, "%d\x01%s\x01%s\n", at.Unix(), action, data))
+	return r.uploadDawn(fmt.Appendf(nil, "%d\x01%s\x01%s\n", at.Unix(), action, data))
 }
 
 func dawnFields(track Track, bitrate int, level string, source PlaySource) map[string]any {
@@ -98,14 +108,14 @@ func dawnRefer(fields map[string]any, now time.Time, track Track, source PlaySou
 		now.UnixMilli(), event, dawnClientVersion, position, cell, page, track.ID, source.ID, source.Source)
 }
 
-func uploadDawn(records []byte) error {
+func (r playReporter) uploadDawn(records []byte) error {
 	cookies := map[string]string{
 		"WEVNSM": "1.0.0", "_iuqxldmzr_": "33", "_ntes_nnid": ",",
 		"appver": dawnBuildVersion, "channel": "netease", "deviceId": "",
 		"WNMCID": fmt.Sprintf("abcdef.%d.01.0", time.Now().UnixMilli()),
 		"mode":   "", "ntes_kaola_ad": "1", "os": "pc", "osver": "Microsoft-Windows-10-Professional-build-19045-64bit",
 	}
-	for _, c := range playCookieJar().Cookies(siteURL) {
+	for _, c := range r.cookies().Cookies(siteURL) {
 		switch c.Name {
 		case "MUSIC_U", "NMTID", "__csrf", "JSESSIONID-WYYY", "WNMCID", "clientSign", "_ntes_nuid":
 			cookies[c.Name] = c.Value

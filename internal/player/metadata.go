@@ -48,15 +48,24 @@ func (p *Player) retryMetadata(manual bool) {
 	words := lyricsOf
 	if p.FetchLyrics != nil {
 		words = p.FetchLyrics
+	} else if cached := p.FetchCachedLyrics; cached != nil {
+		words = func(id int64) (string, string, string, error) {
+			return cached(id, func(lines []lyrics.Line, display lyrics.Display) {
+				if p.gen == gen && p.lyricRevision == revision {
+					p.applyRefreshedLyrics(id, lines, display)
+				}
+			})
+		}
 	}
 	go func() {
 		var lines []lyrics.Line
+		var display lyrics.Display
 		var success bool
 		var failure error
 		for try := 1; try <= lyricTries; try++ {
 			lrc, trans, yrc, err := words(t.ID)
 			if err == nil {
-				lines = lyrics.Build(lrc, trans, yrc)
+				lines, display = lyrics.BuildDisplay(lrc, trans, yrc)
 				success = true
 				break
 			}
@@ -73,9 +82,12 @@ func (p *Player) retryMetadata(manual bool) {
 				return
 			}
 			p.lyricBusy = false
+			if p.lyricRevision != revision {
+				return
+			}
 			p.lyricFailure = failure
-			if success && p.lyricRevision == revision {
-				p.setLyrics(lines)
+			if success {
+				p.setLyrics(lines, display)
 				p.lyricsErr = ""
 				p.offlineLyricsError = false
 			} else if !p.lyricsLoaded {
@@ -95,15 +107,24 @@ func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
 	if p.track == nil || p.track.ID != id {
 		return
 	}
+	lines, display := lyrics.BuildDisplay(original, translation, words)
+	p.applyRefreshedLyrics(id, lines, display)
+}
+
+func (p *Player) applyRefreshedLyrics(id int64, lines []lyrics.Line, display lyrics.Display) {
+	if p.track == nil || p.track.ID != id {
+		return
+	}
 	p.lyricsErr = ""
 	p.offlineLyricsError = false
 	p.lyricFailure = nil
 	p.lyricRevision++
-	p.setLyrics(lyrics.Build(original, translation, words))
+	p.setLyrics(lines, display)
 }
 
-func (p *Player) setLyrics(lines []lyrics.Line) {
-	p.lyrics, p.lyricsLoaded, p.lyricLanguage = lines, true, lyrics.Lang(lines)
+func (p *Player) setLyrics(lines []lyrics.Line, display lyrics.Display) {
+	p.lyrics, p.lyricsLoaded, p.lyricLanguage = lines, true, lyrics.Lang(display.Lines)
+	p.lyricDisplay = display
 }
 
 func (p *Player) MetadataLoading() bool { return p.lyricBusy || p.coverBusy }

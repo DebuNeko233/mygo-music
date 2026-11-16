@@ -54,6 +54,8 @@ type settings struct {
 	// rising and swelling with the bass: an experiment the listener turns
 	// on.
 	Fog bool `json:"fog"`
+	// LyricEdgeFade enables the experimental effects in the scrolling lyrics pane.
+	LyricEdgeFade bool `json:"lyricEdgeFade"`
 	// AppIcon is where the app's icon shows on macOS (appIcons); elsewhere
 	// it is always in the notification area.
 	AppIcon string `json:"appIcon"`
@@ -90,6 +92,8 @@ type settings struct {
 	// 0 for left, 1 for centre and 2 for right. A single line uses LyricAlign.
 	LyricAlign     int `json:"lyricAlign,omitempty"`
 	LyricNextAlign int `json:"lyricNextAlign,omitempty"`
+	// LyricLineGap is the space between two desktop lines in points.
+	LyricLineGap float64 `json:"lyricLineGap,omitempty"`
 	// LyricLocked keeps the lyrics window where it is: it is dragged by
 	// its lines, and locked, it has none that move it.
 	LyricLocked bool `json:"lyricLocked,omitempty"`
@@ -166,7 +170,8 @@ func defaultSettings() settings {
 		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true,
 		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
-		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2, LyricAlign: 1, LyricNextAlign: 1,
+		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
+		LyricAlign: 1, LyricNextAlign: 1, LyricLineGap: 8, LyricEdgeFade: true,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
 	}
 }
@@ -270,6 +275,7 @@ func (s *settings) clamp() {
 	s.LyricLines = max(1, min(4, s.LyricLines))
 	s.LyricAlign = max(0, min(2, s.LyricAlign))
 	s.LyricNextAlign = max(0, min(2, s.LyricNextAlign))
+	s.LyricLineGap = max(0, min(40, s.LyricLineGap))
 	if s.LyricWidth < 0 {
 		s.LyricWidth = 0
 	}

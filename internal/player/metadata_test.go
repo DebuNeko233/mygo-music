@@ -1,8 +1,10 @@
 package player
 
 import (
-	"netease-music-mygo/internal/netease"
 	"testing"
+
+	"netease-music-mygo/internal/lyrics"
+	"netease-music-mygo/internal/netease"
 )
 
 // Metadata recovery does not start audio or change the current queue, pause or seek.
@@ -85,5 +87,31 @@ func TestLyricLanguageAfterRefresh(t *testing.T) {
 	p.RefreshLyrics(1, "[00:01]New lyric", "", "")
 	if p.LyricLanguage() != "" {
 		t.Fatal("metadata replacement retained the previous language")
+	}
+}
+
+// A revalidation from an earlier load of the same song cannot replace the current lyrics.
+func TestCachedLyricsRefreshRejectsEarlierLoadOfSameTrack(t *testing.T) {
+	posts := make(chan func(), 2)
+	p := New(func(f func()) { posts <- f })
+	p.track = &netease.Track{ID: 1}
+	refreshes := make(chan func([]lyrics.Line, lyrics.Display), 2)
+	p.FetchCachedLyrics = func(_ int64, refresh func([]lyrics.Line, lyrics.Display)) (string, string, string, error) {
+		refreshes <- refresh
+		return "[00:01]Cached", "", "", nil
+	}
+	p.RetryMetadata()
+	oldRefresh := <-refreshes
+	(<-posts)()
+
+	p.gen++
+	p.lyricsLoaded = false
+	p.RetryMetadata()
+	currentRefresh := <-refreshes
+	currentRefresh(lyrics.BuildDisplay("[00:01]Current", "", ""))
+	(<-posts)()
+	oldRefresh(lyrics.BuildDisplay("[00:01]Old", "", ""))
+	if len(p.lyrics) != 1 || p.lyrics[0].Text != "Current" {
+		t.Fatalf("a stale revalidation replaced the current lyrics: %+v", p.lyrics)
 	}
 }

@@ -264,6 +264,22 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 	if a.settings.LyricLines != 1 || a.settings.LyricAlign != 0 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.path).LyricAlign != 0 {
 		t.Fatal("single-line alignment did not apply to the shared line and persist")
 	}
+	if err := tt.Click("双行"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	gap, ok := tt.AccessByRole(ui.RoleSlider, "调整双行歌词行距")
+	if !ok {
+		t.Fatal("two-line mode did not expose its line spacing control")
+	}
+	r := gap.Bounds
+	tt.ClickAt(r.X+r.W*0.75, r.Y+r.H/2)
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	settingsWrites.wait()
+	if a.settings.LyricLineGap <= 8 || readCacheSettings(t, a.settings.path).LyricLineGap != a.settings.LyricLineGap {
+		t.Fatalf("two-line spacing did not apply and persist: %v", a.settings.LyricLineGap)
+	}
 }
 
 // A font setting stands for the families an older settings file named by a

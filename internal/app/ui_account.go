@@ -207,9 +207,8 @@ func (a *app) pollLogin(gen int, key string) {
 			code, msg, name, avatar, err := netease.QRCheck(key)
 			var prof *netease.Profile
 			if code == netease.QRConfirmed {
-				// The old account's queued reports go out under the cookies it
-				// had, which the snapshot keeps, so the confirmation cookies
-				// replace the global jar without waiting for the network.
+				// Detach the old account's queue before setting up the new one.
+				// Its reporter already owns a copy of the old login's cookies.
 				closed := make(chan struct{})
 				a.post(func() { a.stopPlayReports(); close(closed) })
 				<-closed

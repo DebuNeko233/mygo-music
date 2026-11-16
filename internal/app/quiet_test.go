@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -144,5 +145,69 @@ func TestQuietCard(t *testing.T) {
 		if a.npPane != paneComments {
 			t.Errorf("pane %d: the comment did not open the comments", pane)
 		}
+	}
+}
+
+// Opening credits stay out of the hot card's entrance and exit in both lyric layouts.
+func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
+	for _, extra := range []int{0, timedListThreshold} {
+		t.Run(fmt.Sprint(extra), func(t *testing.T) {
+			a, _, lines := quietApp(0)
+			a.settings.LyricEdgeFade = true
+			for i := range extra {
+				lines = append(lines, lyrics.Line{At: 31*time.Second + time.Duration(i)*400*time.Millisecond, Text: fmt.Sprint("Lyric ", i)})
+			}
+			a.pl.SetLyrics(lines)
+			tt := ui.NewTester(func(c *ui.Context) {
+				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
+			}, 320, 360)
+			tt.SetScale(0.25)
+			credit, comment := lines[0].Text, a.comments.quietHot[0].Content
+			check := func(phase string, wantCredit, wantComment bool) {
+				t.Helper()
+				if tt.HasText(credit) != wantCredit || tt.HasText(comment) != wantComment {
+					t.Fatalf("%s: credit=%t, comment=%t", phase, tt.HasText(credit), tt.HasText(comment))
+				}
+			}
+			check("before entrance", true, false)
+			a.pl.Hold(2 * time.Second)
+			tt.Frame()
+			tt.Advance(160 * time.Millisecond)
+			check("mid-entrance", false, true)
+			tt.Advance(600 * time.Millisecond)
+			a.pl.Hold(19200 * time.Millisecond)
+			tt.Frame()
+			tt.Advance(160 * time.Millisecond)
+			check("mid-exit", false, true)
+			tt.Advance(600 * time.Millisecond)
+			check("after exit", true, false)
+		})
+	}
+}
+
+// Static lyrics show hot comments within the quiet interval and return when the setting is off.
+func TestStaticLyricsQuietCard(t *testing.T) {
+	for _, text := range []string{lyrics.InstrumentalText, "作曲：周杰伦"} {
+		t.Run(text, func(t *testing.T) {
+			a, _, _ := quietApp(0)
+			a.pl.SetLyrics([]lyrics.Line{{At: 10 * time.Second, Text: text}})
+			tt := ui.NewTesterWith(func(c *ui.Context) {
+				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
+			}, 320, 360, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			const comment = "刮风这天，我试过握着你手"
+			if tt.HasText(comment) {
+				t.Fatal("hot comment showed before the quiet interval")
+			}
+			a.pl.Hold(5 * time.Second)
+			tt.Frame()
+			if !tt.HasText(comment) {
+				t.Fatal("hot comment missing during the quiet interval")
+			}
+			a.settings.HotComments = false
+			tt.Frame()
+			if tt.HasText(comment) || !tt.HasText(text) {
+				t.Fatal("disabling hot comments did not restore the static lyrics")
+			}
+		})
 	}
 }
