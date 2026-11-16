@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"unicode/utf16"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -458,6 +459,39 @@ func outlinedText(c *ui.Context, text string, size float32, weight int, family s
 	})
 }
 
+// paintDesktopWords reuses the lyric page's timing and selection geometry,
+// adding the desktop's outline and centre alignment.
+func (d *deskLyrics) paintDesktopWords(c *ui.Context, line *lyrics.Line, size float32, weight int, family, lang string, played, idle, outline ui.Color, outlineWidth float32) {
+	st := linesStyle{size: size, weight: weight, family: family, lang: lang}
+	font := lyricFont(c, st)
+	width, _ := c.Size()
+	if width <= 0 {
+		width = 10000 // an unconstrained first pass; the laid-out pass gets the window width
+	}
+	width -= 2 * outlineWidth
+	layout := measureLyricWords(line, width, font, c.Direction())
+	w, h := layout.Size()
+	clips := make([][]ui.Rect, len(line.Words))
+	offset := 0
+	for i, word := range line.Words {
+		end := offset
+		for _, r := range word.Text {
+			end += utf16.RuneLen(r)
+		}
+		if end > offset {
+			clips[i] = layout.SelectionRects(ui.TextInputRange{Start: offset, End: end})
+		}
+		offset = end
+	}
+	w += 2 * outlineWidth
+	h += 2 * outlineWidth
+	ui.Box(c).Width(w).Height(h).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
+		r.X += outlineWidth
+		r.Y += outlineWidth
+		drawOutlinedLyricWords(p, r, line.Words, layout, clips, d.a.pl.Position(), d.a.pl.Playing(), played, idle, outline, outlineWidth)
+	})
+}
+
 func (d *deskLyrics) view(c *ui.Context) {
 	a := d.a
 	s := &a.settings
@@ -575,7 +609,11 @@ func (d *deskLyrics) view(c *ui.Context) {
 					outlineColor := lyricColor(s.LyricOutlineColor, ui.Hex("#16161a"))
 					// Clamp outline width to prevent layout issues from corrupted settings
 					outlineWidth := float32(max(0, min(2.5, s.LyricOutlineWidth)))
-					outlinedText(c, l.Text, fontSize, weight, family, tint, outlineColor, outlineWidth, lang)
+					if on && s.LyricKaraoke && len(l.Words) > 0 {
+						d.paintDesktopWords(c, &l, fontSize, weight, family, lang, played, idle, outlineColor, outlineWidth)
+					} else {
+						outlinedText(c, l.Text, fontSize, weight, family, tint, outlineColor, outlineWidth, lang)
+					}
 					if s.LyricTrans && l.Translation != "" {
 						outlinedText(c, l.Translation, size*0.62, 500, transFamily, trans, outlineColor, outlineWidth*0.62, c.Locale())
 					}

@@ -218,6 +218,25 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	}
 }
 
+// The desktop setting enables word-by-word highlighting and persists the choice.
+func TestDeskLyricsKaraokeSetting(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = loadSettings()
+	tt := ui.NewTester(a.settingsView, 780, 3400)
+	showSettingsPage(t, tt, "桌面歌词")
+	clickSettingsSwitch(t, tt, "逐字歌词")
+	settingsWrites.wait()
+	if !a.settings.LyricKaraoke || !readCacheSettings(t, a.settings.path).LyricKaraoke {
+		t.Fatal("enabling desktop karaoke did not persist")
+	}
+	clickSettingsSwitch(t, tt, "逐字歌词")
+	settingsWrites.wait()
+	if a.settings.LyricKaraoke || readCacheSettings(t, a.settings.path).LyricKaraoke {
+		t.Fatal("disabling desktop karaoke did not persist")
+	}
+}
+
 // A font setting stands for the families an older settings file named by a
 // name of the app's, for the family the system gives, and for none at all
 // when it names the system's own.

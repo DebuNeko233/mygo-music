@@ -70,11 +70,69 @@ func timedLineWidth(viewport float32) float32 {
 }
 
 func lyricFont(c *ui.Context, st linesStyle) ui.Font {
-	return ui.Font{Family: c.Theme().Font, Size: st.size, Weight: st.weight, Lang: st.lang, LineHeight: st.lineHeight}
+	family := st.family
+	if family == "" {
+		family = c.Theme().Font
+	}
+	return ui.Font{Family: family, Size: st.size, Weight: st.weight, Lang: st.lang, LineHeight: st.lineHeight}
 }
 
 func shapeLyric(text string, font ui.Font, width float32, direction ui.Direction) *ui.TextLayout {
 	return ui.ShapeRichTextWith([]ui.Span{{Text: text, LetterSpacing: -0.4}}, font, ui.TextShape{Width: width, Direction: direction})
+}
+
+// measureLyricWords shapes the line without changing its glyph positions as
+// the highlight advances. Keeping the layout here also lets desktop lyrics
+// outline the complete line and its highlight with the same geometry.
+func measureLyricWords(line *lyrics.Line, width float32, font ui.Font, direction ui.Direction) *ui.TextLayout {
+	return shapeLyric(lyricWordsText(line.Words), font, width, direction)
+}
+
+// drawOutlinedLyricWords paints the same progressive highlight as the lyric
+// page, with the desktop window's colours and an outline around every layer.
+func drawOutlinedLyricWords(p *ui.Painter, r ui.Rect, words []lyrics.Word, layout *ui.TextLayout, clips [][]ui.Rect, pos time.Duration, playing bool, played, idle, outline ui.Color, outlineWidth float32) {
+	paint := func(color ui.Color, dx, dy float32) {
+		p.TextLayout(layout, r.X+dx, r.Y+dy, color)
+	}
+	if outlineWidth > 0 {
+		for _, off := range []struct{ dx, dy float32 }{
+			{0, -outlineWidth}, {outlineWidth * .7, -outlineWidth * .7},
+			{outlineWidth, 0}, {outlineWidth * .7, outlineWidth * .7},
+			{0, outlineWidth}, {-outlineWidth * .7, outlineWidth * .7},
+			{-outlineWidth, 0}, {-outlineWidth * .7, -outlineWidth * .7},
+		} {
+			paint(outline, off.dx, off.dy)
+		}
+	}
+	paint(idle, 0, 0)
+	for i, word := range words {
+		lit, _ := wordPaintTime(word, pos)
+		if lit == 0 {
+			continue
+		}
+		for _, clip := range clips[i] {
+			clip.X += r.X
+			clip.Y += r.Y
+			if lit == 1 {
+				p.Clip(clip, 0, func() { paint(played, 0, 0) })
+			} else {
+				// KTV fill sweeps across a word instead of fading its whole text.
+				clip.W *= lit
+				p.Clip(clip, 0, func() { paint(played, 0, 0) })
+			}
+		}
+	}
+	if playing {
+		var next time.Duration
+		for _, word := range words {
+			if _, delay := wordPaintTime(word, pos); delay > 0 && (next == 0 || delay < next) {
+				next = delay
+			}
+		}
+		if next > 0 {
+			p.After(next)
+		}
+	}
 }
 
 func lyricWordsText(words []lyrics.Word) string {

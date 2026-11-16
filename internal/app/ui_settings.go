@@ -631,6 +631,11 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
+		row("逐字歌词", "当前句按歌曲提供的逐字时间逐渐高亮", func() {
+			if ui.Switch(c.Key("lyric-karaoke"), &s.LyricKaraoke).Label("逐字歌词").Changed() {
+				a.changed()
+			}
+		})
 		row("行数", "窗口一次显示一句或本句和下句", func() {
 			i := 1
 			if s.LyricLines == 1 {

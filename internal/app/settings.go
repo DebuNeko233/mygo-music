@@ -81,6 +81,9 @@ type settings struct {
 	// LyricWindow shows the lyrics in a window of their own, over every
 	// other window: the listener turns it on.
 	LyricWindow bool `json:"lyricWindow,omitempty"`
+	// LyricKaraoke highlights the current desktop line word by word when
+	// the song supplies word timings.
+	LyricKaraoke bool `json:"lyricKaraoke,omitempty"`
 	// LyricLines is how many lines the window shows at once: one or two.
 	LyricLines int `json:"lyricLines,omitempty"`
 	// LyricLocked keeps the lyrics window where it is: it is dragged by

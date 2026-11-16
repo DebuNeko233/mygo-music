@@ -512,6 +512,7 @@ type linesStyle struct {
 	size        float32
 	weight      int
 	lineHeight  float32
+	family      string // empty follows the app's theme; desktop lyrics have their own font
 	quiet       bool
 	lang        string
 	centerShort bool // center a whole lyric block that fits; captions keep their growing list
