@@ -70,8 +70,8 @@ func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
 		t.Fatal("toggling immersive lyrics moved the instrumental panel")
 	}
 	tt.SetSize(680, 500)
-	if title := bounds(lyrics.InstrumentalText); title.H > 31 {
-		t.Fatalf("the cover's scrollbar inset squeezed the notice in a narrow window: %+v", title)
+	if resized := bounds(lyrics.InstrumentalText); resized.H > title.H+1 {
+		t.Fatalf("the cover's scrollbar inset squeezed the notice in a narrow window: %+v", resized)
 	}
 }
 
