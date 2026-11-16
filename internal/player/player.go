@@ -794,12 +794,28 @@ func (p *Player) Duration() time.Duration {
 
 // Levels returns the spectrum of what plays now.
 func (p *Player) Levels() ([Bands]float32, bool) {
+	spec, frame := p.spectrumAtPosition()
+	m, ok := spec.at(frame)
+	return m.bands, ok
+}
+
+// DetailedLevels returns the 64-band spectrum at the playhead.
+func (p *Player) DetailedLevels() ([DetailBands]float32, bool) {
+	if p.seeking {
+		return [DetailBands]float32{}, false
+	}
+	spec, frame := p.spectrumAtPosition()
+	m, ok := spec.at(frame)
+	return m.detail, ok
+}
+
+func (p *Player) spectrumAtPosition() (*spectrum, int64) {
 	if p.stream == nil || p.out == nil || !p.playing {
-		return [Bands]float32{}, false
+		return nil, 0
 	}
 	_, spec := p.stream.source()
 	frame := int64(p.Position().Seconds() * float64(p.stream.SampleRate()))
-	return spec.at(frame)
+	return spec, frame
 }
 
 func (p *Player) stop() {

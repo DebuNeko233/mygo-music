@@ -808,7 +808,10 @@ func frameSize(b []byte) int {
 const (
 	fftSize      = 1024
 	Bands        = 24
+	DetailBands  = 64
 	spectrumKeep = 10 * time.Second
+	detailTiltDB = 4.5 // dB per octave
+	detailTiltHz = 1000
 )
 
 type spectrum struct {
@@ -819,13 +822,16 @@ type spectrum struct {
 	acc    []float32 // mono samples of the chunk being filled
 	accAt  int64     // its first frame
 	edges  [Bands + 1]int
+	detail [DetailBands + 1]float64
+	tilt   [DetailBands]float64
 	fft    []complex128
 }
 
 // measured is the bands of a chunk, and which chunk: -1 for none yet.
 type measured struct {
-	chunk int64
-	bands [Bands]float32
+	chunk  int64
+	bands  [Bands]float32
+	detail [DetailBands]float32
 }
 
 func newSpectrum(rate int) *spectrum {
@@ -846,6 +852,7 @@ func newSpectrum(rate int) *spectrum {
 	for i := 1; i < len(s.edges); i++ {
 		s.edges[i] = max(s.edges[i], s.edges[i-1]+1)
 	}
+	detailLayout(rate, s.detail[:], s.tilt[:])
 	s.fft = make([]complex128, fftSize)
 	return s
 }
@@ -886,36 +893,44 @@ func (s *spectrum) analyze(chunk int64) {
 		s.fft[i] = complex(float64(v*s.window[i]), 0)
 	}
 	fft(s.fft)
-	var bands [Bands]float32
-	for b := range Bands {
-		var sum float64
-		for k := s.edges[b]; k < s.edges[b+1]; k++ {
-			sum += cmplx.Abs(s.fft[k])
-		}
-		mag := sum / float64(s.edges[b+1]-s.edges[b]) / (fftSize / 4)
-		// Higher bands carry less energy: tilt them up, as the ear hears.
-		mag *= 1 + float64(b)/6
-		db := 20 * math.Log10(mag+1e-9)
-		bands[b] = float32(math.Max(0, math.Min(1, (db+60)/52)))
+	// Both displays reuse the same transform and magnitudes. A prefix
+	// sum lets the finer buckets split FFT bins at fractional boundaries.
+	var sums [fftSize + 1]float64
+	end := max(s.edges[Bands], int(math.Ceil(s.detail[DetailBands])))
+	for k := range end {
+		sums[k+1] = sums[k] + cmplx.Abs(s.fft[k])
 	}
+	m := measured{chunk: chunk}
+	for b := range Bands {
+		from, to := s.edges[b], s.edges[b+1]
+		// Higher bands carry less energy: tilt them up, as the ear hears.
+		m.bands[b] = normalizedBand(sums[to]-sums[from], float64(to-from), 1+float64(b)/6)
+	}
+	measureDetail(m.detail[:], sums[:], s.detail[:], s.tilt[:])
 	s.mu.Lock()
-	s.ring[chunk%int64(len(s.ring))] = measured{chunk, bands}
+	s.ring[chunk%int64(len(s.ring))] = m
 	s.mu.Unlock()
 }
 
-// at returns the bands of frame, or false if not measured.
-func (s *spectrum) at(frame int64) ([Bands]float32, bool) {
+func normalizedBand(sum, width, tilt float64) float32 {
+	mag := sum / width / (fftSize / 4) * tilt
+	db := 20 * math.Log10(mag+1e-9)
+	return float32(max(0, min(1, (db+60)/52)))
+}
+
+// at returns the measurement covering frame, or false if it is absent.
+func (s *spectrum) at(frame int64) (measured, bool) {
+	if s == nil || frame < 0 {
+		return measured{}, false
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	c := frame / fftSize
-	if c < 0 {
-		return [Bands]float32{}, false
-	}
 	m := s.ring[c%int64(len(s.ring))]
 	if m.chunk != c {
-		return [Bands]float32{}, false
+		return measured{}, false
 	}
-	return m.bands, true
+	return m, true
 }
 
 // fft transforms x in place; len(x) is a power of two.
