@@ -237,6 +237,51 @@ func TestDeskLyricsKaraokeSetting(t *testing.T) {
 	}
 }
 
+// Each desktop line and its translation follow the alignment chosen for that line.
+func TestDeskLyricsAlignmentSetting(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = loadSettings()
+	tt := ui.NewTester(a.settingsView, 780, 3400)
+	showSettingsPage(t, tt, "桌面歌词")
+	if err := tt.Click("靠右"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	settingsWrites.wait()
+	if a.settings.LyricAlign != 2 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.path).LyricAlign != 2 {
+		t.Fatal("two-line alignment did not change only the current line and persist")
+	}
+	if err := tt.Click("单行"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("靠左"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	settingsWrites.wait()
+	if a.settings.LyricLines != 1 || a.settings.LyricAlign != 0 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.path).LyricAlign != 0 {
+		t.Fatal("single-line alignment did not apply to the shared line and persist")
+	}
+	if err := tt.Click("双行"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	gap, ok := tt.AccessByRole(ui.RoleSlider, "调整双行歌词行距")
+	if !ok {
+		t.Fatal("two-line mode did not expose its line spacing control")
+	}
+	r := gap.Bounds
+	tt.ClickAt(r.X+r.W*0.75, r.Y+r.H/2)
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	settingsWrites.wait()
+	if a.settings.LyricLineGap <= 8 || readCacheSettings(t, a.settings.path).LyricLineGap != a.settings.LyricLineGap {
+		t.Fatalf("two-line spacing did not apply and persist: %v", a.settings.LyricLineGap)
+	}
+}
+
 // A font setting stands for the families an older settings file named by a
 // name of the app's, for the family the system gives, and for none at all
 // when it names the system's own.

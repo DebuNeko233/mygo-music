@@ -88,6 +88,12 @@ type settings struct {
 	LyricKaraoke bool `json:"lyricKaraoke,omitempty"`
 	// LyricLines is how many lines the window shows at once: one or two.
 	LyricLines int `json:"lyricLines,omitempty"`
+	// LyricAlign and LyricNextAlign align the first and second desktop lines:
+	// 0 for left, 1 for centre and 2 for right. A single line uses LyricAlign.
+	LyricAlign     int `json:"lyricAlign,omitempty"`
+	LyricNextAlign int `json:"lyricNextAlign,omitempty"`
+	// LyricLineGap is the space between two desktop lines in points.
+	LyricLineGap float64 `json:"lyricLineGap,omitempty"`
 	// LyricLocked keeps the lyrics window where it is: it is dragged by
 	// its lines, and locked, it has none that move it.
 	LyricLocked bool `json:"lyricLocked,omitempty"`
@@ -164,7 +170,8 @@ func defaultSettings() settings {
 		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true,
 		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
-		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2, LyricEdgeFade: true,
+		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
+		LyricAlign: 1, LyricNextAlign: 1, LyricLineGap: 8, LyricEdgeFade: true,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
 	}
 }
@@ -266,6 +273,9 @@ func (s *settings) clamp() {
 	s.LyricWeight = max(100, min(900, s.LyricWeight))
 	s.LyricOutlineWidth = max(0, min(2.5, s.LyricOutlineWidth))
 	s.LyricLines = max(1, min(4, s.LyricLines))
+	s.LyricAlign = max(0, min(2, s.LyricAlign))
+	s.LyricNextAlign = max(0, min(2, s.LyricNextAlign))
+	s.LyricLineGap = max(0, min(40, s.LyricLineGap))
 	if s.LyricWidth < 0 {
 		s.LyricWidth = 0
 	}

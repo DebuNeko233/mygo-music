@@ -646,6 +646,26 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
+		alignment := func(key, label, desc string, value *int) {
+			row(label, desc, func() {
+				if segmented(c.Key(key), value, "靠左", "居中", "靠右") {
+					a.changed()
+				}
+			})
+		}
+		if s.LyricLines == 1 {
+			alignment("lyric-align", "歌词对齐", "原文与翻译使用相同的水平对齐方式", &s.LyricAlign)
+		} else {
+			alignment("lyric-align", "当前行对齐", "当前行及其翻译的水平对齐方式", &s.LyricAlign)
+			alignment("lyric-next-align", "下一行对齐", "下一行及其翻译的水平对齐方式", &s.LyricNextAlign)
+			row("行距", "当前行与下一行之间的距离", func() {
+				gap := min(max(s.LyricLineGap, 0), 40)
+				if ui.Slider(c.Key("lyric-line-gap"), &gap, 0, 40).Width(150).Label("调整双行歌词行距").Changed() {
+					s.LyricLineGap = math.Round(gap)
+					a.changed()
+				}
+			})
+		}
 		row("字号", "歌词文字的大小", func() {
 			v := min(max(s.LyricSize, lyricSizeMin), lyricSizeMax)
 			slider := ui.Slider(c.Key("lyric-size"), &v, lyricSizeMin, lyricSizeMax).Width(150).Label("调整歌词字号")

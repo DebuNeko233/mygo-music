@@ -555,7 +555,8 @@ func (d *deskLyrics) view(c *ui.Context) {
 	if len(shown) > 0 {
 		// An absolute group, centered in the window itself: the controls
 		// hover above it, rather than making its padding uneven.
-		words = ui.Column(c).Absolute().Top(0).Bottom(0).WidthPercent(100).Justify(ui.Center).Gap(8).PassThrough()
+		words = ui.Column(c).Absolute().Top(0).Bottom(0).WidthPercent(100).Justify(ui.Center).
+			Gap(float32(s.LyricLineGap)).PassThrough()
 	}
 	if over {
 		if s.LyricLocked {
@@ -601,7 +602,17 @@ func (d *deskLyrics) view(c *ui.Context) {
 				if on {
 					tint = played
 				}
-				line := ui.Column(c).Gap(4).AlignItems(ui.Center).PassThrough()
+				alignment := ui.Center
+				choice := s.LyricAlign
+				if i > 0 {
+					choice = s.LyricNextAlign
+				}
+				if choice == 0 {
+					alignment = ui.Start
+				} else if choice == 2 {
+					alignment = ui.End
+				}
+				line := ui.Column(c).Gap(4).AlignItems(alignment).PassThrough()
 				line.Children(func() {
 					fontSize := size
 					if on {
