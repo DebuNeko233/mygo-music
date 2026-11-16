@@ -624,11 +624,17 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	}
 	scroll := ui.Scroll(c.Key(key)).Grow(1).TrackScroll(&a.lyricScroll).Margin(0, -extend, 0, 0).Label("歌词")
 	viewport := scroll.LayoutBounds()
-	// Keep the cover alignment where it fits, with room for the credits in narrow panes.
 	if !hasSinging && viewport.H > 0 {
 		right = min(right, max(0, viewport.W-lyricInfoMinWidth-bar.TrackWidth))
 	}
-	gutter := max(timedPaneInsetRight+extend, right+bar.TrackWidth)
+	gutter := timedPaneInsetRight + extend
+	if hasSinging {
+		gutter = max(gutter, right+bar.TrackWidth)
+	} else {
+		// Credits and the instrumental notice use the available width. Their
+		// scrollbar overlays the edge rather than wrapping short lines.
+		gutter = 0
+	}
 	scroll.Padding(0, gutter, 0, 0).ScrollbarInsets(0, right, 0, 0)
 	w, h := c.Size()
 	if !hasSinging {
