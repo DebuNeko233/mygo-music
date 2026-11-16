@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -76,10 +75,6 @@ const backdropSide = 2560
 // back after others pushed it out.
 const backdropLimit = 8
 
-// backdropRelease is how long a picture keeps its pixels once read: past
-// the frames that first show it.
-const backdropRelease = 5 * time.Second
-
 // pictureExts are the extensions of the pictures a page can stand on: the
 // ones the app's decoders read.
 var pictureExts = []string{"png", "jpg", "jpeg", "webp", "gif"}
@@ -117,6 +112,23 @@ func (a *app) addPictures(files []string, paths *[]string) {
 	}
 	if added {
 		a.changed()
+	}
+}
+
+// preloadPictures starts reading the chosen backdrops before their first
+// frame. The home and playing paths overlap at most once in the read queue.
+func (a *app) preloadPictures() {
+	// Keep the chosen bitmaps decoded. Releasing their pixels a few seconds
+	// after reading makes an unopened page decode again on its first frame.
+	for _, path := range slices.Concat(a.settings.BackdropHome, a.settings.BackdropPlaying) {
+		if _, done := a.pics[path]; done {
+			continue
+		}
+		if a.pics == nil {
+			a.pics = map[string]*backdropPicture{}
+		}
+		a.pics[path] = nil
+		go a.readPicture(path)
 	}
 }
 
@@ -178,12 +190,6 @@ func (a *app) readPicture(path string) {
 			a.pics = map[string]*backdropPicture{}
 		}
 		a.pics[path] = pic
-		if pic != nil {
-			// Shown by the frames after it lands, the picture drops the
-			// pixels the GPU uploaded: its bytes decode them again if they
-			// are needed.
-			time.AfterFunc(backdropRelease, func() { a.post(pic.bmp.ReleasePixels) })
-		}
 		a.redraw()
 	})
 }

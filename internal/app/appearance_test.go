@@ -224,6 +224,41 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 	}
 }
 
+// The home and playing backdrops are read before either page first draws,
+// rather than each waiting for its own page to request them.
+func TestBackdropPreloadWarmsBothPages(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home.png")
+	playing := filepath.Join(dir, "playing.png")
+	writePicture(t, home, 8, 8, color.RGBA{R: 255, A: 255})
+	writePicture(t, playing, 8, 8, color.RGBA{B: 255, A: 255})
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settings.BackdropHome = []string{home}
+	a.settings.BackdropPlaying = []string{playing}
+
+	a.preloadPictures()
+	for waited := time.Duration(0); ; waited += 2 * time.Millisecond {
+		a.postMu.Lock()
+		ready := len(a.kept) == 2
+		a.postMu.Unlock()
+		if ready {
+			break
+		}
+		if waited > 5*time.Second {
+			t.Fatal("the chosen backdrops were not both read")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	a.flushKept()
+	if got := a.pictures(a.settings.BackdropHome); len(got) != 1 || got[0] == nil {
+		t.Fatal("the home page still has to wait for its backdrop")
+	}
+	if got := a.pictures(a.settings.BackdropPlaying); len(got) != 1 || got[0] == nil {
+		t.Fatal("the playing page still has to wait for its backdrop")
+	}
+}
+
 // The home page's picture shows after a restart: the page asks for it while
 // the window is being made, before there is a window to read it back into,
 // and the read was dropped there and never asked for again.
