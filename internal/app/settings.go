@@ -30,6 +30,10 @@ type settings struct {
 	Quality string `json:"quality"`
 	// Appearance is light, dark, or system to follow the system.
 	Appearance string `json:"appearance"`
+	// UIFont overrides the default typeface for the app's interface.
+	UIFont string `json:"uiFont,omitempty"`
+	// PlaybackLyricFont is the preferred face for in-app lyrics and translations.
+	PlaybackLyricFont string `json:"playbackLyricFont,omitempty"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
 	// for a few percent of a core: the listener turns it on.
 	Smoke bool `json:"smoke"`

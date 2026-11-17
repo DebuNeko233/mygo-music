@@ -10,6 +10,8 @@ import (
 	"netease-music-mygo/internal/lyrics"
 )
 
+const inactiveTimedLyricScale = 0.94
+
 // wholeLineHighlight keeps estimated LRC word times out of the lyric pane.
 func (st linesStyle) wholeLineHighlight(line *lyrics.Line) bool {
 	return (st.centerShort || st.immersive) && !line.Timed
@@ -21,7 +23,7 @@ func (st linesStyle) showsTimedWords(line *lyrics.Line) bool {
 
 func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float32, st linesStyle) (ui.Element, bool) {
 	if l.Kind != lyrics.Sung {
-		row := lyricInfoRow(c, l, st.lang)
+		row := lyricInfoRow(c, l, st.lang, st.translation)
 		return row, st.immersive && !st.browsing && row.Hovered()
 	}
 	line := ui.ButtonBase(c).Column().AlignItems(ui.Start).Padding(timedLineInsetY, timedLineInsetX).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
@@ -54,7 +56,7 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 	if hovered {
 		line.Background(white.Alpha(0.06))
 	}
-	scale := float32(0.94)
+	scale := float32(inactiveTimedLyricScale)
 	if on {
 		scale = 1
 	}
@@ -74,10 +76,13 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 			if on && width > 0 && st.showsTimedWords(l) {
 				a.paintLyricWords(c, l, width, st)
 			} else {
-				ui.Text(c, l.Text).Lang(st.lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
+				line := ui.Text(c, l.Text).Lang(st.lang).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
+				if st.family != "" {
+					line.Font(st.family)
+				}
 			}
 			if l.Translation != "" {
-				ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
+				st.translation.apply(ui.Text(c, l.Translation)).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
 			}
 		})
 	})
@@ -103,7 +108,7 @@ func lyricStaticNotice(c *ui.Context, text, lang string) ui.Element {
 	return ui.Text(c, text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(white.Alpha(0.85))
 }
 
-func lyricInfoRow(c *ui.Context, l *lyrics.Line, lang string) ui.Element {
+func lyricInfoRow(c *ui.Context, l *lyrics.Line, lang string, translatedFont lyricTypeface) ui.Element {
 	row := ui.Column(c).Padding(timedLineInsetY, timedLineInsetX).Gap(timedLineGap)
 	row.Children(func() {
 		if l.Kind == lyrics.Instrumental {
@@ -113,7 +118,7 @@ func lyricInfoRow(c *ui.Context, l *lyrics.Line, lang string) ui.Element {
 		size, weight := lyricInfoFont(l.Kind)
 		ui.Text(c, l.Text).Lang(lang).FontSize(size).FontWeight(weight).LineHeight(1.25).TextColor(white.Alpha(0.68))
 		if l.Translation != "" {
-			ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.55))
+			translatedFont.apply(ui.Text(c, l.Translation)).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.55))
 		}
 	})
 	return row

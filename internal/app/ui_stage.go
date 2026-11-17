@@ -55,6 +55,7 @@ func easeOutCubic(t float32) float32 {
 type stageWordLayout struct {
 	line   *lyrics.Line
 	f      float32
+	font   lyricTypeface
 	shapes []wordShape
 }
 
@@ -62,21 +63,21 @@ type stageWordLayout struct {
 // the stage builds the same line again every frame while its words spring
 // in and fill, and measuring every word of it each time costs more than
 // the drawing does.
-func (a *app) laidOutShapes(c *ui.Context, l *lyrics.Line, f float32) []wordShape {
-	if a.stageWords.line == l && a.stageWords.f == f {
+func (a *app) laidOutShapes(c *ui.Context, l *lyrics.Line, f float32, font lyricTypeface) []wordShape {
+	if a.stageWords.line == l && a.stageWords.f == f && a.stageWords.font == font {
 		return a.stageWords.shapes
 	}
-	a.stageWords = stageWordLayout{line: l, f: f, shapes: stageShapes(c, l, f)}
+	a.stageWords = stageWordLayout{line: l, f: f, font: font, shapes: stageShapes(c, l, f, font)}
 	return a.stageWords.shapes
 }
 
 // stageShapes lays out the words of a line at font size f.
-func stageShapes(c *ui.Context, l *lyrics.Line, f float32) []wordShape {
+func stageShapes(c *ui.Context, l *lyrics.Line, f float32, font lyricTypeface) []wordShape {
 	seed := float64(l.At / time.Millisecond)
 	shapes := make([]wordShape, len(l.Words))
 	widths := make([]float32, len(l.Words))
 	for i, w := range l.Words {
-		widths[i], _ = c.MeasureText(0, ui.Span{Text: w.Text, Size: f, Weight: 800})
+		widths[i] = font.width(c, w.Text, f, 800)
 	}
 	for i := range l.Words {
 		ws := seed + float64(i)
@@ -155,15 +156,23 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		}
 	}
 
-	lang := pl.LyricLanguage()
+	original, translation := pl.LyricScripts()
+	font := a.playbackTypeface(original, c.Locale())
+	translatedFont := a.playbackTypeface(translation, c.Locale())
+	if translatedFont.lang == "" {
+		translatedFont.lang = c.Locale()
+	}
+	if translatedFont.family == "" && font.family != "" {
+		translatedFont.family = c.Theme().Font
+	}
 	box.Children(func() {
 		defer a.stageQuiet(c, dim, f, w)
-		quietUnder(ui.Box(c.Key("sung")).Lang(lang).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {
+		quietUnder(font.apply(ui.Box(c.Key("sung"))).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {
 			// The line before goes as the new one comes.
 			if cur > 0 && !c.Preferences().ReduceMotion {
 				gone := float32((pos - lines[cur].At).Seconds()) / 0.4
 				if gone < 1 {
-					a.stageLine(c, &lines[cur-1], pos, f, w, h, 1-easeOutCubic(gone), accent)
+					a.stageLine(c, &lines[cur-1], pos, f, w, h, 1-easeOutCubic(gone), accent, font)
 				}
 			}
 			switch {
@@ -173,13 +182,14 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 				// A long break before the next line.
 				a.interlude(c, pos, lines[cur].End, lines[cur+1].At)
 			default:
-				a.stageLine(c, &lines[cur], pos, f, w, h, 1, accent)
+				a.stageLine(c, &lines[cur], pos, f, w, h, 1, accent, font)
 			}
 
 			// The translation, and the line coming next, along the foot.
 			ui.Column(c).Absolute().Left(0).Right(0).Bottom(24).AlignItems(ui.Center).Gap(8).PassThrough().Children(func() {
 				if cur >= 0 && lines[cur].Translation != "" {
-					ui.Text(c.Key("translation"), lines[cur].Translation).Lang(c.Locale()).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
+					translatedFont.apply(ui.Text(c.Key("translation"), lines[cur].Translation)).FontSize(18).
+						FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
 				}
 				if cur+1 < len(lines) {
 					ui.Text(c.Key("next"), lines[cur+1].Text).FontSize(14).TextColor(white.Alpha(0.32)).TextAlign(ui.Center).SingleLine()
@@ -256,21 +266,21 @@ func stageNextFrame(c *ui.Context, lines []lyrics.Line, cur int, pos, lead time.
 
 // stageLine shows the words of l as they are at pos, the whole line at
 // opacity fade.
-func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent ui.Color) {
+func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent ui.Color, font lyricTypeface) {
 	if c.Preferences().ReduceMotion {
 		stageStillLine(c, l, pos, f, w, accent)
 		return
 	}
 	switch a.settings.StageStyle {
 	case "partita":
-		a.partitaLine(c, l, pos, f, h, fade, accent)
+		a.partitaLine(c, l, pos, f, h, fade, accent, font)
 		return
 	case "tilt":
-		tiltLine(c, l, pos, w, fade, accent, a.settings.StageSparks)
+		tiltLine(c, l, pos, w, fade, accent, a.settings.StageSparks, font)
 		return
 	}
 	seed := float64(l.At / time.Millisecond)
-	shapes := a.laidOutShapes(c, l, f)
+	shapes := a.laidOutShapes(c, l, f, font)
 	// Where the line sits: to one side or the middle, a little up or down.
 	// Use positive modulo to handle negative timestamps from malformed lyrics.
 	justify := []ui.Align{ui.Start, ui.Center, ui.End}[((int(seed)%3)+3)%3]

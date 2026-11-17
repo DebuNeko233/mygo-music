@@ -23,3 +23,23 @@ func TestLyricsLanguage(t *testing.T) {
 		}
 	}
 }
+
+// Font choice uses the script of the originals while leaving ambiguous Han unlabelled.
+func TestOriginalScript(t *testing.T) {
+	for _, c := range []struct {
+		source, translation string
+		want                Script
+	}{
+		{"憧れていた世界へ", "A world of dreams", JapaneseScript},
+		{"春日影", "Love you", HanScript},
+		{"有你的 Summer", "きみの夏", HanScript},
+		{"L’été, we’ll sing", "梦中", LatinScript},
+		{"Песня Hello", "", UnknownScript},
+		{"한글 漢字", "", UnknownScript},
+		{"♪ 2000", "カタカナ", UnknownScript},
+	} {
+		if got := OriginalScript([]Line{{Text: c.source, Translation: c.translation}}); got != c.want {
+			t.Errorf("script of %q = %v, want %v", c.source, got, c.want)
+		}
+	}
+}

@@ -217,7 +217,7 @@ func settingsMatch(query string, texts ...string) bool {
 }
 
 func (a *app) settingsView(c *ui.Context) {
-	t := *c.Theme()
+	t := a.settings.uiTheme(c.Theme())
 	p := paletteFor(&t)
 	t.Accent, t.AccentText = p.accent, p.onAccent
 	c.SetTheme(&t)
@@ -391,6 +391,27 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 	var sections []settingsSection
 	add := func(id, title string, icon *ui.SVG, build func(settingsRow, settingsBlock)) {
 		sections = append(sections, settingsSection{id, title, icon, build})
+	}
+	font := func(row settingsRow, key, label, desc string, chosen *string) {
+		row(label, desc, func() {
+			names := lyricFontNames()
+			current := *chosen
+			if current == "" {
+				current = lyricFontSystem
+			}
+			// Keep showing a saved choice from another system or an older version.
+			if !slices.Contains(names, current) {
+				names = append([]string{lyricFontSystem, current}, names[1:]...)
+			}
+			if ui.Combobox(c.Key(key), &current, names).Label("选择" + label).Width(180).Changed() {
+				if current == lyricFontSystem {
+					current = ""
+				}
+				*chosen = current
+				a.changed()
+				c.AnimationFrame()
+			}
+		})
 	}
 
 	add("general", "通用", iconSettings, func(row settingsRow, block settingsBlock) {
@@ -573,38 +594,14 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				}
 			})
 		})
+		font(row, "ui-font", "UI 字体", "应用界面的文字字体", &s.UIFont)
+		font(row, "playing-lyric-font", "歌词字体", "播放页的歌词字体", &s.PlaybackLyricFont)
 		background("home", "主页面背景", &s.BackdropHome, &s.BackdropHomeOpacity)
 		background("playing", "播放页背景", &s.BackdropPlaying, &s.BackdropPlayingOpacity)
 	})
 
 	add("lyrics", "桌面歌词", iconDeskLyrics, func(row settingsRow, block settingsBlock) {
 
-		// A font is one of the system's, named as the system names it,
-		// with the system's own for the first: typed into a field that
-		// narrows the list as the letters come, as a system may have
-		// hundreds of them.
-		font := func(key, label, desc string, chosen *string) {
-			row(label, desc, func() {
-				names := lyricFontNames()
-				now := lyricFontSystem
-				if *chosen != "" {
-					now = *chosen
-				}
-				// A choice an older settings file holds is none of the
-				// system's names: it keeps the place beside the system's
-				// own, showing as it did until it is replaced.
-				if !slices.Contains(names, now) {
-					names = append([]string{names[0], now}, names[1:]...)
-				}
-				if ui.Combobox(c.Key(key), &now, names).Label("选择" + label).Width(150).Changed() {
-					*chosen = ""
-					if now != lyricFontSystem {
-						*chosen = now
-					}
-					a.changed()
-				}
-			})
-		}
 		// So is a colour, beside a dot of it.
 		colour := func(key, label, desc string, chosen *string) {
 			row(label, desc, func() {
@@ -692,7 +689,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
-		font("lyric-font", "字体", "歌词文字所用的字体", &s.LyricFont)
+		font(row, "lyric-font", "字体", "歌词文字所用的字体", &s.LyricFont)
 		colour("lyric-played", "已播放颜色", "正在播放的这一句的颜色", &s.LyricPlayed)
 		colour("lyric-idle", "未播放颜色", "未播放的句子的颜色", &s.LyricIdle)
 		row("描边厚度", "歌词文字描边的粗细（像素），0 为无描边", func() {
@@ -710,7 +707,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
-		font("lyric-trans-font", "翻译字体", "翻译文字所用的字体", &s.LyricTransFont)
+		font(row, "lyric-trans-font", "翻译字体", "翻译文字所用的字体", &s.LyricTransFont)
 		colour("lyric-trans-color", "翻译颜色", "翻译文字的颜色", &s.LyricTransColor)
 		row("锁定位置", "锁定桌面歌词窗格位置", func() {
 			if ui.Switch(c.Key("lyric-locked"), &s.LyricLocked).Label("锁定歌词位置").Changed() {

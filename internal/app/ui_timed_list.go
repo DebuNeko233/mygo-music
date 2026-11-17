@@ -16,25 +16,29 @@ const timedLineInsetY = 10
 const timedPaneInsetRight = 8
 
 type timedListLayout struct {
-	width     float32
-	font      ui.Font
-	direction ui.Direction
-	leading   float32
-	first     *lyrics.Line
-	revision  uint64
-	measured  []bool
-	manual    bool
-	offsets   []float32 // start of each row, plus the end of the last row and gap
-	poseKey   uint64
+	width             float32
+	font, translation ui.Font
+	themeFamily       string
+	direction         ui.Direction
+	leading           float32
+	first             *lyrics.Line
+	revision          uint64
+	measured          []bool
+	manual            bool
+	offsets           []float32 // start of each row, plus the end of the last row and gap
+	poseKey           uint64
 }
 
 // reset estimates unvisited heights. Width changes invalidate actual wrapping,
 // while an ordinary transcript append keeps all the measurements already made.
 func (m *timedListLayout) reset(c *ui.Context, lines []lyrics.Line, width float32, st linesStyle, revision uint64) {
 	font, direction := lyricFont(c, st), c.Direction()
+	themeFamily := c.Theme().Font
+	translation := st.translation.translationFont(themeFamily)
 	replaced := st.centerShort && m.first != &lines[0]
-	if replaced || m.revision != revision || m.width != width || m.font != font || m.direction != direction {
-		m.width, m.font, m.direction, m.revision = width, font, direction, revision
+	if replaced || m.revision != revision || m.width != width || m.font != font || m.translation != translation || m.themeFamily != themeFamily || m.direction != direction {
+		m.width, m.font, m.themeFamily, m.direction, m.revision = width, font, themeFamily, direction, revision
+		m.translation = translation
 		m.offsets = append(m.offsets[:0], 0)
 		m.measured = m.measured[:0]
 	}
@@ -85,6 +89,7 @@ func (m *timedListLayout) measure(lines []lyrics.Line, first, last int, st lines
 		if l.Kind == lyrics.Sung {
 			_, height = shapeLyric(l.Text, font, m.width, m.direction).Size()
 		} else {
+			font.Family = m.themeFamily
 			_, height = ui.ShapeRichTextWith([]ui.Span{{Text: l.Text}}, font, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
 		}
 		if st.showsTimedWords(l) {
@@ -94,7 +99,7 @@ func (m *timedListLayout) measure(lines []lyrics.Line, first, last int, st lines
 			}
 		}
 		if l.Translation != "" && l.Kind != lyrics.Instrumental {
-			_, trans := ui.ShapeRichTextWith([]ui.Span{{Text: l.Translation}}, ui.Font{Family: m.font.Family, Size: 17, Weight: 600}, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
+			_, trans := ui.ShapeRichTextWith([]ui.Span{{Text: l.Translation}}, m.translation, ui.TextShape{Width: m.width, Direction: m.direction}).Size()
 			height += timedLineGap + trans
 		}
 		delta += height + 2*timedLineInsetY + timedLineGap - oldHeight

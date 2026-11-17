@@ -38,7 +38,17 @@ func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.
 	if !ok {
 		t.Fatal("last lyric missing")
 	}
-	if center := (first.Y + last.Y + last.H) / 2; math.Abs(float64(center-float32(h)/2)) > 2 {
+	// Find returns painted bounds. Undo the inactive rows' emphasis scale
+	// to check the layout, including when font metrics make a row taller.
+	top, bottom := first.Y, last.Y+last.H
+	const unscale = (1/inactiveTimedLyricScale - 1) / 2
+	if a.lyricAt != 0 {
+		top -= first.H * unscale
+	}
+	if a.lyricAt != len(lines)-1 {
+		bottom += last.H * unscale
+	}
+	if center := (top + bottom) / 2; math.Abs(float64(center-float32(h)/2)) > 2 {
 		t.Fatalf("lyrics centered at %.1f, want %.1f", center, float32(h)/2)
 	}
 	if a.lyricScroll.MaxY > 1 || a.lyricScroll.Y != 0 {

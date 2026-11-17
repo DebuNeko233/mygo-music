@@ -242,21 +242,66 @@ func isCJK(r rune) bool {
 	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
 }
 
-// Lang answers "ja" for lyrics in Japanese, any of whose lines has kana,
-// and "" for any others, which take the app's language. Their kanji are
-// then drawn in a Japanese font along with their kana: in a Chinese app
-// they took a Chinese one, heavier and larger than the Japanese font the
-// kana fell back to.
-func Lang(lines []Line) string {
+// Script describes the source lyrics for choosing a text font.
+type Script uint8
+
+const (
+	UnknownScript Script = iota
+	HanScript
+	JapaneseScript
+	LatinScript
+)
+
+// OriginalScript looks across the complete originals so Han-only lines of
+// a Japanese song keep its Japanese glyphs. Han alone has no language.
+func OriginalScript(lines []Line) Script {
+	return lyricScriptOf(lines, false)
+}
+
+func TranslationScript(lines []Line) Script {
+	return lyricScriptOf(lines, true)
+}
+
+func lyricScriptOf(lines []Line, translated bool) Script {
+	var han, latin, other bool
 	for _, l := range lines {
-		for _, r := range l.Text {
-			if unicode.In(r, unicode.Hiragana, unicode.Katakana) {
-				return "ja"
+		text := l.Text
+		if translated {
+			text = l.Translation
+		}
+		for _, r := range text {
+			switch {
+			case unicode.In(r, unicode.Hiragana, unicode.Katakana):
+				return JapaneseScript
+			case unicode.Is(unicode.Han, r):
+				han = true
+			case unicode.Is(unicode.Latin, r):
+				latin = true
+			case unicode.IsLetter(r):
+				other = true
 			}
 		}
 	}
+	if !other {
+		if han {
+			return HanScript
+		}
+		if latin {
+			return LatinScript
+		}
+	}
+	return UnknownScript
+}
+
+// Language gives shaping a language when the script identifies one.
+func (s Script) Language() string {
+	if s == JapaneseScript {
+		return "ja"
+	}
 	return ""
 }
+
+func Lang(lines []Line) string { return OriginalScript(lines).Language() }
 
 // Index returns the line sung at pos, or -1 before the first.
 func Index(lines []Line, pos time.Duration) int {
