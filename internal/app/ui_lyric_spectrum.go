@@ -13,17 +13,34 @@ import (
 const (
 	lyricSpectrumSilent = 0.006
 	spectrumSeekFade    = 70 * time.Millisecond
-	spectrumSeekBlend   = 200 * time.Millisecond
+	spectrumPauseFade   = 180 * time.Millisecond
+	spectrumBlendTime   = 200 * time.Millisecond
 )
+
+type spectrumPhase uint8
+
+const (
+	spectrumFollowing spectrumPhase = iota
+	spectrumPausing
+	spectrumResuming
+	spectrumSeeking
+)
+
+type spectrumBlend struct {
+	phase            spectrumPhase
+	since, samplesAt time.Time
+	lightFrom        float32
+	from, target     [player.DetailBands]float32
+}
 
 type lyricSpectrum struct {
 	levels, contour      [player.DetailBands]float32
 	at                   time.Time
 	peak                 float32
+	track                *netease.Track
+	wantsPlay            bool
 	seekRevision         uint64
-	seekAt, seekBlendAt  time.Time
-	seekLightFrom        float32
-	seekFrom, seekTarget [player.DetailBands]float32
+	blend                spectrumBlend
 	tintFrom, tintTarget ui.Color
 	tintSince            time.Time
 	renderer             spectrumRenderer
@@ -46,49 +63,80 @@ func (a *app) lyricSpectrumLayer(c *ui.Context, tr *netease.Track, tint ui.Color
 		pl := a.pl
 		now := p.Now()
 		changed := now.After(st.at)
-		playing := pl.Playing() && pl.Ready()
-		revision := pl.SeekRevision()
-		if revision != st.seekRevision {
-			st.seekRevision = revision
-			if !st.at.IsZero() && (playing || st.peak > lyricSpectrumSilent) {
-				st.beginSeek(now)
-			}
-		}
-		if changed && (playing || st.peak > lyricSpectrumSilent) {
+		wantsPlay := pl.Playing()
+		st.updateTransport(now, tr, wantsPlay, pl.SeekRevision())
+		animating := wantsPlay && pl.Ready()
+		if changed && (animating || st.peak > lyricSpectrumSilent) {
 			sample, live := pl.DetailedLevels()
 			st.step(now, sample, live)
 		}
 		color := st.blendTint(now, tint)
 		if st.peak > lyricSpectrumSilent {
 			fade := spectrumEase((st.peak - lyricSpectrumSilent) / (0.10 - lyricSpectrumSilent))
-			light := color.Mix(ui.RGB(211, 202, 255), 0.72).Alpha(peakLight * fade * st.seekLight(now))
+			light := color.Mix(ui.RGB(211, 202, 255), 0.72).Alpha(peakLight * fade * st.blend.light(now))
 			st.renderer.draw(p, r, layerHeight, st.contour[:], st.peak, color.Alpha(opacity*fade), light, changed)
 		}
-		if playing || st.peak > lyricSpectrumSilent {
+		if animating || st.peak > lyricSpectrumSilent {
 			p.AnimationFrame()
-		} else {
-			st.seekAt, st.seekBlendAt = time.Time{}, time.Time{}
+		} else if !wantsPlay {
+			st.blend.phase = spectrumFollowing
 		}
 	})
 }
 
-func (st *lyricSpectrum) beginSeek(now time.Time) {
-	st.seekLightFrom = st.seekLight(now)
-	st.seekAt, st.seekBlendAt = now, time.Time{}
+func (st *lyricSpectrum) updateTransport(now time.Time, track *netease.Track, wantsPlay bool, revision uint64) {
+	switch {
+	case revision != st.seekRevision && !st.at.IsZero() && (wantsPlay || st.peak > lyricSpectrumSilent):
+		st.beginBlend(now, spectrumSeeking)
+	case track != st.track && st.blend.phase != spectrumFollowing:
+		// A new track can overtake a pause or resume while its audio loads.
+		st.beginBlend(now, spectrumSeeking)
+	case track == st.track && wantsPlay != st.wantsPlay:
+		if !wantsPlay {
+			st.beginBlend(now, spectrumPausing)
+		} else if st.blend.phase != spectrumSeeking {
+			st.beginBlend(now, spectrumResuming)
+		}
+	}
+	st.track, st.wantsPlay, st.seekRevision = track, wantsPlay, revision
 }
 
-// The old halo fades even if the destination is still buffering. The
-// new halo returns in the latter part of the blend to the new samples.
-func (st *lyricSpectrum) seekLight(now time.Time) float32 {
-	if st.seekAt.IsZero() {
+func (st *lyricSpectrum) beginBlend(now time.Time, phase spectrumPhase) {
+	light := float32(0)
+	if st.peak > lyricSpectrumSilent {
+		light = st.blend.light(now)
+	}
+	st.blend.phase, st.blend.since = phase, now
+	st.blend.samplesAt, st.blend.lightFrom = time.Time{}, light
+}
+
+// Let the new contour take shape before restoring its halo.
+func (b *spectrumBlend) light(now time.Time) float32 {
+	switch b.phase {
+	case spectrumFollowing:
 		return 1
+	case spectrumPausing:
+		return b.fadeLight(now, spectrumPauseFade)
+	case spectrumResuming:
+		if b.samplesAt.IsZero() {
+			return b.fadeLight(now, spectrumPauseFade)
+		}
+		return b.lightFrom + (1-b.lightFrom)*b.incomingLight(now)
+	default: // Seeking.
+		out := b.fadeLight(now, spectrumSeekFade)
+		if b.samplesAt.IsZero() {
+			return out
+		}
+		return out + (1-out)*b.incomingLight(now)
 	}
-	out := st.seekLightFrom * (1 - spectrumEase(float32(now.Sub(st.seekAt))/float32(spectrumSeekFade)))
-	if st.seekBlendAt.IsZero() {
-		return out
-	}
-	in := spectrumEase(float32(now.Sub(st.seekBlendAt)-spectrumSeekFade) / float32(spectrumSeekBlend-spectrumSeekFade))
-	return out + (1-out)*in
+}
+
+func (b *spectrumBlend) fadeLight(now time.Time, duration time.Duration) float32 {
+	return b.lightFrom * (1 - spectrumEase(float32(now.Sub(b.since))/float32(duration)))
+}
+
+func (b *spectrumBlend) incomingLight(now time.Time) float32 {
+	return spectrumEase(float32(now.Sub(b.samplesAt)-spectrumSeekFade) / float32(spectrumBlendTime-spectrumSeekFade))
 }
 
 // blendTint follows the backdrop's crossfade. A new cover can arrive
@@ -113,20 +161,24 @@ func (st *lyricSpectrum) step(now time.Time, sample [player.DetailBands]float32,
 		dt = min(0.2, now.Sub(st.at).Seconds())
 	}
 	st.at = now
-	if !st.seekAt.IsZero() {
-		if st.seekBlendAt.IsZero() && live {
-			st.seekBlendAt = now
-			st.seekFrom, st.seekTarget = st.levels, sample
+	b := &st.blend
+	if b.phase == spectrumSeeking || b.phase == spectrumResuming {
+		if b.samplesAt.IsZero() && live {
+			if b.phase == spectrumResuming {
+				b.lightFrom = b.light(now)
+			}
+			b.samplesAt = now
+			b.from, b.target = st.levels, sample
 		}
-		if !st.seekBlendAt.IsZero() {
-			followSpectrum(&st.seekTarget, &sample, dt, live)
-			mix := spectrumEase(float32(now.Sub(st.seekBlendAt)) / float32(spectrumSeekBlend))
+		if !b.samplesAt.IsZero() {
+			followSpectrum(&b.target, &sample, dt, live)
+			mix := spectrumEase(float32(now.Sub(b.samplesAt)) / float32(spectrumBlendTime))
 			if mix == 1 {
-				st.levels = st.seekTarget
-				st.seekAt, st.seekBlendAt = time.Time{}, time.Time{}
+				st.levels = b.target
+				b.phase = spectrumFollowing
 			} else {
-				for i, from := range st.seekFrom {
-					st.levels[i] = from + (st.seekTarget[i]-from)*mix
+				for i, from := range b.from {
+					st.levels[i] = from + (b.target[i]-from)*mix
 				}
 			}
 			st.smoothContour()

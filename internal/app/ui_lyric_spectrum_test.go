@@ -79,9 +79,9 @@ func TestLyricSpectrumSeekBlend(t *testing.T) {
 	st := lyricSpectrum{at: start}
 	st.levels[6] = .9
 	st.smoothContour()
-	st.beginSeek(start)
+	st.beginBlend(start, spectrumSeeking)
 	st.step(start.Add(40*time.Millisecond), [player.DetailBands]float32{}, false)
-	if light := st.seekLight(st.at); light <= 0 || light >= 1 || st.levels[6] <= .6 {
+	if light := st.blend.light(st.at); light <= 0 || light >= 1 || st.levels[6] <= .6 {
 		t.Fatalf("after seeking, light = %g and outgoing level = %g", light, st.levels[6])
 	}
 
@@ -90,26 +90,100 @@ func TestLyricSpectrumSeekBlend(t *testing.T) {
 	incoming[42] = .85
 	before := st.levels
 	st.step(arrival, incoming, true)
-	if st.levels != before || st.seekLight(arrival) != 0 {
+	if st.levels != before || st.blend.light(arrival) != 0 {
 		t.Fatal("the first destination sample jumped the contour or relit the old peak")
 	}
-	half := arrival.Add(spectrumSeekBlend / 2)
+	half := arrival.Add(spectrumBlendTime / 2)
 	st.step(half, incoming, true)
-	if got := st.levels[42]; got <= 0 || got >= incoming[42] || st.seekLight(half) <= 0 || st.seekLight(half) >= 1 {
-		t.Fatalf("mid-blend incoming level = %g, light = %g", got, st.seekLight(half))
+	if got := st.levels[42]; got <= 0 || got >= incoming[42] || st.blend.light(half) <= 0 || st.blend.light(half) >= 1 {
+		t.Fatalf("mid-blend incoming level = %g, light = %g", got, st.blend.light(half))
 	}
 
 	// Seeking again restarts from what is visible, even mid-blend.
-	before, light := st.levels, st.seekLight(half)
-	st.beginSeek(half)
-	if st.levels != before || st.seekLight(half) != light {
+	before, light := st.levels, st.blend.light(half)
+	st.beginBlend(half, spectrumSeeking)
+	if st.levels != before || st.blend.light(half) != light {
 		t.Fatal("a second seek jumped the displayed spectrum")
 	}
 	arrival = half.Add(90 * time.Millisecond)
 	st.step(arrival, incoming, true)
-	st.step(arrival.Add(spectrumSeekBlend), incoming, true)
-	if st.levels != incoming || st.seekLight(st.at) != 1 || !st.seekAt.IsZero() {
+	st.step(arrival.Add(spectrumBlendTime), incoming, true)
+	if st.levels != incoming || st.blend.light(st.at) != 1 || st.blend.phase != spectrumFollowing {
 		t.Fatal("the second blend did not settle on the destination samples")
+	}
+}
+
+// A long pause must not make the first resumed audio frame jump to full height and brightness.
+func TestLyricSpectrumResumesWithNewSamples(t *testing.T) {
+	start := time.Unix(10, 0)
+	track := &netease.Track{ID: 7}
+	var incoming, silence [player.DetailBands]float32
+	for i := 16; i < 24; i++ {
+		incoming[i] = .95
+	}
+	st := lyricSpectrum{track: track, at: start, wantsPlay: true, levels: incoming}
+	st.smoothContour()
+	st.updateTransport(start, track, false, 0)
+	for elapsed := 20 * time.Millisecond; elapsed <= 2*time.Second; elapsed += 20 * time.Millisecond {
+		st.step(start.Add(elapsed), silence, false)
+	}
+	if st.peak > lyricSpectrumSilent || st.blend.light(st.at) != 0 {
+		t.Fatal("the paused spectrum and light did not settle")
+	}
+
+	resume := start.Add(10 * time.Second)
+	st.updateTransport(resume, track, true, 0)
+	st.step(resume, silence, false)
+	if st.peak > lyricSpectrumSilent || st.blend.light(resume) != 0 {
+		t.Fatal("the spectrum lit up while waiting for resumed audio")
+	}
+	first := resume.Add(350 * time.Millisecond)
+	before := st.levels
+	st.step(first, incoming, true)
+	if st.levels != before || st.blend.light(first) != 0 {
+		t.Fatal("the first resumed audio sample jumped the contour or flashed")
+	}
+	mid := first.Add(spectrumBlendTime / 2)
+	st.step(mid, incoming, true)
+	if st.levels[20] <= before[20] || st.levels[20] >= incoming[20] || st.blend.light(mid) <= 0 || st.blend.light(mid) >= 1 {
+		t.Fatal("the contour and highlight did not ease back in")
+	}
+	st.step(first.Add(spectrumBlendTime), incoming, true)
+	if st.levels != incoming || st.blend.light(st.at) != 1 || st.blend.phase != spectrumFollowing {
+		t.Fatal("the spectrum did not resume normal playback")
+	}
+}
+
+// Rapid pause and play reversals continue from the last displayed contour and light.
+func TestLyricSpectrumRapidPauseResume(t *testing.T) {
+	start := time.Unix(10, 0)
+	track := &netease.Track{ID: 7}
+	var incoming, silence [player.DetailBands]float32
+	for i := 16; i < 24; i++ {
+		incoming[i] = .95
+	}
+	st := lyricSpectrum{track: track, at: start, wantsPlay: true, levels: incoming}
+	st.smoothContour()
+	st.updateTransport(start, track, false, 0)
+	resume := start.Add(50 * time.Millisecond)
+	st.step(resume, silence, false)
+	before, light := st.levels, st.blend.light(resume)
+	st.updateTransport(resume, track, true, 0)
+	st.step(resume, incoming, true)
+	if st.levels != before || light <= 0 || light >= 1 || st.blend.light(resume) != light {
+		t.Fatal("resuming during the fade jumped the displayed spectrum")
+	}
+
+	pause := resume.Add(spectrumBlendTime / 2)
+	st.step(pause, incoming, true)
+	before, light = st.levels, st.blend.light(pause)
+	st.updateTransport(pause, track, false, 0)
+	if st.levels != before || st.blend.light(pause) != light {
+		t.Fatal("pausing during the blend jumped the displayed spectrum")
+	}
+	st.step(pause.Add(30*time.Millisecond), silence, false)
+	if st.levels[20] >= before[20] || st.blend.light(st.at) >= light {
+		t.Fatal("the interrupted resume kept raising the contour or its highlight")
 	}
 }
 
