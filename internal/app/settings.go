@@ -56,6 +56,8 @@ type settings struct {
 	Fog bool `json:"fog"`
 	// LyricEdgeFade enables the experimental effects in the scrolling lyrics pane.
 	LyricEdgeFade bool `json:"lyricEdgeFade"`
+	// LyricSpectrum shows the moving spectrum behind lyrics and the stage.
+	LyricSpectrum bool `json:"lyricSpectrum,omitempty"`
 	// AppIcon is where the app's icon shows on macOS (appIcons); elsewhere
 	// it is always in the notification area.
 	AppIcon string `json:"appIcon"`

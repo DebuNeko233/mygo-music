@@ -70,3 +70,69 @@ func TestSpectrumUnknownLength(t *testing.T) {
 		}
 	}
 }
+
+// The detailed spectrum resolves two tones that occupy the same original band.
+func TestSpectrumDetailSeparatesTones(t *testing.T) {
+	s := newSpectrum(44100)
+	peak := func(bands []float32) int {
+		best := 0
+		for i, v := range bands {
+			if v > bands[best] {
+				best = i
+			}
+		}
+		return best
+	}
+	var coarse, detail [2]int
+	for chunk, bin := range []int{170, 195} {
+		stereo := make([]float32, fftSize*2)
+		for i := range fftSize {
+			v := float32(0.10 * math.Sin(2*math.Pi*float64(bin*i)/fftSize))
+			stereo[2*i], stereo[2*i+1] = v, v
+		}
+		at := int64(chunk * fftSize)
+		s.feed(at, stereo)
+		m, ok := s.at(at)
+		if !ok {
+			t.Fatal("the measured chunk is missing")
+		}
+		coarse[chunk], detail[chunk] = peak(m.bands[:]), peak(m.detail[:])
+	}
+	if coarse[0] != coarse[1] || detail[0] >= detail[1] {
+		t.Errorf("coarse peaks %v and detailed peaks %v did not resolve as expected", coarse, detail)
+	}
+}
+
+// The detailed display adds 4.5 dB per octave across its band centers and keeps the old gain at 1 kHz.
+func TestSpectrumDetailTilt(t *testing.T) {
+	const rate = 44100
+	s := newSpectrum(rate)
+	center := func(i int) float64 {
+		from, to := s.detail[i]*rate/fftSize, s.detail[i+1]*rate/fftSize
+		return math.Sqrt((700+from)*(700+to)) - 700
+	}
+	for _, pair := range [][2]int{{4, 17}, {16, 32}, {32, 52}, {48, 62}} {
+		from, to := pair[0], pair[1]
+		dbPerOctave := 20 * math.Log10(s.tilt[to]/s.tilt[from]) / math.Log2(center(to)/center(from))
+		if math.Abs(dbPerOctave-4.5) > 0.01 {
+			t.Errorf("bands %d–%d tilt by %.2f dB/oct, want 4.5", from, to, dbPerOctave)
+		}
+	}
+	// 1 kHz falls between these centers. Interpolate the old band gain
+	// in the same scale used to space the bands.
+	for hi := 1; hi < DetailBands; hi++ {
+		if center(hi) < 1000 {
+			continue
+		}
+		low := hi - 1
+		mel := func(f float64) float64 { return math.Log1p(f / 700) }
+		mix := (mel(1000) - mel(center(low))) / (mel(center(hi)) - mel(center(low)))
+		old := 1 + 4*(float64(low)+mix)/DetailBands
+		got := s.tilt[hi] / math.Pow(10, 4.5*math.Log2(center(hi)/1000)/20)
+		if math.Abs(got-old) > 0.01 {
+			t.Errorf("1 kHz gain = %.3f, want the previous %.3f", got, old)
+		}
+		return
+	}
+	t.Fatal("the detailed spectrum did not reach 1 kHz")
+}

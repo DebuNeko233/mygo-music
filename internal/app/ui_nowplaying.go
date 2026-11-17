@@ -60,6 +60,9 @@ func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 		pose = ui.Pose{}
 	}
 	layer.AnimatePose(pose, npSpring)
+	if !open {
+		a.npSpectrum = lyricSpectrum{}
+	}
 	if !open && settled || a.pl.Current() == nil {
 		// Closed: nothing to paint or click.
 		layer.Invisible()
@@ -112,6 +115,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	pointerIn := root.Hovered()
 	root.Children(func() {
 		a.backdrop(c, shown, tint)
+		a.lyricSpectrumLayer(c, tr, tint, h)
 		// Over the backdrop, which is positioned too: positioned elements
 		// paint over those in the flow.
 		ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Children(func() { a.nowPlayingBody(c, tr, art, accent, w, h, pointerIn) })

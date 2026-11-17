@@ -796,6 +796,11 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				a.changed()
 			}
 		})
+		row("播放页频谱", "在歌词和律动页底部显示随音乐起伏的频谱", func() {
+			if ui.Switch(c.Key("lyric-spectrum"), &s.LyricSpectrum).Label("播放页频谱").Changed() {
+				a.changed()
+			}
+		})
 
 	})
 

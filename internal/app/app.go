@@ -206,6 +206,7 @@ type app struct {
 	barCover              barCoverState
 	npScrub               scrubState
 	backdropCache         backdropCache // the backdrop of Now Playing, as last painted
+	npSpectrum            lyricSpectrum // the filled frequency spectrum behind the lyrics
 	npArt                 *artwork      // the cover whose colors Now Playing shows
 	npCoverState          coverState    // the cover of Now Playing, as it is tilted and flicked
 	wallState             wallState     // the wall of the queue's covers, as it is dragged
