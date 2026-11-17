@@ -16,13 +16,18 @@ import (
 	"netease-music-mygo/internal/player"
 )
 
-// The spectrum fills to the window's foot, while only a strong peak's upper edge brightens.
+// The spectrum fills to the bottom and strong peaks light the area outside the contour.
 func TestLyricSpectrumMaskFillsToBottom(t *testing.T) {
 	dst := image.NewRGBA(image.Rect(0, 0, 241, 80))
 	var bands [player.DetailBands]float32
 	bands[0], bands[player.DetailBands-1] = .85, .35
 	tint := ui.RGB(80, 100, 150)
-	paintLyricSpectrumFill(dst, bands[:], .85, 6, lyricSpectrumTip, tint)
+	light := ui.RGB(192, 184, 255)
+	const scale = .6
+	const height = 100
+	glow := make([]spectrumGlow, dst.Bounds().Dx())
+	spectrumGlowColumns(glow, bands[:], .85, 400)
+	paintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint, light.Alpha(0))
 
 	edgeAt := func(x int) int {
 		for y := range dst.Bounds().Dy() {
@@ -46,19 +51,65 @@ func TestLyricSpectrumMaskFillsToBottom(t *testing.T) {
 			t.Fatalf("column %d did not fill to the bottom", x)
 		}
 	}
-	bright, dim := dst.RGBAAt(0, edgeAt(0)+4), dst.RGBAAt(240, edgeAt(240)+4)
-	if float64(bright.R) < 1.5*float64(dim.R) || bright.G <= dim.G || bright.B <= dim.B ||
-		math.Abs(float64(bright.R)/float64(dim.R)-float64(bright.B)/float64(dim.B)) > .02 {
-		t.Errorf("the stronger tip should be brighter with the same hue, got %v and %v", bright, dim)
+	edge := edgeAt(0)
+	floor := dst.RGBAAt(0, 79)
+	paintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint, light)
+	if above, beside, away := dst.RGBAAt(0, edge-14).A, dst.RGBAAt(14, edge-14).A, dst.RGBAAt(100, edge-14).A; above == 0 || beside == 0 || beside >= above || away != 0 {
+		t.Errorf("glow outside a strong peak = %d above, %d beside, %d far away", above, beside, away)
 	}
-	body := dst.RGBAAt(0, edgeAt(0)+20)
-	if body != dim || dst.RGBAAt(0, 79) != dim {
-		t.Errorf("the stronger band's fill below the tip should have its base color, got %v instead of %v", body, dim)
+	outside := dst.RGBAAt(14, edge-14)
+	if dst.RGBAAt(0, 79) != floor {
+		t.Error("peak lighting reached the bottom of the spectrum")
+	}
+	paintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint.Alpha(.22), light)
+	if dst.RGBAAt(14, edge-14) != outside {
+		t.Error("the outside glow changed with the page's fill opacity")
 	}
 	clear(bands[:])
-	paintLyricSpectrumFill(dst, bands[:], 0, 6, lyricSpectrumTip, tint)
+	clear(glow)
+	paintLyricSpectrumFill(dst, bands[:], 0, height, scale, glow, tint, light)
 	if dst.RGBAAt(0, 40).A != 0 {
 		t.Error("a previous peak leaked into the next mask")
+	}
+}
+
+// A seek keeps the old contour while the light falls away and blends to the first destination samples.
+func TestLyricSpectrumSeekBlend(t *testing.T) {
+	start := time.Unix(10, 0)
+	st := lyricSpectrum{at: start}
+	st.levels[6] = .9
+	st.smoothContour()
+	st.beginSeek(start)
+	st.step(start.Add(40*time.Millisecond), [player.DetailBands]float32{}, false)
+	if light := st.seekLight(st.at); light <= 0 || light >= 1 || st.levels[6] <= .6 {
+		t.Fatalf("after seeking, light = %g and outgoing level = %g", light, st.levels[6])
+	}
+
+	arrival := start.Add(90 * time.Millisecond)
+	var incoming [player.DetailBands]float32
+	incoming[42] = .85
+	before := st.levels
+	st.step(arrival, incoming, true)
+	if st.levels != before || st.seekLight(arrival) != 0 {
+		t.Fatal("the first destination sample jumped the contour or relit the old peak")
+	}
+	half := arrival.Add(spectrumSeekBlend / 2)
+	st.step(half, incoming, true)
+	if got := st.levels[42]; got <= 0 || got >= incoming[42] || st.seekLight(half) <= 0 || st.seekLight(half) >= 1 {
+		t.Fatalf("mid-blend incoming level = %g, light = %g", got, st.seekLight(half))
+	}
+
+	// Seeking again restarts from what is visible, even mid-blend.
+	before, light := st.levels, st.seekLight(half)
+	st.beginSeek(half)
+	if st.levels != before || st.seekLight(half) != light {
+		t.Fatal("a second seek jumped the displayed spectrum")
+	}
+	arrival = half.Add(90 * time.Millisecond)
+	st.step(arrival, incoming, true)
+	st.step(arrival.Add(spectrumSeekBlend), incoming, true)
+	if st.levels != incoming || st.seekLight(st.at) != 1 || !st.seekAt.IsZero() {
+		t.Fatal("the second blend did not settle on the destination samples")
 	}
 }
 
@@ -71,7 +122,7 @@ func TestLyricSpectrumStops(t *testing.T) {
 
 	seedLyricSpectrum(a, tt.Now())
 	tt.Frame()
-	if a.npSpectrum.mask == nil {
+	if a.npSpectrum.renderer.mask == nil {
 		t.Fatal("the lyrics page did not draw the spectrum")
 	}
 	initial := a.npSpectrum.peak
@@ -122,10 +173,10 @@ func TestLyricSpectrumStops(t *testing.T) {
 		t.Errorf("the outgoing spectrum did not fall while waiting for audio: %g → %g", peak, next)
 	}
 	seedLyricSpectrum(a, tt.Now())
-	peak, mask := a.npSpectrum.peak, a.npSpectrum.mask
+	peak, mask := a.npSpectrum.peak, a.npSpectrum.renderer.mask
 	a.npPane = paneStage
 	tt.Frame()
-	if a.npSpectrum.peak != peak || a.npSpectrum.mask != mask {
+	if a.npSpectrum.peak != peak || a.npSpectrum.renderer.mask != mask {
 		t.Error("switching to the stage discarded the current spectrum")
 	}
 	a.npPane = paneQueue

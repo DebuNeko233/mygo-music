@@ -1,66 +1,32 @@
 package app
 
 import (
-	"image"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/shader"
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
 
 const (
-	lyricSpectrumFeather = 10 // DIPs across the upper edge
-	lyricSpectrumTip     = 18 // DIPs below the upper edge
-	lyricSpectrumSilent  = 0.006
-	lyricSpectrumSamples = 384
+	lyricSpectrumSilent = 0.006
+	spectrumSeekFade    = 70 * time.Millisecond
+	spectrumSeekBlend   = 200 * time.Millisecond
 )
-
-// One texture row carries 16-bit heights in red and green and the
-// brightness boost in blue. The GPU filters before unpacking the height.
-const lyricSpectrumSource = `package main
-
-var Height float
-var Feather float
-var TipDepth float
-var Tint vec4
-
-func Fragment(dst vec4, pos vec2) vec4 {
-	size := rectSize()
-	x := 0.5 + clamp(pos.x/size.x, 0.0, 1.0)*(image0Size().x-1.0)
-	sample := image0Sample(vec2(x, 0.5)).rgb
-	edge := (sample.r*256.0 + sample.g)/257.0*Height
-	distance := edge - (size.y-pos.y)
-	alpha := Tint.a*smoothstep(-Feather/2.0, Feather/2.0, distance)
-	tip := 1.0 - smoothstep(0.0, TipDepth, distance)
-	// Limit all three channels by the same factor to keep the hue.
-	gain := min(1.0 + sample.b*tip, 1.0 / max(max(Tint.r, Tint.g), max(Tint.b, 1.0/255.0)))
-	return vec4(Tint.rgb*(gain*alpha), alpha)
-}
-`
-
-var lyricSpectrumShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(lyricSpectrumSource) })
-
-var lyricSpectrumUniforms = sync.OnceValue(func() [4]shader.Uniform {
-	s := lyricSpectrumShader()
-	return [4]shader.Uniform{s.Uniform("Height"), s.Uniform("Feather"), s.Uniform("TipDepth"), s.Uniform("Tint")}
-})
 
 type lyricSpectrum struct {
 	levels, contour      [player.DetailBands]float32
 	at                   time.Time
 	peak                 float32
+	seekRevision         uint64
+	seekAt, seekBlendAt  time.Time
+	seekLightFrom        float32
+	seekFrom, seekTarget [player.DetailBands]float32
 	tintFrom, tintTarget ui.Color
 	tintSince            time.Time
-	mask                 *ui.Bitmap
-	pixels               [2]*image.RGBA
-	write                int
-	values               *shader.Values
-	paintTint            ui.Color
+	renderer             spectrumRenderer
 }
 
 func (a *app) lyricSpectrumLayer(c *ui.Context, tr *netease.Track, tint ui.Color, height float32) {
@@ -70,28 +36,59 @@ func (a *app) lyricSpectrumLayer(c *ui.Context, tr *netease.Track, tint ui.Color
 		*st = lyricSpectrum{}
 		return
 	}
-	tint = tint.Mix(ui.RGB(117, 124, 192), 0.35).Mix(white, 0.13).Alpha(0.31)
+	layerHeight, opacity, peakLight := min(height*0.216, 208), float32(0.16), float32(0.75)
+	if a.npPane == paneStage {
+		layerHeight, opacity, peakLight = min(height*0.35, 340), 0.31, 1
+	}
+	tint = tint.Mix(ui.RGB(112, 112, 200), 0.45).Mix(white, 0.07)
 	ui.Box(c.Key("lyric-spectrum")).Absolute().Left(0).Right(0).Bottom(0).
-		Height(min(height*0.25, 220)).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
+		Height(layerHeight + lyricSpectrumGlowY).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 		pl := a.pl
 		now := p.Now()
 		changed := now.After(st.at)
 		playing := pl.Playing() && pl.Ready()
+		revision := pl.SeekRevision()
+		if revision != st.seekRevision {
+			st.seekRevision = revision
+			if !st.at.IsZero() && (playing || st.peak > lyricSpectrumSilent) {
+				st.beginSeek(now)
+			}
+		}
 		if changed && (playing || st.peak > lyricSpectrumSilent) {
-			// Pause, seek, and track loading keep the same envelope.
-			// Missing samples let it settle until matching audio arrives.
 			sample, live := pl.DetailedLevels()
 			st.step(now, sample, live)
 		}
 		color := st.blendTint(now, tint)
 		if st.peak > lyricSpectrumSilent {
-			fade := clamp01((st.peak - lyricSpectrumSilent) / (0.10 - lyricSpectrumSilent))
-			st.draw(p, r, color.Alpha(fade*fade*(3-2*fade)), changed)
+			fade := spectrumEase((st.peak - lyricSpectrumSilent) / (0.10 - lyricSpectrumSilent))
+			light := color.Mix(ui.RGB(211, 202, 255), 0.72).Alpha(peakLight * fade * st.seekLight(now))
+			st.renderer.draw(p, r, layerHeight, st.contour[:], st.peak, color.Alpha(opacity*fade), light, changed)
 		}
 		if playing || st.peak > lyricSpectrumSilent {
 			p.AnimationFrame()
+		} else {
+			st.seekAt, st.seekBlendAt = time.Time{}, time.Time{}
 		}
 	})
+}
+
+func (st *lyricSpectrum) beginSeek(now time.Time) {
+	st.seekLightFrom = st.seekLight(now)
+	st.seekAt, st.seekBlendAt = now, time.Time{}
+}
+
+// The old halo fades even if the destination is still buffering. The
+// new halo returns in the latter part of the blend to the new samples.
+func (st *lyricSpectrum) seekLight(now time.Time) float32 {
+	if st.seekAt.IsZero() {
+		return 1
+	}
+	out := st.seekLightFrom * (1 - spectrumEase(float32(now.Sub(st.seekAt))/float32(spectrumSeekFade)))
+	if st.seekBlendAt.IsZero() {
+		return out
+	}
+	in := spectrumEase(float32(now.Sub(st.seekBlendAt)-spectrumSeekFade) / float32(spectrumSeekBlend-spectrumSeekFade))
+	return out + (1-out)*in
 }
 
 // blendTint follows the backdrop's crossfade. A new cover can arrive
@@ -116,151 +113,66 @@ func (st *lyricSpectrum) step(now time.Time, sample [player.DetailBands]float32,
 		dt = min(0.2, now.Sub(st.at).Seconds())
 	}
 	st.at = now
+	if !st.seekAt.IsZero() {
+		if st.seekBlendAt.IsZero() && live {
+			st.seekBlendAt = now
+			st.seekFrom, st.seekTarget = st.levels, sample
+		}
+		if !st.seekBlendAt.IsZero() {
+			followSpectrum(&st.seekTarget, &sample, dt, live)
+			mix := spectrumEase(float32(now.Sub(st.seekBlendAt)) / float32(spectrumSeekBlend))
+			if mix == 1 {
+				st.levels = st.seekTarget
+				st.seekAt, st.seekBlendAt = time.Time{}, time.Time{}
+			} else {
+				for i, from := range st.seekFrom {
+					st.levels[i] = from + (st.seekTarget[i]-from)*mix
+				}
+			}
+			st.smoothContour()
+			return
+		}
+	}
+	followSpectrum(&st.levels, &sample, dt, live)
+	st.smoothContour()
+}
+
+func followSpectrum(levels, sample *[player.DetailBands]float32, dt float64, live bool) {
 	release := 4.5
 	if !live {
 		release = 3.8
 	}
 	rise, fall := float32(1-math.Exp(-18*dt)), float32(1-math.Exp(-release*dt))
-	for i, value := range st.levels {
+	for i, value := range levels {
 		speed := rise
 		if sample[i] < value {
 			speed = fall
 		}
-		st.levels[i] += (sample[i] - value) * speed
+		levels[i] += (sample[i] - value) * speed
 	}
-	st.smoothContour()
 }
 
 // Two passes over neighboring bands round isolated spikes. Keep a little
 // of the measured contour so their position is still visible.
 func (st *lyricSpectrum) smoothContour() {
 	var scratch [player.DetailBands]float32
-	spectrumAverage(&scratch, &st.levels)
-	spectrumAverage(&st.contour, &scratch)
+	for i := range scratch {
+		scratch[i] = spectrumAverage(&st.levels, i)
+	}
 	st.peak = 0
 	for i, v := range st.levels {
-		st.contour[i] += 0.18 * (v - st.contour[i])
+		avg := spectrumAverage(&scratch, i)
+		st.contour[i] = avg + 0.18*(v-avg)
 		st.peak = max(st.peak, st.contour[i])
 	}
 }
 
-func spectrumAverage(dst, src *[player.DetailBands]float32) {
+func spectrumAverage(src *[player.DetailBands]float32, i int) float32 {
 	last := len(src) - 1
-	for i := range src {
-		dst[i] = (src[max(0, i-1)] + src[i] + src[min(last, i+1)]) / 3
-	}
+	return (src[max(0, i-1)] + src[i] + src[min(last, i+1)]) / 3
 }
 
-func (st *lyricSpectrum) draw(p *ui.Painter, r ui.Rect, tint ui.Color, changed bool) {
-	if r.W <= 0 || r.H <= 0 {
-		return
-	}
-	// Software keeps a small raster mask instead of interpreting the
-	// shader per pixel. Both paths reuse the bitmap and its two buffers.
-	gpu := p.Accelerated()
-	w, h := lyricSpectrumSamples, 1
-	if !gpu {
-		w = min(480, int(math.Ceil(float64(r.W)/2)))
-		h = int(math.Ceil(float64(r.H) / 2))
-		changed = changed || st.paintTint != tint
-		st.paintTint = tint
-	}
-	bounds := image.Rect(0, 0, w, h)
-	if st.pixels[0] == nil || st.pixels[0].Bounds() != bounds {
-		st.pixels = [2]*image.RGBA{image.NewRGBA(bounds), image.NewRGBA(bounds)}
-		changed = true
-	}
-	if changed {
-		pixels := st.pixels[st.write]
-		if gpu {
-			paintLyricSpectrumHeights(pixels, st.contour[:], st.peak)
-		} else {
-			scale := float32(h) / r.H
-			paintLyricSpectrumFill(pixels, st.contour[:], st.peak, lyricSpectrumFeather*scale, lyricSpectrumTip*scale, tint)
-		}
-		if st.mask == nil {
-			st.mask = ui.NewBitmap(pixels)
-		} else {
-			st.mask.Update(pixels)
-		}
-		st.write = 1 - st.write
-	}
-	if !gpu {
-		p.ImageRegion(st.mask, ui.Rect{}, r, ui.ImageOptions{})
-		return
-	}
-	if st.values == nil {
-		st.values = lyricSpectrumShader().NewValues()
-	}
-	// Skip the part above even the highest possible peak and its feather.
-	height := r.H
-	r.H = min(height, height*0.96*st.peak+lyricSpectrumFeather/2)
-	r.Y += height - r.H
-	u := lyricSpectrumUniforms()
-	st.values.Float(u[0], height).Float(u[1], lyricSpectrumFeather).Float(u[2], lyricSpectrumTip).Color(u[3], tint)
-	lyricSpectrumShader().Draw(p, r, shader.Options{Values: st.values, Images: [4]*ui.Bitmap{st.mask}})
-}
-
-func paintLyricSpectrumHeights(dst *image.RGBA, bands []float32, peak float32) {
-	w := dst.Bounds().Dx()
-	for x := range w {
-		level := lyricSpectrumLevel(bands, x, w)
-		value := uint16((0.28*peak+0.68*level)*65535 + 0.5)
-		i := x * 4
-		dst.Pix[i], dst.Pix[i+1], dst.Pix[i+2], dst.Pix[i+3] = uint8(value>>8), uint8(value), uint8(lyricSpectrumBrightness(level)*255+0.5), 255
-	}
-}
-
-// paintLyricSpectrumFill fills each column from the feathered curve to
-// the bottom. The strongest bands brighten only near the upper edge.
-func paintLyricSpectrumFill(dst *image.RGBA, bands []float32, peak, feather, tipDepth float32, tint ui.Color) {
-	clear(dst.Pix)
-	w, h := dst.Bounds().Dx(), dst.Bounds().Dy()
-	maxGain := 255 / float32(max(1, tint.R, tint.G, tint.B))
-	alpha := float32(tint.A) / 255
-	r, g, b := float32(tint.R)*alpha, float32(tint.G)*alpha, float32(tint.B)*alpha
-	rr, gg, bb := uint8(r+0.5), uint8(g+0.5), uint8(b+0.5)
-	for x := range w {
-		level := lyricSpectrumLevel(bands, x, w)
-		edge := float32(h) * (1 - 0.28*peak - 0.68*level)
-		boost := lyricSpectrumBrightness(level)
-		top := edge - feather/2
-		end := edge + feather/2
-		if boost > 0 {
-			end = max(end, edge+tipDepth)
-		}
-		solid := min(h, int(math.Ceil(float64(end))))
-		for y := max(0, int(top)); y < solid; y++ {
-			center := float32(y) + 0.5
-			f := min(1, max(0, (center-top)/feather))
-			f = f * f * (3 - 2*f)
-			d := min(1, max(0, (center-edge)/tipDepth))
-			gain := min(1+boost*(1-d*d*(3-2*d)), maxGain) * f
-			i := y*dst.Stride + x*4
-			dst.Pix[i], dst.Pix[i+1], dst.Pix[i+2], dst.Pix[i+3] = uint8(r*gain+0.5), uint8(g*gain+0.5), uint8(b*gain+0.5), uint8(float32(tint.A)*f+0.5)
-		}
-		for y := solid; y < h; y++ {
-			i := y*dst.Stride + x*4
-			dst.Pix[i], dst.Pix[i+1], dst.Pix[i+2], dst.Pix[i+3] = rr, gg, bb, tint.A
-		}
-	}
-}
-
-func lyricSpectrumBrightness(level float32) float32 {
-	t := min(1, max(0, (level-0.50)/0.35))
-	return 0.85 * t * t * (3 - 2*t)
-}
-
-func lyricSpectrumLevel(bands []float32, x, width int) float32 {
-	// A clamped Catmull–Rom curve joins the bands without inventing
-	// peaks between them.
-	last := len(bands) - 1
-	band := float32(x) * float32(last) / float32(max(1, width-1))
-	i := min(int(band), last-1)
-	t := band - float32(i)
-	before, left := bands[max(0, i-1)], bands[i]
-	right, after := bands[i+1], bands[min(last, i+2)]
-	startSlope, endSlope := (right-before)/2, (after-left)/2
-	value := left + t*(startSlope+t*(3*(right-left)-2*startSlope-endSlope+t*(2*(left-right)+startSlope+endSlope)))
-	return min(max(left, right), max(min(left, right), value))
+func spectrumEase(t float32) float32 {
+	t = clamp01(t)
+	return t * t * (3 - 2*t)
 }
