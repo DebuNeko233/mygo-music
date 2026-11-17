@@ -13,7 +13,7 @@ import (
 const sidebarWidth = 232
 
 func (a *app) view(c *ui.Context) {
-	t := *c.Theme()
+	t := a.settings.uiTheme(c.Theme())
 	a.pal = paletteFor(&t)
 	p := a.pal
 	t.Background, t.Text = p.bg, p.text

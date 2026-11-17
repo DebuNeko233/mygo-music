@@ -636,6 +636,9 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	}
 	scroll.Padding(0, gutter, 0, 0).ScrollbarInsets(0, right, 0, 0)
 	w, h := c.Size()
+	original, translation := pl.LyricScripts()
+	font := a.playbackTypeface(original, c.Locale())
+	translatedFont := a.playbackTypeface(translation, c.Locale())
 	if !hasSinging {
 		// A static block centers when short and remains readable by scrolling
 		// when long. It has no playback position or automatic scrolling.
@@ -653,10 +656,10 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 				ui.Column(c).WidthPercent(100).MaxWidth(480).MinWidth(0).Gap(timedLineGap).Children(func() {
 					lang := pl.LyricLanguage()
 					notice := lyrics.Line{Text: display.EmptyText(), Kind: lyrics.Instrumental}
-					lyricInfoRow(c.Key("notice"), &notice, lang)
+					lyricInfoRow(c.Key("notice"), &notice, lang, translatedFont)
 					for i := range lines {
 						if lines[i].Kind == lyrics.Credit {
-							lyricInfoRow(c.Key(i), &lines[i], lang)
+							lyricInfoRow(c.Key(i), &lines[i], lang, translatedFont)
 						}
 					}
 				})
@@ -676,7 +679,8 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	style := linesStyle{size: 30, weight: 600, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: pl.LyricLanguage(), immersive: a.settings.LyricEdgeFade, rightInset: gutter}
+	style := linesStyle{size: 30, weight: 600, lineHeight: 1.25, quiet: quiet, centerShort: true, lang: font.lang,
+		family: font.family, translation: translatedFont, immersive: a.settings.LyricEdgeFade, rightInset: gutter}
 	style.viewportHeight = height
 	if style.immersive {
 		// The volume row can extend the viewport beyond its minimum.
@@ -783,6 +787,7 @@ type linesStyle struct {
 	weight             int
 	lineHeight         float32
 	family             string // empty follows the app's theme; desktop lyrics have their own font
+	translation        lyricTypeface
 	quiet              bool
 	lang               string
 	centerShort        bool // center a whole lyric block that fits; captions keep their growing list

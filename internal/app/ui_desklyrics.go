@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"sync"
 	"time"
 	"unicode/utf16"
 
@@ -105,25 +104,6 @@ func lyricColor(name string, fallback ui.Color) ui.Color {
 	}
 	return fallback
 }
-
-// lyricFontSystem is the choice standing for the font the system takes for
-// text of its own, which an unset setting picks as well.
-const lyricFontSystem = "跟随系统"
-
-// lyricFontNames lists the fonts the settings offer: the system's own first,
-// then the families this system has, which the lines are set in as every
-// other word of the app is. MyGo lists them once, as they stay the same
-// while the app runs, and a system whose text it has no engine for lists
-// none, leaving the settings the system's own alone.
-var lyricFontNames = sync.OnceValue(func() []string {
-	names := []string{lyricFontSystem}
-	for _, f := range ui.FontFamilies() {
-		if f.Name != "" && f.Name != lyricFontSystem {
-			names = append(names, f.Name)
-		}
-	}
-	return names
-})
 
 // lyricOldFonts are the fonts that settings files written before the
 // settings listed the system's own names call by the app's names, and the
@@ -396,7 +376,10 @@ func (d *deskLyrics) controls(c *ui.Context) {
 		b := ui.ButtonBase(c.Key(key)).Padding(3, 9).Radius(999).
 			Border(1, white.Alpha(0.6)).FocusRing(false)
 		b.Children(func() {
-			ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(white)
+			text := ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(white)
+			if a.settings.UIFont != "" {
+				text.Font(a.settings.UIFont)
+			}
 		})
 		if b.Clicked() {
 			on()

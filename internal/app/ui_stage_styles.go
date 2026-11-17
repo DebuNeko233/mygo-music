@@ -192,7 +192,7 @@ func partitaRows(l *lyrics.Line, h float32) []partitaRow {
 // middle, each sliding in from the side of its guide as its first word is
 // due, the words in it springing in as classic's do. The whole line is at
 // opacity fade, swelling a little as it goes.
-func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h, fade float32, accent ui.Color) {
+func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h, fade float32, accent ui.Color, font lyricTypeface) {
 	const lookahead = 80 * time.Millisecond
 	rows := partitaRows(l, h)
 	if wordsLength(l.Words) > 40 {
@@ -229,7 +229,7 @@ func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h
 			widths := make([]float32, len(words))
 			seed := float64(words[0].Start/time.Millisecond) / 1000
 			for i, w := range words {
-				widths[i], _ = c.MeasureText(0, ui.Span{Text: w.Text, Size: f, Weight: 800})
+				widths[i] = font.width(c, w.Text, f, 800)
 				ws := seed + float64(i)*7.13
 				shapes[i] = wordShape{
 					x:      (lineRandom(ws, 1) - 0.5) * 12,
@@ -358,7 +358,7 @@ func splitParts(words []lyrics.Word, units [][2]int, n int) []tiltPart {
 // the accent, its characters up and down by turns. The whole line is at
 // opacity fade, rising a little as it goes; with sparks, each word throws
 // them as it is sung.
-func tiltLine(c *ui.Context, l *lyrics.Line, pos time.Duration, w, fade float32, accent ui.Color, sparks bool) {
+func tiltLine(c *ui.Context, l *lyrics.Line, pos time.Duration, w, fade float32, accent ui.Color, sparks bool, font lyricTypeface) {
 	size := min(w*0.06875, 90)
 	avail := w * 0.85
 	style := func(p tiltPart) (weight int, spacing float32) {
@@ -374,7 +374,7 @@ func tiltLine(c *ui.Context, l *lyrics.Line, pos time.Duration, w, fade float32,
 			text += w.Text
 		}
 		text = strings.TrimSpace(text)
-		tw, _ := c.MeasureText(0, ui.Span{Text: text, Size: size, Weight: weight})
+		tw := font.width(c, text, size, weight)
 		return tw + float32(utf8.RuneCountInString(text))*size*spacing
 	}
 	widest := func(parts []tiltPart) float32 {

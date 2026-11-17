@@ -140,13 +140,13 @@ type Player struct {
 	// track, so that a song that keeps breaking off is left where it is.
 	tries int
 
-	lyrics                            []lyrics.Line
-	lyricsLoaded                      bool
-	lyricLanguage                     string
-	lyricRevision                     uint64
-	lyricDisplay                      lyrics.Display
-	lyricBusy, coverBusy, coverLoaded bool
-	lyricFailure, coverFailure        error
+	lyrics                              []lyrics.Line
+	lyricsLoaded                        bool
+	lyricScript, lyricTranslationScript lyrics.Script
+	lyricRevision                       uint64
+	lyricDisplay                        lyrics.Display
+	lyricBusy, coverBusy, coverLoaded   bool
+	lyricFailure, coverFailure          error
 
 	// pending holds a seek asked for while the track loads.
 	pending time.Duration
@@ -502,7 +502,11 @@ func (p *Player) Lyrics() ([]lyrics.Line, bool) { return p.lyrics, p.lyricsLoade
 func (p *Player) LyricsDisplay() (lyrics.Display, bool) { return p.lyricDisplay, p.lyricsLoaded }
 
 // LyricLanguage is computed when the current lyrics change.
-func (p *Player) LyricLanguage() string { return p.lyricLanguage }
+func (p *Player) LyricLanguage() string { return p.lyricScript.Language() }
+
+func (p *Player) LyricScripts() (original, translation lyrics.Script) {
+	return p.lyricScript, p.lyricTranslationScript
+}
 
 // Downloaded returns the share of the current track downloaded so far, or
 // false before it has started to.
@@ -945,7 +949,8 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.retrying = false
 	p.lyricsErr = ""
 	p.awaiting = false
-	p.lyrics, p.lyricsLoaded, p.lyricLanguage = nil, false, ""
+	p.lyrics, p.lyricsLoaded, p.lyricScript = nil, false, lyrics.UnknownScript
+	p.lyricTranslationScript = lyrics.UnknownScript
 	p.lyricDisplay = lyrics.Display{}
 	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
 	p.lyricFailure, p.coverFailure = nil, nil

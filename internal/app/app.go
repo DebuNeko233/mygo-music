@@ -154,6 +154,7 @@ type app struct {
 	lyricResizeAnchor              lyricReadingAnchor
 	lyricBlurPass                  *ui.Canvas
 	paintedLyric                   paintedLyric
+	playbackFont                   lyricFontSelection
 	timedList                      timedListLayout
 	lyricAt                        int
 	lyricTrack                     int64
