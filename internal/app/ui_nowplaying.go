@@ -25,7 +25,7 @@ func (a *app) npState(c *ui.Context) (open, settled bool) {
 	now := c.Now()
 	if open != a.npOpen {
 		a.npOpen, a.npChangedAt = open, now
-		a.npTabsUntil = time.Time{}
+		a.npPointerUntil = time.Time{}
 		if open && a.npPane == paneLyrics {
 			// The new scroll may clamp before it has measured its
 			// contents. Start following before reading that offset.
@@ -140,6 +140,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 	case !program && (a.npPane == paneProgram || a.npPane == paneCaptions):
 		a.npPane = a.lyricsPaneChosen()
 	}
+	pointerIn = a.npPointerActive(c, pointerIn)
 	if a.npPane != paneQueue {
 		a.queueAt = -1
 	}
@@ -148,7 +149,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 	}
 	{
 		// The top strip drags the window; the chevron closes the view,
-		// showing only while the pointer is in the window, as the pane tabs do.
+		// following the same pointer fade as the pane tabs.
 		var closeBounds ui.Rect
 		barHeight := topBar(c)
 		ui.Row(c).Height(barHeight).Justify(ui.Center).AlignItems(ui.Center).DragWindow().Children(func() {
@@ -331,36 +332,30 @@ func (a *app) npTabsRow(c *ui.Context, anchor ui.Element, pointerIn bool) ui.Ele
 	width := a.npTabsWidth(c)
 	row := ui.Row(c.Key("tabs")).AttachTo(anchor, ui.AnchorCenter, ui.AnchorCenter).AttachEdgeMargin(12).Left(6).
 		Width(width).Height(npTabsHeight).Gap(6).AlignItems(ui.Center).Justify(ui.Center)
-	playing := a.pl.Playing()
-	autoHide := playing && (a.npPane == paneLyrics || a.npPane == paneStage)
-	idle := a.npTabsIdle(c, autoHide)
-	return reveal(row, !playing || (pointerIn && !idle)).IgnoreInput(idle).AccessHidden(idle)
+	return reveal(row, !a.pl.Playing() || pointerIn)
 }
 
-const npTabsIdleDelay = 2 * time.Second
+const npPointerIdleDelay = 2 * time.Second
 
-func (a *app) npTabsIdle(c *ui.Context, enabled bool) bool {
-	if !enabled {
-		a.npTabsUntil = time.Time{}
-		return false
+// npPointerActive treats an idle pointer like one that left the window.
+func (a *app) npPointerActive(c *ui.Context, pointerIn bool) bool {
+	if !pointerIn || !a.pl.Playing() || (a.npPane != paneLyrics && a.npPane != paneStage) {
+		a.npPointerUntil = time.Time{}
+		return pointerIn
 	}
 	// Use window coordinates so animating the page or switching panes
 	// cannot look like pointer movement.
-	x, y, inWindow := c.Root().PointerPosition()
-	if !inWindow {
-		a.npTabsUntil = time.Time{}
-		return false
-	}
+	x, y, _ := c.Root().PointerPosition()
 	pointer := ui.Point{X: x, Y: y}
-	if a.npTabsUntil.IsZero() || pointer != a.npTabsPointer {
-		a.npTabsPointer = pointer
-		a.npTabsUntil = c.Now().Add(npTabsIdleDelay)
+	if a.npPointerUntil.IsZero() || pointer != a.npPointer {
+		a.npPointer = pointer
+		a.npPointerUntil = c.Now().Add(npPointerIdleDelay)
 	}
-	if left := a.npTabsUntil.Sub(c.Now()); left > 0 {
+	if left := a.npPointerUntil.Sub(c.Now()); left > 0 {
 		c.After(left)
-		return false
+		return true
 	}
-	return true
+	return false
 }
 
 // reveal fades e in while the pointer is in the window, and out when it

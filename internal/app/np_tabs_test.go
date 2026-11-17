@@ -1,6 +1,7 @@
 package app
 
 import (
+	"image"
 	"math"
 	"testing"
 	"time"
@@ -51,18 +52,19 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 	}
 }
 
-// Navigation hides while playing lyrics or stage. Pausing or leaving those panes resets the idle period.
-func TestNowPlayingTabsHideWhenPlayingAndPointerIsIdle(t *testing.T) {
+// The idle timer must hide the same controls as leaving the window, including the close and stage-style buttons.
+func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		pane int
+		name, activeTab string
+		pane            int
 	}{
-		{"lyrics", paneLyrics},
-		{"stage", paneStage},
+		{"lyrics", "歌词", paneLyrics},
+		{"stage", "律动", paneStage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
+			a.settings.Fog = false
 			a.pl.Cue([]netease.Track{{ID: 1, Name: "Song", Duration: 200000}})
 			a.pl.SetLyrics(nil)
 			out := audio.NewPlayer(&silence{})
@@ -72,65 +74,84 @@ func TestNowPlayingTabsHideWhenPlayingAndPointerIsIdle(t *testing.T) {
 			a.pl.Attach(out)
 			a.nowPlaying, a.npPane = true, tc.pane
 			tt := ui.NewTesterWith(a.view, 1120, 720, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-			tt.SetScale(0.25)
+			const scale = 0.5
+			tt.SetScale(scale)
 			tt.Move(680, 260)
 			tt.Advance(npSettle)
-			const label = "待播清单"
-			button := func(wantVisible bool) ui.Rect {
-				t.Helper()
-				item, ok := tt.AccessByRole(ui.RoleButton, label)
-				if (ok && !item.Offscreen) != wantVisible {
-					t.Fatalf("queue button visibility = %v, want %v", ok && !item.Offscreen, wantVisible)
+
+			// The selected tab has a painted background even without CJK glyphs.
+			const closeLabel = "关闭"
+			labels := []string{tc.activeTab, closeLabel}
+			if tc.pane == paneStage {
+				labels = append(labels, "律动效果")
+			}
+			regions := make(map[string]image.Rectangle, len(labels))
+			for _, label := range labels {
+				box, ok := tt.Find(label)
+				if !ok {
+					t.Fatalf("can't locate %q", label)
 				}
-				return item.Bounds
+				regions[label] = image.Rect(int(box.X*scale), int(box.Y*scale), int((box.X+box.W)*scale), int((box.Y+box.H)*scale))
 			}
-			box := button(true)
-			x, y := box.X+box.W/2, box.Y+box.H/2
-			tt.Move(x, y)
+			shown := tt.Image()
+			tt.Move(-1, -1)
+			tt.Advance(250 * time.Millisecond)
+			left := tt.Image()
+			check := func(want *image.RGBA) {
+				t.Helper()
+				frame := tt.Image()
+				for _, label := range labels {
+					if !sameNowPlayingRegion(frame, want, regions[label]) {
+						t.Errorf("%q differs from the expected pointer state", label)
+					}
+				}
+			}
+			for _, label := range labels {
+				if sameNowPlayingRegion(shown, left, regions[label]) {
+					t.Errorf("%q did not change after the pointer left", label)
+				}
+			}
+			const queueLabel = "待播清单"
+			_, queueAccessibleOnLeave := tt.AccessByRole(ui.RoleButton, queueLabel)
+
+			tt.Move(680, 260)
 			tt.Advance(time.Second)
-			button(true)
-			x++
-			tt.Move(x, y)
+			check(shown)
+			tt.Move(681, 260)
 			tt.Advance(1900 * time.Millisecond)
-			button(true)
-			tt.Advance(100 * time.Millisecond)
-			button(false)
-			tt.ClickAt(x, y)
-			if a.npPane != tc.pane {
-				t.Fatal("clicked a hidden tab")
+			check(shown)
+			tt.Advance(350 * time.Millisecond)
+			check(left)
+			if _, ok := tt.AccessByRole(ui.RoleButton, queueLabel); ok != queueAccessibleOnLeave {
+				t.Error("the queue tab is accessible in only one of the two hidden states")
 			}
+			tt.Move(682, 260)
+			tt.Advance(250 * time.Millisecond)
+			check(shown)
 			a.pl.TogglePlay()
 			tt.Frame()
-			button(true)
-			tt.Advance(4 * time.Second)
-			button(true)
+			tt.Advance(3 * time.Second)
+			check(shown)
+
 			a.pl.TogglePlay()
+			a.npPane = paneQueue
 			tt.Frame()
-			tt.Advance(1900 * time.Millisecond)
-			button(true)
-			tt.Advance(100 * time.Millisecond)
-			button(false)
-			for _, pane := range []int{paneQueue, paneWall, paneComments} {
-				a.npPane = pane
-				tt.Frame()
-				button(true)
-				tt.Advance(3 * time.Second)
-				button(true)
-			}
-			a.npPane = tc.pane
-			tt.Frame()
-			tt.Advance(1900 * time.Millisecond)
-			button(true)
-			tt.Advance(100 * time.Millisecond)
-			button(false)
-			tt.Move(x+1, y)
-			if got := button(true); got != box {
-				t.Fatalf("the tabs moved from %v to %v", box, got)
-			}
-			tt.ClickAt(x+1, y)
-			if a.npPane != paneQueue {
-				t.Fatal("the revealed tab did not open the queue")
+			queueShown := tt.Image()
+			tt.Advance(3 * time.Second)
+			if !sameNowPlayingRegion(tt.Image(), queueShown, regions[closeLabel]) {
+				t.Error("the close button faded while idling on the queue")
 			}
 		})
 	}
+}
+
+func sameNowPlayingRegion(got, want *image.RGBA, region image.Rectangle) bool {
+	for y := region.Min.Y; y < region.Max.Y; y++ {
+		for x := region.Min.X; x < region.Max.X; x++ {
+			if got.RGBAAt(x, y) != want.RGBAAt(x, y) {
+				return false
+			}
+		}
+	}
+	return true
 }
