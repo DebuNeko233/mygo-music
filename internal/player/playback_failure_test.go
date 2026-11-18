@@ -138,18 +138,17 @@ func TestRangeDownloadEndChecksWholeSongSize(t *testing.T) {
 				if r.Header.Get("Range") != "bytes=3-" {
 					t.Errorf("range=%q", r.Header.Get("Range"))
 				}
-				return &http.Response{StatusCode: http.StatusPartialContent, Header: make(http.Header), Body: io.NopCloser(bytes.NewBufferString(tc.body)), Request: r}, nil
+				header := http.Header{"Content-Range": {"bytes 3-7/8"}}
+				return &http.Response{StatusCode: http.StatusPartialContent, Header: header, Body: io.NopCloser(bytes.NewBufferString(tc.body)), Request: r}, nil
 			})
 			t.Cleanup(func() { http.DefaultTransport = old })
 			ctx, cancel := context.WithCancel(context.Background())
-			d := &download{url: "https://fixture.invalid/range", base: 3, size: 8, runs: 1, users: 2, cancel: cancel, finished: make(chan struct{})}
+			defer cancel()
+			d := &download{url: "https://fixture.invalid/range"}
 			d.cond.L = &d.mu
-			defer d.Close()
-			go d.run(ctx, 3, 1, time.Second)
-			d.waitFor(math.MaxInt64)
-			<-d.finished
-			if errors.Is(d.Err(), io.ErrUnexpectedEOF) != tc.interrupted {
-				t.Fatalf("error=%v", d.Err())
+			_, err := d.fetchRange(ctx, cancel, 3, -1, 8, time.Second, new(string))
+			if tc.interrupted && !errors.Is(err, io.ErrUnexpectedEOF) || !tc.interrupted && err != nil {
+				t.Fatalf("error=%v", err)
 			}
 		})
 	}
