@@ -334,6 +334,8 @@ func Run() error {
 		}
 	})
 	defer offURL()
+	offFile := mygo.App.OnOpenFile(a.openTemporaryAudio)
+	defer offFile()
 	offSecond := mygo.App.OnSecondInstance(func([]string, string) { a.showMain() })
 	defer offSecond()
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.cancelMusicLink() })

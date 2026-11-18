@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 
@@ -32,16 +33,20 @@ type localCatalog struct {
 }
 
 type localMusic struct {
-	catalog localCatalog
-	tracks  []netease.Track
-	byID    map[int64]int
-	missing map[int64]bool
-	path    string
-	status  string
-	busy    bool
-	picking bool
-	check   uint64
-	window  *mygo.Window
+	catalog     localCatalog
+	tracks      []netease.Track
+	byID        map[int64]int
+	missing     map[int64]bool
+	path        string
+	status      string
+	busy        bool
+	picking     bool
+	check       uint64
+	window      *mygo.Window
+	temporary   localSong
+	temporaryID int64
+	pendingFile string
+	openRequest uint64
 }
 
 var localExtensions = []string{"mp3", "flac"}
@@ -60,7 +65,12 @@ func (a *app) initLocalMusic() {
 		a.local.path, a.local.status = "", "无法读取本地曲库"
 	}
 	a.local.replace(catalog)
-	a.pl.LocalPath = func(id int64) string { return a.local.song(id).Path }
+	a.pl.LocalPath = func(id int64) string {
+		if t := a.pl.Current(); t != nil && t.Temporary && t.LocalID == id {
+			return a.local.temporary.Path
+		}
+		return a.local.song(id).Path
+	}
 	a.pl.LocalMissing = func(id int64) { a.local.missing[id] = true }
 }
 
@@ -81,6 +91,13 @@ func (m *localMusic) song(id int64) localSong {
 		return m.catalog.Songs[i]
 	}
 	return localSong{}
+}
+
+func (a *app) playbackLocalSong(track *netease.Track) localSong {
+	if track.Temporary {
+		return a.local.temporary
+	}
+	return a.local.song(track.LocalID)
 }
 
 func (a *app) checkLocalFiles() {
@@ -128,6 +145,10 @@ func inspectLocalSong(path string) (localSong, bool) {
 	if err != nil || duration <= 0 {
 		return localSong{}, false
 	}
+	return readLocalSong(path, st, duration), true
+}
+
+func readLocalSong(path string, st fs.FileInfo, duration time.Duration) localSong {
 	song := localSong{Path: path, Stamp: st.ModTime().UnixNano(), Size: st.Size()}
 	song.Track = netease.Track{Name: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), Duration: duration.Milliseconds()}
 	if meta := localmedia.Tags(path); meta != nil {
@@ -140,7 +161,7 @@ func inspectLocalSong(path string) (localSong, bool) {
 		song.Track.Album.Name = strings.TrimSpace(meta.Album())
 		song.Cover = meta.Picture() != nil
 	}
-	return song, true
+	return song
 }
 
 // changeLocal serializes catalog edits and commits the new index before showing it.

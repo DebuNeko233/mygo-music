@@ -189,6 +189,12 @@ func (a *app) restoreSession() {
 		return
 	}
 	a.restored = true
+	defer func() {
+		if file := a.local.pendingFile; file != "" {
+			a.local.pendingFile = ""
+			a.openTemporaryAudio(file)
+		}
+	}()
 	path, err := sessionPath()
 	if err != nil {
 		return

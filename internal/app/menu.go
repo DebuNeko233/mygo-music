@@ -40,6 +40,8 @@ func (a *app) setMenu() {
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Label: name, Submenu: appMenu},
 		{Label: "文件", Submenu: []*mygo.MenuItem{
+			{Label: "打开音频文件…", Accelerator: "CmdOrCtrl+O", Click: run(a.chooseTemporaryAudio)},
+			mygo.Separator(),
 			{Label: "新建歌单…", Accelerator: "CmdOrCtrl+N", Click: run(func() {
 				a.showMain()
 				a.nowPlaying = false

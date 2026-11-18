@@ -5,10 +5,61 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
 	"netease-music-mygo/internal/netease"
 )
+
+// A one-off bypasses repeat-one and preserves the shuffled order and saved position.
+func TestLocalTemporaryContinuesOriginalQueue(t *testing.T) {
+	path := filepath.Join("testdata", "seek.flac")
+	posts, p := newLoadPlayer(t, nil)
+	p.LocalPath = func(int64) string { return path }
+	tracks := []netease.Track{{LocalID: 1}, {LocalID: 2}, {LocalID: 3}}
+	order := []int{2, 0, 1}
+	p.Restore(Session{Queue: slices.Clone(tracks), Order: slices.Clone(order), Shuffle: true, Repeat: RepeatOne, At: 1, Position: 1500})
+	audio, err := PrepareLocalAudio(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.PlayTemporary(netease.Track{LocalID: 4, Duration: audio.Duration.Milliseconds()}, audio)
+	pump(t, posts, "temporary audio", func() bool { return p.Ready() })
+	s, ok := p.Session()
+	if !ok || s.At != 1 || s.Position != 1500 || !slices.Equal(s.Order, order) || len(s.Queue) != 3 {
+		t.Fatalf("saved the temporary track or lost the original queue: %+v", s)
+	}
+	p.ended()
+	pump(t, posts, "original next song", func() bool { return p.Ready() && p.Current().LocalID == 2 })
+	if got, at := p.PlayOrder(); !slices.Equal(got, order) || at != 2 || p.Repeat() != RepeatOne || !p.Playing() {
+		t.Fatalf("continuation changed the original order: %v at %d", got, at)
+	}
+	for i, song := range p.Queue() {
+		if song.LocalID != tracks[i].LocalID || song.Temporary {
+			t.Fatalf("temporary playback changed the queue: %+v", p.Queue())
+		}
+	}
+}
+
+// Finishing a temporary file with no next song pauses the original track where it was.
+func TestLocalTemporaryAtQueueEnd(t *testing.T) {
+	path := filepath.Join("testdata", "seek.mp3")
+	posts, p := newLoadPlayer(t, nil)
+	p.LocalPath = func(int64) string { return path }
+	p.Restore(Session{Queue: []netease.Track{{LocalID: 1}}, Order: []int{0}, Position: 1000})
+	audio, err := PrepareLocalAudio(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.PlayTemporary(netease.Track{LocalID: 2, Duration: audio.Duration.Milliseconds()}, audio)
+	pump(t, posts, "temporary audio", func() bool { return p.Ready() })
+	p.ended()
+	pump(t, posts, "previous track paused", func() bool { return p.Ready() })
+	if p.Playing() || len(p.Queue()) != 1 || p.Current().LocalID != 1 || p.Position() < 950*time.Millisecond {
+		t.Fatalf("returned to %+v at %v, playing %v", p.Current(), p.Position(), p.Playing())
+	}
+}
 
 // Restoring and navigating a mixed queue offline reads local lyrics and cached cloud audio.
 func TestLocalMixedQueueRestoresOffline(t *testing.T) {

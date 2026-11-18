@@ -36,14 +36,15 @@ type Album struct {
 }
 
 type Track struct {
-	ID       int64    `json:"id"`
-	LocalID  int64    `json:"localId,omitempty"` // local library identity in a playback queue
-	Name     string   `json:"name"`
-	Artists  []Artist `json:"ar"`
-	Album    Album    `json:"al"`
-	Duration int64    `json:"dt"` // milliseconds
-	Fee      int      `json:"fee"`
-	Alias    []string `json:"alia"`
+	ID        int64    `json:"id"`
+	LocalID   int64    `json:"localId,omitempty"` // local library identity in a playback queue
+	Temporary bool     `json:"-"`                 // an open-file queue entry played once
+	Name      string   `json:"name"`
+	Artists   []Artist `json:"ar"`
+	Album     Album    `json:"al"`
+	Duration  int64    `json:"dt"` // milliseconds
+	Fee       int      `json:"fee"`
+	Alias     []string `json:"alia"`
 	// Reason says why a daily recommendation was picked; Alg identifies its
 	// recommendation algorithm when NetEase provides one.
 	Reason string `json:"reason"`

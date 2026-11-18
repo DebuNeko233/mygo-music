@@ -149,6 +149,14 @@ func (a *app) localFoldersView(c *ui.Context) {
 }
 
 func (a *app) localSongItems(tr *netease.Track) func(*ui.Menu) {
+	if tr.Temporary {
+		name := tr.Name
+		return func(m *ui.Menu) {
+			if m.Item("复制歌名").Chosen() {
+				copyText(name)
+			}
+		}
+	}
 	track := *tr
 	return func(m *ui.Menu) {
 		song := a.local.song(track.LocalID)

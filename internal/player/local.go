@@ -3,6 +3,7 @@ package player
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -47,6 +48,48 @@ func LocalDuration(path string) (time.Duration, error) {
 		return 0, err
 	}
 	defer s.Close()
+	return localDuration(s)
+}
+
+// LocalAudio holds a validated decoder until it is played or closed.
+type LocalAudio struct {
+	info     *netease.Stream
+	stream   stream
+	Duration time.Duration
+}
+
+// PrepareLocalAudio checks that sound can be decoded without interrupting playback.
+func PrepareLocalAudio(path string) (*LocalAudio, error) {
+	info, s, err := openLocal(path)
+	if err != nil {
+		return nil, err
+	}
+	duration, err := localDuration(s)
+	if err == nil && s.Len() >= 0 {
+		var first [2]float32
+		if n, readErr := s.Read(first[:]); n == 0 {
+			err = readErr
+			if err == nil {
+				err = io.ErrUnexpectedEOF
+			}
+		}
+	}
+	if err == nil {
+		err = s.SetPosition(0)
+	}
+	if err != nil || duration <= 0 {
+		s.Close()
+		if err == nil {
+			err = io.ErrUnexpectedEOF
+		}
+		return nil, err
+	}
+	return &LocalAudio{info: info, stream: s, Duration: duration}, nil
+}
+
+func (a *LocalAudio) Close() { a.stream.Close() }
+
+func localDuration(s stream) (time.Duration, error) {
 	frames := s.Len()
 	if frames < 0 {
 		frames = 0
