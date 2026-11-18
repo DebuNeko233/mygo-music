@@ -86,6 +86,7 @@ func (a *app) view(c *ui.Context) {
 	a.loginDialog(c)
 	a.playlistNameDialog(c)
 	a.deletePlaylistDialog(c)
+	a.descriptionDialog(c)
 	if a.toast != "" {
 		c.Toast(a.toast)
 		a.toast = ""
@@ -136,6 +137,7 @@ func (a *app) open(r route) {
 
 // show shows the page of r.
 func (a *app) show(r route) {
+	a.intro.open = false
 	a.route = r
 	if r.page == pageSearch {
 		a.query, a.searched = r.query, r

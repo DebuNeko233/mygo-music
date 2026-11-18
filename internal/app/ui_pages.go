@@ -12,6 +12,7 @@ import (
 )
 
 const pagePad = 40
+const trackPagePad = pagePad - 12
 
 // columns returns how many cards of at least min DIPs fit across the page.
 func (a *app) columns(c *ui.Context, min float32) int {
@@ -466,7 +467,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 				a.pl.PlayQueueFrom(tracks, i, a.playSource())
 			}
 		}
-	}).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).ScrollbarInsets(top, 0, bottom, 0)
+	}).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0)
 	if a.route.page == pagePlaylist {
 		list.TrackScroll(&a.pageScroll)
 	}

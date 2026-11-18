@@ -170,6 +170,84 @@ func TestPrefetchNext(t *testing.T) {
 	}
 }
 
+// Switching while prefetch asks for a URL must use the same request and download.
+func TestNextTakesPendingPrefetch(t *testing.T) {
+	b := song(t)
+	body := make(chan struct{})
+	var downloads atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+		if r.URL.Path != "/2" {
+			w.Write(b)
+			return
+		}
+		downloads.Add(1)
+		w.Write(b[:len(b)/2])
+		w.(http.Flusher).Flush()
+		select {
+		case <-body:
+			w.Write(b[len(b)/2:])
+		case <-r.Context().Done():
+		}
+	}))
+	t.Cleanup(srv.Close)
+	defer close(body)
+	asked := make(chan struct{})
+	release := make(chan struct{})
+	releaseURL := sync.OnceFunc(func() { close(release) })
+	defer releaseURL()
+	var calls atomic.Int64
+	old := songURL
+	songURL = func(id int64, level string) (*netease.Stream, error) {
+		if id == 2 && calls.Add(1) == 1 {
+			close(asked)
+			<-release
+		}
+		return &netease.Stream{URL: fmt.Sprintf("%s/%d", srv.URL, id), Size: int64(len(b)), Level: level, Type: "mp3"}, nil
+	}
+	t.Cleanup(func() { songURL = old })
+	ch, p := newLoadPlayer(t, NewCache(t.TempDir(), 1<<30))
+	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
+	pump(t, ch, "the pending URL request", func() bool {
+		select {
+		case <-asked:
+			return true
+		default:
+			return false
+		}
+	})
+	p.Next()
+	releaseURL()
+	pump(t, ch, "the next track playing", func() bool { return p.out != nil && p.Current().ID == 2 })
+	if n, gets := calls.Load(), downloads.Load(); n != 1 || gets != 1 {
+		t.Fatalf("the next track made %d URL requests and %d downloads", n, gets)
+	}
+}
+
+// Prefetch used to download the next track again even when it was already cached.
+func TestPrefetchUsesCachedTrack(t *testing.T) {
+	c := NewCache(t.TempDir(), 1<<30)
+	b := song(t)
+	st := &netease.Stream{Level: "lossless", Type: "mp3", Size: int64(len(b))}
+	part := filepath.Join(c.dir, "song.part")
+	if err := os.WriteFile(part, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c.keep(2, st.Level, st, part, st.Size); !ok {
+		t.Fatal("could not keep the next track")
+	}
+	p := &Player{Cache: c, post: func(func()) {}}
+	defer p.dropAhead()
+	p.startPrefetch(2, "exhigh", nil, func(int64, string) (*netease.Stream, error) {
+		return nil, netease.ErrUnavailable
+	}, 0)
+	a := p.ahead
+	<-a.ready
+	if a.dl == nil || a.info.Level != st.Level {
+		t.Fatal("the cached track was not ready at the requested quality")
+	}
+}
+
 // A track that does not load is asked for again, rather than skipped as if
 // it could not play: a slow or dropped connection is not an unavailable
 // song.
@@ -230,7 +308,8 @@ func TestRiskControlPrefetchIsLimited(t *testing.T) {
 			asks.Add(1)
 			return nil, netease.ErrRiskControl
 		}
-		p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
+		p.startPrefetch(2, "exhigh", nil, ask, 0)
+		synctest.Wait()
 		time.Sleep(10*time.Second - time.Millisecond)
 		synctest.Wait()
 		if run(ch) {
@@ -264,7 +343,8 @@ func TestRiskControlPrefetchStopsWhenTheSongMovesOn(t *testing.T) {
 			asks.Add(1)
 			return nil, netease.ErrRiskControl
 		}
-		p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, ask, nil, 0)
+		p.startPrefetch(2, "exhigh", nil, ask, 0)
+		synctest.Wait()
 		p.gen++ // Next, previous, or another queue invalidates this wait.
 		select {
 		case fn := <-ch:
@@ -302,7 +382,16 @@ func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 	if p.err != "" || p.Current().ID != 1 {
 		t.Fatalf("did not recover: %s", p.Err())
 	}
-	pumpFor(t, ch, "the next song after the same refusal", 15*time.Second, func() bool { return p.ahead != nil && p.ahead.dl.Err() == nil && p.ahead.dl.Progress() == 1 })
+	pumpFor(t, ch, "the next song after the same refusal", 15*time.Second, func() bool {
+		if a := p.ahead; a != nil {
+			select {
+			case <-a.ready:
+				return a.dl != nil && a.dl.Progress() == 1
+			default:
+			}
+		}
+		return false
+	})
 	if p.ahead == nil {
 		t.Fatalf("next song had no prefetch: error=%q", p.Err())
 	}
@@ -535,7 +624,11 @@ func TestPrefetchWaitsForThisOne(t *testing.T) {
 		t.Errorf("asked for the next track %d times, as this one still comes in", n)
 	}
 	close(rest)
-	pump(t, ch, "the next track fetched ahead", func() bool { return p.ahead != nil })
+	pump(t, ch, "the next track fetched ahead", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return hits[2] > 0
+	})
 }
 
 // A track fetched ahead whose download breaks off is fetched again while

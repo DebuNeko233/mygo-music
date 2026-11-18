@@ -185,7 +185,7 @@ func (s *flacStream) SetPosition(target int64) error {
 	// What came in bounds where frames are looked for: a download that
 	// stopped short has none past the bytes it brought.
 	short := false
-	if _, in, stopped := s.dl.arrived(); stopped && in < declared && in > s.start {
+	if in, stopped := s.dl.arrived(); stopped && in < declared && in > s.start {
 		short, size = true, in
 	}
 	if short && total > 0 {
@@ -198,12 +198,6 @@ func (s *flacStream) SetPosition(target int64) error {
 	}
 	loOff, lo := s.start, int64(0)
 	hiOff, hi := size, total
-	// Ask for the part the first guess is in rather than wait for the
-	// download to reach it: the seek sounds at once, if the server sends
-	// the song from a byte.
-	if target > 0 && total > 0 {
-		s.dl.seekTo(s.start + int64(float64(size-s.start)*float64(target)/float64(total)))
-	}
 	found := false
 	for tries := 0; tries < 8 && target-lo > int64(s.info.SampleRate) && hi > lo; tries++ {
 		guess := loOff + int64(float64(hiOff-loOff)*float64(target-lo)/float64(hi-lo))
@@ -244,7 +238,7 @@ func (s *flacStream) seekFailed() error {
 // cutShort reports whether the download stopped before the whole song came
 // in, as one whose length the API declared and the server did not send does.
 func (s *flacStream) cutShort() bool {
-	_, in, stopped := s.dl.arrived()
+	in, stopped := s.dl.arrived()
 	return stopped && s.dl.size > 0 && in < s.dl.size
 }
 
@@ -254,15 +248,11 @@ func (s *flacStream) cutShort() bool {
 // It reads the song a piece at a time, so the download is locked once per
 // piece rather than once per byte.
 func (s *flacStream) frameAfter(off, end int64) (int64, int64, bool) {
-	if from, _, _ := s.dl.arrived(); off < from {
-		// The download starts after off: what came before it was dropped,
-		// and is not there to be looked at.
-		off = from
-	}
+	s.dl.seekTo(off)
 	w := window{dl: s.dl, b: s.scan}
 	defer func() { s.scan = w.b }()
 	for off+2 < end {
-		if s.dl.waitFor(off+2) < off+2 {
+		if s.dl.waitRange(off, off+2) < off+2 {
 			return 0, 0, false
 		}
 		b := w.at(off, int(min(int64(windowPiece), end-off)))
