@@ -465,7 +465,7 @@ func (a *app) artistHeader(c *ui.Context, d *artistData) {
 				meta = append(meta, fmt.Sprintf("%d 张专辑", ar.AlbumSize))
 			}
 			ui.Text(c, strings.Join(meta, " · ")).FontSize(13).TextColor(p.muted)
-			a.descriptionSummary(c, ar.Name, ar.BriefDesc, artistPhotoSize)
+			a.headerDescription(c, ar.Name+" · 简介", ar.BriefDesc, artistPhotoSize)
 			ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
 				if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
 					if a.pl.Shuffle() {

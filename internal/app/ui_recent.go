@@ -210,11 +210,7 @@ func (a *app) recentPage(c *ui.Context) {
 				a.empty(c, "最近没有听过播客")
 				return
 			}
-			ui.Grid(c).Columns(a.columns(c, 340)).GapX(8).GapY(4).Margin(0, -12).Children(func() {
-				for i := range d.podcasts {
-					a.podcastRow(c.Key(d.podcasts[i].Item.ID), &d.podcasts[i].Item)
-				}
-			})
+			a.podcastGrid(c, len(d.podcasts), func(i int) *netease.Podcast { return &d.podcasts[i].Item })
 		})
 	case recentVoicesTab:
 		a.scrollPage(c, func() {

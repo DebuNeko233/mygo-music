@@ -14,6 +14,11 @@ import (
 const pagePad = 40
 const trackPagePad = pagePad - 12
 
+func trackPageWidth(c *ui.Context) float32 {
+	w, _ := c.Size()
+	return w - sidebarWidth - 1 - 2*trackPagePad // the content's left border also takes one DIP
+}
+
 // columns returns how many cards of at least min DIPs fit across the page.
 func (a *app) columns(c *ui.Context, min float32) int {
 	w, _ := c.Size()
@@ -258,8 +263,9 @@ func (a *app) playlistPage(c *ui.Context) {
 
 func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 	p := a.pal
-	ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 26, 0).Children(func() {
-		ui.Box(c).Size(212, 212).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+	const coverSize = 212
+	ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 26, 0).Children(func() {
+		ui.Box(c).Size(coverSize, coverSize).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 			a.coverFill(c, pl.Cover(), 600, 14)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
@@ -278,9 +284,7 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 				meta = append(meta, plays(pl.PlayCount)+" 次播放")
 			}
 			ui.Text(c, strings.Join(meta, " · ")).FontSize(13).TextColor(p.muted)
-			if d := strings.TrimSpace(pl.Description); d != "" {
-				ui.Text(c, strings.ReplaceAll(d, "\n", " ")).FontSize(12.5).TextColor(p.muted).MaxLines(2).LineHeight(1.45).Margin(2, 0, 0, 0)
-			}
+			a.headerDescription(c, pl.Name+" · 简介", pl.Description, coverSize)
 			ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
 				if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
 					if a.pl.Shuffle() {

@@ -80,7 +80,6 @@ type app struct {
 	naming       nameDialog   // the name of a playlist asked for
 	deleting     deleteDialog // whether to delete a playlist, asked
 	intro        descriptionDialog
-	introPreview descriptionPreview
 	liked        map[int64]bool // the songs the listener likes
 	toast        string         // a message to show once
 	picked       pickedUp       // the song a login picked up, waiting to play

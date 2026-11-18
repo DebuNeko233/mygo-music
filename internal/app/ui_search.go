@@ -162,7 +162,7 @@ func (a *app) searchPage(c *ui.Context) {
 			}
 		case netease.SearchPodcasts:
 			for i := range res.Podcasts {
-				a.podcastRow(c.Key(res.Podcasts[i].ID), &res.Podcasts[i])
+				a.podcastRow(c.Key(res.Podcasts[i].ID), &res.Podcasts[i], trackPageWidth(c))
 			}
 		}
 		if !d.page.loaded && d.page.loading {
