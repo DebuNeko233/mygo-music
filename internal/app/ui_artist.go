@@ -420,7 +420,7 @@ func (a *app) artistPage(c *ui.Context) {
 // a tab of a page that lists tracks puts its header in the same place.
 func (a *app) scrollPage(c *ui.Context, content func()) {
 	top, bottom := a.insets(c)
-	ui.Scroll(c.Key(a.route)).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
+	ui.Scroll(c.Key(a.route)).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		a.startMark(c)
 		defer a.endMark(c)
 		content()
@@ -443,7 +443,7 @@ func (a *app) artistHeader(c *ui.Context, d *artistData) {
 	if a.artistTab == artistLatest && d.latest != nil {
 		songs = d.latest
 	}
-	ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
+	ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
 		photo := ar.Avatar
 		if photo == "" {
 			photo = ar.PicURL
@@ -465,9 +465,7 @@ func (a *app) artistHeader(c *ui.Context, d *artistData) {
 				meta = append(meta, fmt.Sprintf("%d 张专辑", ar.AlbumSize))
 			}
 			ui.Text(c, strings.Join(meta, " · ")).FontSize(13).TextColor(p.muted)
-			if d := strings.TrimSpace(ar.BriefDesc); d != "" {
-				ui.Text(c, strings.ReplaceAll(d, "\n", " ")).FontSize(12.5).TextColor(p.muted).MaxLines(2).LineHeight(1.45).Margin(2, 0, 0, 0)
-			}
+			a.descriptionSummary(c, ar.Name, ar.BriefDesc, artistPhotoSize)
 			ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
 				if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
 					if a.pl.Shuffle() {
