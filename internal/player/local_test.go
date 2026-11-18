@@ -1,0 +1,122 @@
+package player
+
+import (
+	"bytes"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"netease-music-mygo/internal/netease"
+)
+
+// Restoring and navigating a mixed queue offline reads local lyrics and cached cloud audio.
+func TestLocalMixedQueueRestoresOffline(t *testing.T) {
+	b := song(t)
+	path := filepath.Join(t.TempDir(), "local.mp3")
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path[:len(path)-4]+".lrc", []byte("[00:01.00]本地歌词"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cache := NewCache(t.TempDir(), 1<<30)
+	part := filepath.Join(cache.dir, "cloud.part")
+	if err := os.WriteFile(part, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cache.keep(1, "exhigh", &netease.Stream{Type: "mp3", Level: "exhigh"}, part, int64(len(b))); !ok {
+		t.Fatal("could not cache the cloud fixture")
+	}
+	netease.SetOffline(true)
+	t.Cleanup(func() { netease.SetOffline(false) })
+	posts, p := newLoadPlayer(t, cache)
+	p.LocalPath = func(int64) string { return path }
+	p.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", nil }
+	local := netease.Track{LocalID: 1, Name: "Local", Duration: 5000}
+	cloud := netease.Track{ID: 1, Name: "Cloud", Duration: 5000}
+	p.Restore(Session{Queue: []netease.Track{cloud, local}, Order: []int{0, 1}, At: 1, Position: 1500})
+	pump(t, posts, "local restore", func() bool { return p.Ready() && !p.MetadataLoading() })
+	if p.Playing() || p.Current().Key() != local.Key() || p.Position().Milliseconds() < 1450 ||
+		len(p.lyrics) != 1 || p.lyrics[0].Text != "本地歌词" {
+		t.Fatalf("restored %+v at %v, lyrics %+v", p.Current(), p.Position(), p.lyrics)
+	}
+	p.Enqueue(cloud, true)
+	if order, at := p.PlayOrder(); len(order) != 3 || p.Queue()[order[at+1]].ID != cloud.ID {
+		t.Fatal("did not insert the song after the current entry")
+	}
+	p.Next()
+	pump(t, posts, "cached cloud song", func() bool { return p.Ready() && p.Current().ID == cloud.ID })
+	p.Jump(1)
+	pump(t, posts, "local song playing again", func() bool { return p.Ready() && p.Current().IsLocal() })
+}
+
+// A local FLAC decodes and seeks with the same sample alignment as a complete stream.
+func TestLocalFLACSeek(t *testing.T) {
+	b, err := os.ReadFile("testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "local.flac")
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	st, s, err := openLocal(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if st.Type != "flac" {
+		t.Fatalf("opened as %s", st.Type)
+	}
+	ref := decodeAll(t, b)
+	const pos = 123457
+	if err := s.SetPosition(pos); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]float32, 4096)
+	n, err := s.Read(buf)
+	if n == 0 || err != nil || maxDiff(buf[:n], ref[pos*2:]) != 0 {
+		t.Fatalf("local FLAC seek did not match the source: %d, %v", n, err)
+	}
+	if err := s.SetPosition(s.Len()); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Read(buf); n != 0 || err != io.EOF {
+		t.Fatalf("local FLAC at the end: %d, %v", n, err)
+	}
+}
+
+// MP3 seeking uses indexed sample positions, and cache cleanup leaves user files alone.
+func TestLocalMP3SeekAndSourceOwnership(t *testing.T) {
+	b := song(t)
+	path := filepath.Join(t.TempDir(), "sample.mp3")
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, s, err := openLocal(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ref := decodeAll(t, b)
+	if s.Len()*2 != int64(len(ref)) {
+		t.Fatalf("indexed %d samples, decoded %d", s.Len()*2, len(ref))
+	}
+	buf := make([]float32, 4096)
+	for _, pos := range []int64{134567, 23451, 0} {
+		if err := s.SetPosition(pos); err != nil {
+			t.Fatal(err)
+		}
+		n, err := s.Read(buf)
+		if n == 0 || err != nil || maxDiff(buf[:n], ref[pos*2:]) > 1e-4 {
+			t.Fatalf("seek to %d did not decode the expected samples: %d, %v", pos, n, err)
+		}
+	}
+	dl, _ := s.source()
+	dl.discard()
+	s.Close()
+	if after, err := os.ReadFile(path); err != nil || !bytes.Equal(after, b) {
+		t.Fatal("cache cleanup changed the local source file", err)
+	}
+}

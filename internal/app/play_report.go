@@ -27,6 +27,9 @@ type heardPlay struct {
 // Restoring paused, pausing and seeking emit no transition, so none can create
 // or discard a report. These callbacks run on the app's main thread.
 func (a *app) playback(event player.PlaybackEvent) {
+	if event.Track.IsLocal() {
+		return
+	}
 	if event.Started {
 		if event.Track.ProgramID != 0 || a.profile == nil {
 			return

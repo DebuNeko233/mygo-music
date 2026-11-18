@@ -398,7 +398,7 @@ func (n *notch) compact(c *ui.Context, tr *netease.Track, shown float32) {
 	if shown < 0.02 {
 		return
 	}
-	art := n.a.art.get(netease.Sized(tr.Album.PicURL, 96), false)
+	art := n.a.trackArtwork(tr, 96, false)
 	s := n.h0 - 12
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Height(n.h0).PaddingX(7).AlignItems(ui.Center).Opacity(shown).Children(func() {
 		cov := ui.Box(c).Size(s, s).Radius(s * 0.28)
@@ -416,7 +416,7 @@ func (n *notch) compact(c *ui.Context, tr *netease.Track, shown float32) {
 func (n *notch) levels(c *ui.Context, tr *netease.Track, w, h float32, count int) {
 	a := n.a
 	color := ui.RGB(255, 255, 255)
-	if art := a.art.get(netease.Sized(tr.Album.PicURL, 96), false); art != nil && !art.failed {
+	if art := a.trackArtwork(tr, 96, false); art != nil && !art.failed {
 		color = art.tint.Mix(white, 0.35)
 	}
 	ui.Box(c).Size(w, h).Draw(func(p *ui.Painter, r ui.Rect) {
@@ -432,7 +432,7 @@ func (n *notch) levels(c *ui.Context, tr *netease.Track, w, h float32, count int
 func (n *notch) expanded(c *ui.Context, tr *netease.Track, open, left float32) {
 	a := n.a
 	pl := a.pl
-	art := a.art.get(netease.Sized(tr.Album.PicURL, 200), false)
+	art := a.trackArtwork(tr, 200, false)
 	a.tickTimes(c)
 	col := ui.Column(c).Absolute().Top(n.h0+6).Left(left).Width(notchOpenW).Padding(8, 22, 16, 22).Gap(12).Opacity(max(0, open*1.4-0.4))
 	col.Translate(0, (1-open)*-10)
@@ -531,7 +531,7 @@ func (a *app) syncWindows() {
 	pl := a.pl
 	var id int64
 	if tr := pl.Current(); tr != nil {
-		id = tr.ID
+		id = tr.Key()
 	}
 	sig := playerSig{id, pl.Playing(), pl.Loading(), pl.Shuffle(), pl.Repeat(), a.volume, a.nowPlaying, pl.Err()}
 	if sig != a.sig {

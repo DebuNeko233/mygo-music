@@ -37,6 +37,7 @@ type Album struct {
 
 type Track struct {
 	ID       int64    `json:"id"`
+	LocalID  int64    `json:"localId,omitempty"` // local library identity in a playback queue
 	Name     string   `json:"name"`
 	Artists  []Artist `json:"ar"`
 	Album    Album    `json:"al"`
@@ -54,6 +55,16 @@ type Track struct {
 	ProgramID   int64  `json:"programId,omitempty"`
 	PodcastID   int64  `json:"podcastId,omitempty"`
 	Description string `json:"description,omitempty"`
+}
+
+func (t *Track) IsLocal() bool { return t.LocalID > 0 }
+
+// Key identifies a track in a mixed playback queue. Cloud IDs are positive.
+func (t *Track) Key() int64 {
+	if t.IsLocal() {
+		return -t.LocalID
+	}
+	return t.ID
 }
 
 // Privilege is what NetEase lets the listener signed in, or nobody, do

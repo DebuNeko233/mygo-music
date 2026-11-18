@@ -447,7 +447,7 @@ func (a *app) playerBar(c *ui.Context) {
 					var sub string
 					color := p.muted
 					switch {
-					case a.picked.id == tr.ID:
+					case a.picked.id != 0 && a.picked.id == tr.ID:
 						sub = a.picked.heard
 					case pl.Loading():
 						sub = "正在缓冲…"
@@ -487,8 +487,10 @@ func (a *app) playerBar(c *ui.Context) {
 			if iconButton(c.Key("desk-lyrics"), iconDeskLyrics, 16, deskLyrColor, "桌面歌词").Clicked() {
 				a.toggleDeskLyrics()
 			}
-			if iconButton(c.Key("comments"), iconComment, 16, p.muted, "评论").Clicked() && tr != nil {
-				a.nowPlaying, a.npPane = true, paneComments
+			if tr == nil || !tr.IsLocal() {
+				if iconButton(c.Key("comments"), iconComment, 16, p.muted, "评论").Clicked() && tr != nil {
+					a.nowPlaying, a.npPane = true, paneComments
+				}
 			}
 			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {
 				a.nowPlaying, a.npPane = true, paneQueue

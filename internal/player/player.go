@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -80,6 +81,10 @@ type Player struct {
 	Normalize func() bool
 	// Cache keeps the songs played, if set.
 	Cache *Cache
+	// LocalPath resolves a library ID on the main thread before a worker opens it.
+	LocalPath func(int64) string
+	// LocalMissing is called on the main thread when a library file cannot be opened.
+	LocalMissing func(int64)
 	// FetchLyrics optionally supplies persistent lyrics; captured per load.
 	FetchLyrics func(int64) (string, string, string, error)
 	// FetchCachedLyrics may post fresher lyrics while returning the cached source.
@@ -256,6 +261,48 @@ func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySou
 	p.playQueue(tracks, max(start, 0))
 }
 
+// Enqueue adds one song after the current song or at the end of play order.
+func (p *Player) Enqueue(track netease.Track, next bool) {
+	if len(p.order) == 0 {
+		p.PlayQueue([]netease.Track{track}, 0)
+		return
+	}
+	p.endRadio()
+	index := len(p.queue)
+	p.queue = append(p.queue, track)
+	if next {
+		p.order = slices.Insert(p.order, p.at+1, index)
+	} else {
+		p.order = append(p.order, index)
+	}
+	p.queueRevision++
+	if !p.cacheChanging {
+		p.prefetch(p.at + 1)
+	}
+	p.sync()
+}
+
+// UpdateLocalTrack keeps the queue display and next load in sync after relinking.
+func (p *Player) UpdateLocalTrack(track netease.Track) {
+	if !track.IsLocal() {
+		return
+	}
+	changed := false
+	for i := range p.queue {
+		if p.queue[i].LocalID == track.LocalID {
+			p.queue[i] = track
+			changed = true
+		}
+	}
+	if p.track != nil && p.track.LocalID == track.LocalID {
+		p.track = &track
+	}
+	if changed {
+		p.queueRevision++
+		p.sync()
+	}
+}
+
 // PlayShuffled starts a whole list with any song at its head. Explicitly
 // choosing a song through PlayQueue still keeps that song first.
 func (p *Player) PlayShuffled(tracks []netease.Track) {
@@ -417,11 +464,11 @@ func (p *Player) appendTracks(tracks []netease.Track) {
 	before := len(p.queue)
 	in := make(map[int64]bool, len(p.queue))
 	for _, t := range p.queue {
-		in[t.ID] = true
+		in[t.Key()] = true
 	}
 	for _, t := range tracks {
-		if !in[t.ID] {
-			in[t.ID] = true
+		if !in[t.Key()] {
+			in[t.Key()] = true
 			p.order = append(p.order, len(p.queue))
 			p.queue = append(p.queue, t)
 		}
@@ -969,9 +1016,20 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	p.refill()
 
 	p.RetryMetadata()
+	var localPath string
+	if t.IsLocal() && p.LocalPath != nil {
+		localPath = p.LocalPath(t.LocalID)
+	}
 
 	go func() {
-		info, s, err := p.open(t, level, ahead, ask, cache)
+		var info *netease.Stream
+		var s stream
+		var err error
+		if t.IsLocal() {
+			info, s, err = openLocal(localPath)
+		} else {
+			info, s, err = p.open(t, level, ahead, ask, cache)
+		}
 		p.post(func() {
 			if gen != p.gen {
 				if s != nil {
@@ -1022,6 +1080,18 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 // come now, skipped if it cannot play at all, and else left where it is
 // for the listener to play again.
 func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, err error) {
+	if t.IsLocal() {
+		p.playing, p.loading = false, false
+		p.err = "无法播放本地歌曲"
+		if errors.Is(err, errLocalFile) {
+			p.err = "文件已移动或不可访问"
+			if p.LocalMissing != nil {
+				p.LocalMissing(t.LocalID)
+			}
+		}
+		p.sync()
+		return
+	}
 	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	if errors.Is(err, netease.ErrOffline) {
 		p.loading, p.playing = false, false
@@ -1151,7 +1221,7 @@ func (p *Player) cutOff() {
 	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	dl, _ := p.stream.source()
 	dl.discard()
-	if p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
+	if !p.track.IsLocal() && p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
 		p.retry(p.at, 0, p.Position(), err)
 		return
 	}
@@ -1182,6 +1252,10 @@ func (p *Player) prefetch(at int) {
 		return
 	}
 	t := p.queue[p.order[at]]
+	if t.IsLocal() {
+		p.dropAhead()
+		return
+	}
 	level := p.level()
 	if a := p.ahead; a != nil && a.id == t.ID && a.level == level {
 		return // fetched already, or coming in

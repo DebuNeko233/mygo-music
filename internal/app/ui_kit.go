@@ -152,9 +152,15 @@ func pillButton(c *ui.Context, icon *ui.SVG, label string, bg, fg ui.Color) ui.E
 
 // cover shows an artwork, or a placeholder of the same size while it loads.
 func (a *app) cover(c *ui.Context, url string, px int, size, radius float32) ui.Element {
+	return a.coverImage(c, size, radius, func(box ui.Element) *artwork {
+		return a.art.getInView(netease.Sized(url, px), false, box)
+	})
+}
+
+func (a *app) coverImage(c *ui.Context, size, radius float32, load func(ui.Element) *artwork) ui.Element {
 	p := a.pal
 	box := ui.Box(c).Size(size, size).Radius(radius).Center()
-	bmp := bitmap(a.art.getInView(netease.Sized(url, px), false, box))
+	bmp := bitmap(load(box))
 	in := artIn(box, bmp)
 	if in < 1 {
 		box.Background(p.hover)

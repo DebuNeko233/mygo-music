@@ -10,7 +10,7 @@ import (
 // MetadataPending excludes an in-flight request: recovery never starts a
 // second copy, and it never restarts audio or changes pause/seek state.
 func (p *Player) MetadataPending() bool {
-	return p.track != nil && !p.cacheChanging && (!p.lyricsLoaded && !p.lyricBusy && metadataRecoverable(p.lyricFailure) || !p.coverLoaded && !p.coverBusy && p.track.Album.PicURL != "" && metadataRecoverable(p.coverFailure))
+	return p.track != nil && !p.track.IsLocal() && !p.cacheChanging && (!p.lyricsLoaded && !p.lyricBusy && metadataRecoverable(p.lyricFailure) || !p.coverLoaded && !p.coverBusy && p.track.Album.PicURL != "" && metadataRecoverable(p.coverFailure))
 }
 func metadataRecoverable(err error) bool { return err == nil || netease.RetryableError(err) }
 
@@ -23,6 +23,10 @@ func (p *Player) retryMetadata(manual bool) {
 		return
 	}
 	t, gen := *p.track, p.gen
+	if t.IsLocal() {
+		p.loadLocalMetadata(t, gen)
+		return
+	}
 	if !p.coverLoaded && !p.coverBusy && t.Album.PicURL != "" && (manual || metadataRecoverable(p.coverFailure)) {
 		p.coverBusy = true
 		go func() {
@@ -150,7 +154,7 @@ func (p *Player) LyricsRetryable() bool {
 // Downloads cancel through netease.SetOffline; a complete local song and
 // already decoded audio keep playing until their own end/failure callback.
 func (p *Player) NetworkOffline() {
-	if !p.lyricsLoaded {
+	if !p.lyricsLoaded && (p.track == nil || !p.track.IsLocal()) {
 		p.offlineLyricsError = true
 		p.lyricsErr = "暂无缓存歌词"
 	}

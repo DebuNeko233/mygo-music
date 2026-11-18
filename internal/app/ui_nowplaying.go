@@ -91,7 +91,12 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	// The player bar, with its timer, stops building once this page settles.
 	a.tickTimes(c)
 	w, h := c.Size()
-	art := a.playbackArtwork(tr.Album.PicURL, nowPlayingCoverRequest)
+	var art *artwork
+	if tr.IsLocal() {
+		art = a.trackArtwork(tr, nowPlayingCoverPixels, true)
+	} else {
+		art = a.playbackArtwork(tr.Album.PicURL, nowPlayingCoverRequest)
+	}
 	if cs := &a.npCoverState; a.npPane == paneStage || a.npPane == paneWall {
 		cs.previous = nil
 		cs.switching = false
@@ -99,7 +104,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	// The colors stay the last song's while its cover loads, rather than
 	// going gray between the two.
 	shown := art
-	if art == nil && tr.Album.PicURL != "" {
+	if art == nil && a.hasTrackCover(tr) {
 		shown = a.npArt
 	}
 	a.npArt = shown
@@ -124,7 +129,13 @@ func (a *app) nowPlayingView(c *ui.Context) {
 
 func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool) {
 	pl := a.pl
-	a.commentsFor(tr)
+	if tr.IsLocal() {
+		if a.npPane == paneComments {
+			a.npPane = a.lyricsPaneChosen()
+		}
+	} else {
+		a.commentsFor(tr)
+	}
 	// An episode has what it is about and its captions in place of lyrics;
 	// a song, lyrics in place of those.
 	switch program := tr.ProgramID != 0; {
@@ -405,7 +416,11 @@ func (a *app) npTabs() []npTab {
 		}
 		return append(tabs, npTab{paneQueue, "待播清单"}, npTab{paneComments, "评论"})
 	}
-	return []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}, {paneComments, "评论"}}
+	tabs := []npTab{{paneLyrics, "歌词"}, {paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}}
+	if tr := a.pl.Current(); tr == nil || !tr.IsLocal() {
+		tabs = append(tabs, npTab{paneComments, "评论"})
+	}
+	return tabs
 }
 
 func (a *app) paneTabs(c *ui.Context) {
@@ -501,7 +516,11 @@ func (a *app) nowPlayingTime(c *ui.Context) {
 				FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.6))
 		}
 		label(playbackClock(elapsed))
-		qualityBadge(c, pl.Stream())
+		if tr := pl.Current(); tr != nil && tr.IsLocal() {
+			ui.Text(c, "本地").FontSize(11).TextColor(white.Alpha(0.6))
+		} else {
+			qualityBadge(c, pl.Stream())
+		}
 		label(status).TextAlign(ui.End)
 	})
 }
@@ -528,7 +547,7 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Grow(1).Basis(0).MinWidth(0).Gap(12).AlignItems(ui.Center).Children(func() {
 				if bmp := bitmap(art); bmp != nil {
-					cov := ui.Box(c.Key(tr.ID)).Size(44, 44)
+					cov := ui.Box(c.Key(tr.Key())).Size(44, 44)
 					in := artIn(cov, bmp)
 					cov.Children(func() { artImage(c, bmp, 8, in) })
 				}
@@ -582,8 +601,8 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	if len(lines) > 0 {
 		first = &lines[0]
 	}
-	if a.lyricTrack != tr.ID || a.lyricFirst != first {
-		a.lyricTrack, a.lyricFirst = tr.ID, first
+	if a.lyricTrack != tr.Key() || a.lyricFirst != first {
+		a.lyricTrack, a.lyricFirst = tr.Key(), first
 		a.lyricScroll = ui.ScrollState{}
 		a.seekLyricFollow()
 	}
@@ -1152,7 +1171,7 @@ func (a *app) queuePane(c *ui.Context) {
 			row.Opacity(0.4)
 		}
 		row.Children(func() {
-			a.cover(c, tr.Album.PicURL, 96, 42, 7)
+			a.trackCover(c, tr, 96, 42, 7)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 				ui.Text(c, tr.Name).FontSize(14).FontWeight(600).SingleLine()
 				a.artistLinks(c, tr, white.Alpha(0.55), white).FontSize(12.5).SingleLine()

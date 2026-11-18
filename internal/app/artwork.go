@@ -188,6 +188,10 @@ func (c *artCache) prefetch(url string, backdrop bool) {
 }
 
 func (c *artCache) request(url string, backdrop, visible bool) *artwork {
+	return c.requestCover(url, backdrop, visible, loadArt)
+}
+
+func (c *artCache) requestCover(url string, backdrop, visible bool, load func(string) (*ui.Bitmap, image.Image, int, error)) *artwork {
 	if url == "" {
 		return nil
 	}
@@ -226,7 +230,6 @@ func (c *artCache) request(url string, backdrop, visible bool) *artwork {
 	c.serial++
 	request := c.serial
 	c.busy[key] = request
-	load := loadArt
 	go func() {
 		bmp, img, size, err := load(url)
 		var blurred *image.RGBA

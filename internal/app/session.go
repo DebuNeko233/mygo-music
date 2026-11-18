@@ -197,6 +197,11 @@ func (a *app) restoreSession() {
 	if !ok {
 		return
 	}
+	for i, track := range s.Queue {
+		if song := a.local.song(track.LocalID); track.IsLocal() && song.Track.IsLocal() {
+			s.Queue[i] = song.Track
+		}
+	}
 	a.pl.Restore(s)
 	if s.Radio != "" && a.pl.Current() != nil {
 		a.pl.AttachRadio(s.Radio, a.radioFeed(s.Radio))

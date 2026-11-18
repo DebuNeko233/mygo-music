@@ -373,8 +373,10 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		}
 		i--
 		tr := &tracks[i]
-		playing := cur != nil && cur.ID == tr.ID
-		row := ui.ButtonBase(c.Key(tr.ID)).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
+		missing := tr.IsLocal() && a.local.missing[tr.LocalID]
+		playable := tr.Playable()
+		playing := cur != nil && cur.Key() == tr.Key()
+		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
 			ContextMenu(a.songItems(tr, pid))
 		if playing {
 			// The bars overlay the list. Even a partially visible row counts,
@@ -390,22 +392,22 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			bg = p.hover
 		}
 		row.Background(row.AnimateColor("bg", bg, ui.Animation{Duration: 100 * time.Millisecond}))
-		if !tr.Playable() {
+		if !playable {
 			row.Opacity(0.42)
 		}
 		row.Children(func() {
 			ui.Box(c).Width(26).Center().Children(func() {
 				switch {
-				case playing:
+				case playing && !missing:
 					a.nowPlayingBars(c)
-				case hovered && tr.Playable():
+				case hovered && playable && !missing:
 					ui.Icon(c, iconPlay).Size(13, 13).TextColor(p.text)
 				default:
 					ui.Textf(c, "%d", i+1).FontSize(13).FontFeatures("tnum").TextColor(p.faint)
 				}
 			})
 			if covers {
-				a.cover(c, tr.Album.PicURL, 96, 38, 6)
+				a.trackCover(c, tr, 96, 38, 6)
 			}
 			ui.Column(c).Grow(3).Basis(0).MinWidth(0).Gap(3).Children(func() {
 				name := p.text
@@ -418,7 +420,11 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 				}
 				ui.RichText(c, spans...).FontSize(14).SingleLine()
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					if !tr.Playable() {
+					if missing {
+						ui.Text(c, "文件已移动或不可访问").FontSize(12.5).TextColor(p.muted).SingleLine()
+						return
+					}
+					if !playable {
 						ui.Text(c, "VIP").FontSize(9).FontWeight(800).TextColor(p.accent).Padding(0, 4).Radius(3).Border(1, p.accent.Alpha(0.6))
 					}
 					a.artistLinks(c, tr, p.muted, p.text).FontSize(12.5).SingleLine().Shrink(1).MinWidth(0)
@@ -438,19 +444,27 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 				})
 			}
 			// A liked song's heart shows; the others' as the pointer is on them.
-			ui.Box(c).Size(32, 32).Center().Children(func() {
-				if a.liked[tr.ID] || hovered {
-					a.likeButton(c.Key("like"), tr, 15, p.muted)
-				}
-			})
+			if missing {
+				ui.Button(c.Key("relink"), "重新定位").Disabled(a.local.busy).OnClick(func() { a.chooseLocalFile(tr.LocalID) })
+			} else {
+				ui.Box(c).Size(32, 32).Center().Children(func() {
+					if !tr.IsLocal() && (a.liked[tr.ID] || hovered) {
+						a.likeButton(c.Key("like"), tr, 15, p.muted)
+					}
+				})
+			}
 			if meta != nil {
 				ui.Text(c, meta(i)).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).MinWidth(88).TextAlign(ui.End)
 			} else {
 				ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
 			}
 		})
-		if row.Clicked() && tr.Playable() {
-			a.pl.PlayQueueFrom(tracks, i, a.playSource())
+		if row.Clicked() {
+			if missing {
+				a.chooseLocalFile(tr.LocalID)
+			} else if playable {
+				a.pl.PlayQueueFrom(tracks, i, a.playSource())
+			}
 		}
 	}).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).ScrollbarInsets(top, 0, bottom, 0)
 	if a.route.page == pagePlaylist {

@@ -30,6 +30,7 @@ const (
 	pageUser
 	pagePodcast
 	pagePodcasts
+	pageLocal
 )
 
 type route struct {
@@ -125,6 +126,7 @@ type app struct {
 	podcasts   pageCache[int64, *podcastData]
 	podcastTab *podcastTab // the podcasts tab's lists
 	trackList  ui.ListState
+	local      localMusic
 	// Where the page and the sidebar are scrolled, kept while Now Playing
 	// covers them, unbuilt.
 	pageScroll ui.ScrollState
@@ -344,6 +346,7 @@ func Run() error {
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
 		a.pl = player.New(a.post)
+		a.initLocalMusic()
 		a.initOffline()
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
@@ -389,6 +392,7 @@ func Run() error {
 		a.setMenu()
 		a.watchNetwork()
 		a.recoverCacheDirectory()
+		a.refreshLocalSongs()
 		a.boot()
 		// The system's keys are claimed once there is a window to say the
 		// app runs, and given back as it quits.
@@ -410,6 +414,11 @@ func Run() error {
 		a.win.OnHide(func() { a.recoveryFrame(false) })
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(a.freshenHome)
+		a.win.OnFocus(func() {
+			if a.route.page == pageLocal {
+				a.refreshLocalSongs()
+			}
+		})
 		a.applyTray()
 		if shotHook != nil {
 			shotHook(a)

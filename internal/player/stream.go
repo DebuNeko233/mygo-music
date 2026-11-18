@@ -64,6 +64,8 @@ type download struct {
 	// drop is where the song is kept and is to go: what a discard marks,
 	// since Windows removes no file a reader still holds open.
 	drop string
+	// local marks a music-library file that the cache does not own.
+	local bool
 }
 
 // startDownload fetches url, of size bytes if known, into part, a file
@@ -264,7 +266,7 @@ func (d *download) discard() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.keep = nil
-	if d.file == nil || d.part != "" {
+	if d.local || d.file == nil || d.part != "" {
 		return
 	}
 	path := d.file.Name()
@@ -288,7 +290,7 @@ func (d *download) discard() {
 func (d *download) seekTo(off int64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if off < 0 || d.users > 2 || (off >= d.base && off < d.base+d.n) || (off == d.base && !d.done) {
+	if d.local || off < 0 || d.users > 2 || (off >= d.base && off < d.base+d.n) || (off == d.base && !d.done) {
 		return false
 	}
 	if d.done {
@@ -624,12 +626,25 @@ type mp3Stream struct {
 
 func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
 	s := &mp3Stream{dl: dl, drop: dl.Close}
-	dec, err := gomp3.NewDecoder(&downloadReader{d: dl})
+	var reader io.Reader = &downloadReader{d: dl}
+	if dl.local {
+		dl.mu.Lock()
+		file := dl.file
+		dl.mu.Unlock()
+		if file == nil {
+			return nil, io.ErrClosedPipe
+		}
+		reader = io.NewSectionReader(file, 0, dl.size)
+	}
+	dec, err := gomp3.NewDecoder(reader)
 	if err != nil {
 		return nil, err
 	}
 	s.dec, s.rate = dec, dec.SampleRate()
 	s.frames = durationMs * int64(s.rate) / 1000
+	if dl.local {
+		s.frames = dec.Length() / 4
+	}
 	s.start = id3Size(dl)
 	s.spec = newSpectrum(s.rate)
 	return s, nil
@@ -700,6 +715,17 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 const preroll = 4 * 1152
 
 func (s *mp3Stream) SetPosition(frame int64) error {
+	if s.dl.local {
+		frame = min(max(frame, 0), s.frames)
+		from := max(frame-preroll, 0)
+		if _, err := s.dec.Seek(from*4, io.SeekStart); err != nil {
+			s.failure.record(err)
+			return err
+		}
+		s.pos, s.skip = frame, int(frame-from)*4
+		s.failure.clear()
+		return nil
+	}
 	// The frame to decode from, and where its bytes are, which is unknown:
 	// the bytes are spread over the song in proportion to the frames.
 	off := s.start

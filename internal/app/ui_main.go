@@ -164,6 +164,8 @@ func (a *app) load(r route) {
 		a.loadPodcast(r.id)
 	case pagePodcasts:
 		a.loadPodcastTab()
+	case pageLocal:
+		a.refreshLocalSongs()
 	}
 }
 
@@ -215,6 +217,7 @@ func (a *app) sidebar(c *ui.Context) {
 			a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
 			a.navItem(c, iconCharts, "排行榜", route{page: pageCharts})
 			a.navItem(c, iconPodcast, "播客", route{page: pagePodcasts})
+			a.navItem(c, iconNote, "本地歌曲", route{page: pageLocal})
 			if a.searched.query != "" {
 				a.navItem(c, iconSearch, "搜索结果", a.searched)
 			}
@@ -265,7 +268,7 @@ func (a *app) sidebarNowPlaying(c *ui.Context, tr *netease.Track) {
 	}
 	card.Background(card.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
 	card.Children(func() {
-		a.cover(c, tr.Album.PicURL, 96, 40, 6).Shadow(0, 2, 6, 0, p.cardShade)
+		a.trackCover(c, tr, 96, 40, 6).Shadow(0, 2, 6, 0, p.cardShade)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Text(c, tr.Name).FontSize(12.5).FontWeight(600).SingleLine()
 			a.artistLinks(c, tr, p.muted, p.text).FontSize(11.5).SingleLine()
@@ -404,6 +407,8 @@ func (a *app) content(c *ui.Context) {
 		a.podcastPage(c)
 	case pagePodcasts:
 		a.podcastsPage(c)
+	case pageLocal:
+		a.localPage(c)
 	}
 }
 

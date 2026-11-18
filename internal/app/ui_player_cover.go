@@ -16,7 +16,13 @@ type barCoverState struct {
 func (a *app) playerBarArtwork(c *ui.Context, url string) {
 	const size, radius = 48, 8
 	p := a.pal
-	requested := a.playbackArtwork(url, barCoverRequest)
+	var requested *artwork
+	hasCover := url != ""
+	if tr := a.pl.Current(); tr != nil && tr.IsLocal() {
+		requested, hasCover = a.trackArtwork(tr, barCoverPixels, false), a.hasTrackCover(tr)
+	} else {
+		requested = a.playbackArtwork(url, barCoverRequest)
+	}
 	state := &a.barCover
 	in := float32(1)
 	now := c.Now()
@@ -25,7 +31,7 @@ func (a *app) playerBarArtwork(c *ui.Context, url string) {
 	}
 	// Finish a short fade already on screen, then pick up only the latest
 	// selection. While its cover is loading, keep the last visible one.
-	if state.changedAt.IsZero() && (url == "" || requested != nil) {
+	if state.changedAt.IsZero() && (!hasCover || requested != nil) {
 		if bitmap(requested) == nil {
 			requested = nil
 		}
