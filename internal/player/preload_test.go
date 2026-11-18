@@ -170,6 +170,29 @@ func TestPrefetchNext(t *testing.T) {
 	}
 }
 
+// Prefetch used to download the next track again even when it was already cached.
+func TestPrefetchUsesCachedTrack(t *testing.T) {
+	c := NewCache(t.TempDir(), 1<<30)
+	b := song(t)
+	st := &netease.Stream{Level: "lossless", Type: "mp3", Size: int64(len(b))}
+	part := filepath.Join(c.dir, "song.part")
+	if err := os.WriteFile(part, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c.keep(2, st.Level, st, part, st.Size); !ok {
+		t.Fatal("could not keep the next track")
+	}
+	p := &Player{post: func(fn func()) { fn() }}
+	defer p.dropAhead()
+	p.prefetching(p.gen, netease.Track{ID: 2}, "exhigh", nil, func(int64, string) (*netease.Stream, error) {
+		t.Fatal("asked for a URL for the cached next track")
+		return nil, nil
+	}, c, 0)
+	if p.ahead == nil || p.ahead.id != 2 || p.ahead.level != "exhigh" || p.ahead.info.Level != st.Level {
+		t.Fatal("the cached track was not ready at the requested quality")
+	}
+}
+
 // A track that does not load is asked for again, rather than skipped as if
 // it could not play: a slow or dropped connection is not an unavailable
 // song.
