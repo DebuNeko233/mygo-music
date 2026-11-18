@@ -159,11 +159,12 @@ func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
 		return nil, err
 	}
 	s.dec, s.rate = dec, dec.SampleRate()
-	s.frames = durationMs * int64(s.rate) / 1000
 	if dl.local {
 		s.frames = dec.Length() / 4
+	} else {
+		s.frames = durationMs * int64(s.rate) / 1000
+		s.start = id3Size(dl)
 	}
-	s.start = id3Size(dl)
 	s.spec = newSpectrum(s.rate)
 	return s, nil
 }

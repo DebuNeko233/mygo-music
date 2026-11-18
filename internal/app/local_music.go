@@ -46,6 +46,7 @@ type localMusic struct {
 	temporary       localSong
 	temporaryID     int64
 	temporaryLyrics keptLyrics
+	lyricCache      localLyricCache
 	artwork         localArtworkState
 	lyricDialog     *localLyricDialog
 	pendingFile     string
@@ -68,6 +69,9 @@ func (a *app) initLocalMusic() {
 		a.local.path, a.local.status = "", "无法读取本地曲库"
 	}
 	a.local.replace(catalog)
+	if path, lastID, byID := a.local.path, a.local.catalog.LastID, a.local.byID; path != "" && lastID > 0 {
+		go pruneLocalLyricCache(path, lastID, byID)
+	}
 	a.pl.LocalPath = func(id int64) string {
 		if t := a.pl.Current(); t != nil && t.Temporary && t.LocalID == id {
 			return a.local.temporary.Path
@@ -111,18 +115,26 @@ func (a *app) checkLocalFiles() {
 	a.local.check++
 	check, songs := a.local.check, a.local.catalog.Songs
 	go func() {
-		missing := make(map[int64]bool)
-		for _, song := range songs {
-			if st, err := os.Stat(song.Path); err != nil || !st.Mode().IsRegular() {
-				missing[song.Track.LocalID] = true
-			}
-		}
+		missing := missingLocalFiles(songs, nil)
 		a.post(func() {
 			if a.local.check == check {
 				a.local.missing = missing
 			}
 		})
 	}()
+}
+
+func missingLocalFiles(songs []localSong, present map[string]struct{}) map[int64]bool {
+	missing := make(map[int64]bool)
+	for _, song := range songs {
+		if _, scanned := present[song.Path]; scanned {
+			continue
+		}
+		if st, err := os.Stat(song.Path); err != nil || !st.Mode().IsRegular() {
+			missing[song.Track.LocalID] = true
+		}
+	}
+	return missing
 }
 
 func localFilePath(path string) (string, error) {
@@ -145,6 +157,10 @@ func inspectLocalSong(path string) (localSong, bool) {
 	if err != nil || !st.Mode().IsRegular() {
 		return localSong{}, false
 	}
+	return inspectLocalSongWithInfo(path, st)
+}
+
+func inspectLocalSongWithInfo(path string, st fs.FileInfo) (localSong, bool) {
 	duration, err := player.LocalDuration(path)
 	if err != nil || duration <= 0 {
 		return localSong{}, false
@@ -169,7 +185,7 @@ func readLocalSong(path string, st fs.FileInfo, duration time.Duration) localSon
 }
 
 // changeLocal serializes catalog edits and commits the new index before showing it.
-func (a *app) changeLocal(work func(*localCatalog) (bool, string)) {
+func (a *app) changeLocal(work func(*localCatalog, map[string]struct{}) (bool, string)) {
 	if a.local.busy || a.local.path == "" {
 		return
 	}
@@ -179,18 +195,28 @@ func (a *app) changeLocal(work func(*localCatalog) (bool, string)) {
 		a.win.Invalidate()
 	}
 	a.local.check++
-	path, catalog := a.local.path, a.local.catalog
+	path, original := a.local.path, a.local.catalog
+	catalog := original
 	catalog.Songs = slices.Clone(catalog.Songs)
 	catalog.Folders = slices.Clone(catalog.Folders)
 	go func() {
-		changed, status := work(&catalog)
-		if changed && !writeSessionJSON(path, catalog) {
-			changed, status = false, "无法保存本地曲库"
+		present := make(map[string]struct{})
+		changed, status := work(&catalog, present)
+		if changed {
+			if writeSessionJSON(path, catalog) {
+				a.local.lyricCache.removeDeleted(path, original.Songs, catalog.Songs)
+			} else {
+				changed, status = false, "无法保存本地曲库"
+			}
 		}
+		if !changed {
+			catalog = original
+		}
+		missing := missingLocalFiles(catalog.Songs, present)
 		a.post(func() {
 			a.local.busy, a.local.status = false, status
+			var updated []netease.Track
 			if changed {
-				var updated []netease.Track
 				for _, song := range catalog.Songs {
 					old := a.local.song(song.Track.LocalID)
 					if old.Path != "" && (old.Path != song.Path || old.Stamp != song.Stamp || old.Size != song.Size) {
@@ -198,11 +224,11 @@ func (a *app) changeLocal(work func(*localCatalog) (bool, string)) {
 					}
 				}
 				a.local.replace(catalog)
-				for _, track := range updated {
-					a.pl.UpdateLocalTrack(track)
-				}
 			}
-			a.checkLocalFiles()
+			a.local.missing = missing
+			for _, track := range updated {
+				a.pl.UpdateLocalTrack(track)
+			}
 			a.redrawLocalFolders()
 		})
 	}()
@@ -213,7 +239,7 @@ func (a *app) addLocalFolders(paths []string) {
 		return
 	}
 	paths = slices.Clone(paths)
-	a.changeLocal(func(catalog *localCatalog) (bool, string) {
+	a.changeLocal(func(catalog *localCatalog, present map[string]struct{}) (bool, string) {
 		var changed bool
 		var invalid int
 		for _, path := range paths {
@@ -234,7 +260,7 @@ func (a *app) addLocalFolders(paths []string) {
 		if len(catalog.Folders) == 0 {
 			return false, "请选择包含 MP3 或 FLAC 的文件夹"
 		}
-		scanned, status := scanLocalFolders(catalog)
+		scanned, status := scanLocalFolders(catalog, present)
 		if invalid != 0 {
 			status += fmt.Sprintf("，%d 个所选项目无法作为文件夹打开", invalid)
 		}
@@ -254,12 +280,11 @@ func (a *app) refreshLocalSongs() {
 }
 
 // scanLocalFolders only reopens audio whose file size or timestamp changed.
-func scanLocalFolders(catalog *localCatalog) (bool, string) {
+func scanLocalFolders(catalog *localCatalog, present map[string]struct{}) (bool, string) {
 	known := make(map[string]int, len(catalog.Songs))
 	for i, song := range catalog.Songs {
 		known[song.Path] = i
 	}
-	seen := make(map[string]bool)
 	var added, updated, failed int
 	for _, folder := range catalog.Folders {
 		if st, err := os.Stat(folder); err != nil || !st.IsDir() {
@@ -271,20 +296,23 @@ func scanLocalFolders(catalog *localCatalog) (bool, string) {
 				failed++
 				return nil
 			}
-			if !entry.Type().IsRegular() || !localAudioPath(path) || seen[path] {
+			if !entry.Type().IsRegular() || !localAudioPath(path) {
 				return nil
 			}
-			seen[path] = true
+			if _, scanned := present[path]; scanned {
+				return nil
+			}
 			info, err := entry.Info()
-			if err != nil {
+			if err != nil || !info.Mode().IsRegular() {
 				failed++
 				return nil
 			}
+			present[path] = struct{}{}
 			i, exists := known[path]
 			if exists && catalog.Songs[i].Stamp == info.ModTime().UnixNano() && catalog.Songs[i].Size == info.Size() {
 				return nil
 			}
-			song, ok := inspectLocalSong(path)
+			song, ok := inspectLocalSongWithInfo(path, info)
 			if !ok {
 				failed++
 				return nil
@@ -318,7 +346,7 @@ func localPathInFolders(path string, folders []string) bool {
 }
 
 func (a *app) removeLocalFolder(path string) {
-	a.changeLocal(func(catalog *localCatalog) (bool, string) {
+	a.changeLocal(func(catalog *localCatalog, _ map[string]struct{}) (bool, string) {
 		catalog.Folders = slices.DeleteFunc(catalog.Folders, func(folder string) bool { return folder == path })
 		catalog.Songs = slices.DeleteFunc(catalog.Songs, func(song localSong) bool {
 			return song.Scanned && !localPathInFolders(song.Path, catalog.Folders)
@@ -328,7 +356,7 @@ func (a *app) removeLocalFolder(path string) {
 }
 
 func (a *app) relinkLocalSong(id int64, path string) {
-	a.changeLocal(func(catalog *localCatalog) (bool, string) {
+	a.changeLocal(func(catalog *localCatalog, present map[string]struct{}) (bool, string) {
 		path, err := localFilePath(path)
 		if err != nil {
 			return false, "无法打开所选文件"
@@ -347,12 +375,13 @@ func (a *app) relinkLocalSong(id int64, path string) {
 		song.Track.LocalID = id
 		song.Scanned = catalog.Songs[i].Scanned && localPathInFolders(path, catalog.Folders)
 		catalog.Songs[i] = song
+		present[path] = struct{}{}
 		return true, "已重新定位文件"
 	})
 }
 
 func (a *app) removeLocalSong(id int64) {
-	a.changeLocal(func(catalog *localCatalog) (bool, string) {
+	a.changeLocal(func(catalog *localCatalog, _ map[string]struct{}) (bool, string) {
 		catalog.Songs = slices.DeleteFunc(catalog.Songs, func(song localSong) bool { return song.Track.LocalID == id })
 		return true, "已从曲库移除"
 	})

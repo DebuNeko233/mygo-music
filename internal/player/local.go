@@ -112,19 +112,19 @@ func localDuration(s stream) (time.Duration, error) {
 // ReloadLocalLyrics applies an explicit match without changing the audio.
 func (p *Player) ReloadLocalLyrics() {
 	if p.track != nil && p.track.IsLocal() && !p.cacheChanging {
-		p.loadLocalMetadata(*p.track, p.gen, false)
+		p.loadLocalLyrics(*p.track, p.gen)
 	}
 }
 
-// ShowLocalArtwork publishes the matched cover if the track still plays.
+// ShowLocalArtwork publishes the cover if the track still plays.
 func (p *Player) ShowLocalArtwork(track *netease.Track, cover []byte) {
 	if p.track == track && track.IsLocal() {
 		p.announce(track, cover)
 	}
 }
 
-func (p *Player) loadLocalMetadata(t netease.Track, gen int, withCover bool) {
-	if p.LocalPath == nil || p.lyricBusy || withCover && p.lyricsLoaded {
+func (p *Player) loadLocalLyrics(t netease.Track, gen int) {
+	if p.LocalPath == nil || p.lyricBusy {
 		return
 	}
 	path := p.LocalPath(t.LocalID)
@@ -145,19 +145,12 @@ func (p *Player) loadLocalMetadata(t netease.Track, gen int, withCover bool) {
 				display = display.WithUnavailableNotice()
 			}
 		}
-		var cover []byte
-		if withCover {
-			cover = localmedia.Cover(path)
-		}
 		p.post(func() {
 			if p.gen != gen {
 				return
 			}
 			p.lyricBusy = false
 			p.setLyrics(lines, display)
-			if len(cover) != 0 {
-				p.announce(&t, cover)
-			}
 		})
 	}()
 }

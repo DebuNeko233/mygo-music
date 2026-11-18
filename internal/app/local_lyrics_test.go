@@ -141,3 +141,51 @@ func TestLocalLyricsTemporaryMatchStaysInMemory(t *testing.T) {
 		t.Fatalf("temporary match wrote to disk: %v", err)
 	}
 }
+
+// Removing a folder clears its lyrics cache and a pending match can't restore it.
+func TestLocalLyricsRemovedFolderDoesNotKeepMatches(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.initLocalMusic()
+	posts := testPosts(a)
+	dir := t.TempDir()
+	folder := filepath.Join(dir, "music")
+	removed, kept := netease.Track{LocalID: 1}, netease.Track{LocalID: 2}
+	a.local.replace(localCatalog{Folders: []string{folder}, Songs: []localSong{
+		{Track: removed, Scanned: true, Path: filepath.Join(folder, "song.mp3")},
+		{Track: kept, Path: filepath.Join(dir, "relinked.mp3")},
+	}})
+	a.pl.Cue([]netease.Track{removed})
+	for _, id := range []int64{removed.LocalID, kept.LocalID} {
+		if err := a.local.lyricCache.save(a.localLyricPath(id), id, localLyricMatch{SongID: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := lyricsRequest
+	started, finish := make(chan struct{}), make(chan struct{}, 1)
+	lyricsRequest = func(id int64) (string, string, string, error) {
+		close(started)
+		<-finish
+		return "[00:00.00]迟到的匹配", "", "", nil
+	}
+	t.Cleanup(func() { close(finish); lyricsRequest = old })
+	dialog := &localLyricDialog{open: true, selected: 10, track: a.pl.Current()}
+	a.local.lyricDialog = dialog
+	a.confirmLocalLyricMatch(dialog)
+	wait(t, started, "lyric request")
+	a.removeLocalFolder(folder)
+	for a.local.busy {
+		wait(t, posts, "folder removal")()
+	}
+	finish <- struct{}{}
+	wait(t, posts, "late lyric response")()
+	if dialog.status != "该歌曲已从曲库移除" {
+		t.Fatalf("late lyric response status was %q", dialog.status)
+	}
+	if _, err := os.Stat(a.localLyricPath(removed.LocalID)); !os.IsNotExist(err) {
+		t.Fatalf("removed track kept its cache: %v", err)
+	}
+	if _, err := os.Stat(a.localLyricPath(kept.LocalID)); err != nil {
+		t.Fatalf("the remaining track lost its cache: %v", err)
+	}
+}

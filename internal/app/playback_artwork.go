@@ -30,9 +30,10 @@ func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artwork {
 	if !song.Cover {
 		return a.art.get(netease.Sized(a.localArtworkURL(tr, song), px), backdrop)
 	}
-	key := fmt.Sprintf("local-cover/%d/%d/%d/%s", tr.LocalID, song.Stamp, px, song.Path)
+	source := song.embeddedArtworkKey()
+	key := fmt.Sprintf("local-cover/%d/%d/%d/%s", source.stamp, source.size, px, source.path)
 	return a.art.requestCover(key, backdrop, true, func(string) (*ui.Bitmap, image.Image, int, error) {
-		return decodeArtSized(localmedia.Cover(song.Path), px)
+		return decodeArtSized(a.local.artwork.embedded.get(source, localmedia.Cover), px)
 	})
 }
 

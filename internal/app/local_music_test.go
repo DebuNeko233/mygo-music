@@ -169,9 +169,12 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	if err := os.Rename(mp3, moved); err != nil {
 		t.Fatal(err)
 	}
-	a.checkLocalFiles()
-	for !a.local.missing[id] {
-		wait(t, posts, "file status")()
+	a.refreshLocalSongs()
+	for a.local.busy {
+		wait(t, posts, "missing file after refresh")()
+	}
+	if !a.local.missing[id] {
+		t.Fatal("refresh did not flag the removed file")
 	}
 	tt.Frame()
 	if err := tt.Click("重新定位"); err != nil {

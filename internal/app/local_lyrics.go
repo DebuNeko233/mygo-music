@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/egoist/mygo/ui"
 
@@ -38,7 +39,78 @@ func (a *app) localLyricPath(id int64) string {
 	if a.local.path == "" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(a.local.path), "local-lyrics", strconv.FormatInt(id, 10)+".json")
+	return localLyricFile(a.local.path, id)
+}
+
+func localLyricDir(catalogPath string) string {
+	return filepath.Join(filepath.Dir(catalogPath), "local-lyrics")
+}
+
+func localLyricFile(catalogPath string, id int64) string {
+	return filepath.Join(localLyricDir(catalogPath), strconv.FormatInt(id, 10)+".json")
+}
+
+type localLyricCache struct {
+	mu      sync.Mutex
+	deleted map[int64]struct{}
+}
+
+func (c *localLyricCache) save(path string, localID int64, match localLyricMatch) error {
+	if path == "" {
+		return os.ErrInvalid
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, removed := c.deleted[localID]; removed {
+		return os.ErrNotExist
+	}
+	return writeUserData(path, cacheBytes(match))
+}
+
+// Only a committed catalog edit may remove the matched lyrics. A late
+// network result cannot recreate their file after the track is removed.
+func (c *localLyricCache) removeDeleted(path string, before, after []localSong) {
+	if len(after) >= len(before) {
+		return
+	}
+	kept := make(map[int64]bool, len(after))
+	for _, song := range after {
+		kept[song.Track.LocalID] = true
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.deleted == nil {
+		c.deleted = make(map[int64]struct{})
+	}
+	for _, song := range before {
+		if id := song.Track.LocalID; !kept[id] {
+			c.deleted[id] = struct{}{}
+			_ = os.Remove(localLyricFile(path, id))
+		}
+	}
+}
+
+// Clean files left behind by older versions. IDs allocated after this
+// startup snapshot are above lastID and still belong to the live catalog.
+func pruneLocalLyricCache(path string, lastID int64, byID map[int64]int) {
+	dir := localLyricDir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		stem, ok := strings.CutSuffix(entry.Name(), ".json")
+		if !ok || !entry.Type().IsRegular() {
+			continue
+		}
+		id, err := strconv.ParseInt(stem, 10, 64)
+		if err != nil || id <= 0 || id > lastID || stem != strconv.FormatInt(id, 10) {
+			continue
+		}
+		if _, kept := byID[id]; !kept {
+			_ = os.Remove(filepath.Join(dir, entry.Name()))
+		}
+	}
 }
 
 // The player captures this loader before doing any file I/O on its worker.
@@ -128,9 +200,13 @@ func (a *app) confirmLocalLyricMatch(d *localLyricDialog) {
 	if !a.matchingLocalLyrics(d) || d.selected <= 0 || d.searching || d.loading {
 		return
 	}
+	if !d.track.Temporary && a.local.song(d.track.LocalID).Path == "" {
+		d.status = "该歌曲已从曲库移除"
+		return
+	}
 	d.loading, d.status = true, ""
-	id, temporary := d.selected, d.track.Temporary
-	path, fetch := a.localLyricPath(d.track.LocalID), lyricsRequest
+	id, localID, temporary := d.selected, d.track.LocalID, d.track.Temporary
+	path, fetch := a.localLyricPath(localID), lyricsRequest
 	go func() {
 		original, translation, words, err := fetch(id)
 		kept := keptLyrics{original, translation, words}
@@ -144,7 +220,10 @@ func (a *app) confirmLocalLyricMatch(d *localLyricDialog) {
 		case !display.HasSinging():
 			status = "这个版本没有可用的歌词，请选择其他版本"
 		case !temporary:
-			if path == "" || writeUserData(path, cacheBytes(localLyricMatch{SongID: id, Lyrics: kept})) != nil {
+			err := a.local.lyricCache.save(path, localID, localLyricMatch{SongID: id, Lyrics: kept})
+			if errors.Is(err, os.ErrNotExist) {
+				status = "该歌曲已从曲库移除"
+			} else if err != nil {
 				status = "无法保存歌词，请重试"
 			}
 		}

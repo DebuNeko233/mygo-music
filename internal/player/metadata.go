@@ -24,7 +24,9 @@ func (p *Player) retryMetadata(manual bool) {
 	}
 	t, gen := *p.track, p.gen
 	if t.IsLocal() {
-		p.loadLocalMetadata(t, gen, true)
+		if !p.lyricsLoaded {
+			p.loadLocalLyrics(t, gen)
+		}
 		return
 	}
 	if !p.coverLoaded && !p.coverBusy && t.Album.PicURL != "" && (manual || metadataRecoverable(p.coverFailure)) {

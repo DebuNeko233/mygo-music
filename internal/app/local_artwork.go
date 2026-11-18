@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
+	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -29,9 +30,22 @@ type localArtworkResult struct {
 }
 
 type localArtworkState struct {
+	embedded  embeddedArtworkCache
 	known     map[localArtworkKey]localArtworkResult
 	searching bool
 	announced *netease.Track
+}
+
+func (a *app) announceLocalArtwork(t *netease.Track, load func() []byte) {
+	if a.local.artwork.announced == t {
+		return
+	}
+	a.local.artwork.announced = t
+	go func() {
+		if b := load(); len(b) > 0 {
+			a.post(func() { a.pl.ShowLocalArtwork(t, b) })
+		}
+	}()
 }
 
 func (a *app) localArtworkURL(t *netease.Track, song localSong) string {
@@ -48,22 +62,27 @@ func (a *app) syncLocalArtwork() {
 		return
 	}
 	song := a.playbackLocalSong(t)
-	if song.Path == "" || song.Cover {
+	if song.Path == "" {
 		return
 	}
 	state := &a.local.artwork
+	if song.Cover {
+		key := song.embeddedArtworkKey()
+		a.announceLocalArtwork(t, func() []byte { return state.embedded.get(key, localmedia.Cover) })
+		return
+	}
 	key := song.artworkKey(t.Temporary)
 	offline := a.network.offline
 	if known, ok := state.known[key]; ok && (known.url != "" || offline || !known.offlineOnly) {
-		if known.url != "" && state.announced != t {
-			state.announced = t
+		if known.url != "" {
 			fetch := fetchLocalArtwork
-			go func() {
+			a.announceLocalArtwork(t, func() []byte {
 				b, err := fetch(netease.Sized(known.url, nowPlayingCoverPixels))
-				if err == nil && len(b) > 0 {
-					a.post(func() { a.pl.ShowLocalArtwork(t, b) })
+				if err != nil {
+					return nil
 				}
-			}()
+				return b
+			})
 		}
 		return
 	}
