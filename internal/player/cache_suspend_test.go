@@ -260,7 +260,9 @@ func TestSuspendCacheLetsGoOfWhatWasFetchedAhead(t *testing.T) {
 	dl.waitFor(4)
 	// The next track, fetched ahead as it would be, loads while the folder
 	// moves.
-	p.ahead = &ahead{id: 2, level: "exhigh", dl: dl, info: st}
+	p.ahead = &ahead{id: 2, level: "exhigh", ready: make(chan struct{}), dl: dl, info: st}
+	p.ahead.state.Store(aheadStarted)
+	close(p.ahead.ready)
 	p.cacheChanging = true
 	p.loadSkipping(1, 0, true, 0)
 	dl.mu.Lock()

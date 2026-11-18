@@ -85,37 +85,65 @@ func (c *Cache) lookup(id int64, level string) (*download, *netease.Stream, bool
 	}
 	at := max(slices.Index(netease.Levels, level), 0)
 	for i, lv := range netease.Levels {
-		key := cacheKey(id, lv)
-		meta, err := os.ReadFile(filepath.Join(c.dir, key+".json"))
-		if err != nil {
-			continue
+		asked := ""
+		if i < at {
+			asked = level
 		}
-		var kept keptSong
-		if json.Unmarshal(meta, &kept) != nil || !keepable(lv, kept.Type) {
-			continue
+		if dl, info := c.openKept(id, lv, asked); dl != nil {
+			return dl, info, true
 		}
-		if i < at && kept.Asked != level {
-			continue
-		}
-		st := kept.Stream
-		path := filepath.Join(c.dir, key+"."+st.Type)
-		if kept.File != "" {
-			path = filepath.Join(c.dir, kept.File)
-		}
-		f, err := os.Open(path)
-		if err != nil {
-			continue
-		}
-		if info, err := f.Stat(); err != nil || info.Size() != st.Size {
-			f.Close()
-			continue
-		}
-		// Played now: the last to go.
-		now := time.Now()
-		os.Chtimes(path, now, now)
-		return c.track(opened(f, st.Size)), &st, true
 	}
 	return nil, nil, false
+}
+
+// lookupOffline prefers the selected quality, then the best complete copy.
+func (c *Cache) lookupOffline(id int64, level string) (*download, *netease.Stream, error) {
+	if !c.stopped() {
+		if slices.Contains(netease.Levels, level) {
+			if dl, info := c.openKept(id, level, ""); dl != nil {
+				return dl, info, nil
+			}
+		}
+		for _, lv := range slices.Backward(netease.Levels) {
+			if lv == level {
+				continue
+			}
+			if dl, info := c.openKept(id, lv, ""); dl != nil {
+				return dl, info, nil
+			}
+		}
+	}
+	return nil, nil, netease.ErrOffline
+}
+
+// openKept opens a complete file at level, requiring a request for asked if set.
+func (c *Cache) openKept(id int64, level, asked string) (*download, *netease.Stream) {
+	key := cacheKey(id, level)
+	meta, err := os.ReadFile(filepath.Join(c.dir, key+".json"))
+	if err != nil {
+		return nil, nil
+	}
+	var kept keptSong
+	if json.Unmarshal(meta, &kept) != nil || !keepable(level, kept.Type) || (asked != "" && kept.Asked != asked) {
+		return nil, nil
+	}
+	st := kept.Stream
+	path := filepath.Join(c.dir, key+"."+st.Type)
+	if kept.File != "" {
+		path = filepath.Join(c.dir, kept.File)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil
+	}
+	if info, err := f.Stat(); err != nil || info.Size() != st.Size {
+		f.Close()
+		return nil, nil
+	}
+	// Played now: the last to go.
+	now := time.Now()
+	os.Chtimes(path, now, now)
+	return c.track(opened(f, st.Size)), &st
 }
 
 // download fetches the song of the stream st, asked for at level, into a
