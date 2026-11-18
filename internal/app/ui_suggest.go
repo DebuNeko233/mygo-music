@@ -141,11 +141,7 @@ func (a *app) searchField(c *ui.Context) {
 				Width(360).Padding(6).Margin(8, 0, 0, 0).Radius(12).
 				Background(p.bg).Border(1, p.hairline).
 				Shadow(0, 8, 24, -4, ui.RGBA(0, 0, 0, 0.2))
-			// Keep every option reachable when local and online matches fill
-			// a small window. Leave room for the panel's padding and margin.
-			_, height := c.Size()
-			bounds := field.Bounds()
-			ui.Scroll(c.Key("search-options")).MaxHeight(max(80, height-bounds.Y-bounds.H-32)).Children(func() {
+			ui.Scroll(c.Key("search-options")).Shrink(1).Children(func() {
 				option := func(key, label string) ui.Element {
 					row := cb.Item(key).MinHeight(36).Padding(6, 10).Gap(10).Radius(7).AlignItems(ui.Center).Label(label)
 					if row.Highlighted() {
