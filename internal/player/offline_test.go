@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -48,6 +50,44 @@ func TestOfflineCompleteSongUsesCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	stream.Close()
+}
+
+// Offline playback can use the highest complete cached quality when the exact quality is absent.
+func TestOfflineUsesBestCacheWhenExactQualityIsMissing(t *testing.T) {
+	cache := NewCache(t.TempDir(), 1<<30)
+	b := song(t)
+	for _, level := range []string{"standard", "exhigh", "lossless"} {
+		st := &netease.Stream{Level: level, Type: "mp3", Size: int64(len(b))}
+		part := filepath.Join(cache.dir, level+".part")
+		if err := os.WriteFile(part, b, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := cache.keep(1, level, st, part, st.Size); !ok {
+			t.Fatalf("could not keep %s", level)
+		}
+	}
+	netease.SetOffline(true)
+	t.Cleanup(func() { netease.SetOffline(false) })
+	p := &Player{}
+	for _, tc := range []struct{ level, want string }{
+		{"exhigh", "exhigh"},
+		{"higher", "lossless"},
+		{"hires", "lossless"},
+	} {
+		t.Run(tc.level, func(t *testing.T) {
+			st, stream, err := p.open(netease.Track{ID: 1}, tc.level, nil, func(int64, string) (*netease.Stream, error) {
+				t.Fatal("asked for an audio URL while offline")
+				return nil, netease.ErrOffline
+			}, cache)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stream.Close()
+			if st.Level != tc.want {
+				t.Fatalf("opened %s, want %s", st.Level, tc.want)
+			}
+		})
+	}
 }
 
 // Disconnecting during retry backoff stops its buffering state and invalidates

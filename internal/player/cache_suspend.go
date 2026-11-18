@@ -68,6 +68,7 @@ func (p *Player) SuspendCache() func() {
 	// generation and settle busy flags even if resume does not reload audio.
 	p.gen++
 	p.lyricBusy, p.coverBusy = false, false
+	p.dropAhead()
 	if p.stream != nil {
 		if dl, _ := p.stream.source(); dl != nil {
 			dl.Close()

@@ -3,6 +3,7 @@ package player
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -427,18 +428,15 @@ func TestCacheKeepsOnlyKnownLevels(t *testing.T) {
 	}
 }
 
-// A song the cache won't keep sets aside no more memory than maxPrealloc,
-// whatever size the API says it is, which it set aside in full before.
+// A song the cache won't keep only allocates memory for the pages received.
 func TestStreamSizeIsNotTrusted(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("short")) }))
 	defer srv.Close()
 	dl := startDownload(srv.URL, 1<<40, nil, nil)
 	defer dl.Close()
-	dl.mu.Lock()
-	n := cap(dl.data)
-	dl.mu.Unlock()
-	if n > maxPrealloc {
-		t.Errorf("set aside %d bytes", n)
+	dl.waitFor(math.MaxInt64)
+	if n := len(dl.pages); n != 1 {
+		t.Errorf("allocated %d pages for a short response", n)
 	}
 }
 
@@ -514,11 +512,99 @@ func TestSeekAsksForThePartNotIn(t *testing.T) {
 	if got := <-asked; got != want {
 		t.Errorf("asked for %q, wanted %q", got, want)
 	}
-	if have := dl.waitFor(off + 4); have < off+4 {
+	if have := dl.waitRange(off, off+4); have < off+4 {
 		t.Fatalf("%d bytes in, wanted %d", have, off+4)
 	}
 	if got := dl.peek(off, 4); !bytes.Equal(got, b[off:off+4]) {
 		t.Errorf("bytes at %d are %x, wanted %x", off, got, b[off:off+4])
+	}
+}
+
+// Repeated seeks keep each received range and fill only the gaps before caching.
+func TestSeekKeepsDownloadedBytesAndFillsCache(t *testing.T) {
+	b := song(t)
+	first, target, tail := int64(len(b)/4), int64(len(b)/2), int64(len(b)*3/4)
+	targetEnd := target + int64(len(b)/8)
+	jump := fmt.Sprintf("bytes=%d-", target)
+	gap := fmt.Sprintf("bytes=%d-%d", first, target-1)
+	requests := make(chan string, 8)
+	fill := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rangeHeader := r.Header.Get("Range")
+		requests <- rangeHeader
+		switch rangeHeader {
+		case "":
+			w.Header().Set("Content-Length", strconv.Itoa(len(b)))
+			w.Write(b[:first])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		case jump:
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", target, len(b)-1, len(b)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(b)-int(target)))
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(b[target:targetEnd])
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		case gap:
+			select {
+			case <-fill:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b))
+	}))
+	defer srv.Close()
+	c := NewCache(t.TempDir(), 1<<30)
+	dl := c.download(1, "exhigh", &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
+	defer dl.halt()
+	request := func(want string) {
+		t.Helper()
+		select {
+		case got := <-requests:
+			if got != want {
+				t.Fatalf("requested %q, want %q", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("did not request %q", want)
+		}
+	}
+	request("")
+	if dl.waitFor(first) != first || !dl.seekTo(target) {
+		t.Fatal("could not prioritize the first seek")
+	}
+	request(jump)
+	if dl.waitRange(target, targetEnd) != targetEnd || !dl.seekTo(tail) {
+		t.Fatal("could not prioritize the second seek")
+	}
+	request(fmt.Sprintf("bytes=%d-", tail))
+	request(gap)
+	if !bytes.Equal(dl.peek(0, int(first)), b[:first]) ||
+		!bytes.Equal(dl.peek(target, len(b)), b[target:targetEnd]) ||
+		!bytes.Equal(dl.peek(tail, len(b)), b[tail:]) {
+		t.Fatal("seeking lost bytes already downloaded")
+	}
+	if len(dl.peek(first, 1)) != 0 || dl.Progress() >= 1 {
+		t.Fatal("treated the gap as downloaded")
+	}
+	if current, _, ok := c.lookup(1, "exhigh"); ok {
+		current.Close()
+		t.Fatal("cached a song with a missing section")
+	}
+	close(fill)
+	request(fmt.Sprintf("bytes=%d-%d", targetEnd, tail-1))
+	if dl.waitFor(math.MaxInt64) != int64(len(b)) || dl.Err() != nil {
+		t.Fatalf("gap was not filled: %v", dl.Err())
+	}
+	kept, _, ok := c.lookup(1, "exhigh")
+	if !ok {
+		t.Fatal("complete song did not enter the cache")
+	}
+	defer kept.Close()
+	if !bytes.Equal(kept.peek(0, len(b)), b) {
+		t.Fatal("cached bytes differ from the original song")
 	}
 }
 
@@ -542,9 +628,7 @@ func TestSeekToServerThatSendsTheWholeSong(t *testing.T) {
 	}
 }
 
-// A seek waits for the download rather than dropping what is in while a
-// second stream reads the song, as transcribing an episode does: what is
-// dropped may be what that one still needs.
+// A seek leaves the current request alone while a second stream reads it.
 func TestSeekWaitsWhileASecondStreamReads(t *testing.T) {
 	b, err := os.ReadFile("testdata/seek.mp3")
 	if err != nil {
@@ -556,7 +640,7 @@ func TestSeekWaitsWhileASecondStreamReads(t *testing.T) {
 	}
 	defer dl.release()
 	if dl.seekTo(int64(len(b)) * 3 / 4) {
-		t.Error("dropped the part another stream reads")
+		t.Error("interrupted the request another stream reads")
 	}
 }
 
@@ -620,8 +704,7 @@ func TestMP3SeekBackToTheStart(t *testing.T) {
 	if _, err := s.Read(buf); err != nil {
 		t.Fatal(err)
 	}
-	// Into a part of the song not in yet: the seek asks for the song from
-	// there, and what came before goes.
+	// The seek asks for the missing frames around the target.
 	if err := s.SetPosition(s.frames * 3 / 4); err != nil {
 		t.Fatal(err)
 	}
