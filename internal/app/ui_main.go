@@ -22,7 +22,6 @@ func (a *app) view(c *ui.Context) {
 	t.Selection = p.accent.Alpha(0.3)
 	c.SetTheme(&t)
 
-	a.art.beginFrame()
 	defer a.recoveryFrame(c.WindowActive())
 	a.shortcuts(c)
 	active := c.WindowActive()
@@ -43,6 +42,7 @@ func (a *app) view(c *ui.Context) {
 	// as once Now Playing covers the button that had it.
 	a.bindInApp(c, root)
 	npOpen, npSettled := a.npState(c)
+	a.art.pageFrame(a.route, !npOpen)
 	// The pictures the listener chose for the home page, painted behind
 	// it: it stands on them, over its own colour, as deep as they asked.
 	home := a.pictures(a.settings.BackdropHome)
