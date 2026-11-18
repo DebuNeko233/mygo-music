@@ -33,20 +33,22 @@ type localCatalog struct {
 }
 
 type localMusic struct {
-	catalog     localCatalog
-	tracks      []netease.Track
-	byID        map[int64]int
-	missing     map[int64]bool
-	path        string
-	status      string
-	busy        bool
-	picking     bool
-	check       uint64
-	window      *mygo.Window
-	temporary   localSong
-	temporaryID int64
-	pendingFile string
-	openRequest uint64
+	catalog         localCatalog
+	tracks          []netease.Track
+	byID            map[int64]int
+	missing         map[int64]bool
+	path            string
+	status          string
+	busy            bool
+	picking         bool
+	check           uint64
+	window          *mygo.Window
+	temporary       localSong
+	temporaryID     int64
+	temporaryLyrics keptLyrics
+	lyricDialog     *localLyricDialog
+	pendingFile     string
+	openRequest     uint64
 }
 
 var localExtensions = []string{"mp3", "flac"}
@@ -72,6 +74,7 @@ func (a *app) initLocalMusic() {
 		return a.local.song(id).Path
 	}
 	a.pl.LocalMissing = func(id int64) { a.local.missing[id] = true }
+	a.pl.LocalLyrics = a.localLyricsLoader
 }
 
 func (m *localMusic) replace(catalog localCatalog) {

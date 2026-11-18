@@ -301,7 +301,7 @@ func (s settings) save() error {
 	if err != nil {
 		return err
 	}
-	return writeSettings(s.path, b)
+	return writeUserData(s.path, b)
 }
 
 // saveSoon keeps the settings without waiting for the disk. A key that steps
@@ -358,7 +358,7 @@ func (w *settingsSaver) run() {
 			return
 		}
 		w.mu.Unlock()
-		if err := writeSettings(job.path, job.data); err != nil {
+		if err := writeUserData(job.path, job.data); err != nil {
 			log.Printf("settings: %v", err)
 		}
 	}
@@ -375,15 +375,13 @@ func (w *settingsSaver) wait() {
 	}
 }
 
-// writeSettings puts them at path, or leaves what is there.
-func writeSettings(path string, b []byte) error {
+// writeUserData atomically replaces a file in the app's user data.
+func writeUserData(path string, b []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	// Written beside the settings and moved onto them, so that what is
-	// there is either the old settings or the new ones, never half of
-	// them: a crash as they are written loses nothing.
-	f, err := os.CreateTemp(filepath.Dir(path), "settings-*.json")
+	// Stage beside the destination so the rename stays on the same volume.
+	f, err := os.CreateTemp(filepath.Dir(path), ".data-*.part")
 	if err != nil {
 		return err
 	}

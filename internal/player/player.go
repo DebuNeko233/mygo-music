@@ -84,6 +84,9 @@ type Player struct {
 	Cache *Cache
 	// LocalPath resolves a library ID on the main thread before a worker opens it.
 	LocalPath func(int64) string
+	// LocalLyrics captures the selected match on the main thread and returns
+	// a loader that may read its cached lyrics on a worker.
+	LocalLyrics func(netease.Track) func() (original, translation, words string)
 	// LocalMissing is called on the main thread when a library file cannot be opened.
 	LocalMissing func(int64)
 	// FetchLyrics optionally supplies persistent lyrics; captured per load.

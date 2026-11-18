@@ -60,6 +60,7 @@ func (a *app) openTemporaryAudio(path string) {
 				a.local.temporaryID--
 			}
 			a.local.temporary = song
+			a.local.temporaryLyrics = keptLyrics{}
 			a.pl.PlayTemporary(song.Track, audio)
 			a.nowPlaying = true
 		})

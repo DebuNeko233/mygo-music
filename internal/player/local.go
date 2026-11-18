@@ -109,15 +109,39 @@ func localDuration(s stream) (time.Duration, error) {
 	return time.Duration(frames/rate)*time.Second + time.Duration(frames%rate)*time.Second/time.Duration(rate), nil
 }
 
-func (p *Player) loadLocalMetadata(t netease.Track, gen int) {
-	if p.LocalPath == nil || p.lyricBusy || p.lyricsLoaded {
+// ReloadLocalLyrics applies an explicit match without changing the audio.
+func (p *Player) ReloadLocalLyrics() {
+	if p.track != nil && p.track.IsLocal() && !p.cacheChanging {
+		p.loadLocalMetadata(*p.track, p.gen, false)
+	}
+}
+
+func (p *Player) loadLocalMetadata(t netease.Track, gen int, withCover bool) {
+	if p.LocalPath == nil || p.lyricBusy || withCover && p.lyricsLoaded {
 		return
 	}
 	path := p.LocalPath(t.LocalID)
+	var matched func() (string, string, string)
+	if p.LocalLyrics != nil {
+		matched = p.LocalLyrics(t)
+	}
 	p.lyricBusy = true
 	go func() {
 		lines, display := lyrics.BuildDisplay(localmedia.Lyrics(path), "", "")
-		cover := localmedia.Cover(path)
+		if !display.HasSinging() {
+			if matched != nil {
+				if fallback, view := lyrics.BuildDisplay(matched()); view.HasSinging() {
+					lines, display = fallback, view
+				}
+			}
+			if !display.HasSinging() {
+				display = display.WithUnavailableNotice()
+			}
+		}
+		var cover []byte
+		if withCover {
+			cover = localmedia.Cover(path)
+		}
 		p.post(func() {
 			if p.gen != gen {
 				return

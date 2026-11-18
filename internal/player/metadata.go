@@ -24,7 +24,7 @@ func (p *Player) retryMetadata(manual bool) {
 	}
 	t, gen := *p.track, p.gen
 	if t.IsLocal() {
-		p.loadLocalMetadata(t, gen)
+		p.loadLocalMetadata(t, gen, true)
 		return
 	}
 	if !p.coverLoaded && !p.coverBusy && t.Album.PicURL != "" && (manual || metadataRecoverable(p.coverFailure)) {

@@ -123,7 +123,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 	dim, quiet := a.quietShown(c, box, tr, lines, loaded)
 	if len(lines) == 0 {
 		box.Children(func() {
-			quietUnder(ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center(), dim).Children(func() {
+			quietUnder(ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(12), dim).Children(func() {
 				if !loaded && pl.LyricsError() != "" {
 					a.lyricsNotice(c, 20)
 					return
@@ -134,6 +134,9 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 				}
 				display, _ := pl.LyricsDisplay()
 				lyricStaticNotice(c, display.EmptyText(), pl.LyricLanguage()).TextAlign(ui.Center)
+				if tr.IsLocal() {
+					a.localLyricMatchButton(c)
+				}
 			})
 			a.stageQuiet(c, dim, f, w)
 		})

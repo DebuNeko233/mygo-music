@@ -676,6 +676,9 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 					lang := pl.LyricLanguage()
 					notice := lyrics.Line{Text: display.EmptyText(), Kind: lyrics.Instrumental}
 					lyricInfoRow(c.Key("notice"), &notice, lang, translatedFont)
+					if tr.IsLocal() {
+						ui.Row(c).Children(func() { a.localLyricMatchButton(c) })
+					}
 					for i := range lines {
 						if lines[i].Kind == lyrics.Credit {
 							lyricInfoRow(c.Key(i), &lines[i], lang, translatedFont)

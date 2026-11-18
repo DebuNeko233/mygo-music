@@ -87,6 +87,7 @@ func (a *app) view(c *ui.Context) {
 	a.playlistNameDialog(c)
 	a.deletePlaylistDialog(c)
 	a.descriptionDialog(c)
+	a.localLyricMatchDialog(c)
 	if a.toast != "" {
 		c.Toast(a.toast)
 		a.toast = ""
