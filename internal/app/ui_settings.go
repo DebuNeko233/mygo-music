@@ -219,7 +219,7 @@ func settingsMatch(query string, texts ...string) bool {
 func (a *app) settingsView(c *ui.Context) {
 	t := a.settings.uiTheme(c.Theme())
 	p := paletteFor(&t)
-	t.Accent, t.AccentText = p.accent, p.onAccent
+	p.applyAccent(&t)
 	c.SetTheme(&t)
 	c.Root().Background(p.bg)
 	c.OnShortcut(ui.Cmd, ui.KeyW, func() {

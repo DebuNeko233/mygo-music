@@ -87,10 +87,13 @@ func (a *app) localPage(c *ui.Context) {
 						ui.Text(c, "本地歌曲").FontSize(30).FontWeight(700).LetterSpacing(-0.6)
 						ui.Text(c, fmt.Sprintf("%d 首歌曲", len(tracks))).FontSize(12).TextColor(p.muted)
 					})
-					if len(a.local.catalog.Folders) != 0 {
-						ui.Button(c.Key("refresh-local"), "刷新曲库").Disabled(a.local.busy).OnClick(a.refreshLocalSongs)
-					}
-					ui.PrimaryButton(c.Key("manage-local"), "管理文件夹").Disabled(a.local.path == "").OnClick(a.openLocalFolders)
+					ui.Row(c.Key("local-actions")).Gap(12).AlignItems(ui.Stretch).Children(func() {
+						if len(a.local.catalog.Folders) != 0 {
+							ui.Button(c.Key("refresh-local"), "刷新曲库").Disabled(a.local.busy).OnClick(a.refreshLocalSongs)
+						}
+						animateButtonPress(ui.PrimaryButton(c.Key("manage-local"), "管理文件夹"), 0.96).
+							Disabled(a.local.path == "").OnClick(a.openLocalFolders)
+					})
 				})
 				if a.local.status != "" {
 					ui.Text(c, a.local.status).FontSize(12).TextColor(p.muted)
@@ -113,7 +116,7 @@ func (a *app) localPage(c *ui.Context) {
 func (a *app) localFoldersView(c *ui.Context) {
 	theme := a.settings.uiTheme(c.Theme())
 	p := paletteFor(&theme)
-	theme.Accent, theme.AccentText = p.accent, p.onAccent
+	p.applyAccent(&theme)
 	c.SetTheme(&theme)
 	c.Root().Background(p.bg)
 	c.OnShortcut(ui.Cmd, ui.KeyW, func() {
@@ -123,7 +126,8 @@ func (a *app) localFoldersView(c *ui.Context) {
 	})
 	ui.Column(c.Key("local-folders")).Fill().Padding(16, 18, 16, 18).Gap(12).Children(func() {
 		ui.Row(c).Justify(ui.End).Children(func() {
-			ui.PrimaryButton(c.Key("add-local-folder"), "添加").Label("添加文件夹").Disabled(a.local.busy).OnClick(a.chooseLocalFolders)
+			animateButtonPress(ui.PrimaryButton(c.Key("add-local-folder"), "添加"), 0.96).
+				Label("添加文件夹").Disabled(a.local.busy).OnClick(a.chooseLocalFolders)
 		})
 		folders := a.local.catalog.Folders
 		if len(folders) == 0 {

@@ -66,6 +66,12 @@ func paletteFor(t *ui.Theme) palette {
 	return p
 }
 
+func (p palette) applyAccent(t *ui.Theme) {
+	accent := t.WithAccent(p.accent)
+	t.Accent, t.AccentText = p.accent, p.onAccent
+	t.AccentHover, t.AccentPressed = accent.AccentHover, accent.AccentPressed
+}
+
 // iconButton is a borderless button showing an icon, which a soft circle
 // marks under the pointer and which gives a little as it is pressed.
 func iconButton(c *ui.Context, icon *ui.SVG, size float32, color ui.Color, label string) ui.Element {
@@ -120,12 +126,7 @@ func roundButton(c *ui.Context, size float32, color ui.Color, label string, sele
 		}
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	pose := ui.Pose{}
-	if b.Pressed() {
-		pose.Scale = 0.88
-	}
-	b.AnimatePose(pose, ui.Snappy)
-	return b
+	return animateButtonPress(b, 0.88)
 }
 
 // pillButton is a rounded button with an icon and a label.
@@ -136,17 +137,21 @@ func pillButton(c *ui.Context, icon *ui.SVG, label string, bg, fg ui.Color) ui.E
 		fill = bg.Mix(ui.RGB(255, 255, 255), 0.12)
 	}
 	b.Background(b.AnimateColor("bg", fill, ui.Animation{Duration: 120 * time.Millisecond}))
-	pose := ui.Pose{}
-	if b.Pressed() {
-		pose.Scale = 0.96
-	}
-	b.AnimatePose(pose, ui.Snappy)
 	b.Children(func() {
 		if icon != nil {
 			ui.Icon(c, icon).Size(14, 14)
 		}
 		ui.Text(c, label).FontSize(14).FontWeight(600).SingleLine()
 	})
+	return animateButtonPress(b, 0.96)
+}
+
+func animateButtonPress(b ui.Element, scale float32) ui.Element {
+	pose := ui.Pose{}
+	if b.Pressed() {
+		pose.Scale = scale
+	}
+	b.AnimatePose(pose, ui.Snappy)
 	return b
 }
 
