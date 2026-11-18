@@ -28,7 +28,7 @@ func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artwork {
 	}
 	song := a.playbackLocalSong(tr)
 	if !song.Cover {
-		return nil
+		return a.art.get(netease.Sized(a.localArtworkURL(tr, song), px), backdrop)
 	}
 	key := fmt.Sprintf("local-cover/%d/%d/%d/%s", tr.LocalID, song.Stamp, px, song.Path)
 	return a.art.requestCover(key, backdrop, true, func(string) (*ui.Bitmap, image.Image, int, error) {
@@ -40,12 +40,16 @@ func (a *app) trackCover(c *ui.Context, tr *netease.Track, px int, size, radius 
 	if !tr.IsLocal() {
 		return a.cover(c, tr.Album.PicURL, px, size, radius)
 	}
+	if url := a.localArtworkURL(tr, a.playbackLocalSong(tr)); url != "" {
+		return a.cover(c, url, px, size, radius)
+	}
 	return a.coverImage(c, size, radius, func(ui.Element) *artwork { return a.trackArtwork(tr, px, false) })
 }
 
 func (a *app) hasTrackCover(tr *netease.Track) bool {
 	if tr.IsLocal() {
-		return a.playbackLocalSong(tr).Cover
+		song := a.playbackLocalSong(tr)
+		return song.Cover || a.localArtworkURL(tr, song) != ""
 	}
 	return tr.Album.PicURL != ""
 }

@@ -46,6 +46,7 @@ type localMusic struct {
 	temporary       localSong
 	temporaryID     int64
 	temporaryLyrics keptLyrics
+	artwork         localArtworkState
 	lyricDialog     *localLyricDialog
 	pendingFile     string
 	openRequest     uint64

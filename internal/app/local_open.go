@@ -59,6 +59,7 @@ func (a *app) openTemporaryAudio(path string) {
 				song.Track.LocalID = a.local.temporaryID
 				a.local.temporaryID--
 			}
+			delete(a.local.artwork.known, a.local.temporary.artworkKey(true))
 			a.local.temporary = song
 			a.local.temporaryLyrics = keptLyrics{}
 			a.pl.PlayTemporary(song.Track, audio)

@@ -116,6 +116,13 @@ func (p *Player) ReloadLocalLyrics() {
 	}
 }
 
+// ShowLocalArtwork publishes the matched cover if the track still plays.
+func (p *Player) ShowLocalArtwork(track *netease.Track, cover []byte) {
+	if p.track == track && track.IsLocal() {
+		p.announce(track, cover)
+	}
+}
+
 func (p *Player) loadLocalMetadata(t netease.Track, gen int, withCover bool) {
 	if p.LocalPath == nil || p.lyricBusy || withCover && p.lyricsLoaded {
 		return

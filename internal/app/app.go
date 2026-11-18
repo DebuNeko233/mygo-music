@@ -358,6 +358,7 @@ func Run() error {
 		a.pl.Changed = func() {
 			a.keepSession()
 			a.syncCaptions()
+			a.syncLocalArtwork()
 		}
 		a.pl.Playback = a.playback
 		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.flushPlayReports() })
