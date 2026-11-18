@@ -76,9 +76,11 @@ type app struct {
 	savingPl     map[int64]bool     // the playlists whose saving or its end is on its way
 	recPlaylists []netease.Playlist // the day's playlists picked for the listener
 	login        loginState
-	accountOpen  bool           // the dropdown of the account row shows
-	naming       nameDialog     // the name of a playlist asked for
-	deleting     deleteDialog   // whether to delete a playlist, asked
+	accountOpen  bool         // the dropdown of the account row shows
+	naming       nameDialog   // the name of a playlist asked for
+	deleting     deleteDialog // whether to delete a playlist, asked
+	intro        descriptionDialog
+	introPreview descriptionPreview
 	liked        map[int64]bool // the songs the listener likes
 	toast        string         // a message to show once
 	picked       pickedUp       // the song a login picked up, waiting to play
