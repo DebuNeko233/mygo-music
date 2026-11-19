@@ -339,6 +339,7 @@ func Run() error {
 	defer offSecond()
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.cancelMusicLink() })
 	moveOldData()
+	repairFileAssociations()
 	a.useUpdater()
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
