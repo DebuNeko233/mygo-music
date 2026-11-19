@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Clicking or pressing Space toggles shuffle and its accessible state without changing the current track in any transport size.
@@ -35,6 +36,23 @@ func TestTransportShuffleToggle(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The highlighted loop button still cycles through both repeat modes and back to off.
+func TestTransportRepeatCycle(t *testing.T) {
+	a := newTestApp()
+	a.pl.Cue([]netease.Track{{ID: 1}})
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.transport(c, white, white.Alpha(0.45), white, 22)
+	}, 400, 100)
+	for _, want := range []player.RepeatMode{player.RepeatAll, player.RepeatOne, player.RepeatOff} {
+		if err := tt.Click("循环"); err != nil {
+			t.Fatal(err)
+		}
+		if got := a.pl.Repeat(); got != want {
+			t.Fatalf("repeat mode = %v, want %v", got, want)
+		}
 	}
 }
 
