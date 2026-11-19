@@ -1,5 +1,14 @@
 # 更新日志
 
+## 0.2.14
+
+### What's Changed
+* fix: persist left desktop lyric alignment by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/93
+* fix: register Windows audio associations after updates by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/94
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.13...v0.2.14
+
 ## 0.2.13
 
 ### What's Changed
