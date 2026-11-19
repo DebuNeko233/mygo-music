@@ -171,20 +171,21 @@ func (a *app) localSongItems(tr *netease.Track, fromLibrary bool) func(*ui.Menu)
 			return
 		}
 		order, at := a.pl.PlayOrder()
-		scheduled := a.pl.ScheduledPosition(track.Key())
+		position := a.pl.QueuePosition(track.Key())
+		scheduled := position >= 0 && position >= at
 		missing := a.local.missing[track.LocalID]
-		canRemove := fromLibrary && scheduled > at
+		canRemove := fromLibrary && position >= 0 && position != at
 		if !missing {
-			if m.Item("下一首播放").Disabled(scheduled >= 0 && scheduled <= at+1).Chosen() {
+			if m.Item("下一首播放").Disabled(scheduled && position <= at+1).Chosen() {
 				a.pl.Enqueue(track, true)
 			}
 		}
 		if canRemove {
 			if m.Item("移除队列").Chosen() {
-				a.pl.RemoveQueueEntry(order[scheduled])
+				a.pl.RemoveQueueEntry(order[position])
 			}
 		} else if !missing {
-			if m.Item("加入队列").Disabled(scheduled >= 0).Chosen() {
+			if m.Item("加入队列").Disabled(scheduled).Chosen() {
 				a.pl.Enqueue(track, false)
 			}
 		}

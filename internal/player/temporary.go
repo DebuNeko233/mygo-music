@@ -14,7 +14,7 @@ func (p *Player) PlayTemporary(track netease.Track, local *LocalAudio) {
 	p.finish(MovedOn)
 	track.Temporary = true
 	at := p.at
-	if existing := p.queuePosition(track.Key(), 0); existing >= 0 {
+	if existing := p.QueuePosition(track.Key()); existing >= 0 {
 		if existing != at {
 			if p.hasTemporary() {
 				p.queue, p.order = p.withoutQueueEntry(at)

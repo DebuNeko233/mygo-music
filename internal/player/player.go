@@ -283,15 +283,19 @@ func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySou
 	p.playQueue(tracks, max(start, 0))
 }
 
-// ScheduledPosition finds the first occurrence of a song at or after the
-// current position in play order, or -1 if it is not scheduled.
-func (p *Player) ScheduledPosition(key int64) int {
-	return p.queuePosition(key, max(p.at, 0))
+// QueuePosition finds a song anywhere in play order, preferring the current
+// or first upcoming entry over a played one. It returns -1 if absent.
+func (p *Player) QueuePosition(key int64) int {
+	at := min(max(p.at, 0), len(p.order))
+	if position := p.queuePosition(key, at, len(p.order)); position >= 0 {
+		return position
+	}
+	return p.queuePosition(key, 0, at)
 }
 
-func (p *Player) queuePosition(key int64, start int) int {
+func (p *Player) queuePosition(key int64, start, end int) int {
 	if key != 0 {
-		for i := start; i < len(p.order); i++ {
+		for i := start; i < end; i++ {
 			if p.queue[p.order[i]].Key() == key {
 				return i
 			}
@@ -307,18 +311,13 @@ func (p *Player) Enqueue(track netease.Track, next bool) {
 		p.PlayQueue([]netease.Track{track}, 0)
 		return
 	}
-	key := track.Key()
-	position := p.ScheduledPosition(key)
-	if position >= 0 && (!next || position <= p.at+1) {
-		return
-	}
-	if position < 0 && track.IsLocal() {
-		position = p.queuePosition(key, 0)
-	}
-	if position >= 0 {
+	position := p.QueuePosition(track.Key())
+	if position >= 0 && (position >= p.at || track.IsLocal()) {
 		if position < p.at {
 			p.endRadio()
 			p.at--
+		} else if !next || position <= p.at+1 {
+			return
 		}
 		target := len(p.order) - 1
 		if next {

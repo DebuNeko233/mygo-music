@@ -111,8 +111,37 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 	if err := tt.ChooseMenuItem("加入队列"); err != nil {
 		t.Fatal(err)
 	}
-	if len(a.pl.Queue()) != 3 || a.pl.ScheduledPosition(local.Key()) != 2 {
+	if len(a.pl.Queue()) != 3 || a.pl.QueuePosition(local.Key()) != 2 {
 		t.Fatalf("the removed song could not be requeued: %+v", a.pl.Queue())
+	}
+}
+
+// The local library can remove a played song that is still listed before the current song.
+func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.route = route{page: pageLocal}
+	played := netease.Track{LocalID: 1, Name: "已播本地歌曲"}
+	current := netease.Track{ID: 1, Name: "当前在线歌曲"}
+	next := netease.Track{ID: 2, Name: "下一首在线歌曲"}
+	const path = "../player/testdata/seek.flac"
+	a.local.replace(localCatalog{Songs: []localSong{{Track: played, Path: path}}})
+	a.pl.SuspendCache()
+	a.pl.Restore(player.Session{
+		Queue: []netease.Track{current, next, played}, Order: []int{2, 0, 1}, At: 1, Shuffle: true,
+	})
+	a.pl.Hold(17 * time.Second)
+	tt := ui.NewTester(a.view, 1200, 800)
+	if err := tt.RightClick(played.Name); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("移除队列"); err != nil {
+		t.Fatal(err)
+	}
+	order, at := a.pl.PlayOrder()
+	if !slices.Equal(order, []int{0, 1}) || at != 0 || a.pl.Current().Key() != current.Key() ||
+		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.song(played.LocalID).Path != path {
+		t.Fatalf("removal changed playback or the library: order %v, current %d at %v", order, at, a.pl.Position())
 	}
 }
 
