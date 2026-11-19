@@ -264,6 +264,11 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 	if a.settings.LyricLines != 1 || a.settings.LyricAlign != 0 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.path).LyricAlign != 0 {
 		t.Fatal("single-line alignment did not apply to the shared line and persist")
 	}
+	// Left alignment is zero and must be present in the file rather than
+	// omitted, so loading it again cannot restore the default centre.
+	if got := loadSettings().LyricAlign; got != 0 {
+		t.Fatalf("left alignment was restored as %d after loading the saved settings", got)
+	}
 	if err := tt.Click("双行"); err != nil {
 		t.Fatal(err)
 	}
