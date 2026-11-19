@@ -33,8 +33,10 @@ type libraryRefreshState struct {
 	revision    uint64
 	playlists   map[int64]*listRequest
 	playlistUse uint64
+	editedLists map[int64]struct{} // explicit revalidations, including offscreen lists
 	mine, likes listRequest
 	albums      listRequest
+	findLiked   bool             // a heart changed before the sidebar supplied its playlist ID
 	now         func() time.Time // optional test clock; never a UI context
 }
 
@@ -90,6 +92,7 @@ func (a *app) forgetPlaylist(id int64) {
 	req.store.Forget(req.scope, req.key)
 	delete(a.playlists, id)
 	delete(a.listRefresh.playlists, id)
+	delete(a.listRefresh.editedLists, id)
 	delete(a.loadingPl, id)
 	delete(a.plPlay, id)
 }
@@ -97,6 +100,20 @@ func (a *app) touchPlaylist(id int64) {
 	a.usePlaylist(id)
 	a.playlistRequest(id).at = a.listsNow()
 }
+
+// revalidatePlaylist makes an edited list due without discarding its snapshot.
+func (a *app) revalidatePlaylist(id int64) {
+	r := a.playlistRequest(id)
+	r.stale()
+	if a.listRefresh.editedLists == nil {
+		a.listRefresh.editedLists = map[int64]struct{}{}
+	}
+	a.listRefresh.editedLists[id] = struct{}{}
+	if !r.busy && a.listRefresh.edits == 0 {
+		a.loadPlaylist(id, false)
+	}
+}
+
 func copyPlaylist(pl netease.Playlist) netease.Playlist {
 	pl.Tracks = slices.Clone(pl.Tracks)
 	pl.TrackIDs = slices.Clone(pl.TrackIDs)
@@ -137,24 +154,27 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	if was == nil {
 		a.loadingPl[id] = true
 	}
-	var before netease.Playlist
+	var before *netease.Playlist
 	if was != nil {
-		before = copyPlaylist(*was)
+		snapshot := copyPlaylist(*was)
+		before = &snapshot
 	}
 	uid, gen, revision := a.listenerID(), a.homeGen, a.listRefresh.revision
 	req := a.cacheRequest(fmt.Sprintf("playlist/%d", id))
 	readDisk := was == nil
 	fetch := playlistDetail
-	go func() {
+	go func(baseline *netease.Playlist) {
 		if readDisk {
 			a.waitForPlaylistSnapshot(req)
 			var kept *netease.Playlist
 			if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
+				snapshot := copyPlaylist(*kept)
+				baseline = &snapshot
 				a.post(func() {
 					if a.homeGen == gen && a.listRefresh.playlists[id] == r && a.playlists[id] == nil && a.listRefresh.edits == 0 && a.listRefresh.revision == revision {
 						a.playlists[id] = kept
 						was = kept
-						before = copyPlaylist(*kept)
+						before = &snapshot
 						delete(a.loadingPl, id)
 						if thenPlay || a.plPlay[id] {
 							a.pl.PlayQueueFrom(kept.Tracks, firstPlayable(kept.Tracks), player.PlaySource{Source: "list", ID: id})
@@ -166,10 +186,23 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			}
 		}
 		pl, err := fetch(id)
-		bytes := cacheBytes(pl)
-		a.post(func() {
+		var sameTracks, unchanged bool
+		if err == nil && pl != nil && baseline != nil {
+			sameTracks = len(baseline.Tracks) == 0 && len(pl.Tracks) == 0 || reflect.DeepEqual(baseline.Tracks, pl.Tracks)
+			if sameTracks && slices.Equal(baseline.TrackIDs, pl.TrackIDs) {
+				old, fresh := *baseline, *pl
+				old.Tracks, fresh.Tracks = nil, nil
+				old.TrackIDs, fresh.TrackIDs = nil, nil
+				unchanged = reflect.DeepEqual(old, fresh)
+			}
+		}
+		var bytes []byte
+		if err == nil && pl != nil && req.store != nil && !(readDisk && unchanged) {
+			bytes = cacheBytes(pl)
+		}
+		a.postIfChanged(func() bool {
 			if a.listenerID() != uid || a.homeGen != gen || a.listRefresh.playlists[id] != r {
-				return
+				return false
 			}
 			r.busy = false
 			defer a.trimPlaylistCache()
@@ -177,35 +210,53 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			delete(a.loadingPl, id)
 			delete(a.plPlay, id)
 			if err != nil || pl == nil {
+				if !r.retry {
+					delete(a.listRefresh.editedLists, id)
+				}
 				r.failed, r.failure = true, err
 				if was == nil {
 					a.plErr[id] = "歌单加载失败"
 				}
-				return // a refresh failure leaves displayed content intact
+				return true // the error or network recovery can change the UI
 			}
 			if a.listRefresh.edits != 0 || a.listRefresh.revision != revision {
+				if was == nil && play {
+					a.plPlay[id] = true
+				}
 				r.stale()
-				return
+				return true
 			}
 			if was != nil {
 				// A local rename, subscription, addition/removal or a replacement wins.
-				if a.playlists[id] != was || !reflect.DeepEqual(*was, before) {
+				if a.playlists[id] != was || !reflect.DeepEqual(*was, *before) {
 					r.stale()
-					return
+					return true
 				}
 			} else if a.playlists[id] != nil {
-				return
+				delete(a.listRefresh.editedLists, id)
+				return false
 			}
-			a.playlists[id] = pl
+			delete(a.listRefresh.editedLists, id)
+			if r.retry {
+				r.at, r.retry = a.listsNow(), false
+			}
 			delete(a.plErr, id)
 			if bytes != nil {
 				a.savePlaylistSnapshot(req, func() []byte { return bytes })
 			}
+			if was != nil && unchanged {
+				return a.network.recovering && a.route.page == pagePlaylist && a.route.id == id
+			}
+			if was != nil && sameTracks {
+				pl.Tracks = was.Tracks
+			}
+			a.playlists[id] = pl
 			if was == nil && play {
 				a.pl.PlayQueueFrom(pl.Tracks, firstPlayable(pl.Tracks), player.PlaySource{Source: "list", ID: id})
 			}
+			return true
 		})
-	}()
+	}(before)
 }
 
 // loadMine keeps the sidebar visible during refresh and refuses a response
@@ -248,6 +299,12 @@ func (a *app) loadMine(uid int64) {
 			}
 			a.mine, a.saved = made, saved
 			req.keep(bytes)
+			if a.listRefresh.findLiked {
+				if id := a.likedPlaylist(); id != 0 {
+					a.listRefresh.findLiked = false
+					a.revalidatePlaylist(id)
+				}
+			}
 		})
 	}()
 }
@@ -393,8 +450,13 @@ func (a *app) retryLibraryRefresh() {
 			a.loadSubscribedAlbums(a.profile.UserID)
 		}
 	}
+	for id := range a.listRefresh.editedLists {
+		if !a.listRefresh.playlists[id].busy {
+			a.loadPlaylist(id, false)
+		}
+	}
 	if a.route.page == pagePlaylist {
-		if r := a.listRefresh.playlists[a.route.id]; r != nil && r.retry {
+		if r := a.listRefresh.playlists[a.route.id]; r != nil && r.retry && !r.busy {
 			a.loadPlaylist(a.route.id, false)
 		}
 	}

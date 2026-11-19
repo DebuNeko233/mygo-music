@@ -358,6 +358,7 @@ func (a *app) content(c *ui.Context) {
 	// list, as a page's tabs in its header, opens it as the list builds.
 	if a.scrolled != a.route {
 		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.route
+		a.playlistRows = playlistRows{}
 	}
 	// Pages mark where their content is, as they scroll.
 	a.underTop, a.underBottom = false, false

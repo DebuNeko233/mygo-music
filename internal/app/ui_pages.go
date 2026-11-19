@@ -361,7 +361,12 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 	// scrolled away from its start or end has content under the bars.
 	a.underTop, a.underBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
-	list := ui.List(c.Key(a.route), &a.trackList, rows, func(i int) {
+	list := ui.List(c.Key(a.route), &a.trackList, rows)
+	if pid != 0 {
+		list.ItemKey(a.playlistRowKeys(tracks))
+	}
+	list.Rows(func(item ui.ListRow) {
+		i := item.Index
 		if i == 0 {
 			ui.Column(c).Children(func() {
 				a.startMark(c)

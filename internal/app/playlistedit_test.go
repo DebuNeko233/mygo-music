@@ -62,6 +62,49 @@ func TestAddSongToPlaylist(t *testing.T) {
 	}
 }
 
+// Adding a song while its playlist is visible keeps the old rows until
+// NetEase supplies the updated list order.
+func TestAddSongKeepsVisiblePlaylistDuringRefresh(t *testing.T) {
+	a := editTestApp()
+	posts := testPosts(a)
+	id := a.route.id
+	original := a.playlists[id]
+	a.touchPlaylist(id)
+	added := netease.Track{ID: 3, Name: "新歌曲"}
+	next := copyPlaylist(*original)
+	next.Tracks = append([]netease.Track{added}, next.Tracks...)
+
+	oldAdd, oldDetail, oldMine := addToPlaylist, playlistDetail, userPlaylists
+	t.Cleanup(func() { addToPlaylist, playlistDetail, userPlaylists = oldAdd, oldDetail, oldMine })
+	addToPlaylist = func(int64, ...int64) error { return nil }
+	fetching, release := make(chan struct{}), make(chan struct{}, 1)
+	defer close(release)
+	playlistDetail = func(int64) (*netease.Playlist, error) {
+		close(fetching)
+		<-release
+		return &next, nil
+	}
+	mine, saved := a.mine, a.saved
+	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return mine, saved, nil }
+
+	a.addTo(id, &added)
+	refreshPost(t, posts)
+	select {
+	case <-fetching:
+	case <-time.After(3 * time.Second):
+		t.Fatal("add did not revalidate the recently loaded playlist")
+	}
+	if a.playlists[id] != original || a.loadingPl[id] {
+		t.Fatal("add blanked the existing playlist while the refresh was pending")
+	}
+	release <- struct{}{}
+	refreshPost(t, posts)
+	refreshPost(t, posts)
+	if pl := a.playlists[id]; len(pl.Tracks) != 3 || pl.Tracks[0].ID != added.ID {
+		t.Fatal("add did not publish the server's updated list order")
+	}
+}
+
 // Removing a song from the listener's playlist takes its row away at once,
 // and asks NetEase to take it out.
 func TestRemoveSongFromPlaylist(t *testing.T) {
@@ -90,6 +133,60 @@ func TestRemoveSongFromPlaylist(t *testing.T) {
 	}
 	if q := a.pl.Queue(); len(q) != 2 || q[1].ID != 2 {
 		t.Errorf("removing the song changed the queue playing: %v", q)
+	}
+}
+
+// A removal made during an older lookup keeps its local edit and queues
+// a fresh lookup even if the user has already left the playlist.
+func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
+	a := editTestApp()
+	posts := testPosts(a)
+	id := a.route.id
+	original := a.playlists[id]
+	original.TrackCount = 2
+	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}}
+	a.route = route{page: pageHome}
+	a.pl.Cue(original.Tracks)
+	a.pl.Hold(10 * time.Second)
+	revision := a.pl.QueueRevision()
+
+	oldRemove, oldDetail, oldMine := removeFromPlaylist, playlistDetail, userPlaylists
+	t.Cleanup(func() { removeFromPlaylist, playlistDetail, userPlaylists = oldRemove, oldDetail, oldMine })
+	removeFromPlaylist = func(int64, ...int64) error { return nil }
+	requests := make(chan int64, 2)
+	replies := make(chan *netease.Playlist, 2)
+	defer close(replies)
+	playlistDetail = func(pid int64) (*netease.Playlist, error) {
+		requests <- pid
+		return <-replies, nil
+	}
+	mine, saved := a.mine, a.saved
+	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return mine, saved, nil }
+
+	a.loadPlaylist(id, false)
+	wait(t, requests, "the earlier playlist lookup")
+	a.removeFrom(id, &original.Tracks[0])
+	refreshPost(t, posts) // the removal
+	refreshPost(t, posts) // the sidebar lookup
+	reduced := a.playlists[id]
+	if reduced.TrackCount != 1 || len(reduced.Tracks) != 1 || len(reduced.TrackIDs) != 1 || reduced.TrackIDs[0].ID != 2 {
+		t.Fatal("removal did not update the cached song and ID lists")
+	}
+	replies <- original
+	refreshPost(t, posts)
+	if a.playlists[id] != reduced {
+		t.Fatal("an older lookup restored the removed song")
+	}
+	a.retryLibraryRefresh()
+	if pid := wait(t, requests, "the replacement lookup"); pid != id {
+		t.Fatalf("refreshed playlist %d, want %d", pid, id)
+	}
+	server := copyPlaylist(*reduced)
+	server.PlayCount = 10
+	replies <- &server
+	refreshPost(t, posts)
+	if a.playlists[id].PlayCount != 10 || a.pl.QueueRevision() != revision || !a.pl.Playing() || a.pl.Position() != 10*time.Second {
+		t.Fatal("the latest playlist did not publish or changed playback")
 	}
 }
 

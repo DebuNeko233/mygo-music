@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -121,6 +122,16 @@ func (s *Store) Queue(scope, key string, b []byte, epoch uint64) {
 // Prepare reserves acceptance order before a background serialization. A
 // slower old encoder cannot replace a more recently accepted snapshot.
 func (s *Store) Prepare(scope, key string, epoch uint64) func([]byte) {
+	return s.prepare(scope, key, epoch, false)
+}
+
+// PrepareIfChanged reserves a write like Prepare, but keeps an identical
+// file-backed snapshot in place. A missing file is still written.
+func (s *Store) PrepareIfChanged(scope, key string, epoch uint64) func([]byte) {
+	return s.prepare(scope, key, epoch, true)
+}
+
+func (s *Store) prepare(scope, key string, epoch uint64, skipEqual bool) func([]byte) {
 	if s == nil || s.closed.Load() || s.moving.Load() || s.clearing.Load() || s.Epoch() != epoch {
 		return nil
 	}
@@ -135,7 +146,7 @@ func (s *Store) Prepare(scope, key string, epoch uint64) func([]byte) {
 	s.pending[file] = seq
 	s.workers.Add(1)
 	s.mu.Unlock()
-	return func(b []byte) { s.write(file, b, epoch, seq) }
+	return func(b []byte) { s.write(file, b, epoch, seq, skipEqual) }
 }
 
 // Put commits content synchronously before an index refers to it.
@@ -194,7 +205,7 @@ func (s *Store) prepareForget(scope, key string) func() {
 	}
 }
 
-func (s *Store) write(file string, b []byte, epoch, seq uint64) {
+func (s *Store) write(file string, b []byte, epoch, seq uint64, skipEqual bool) {
 	defer s.workers.Done()
 	s.io.Lock()
 	defer s.io.Unlock()
@@ -228,6 +239,16 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 		}
 		return
 	}
+	dest := filepath.Join(s.dir, file)
+	sum := sha256.Sum256(b)
+	if skipEqual && snapshotMatches(dest, len(b), sum) {
+		s.mu.Lock()
+		forgotten := s.forgotten[file] != 0
+		s.mu.Unlock()
+		if !forgotten {
+			return
+		}
+	}
 	if os.MkdirAll(s.dir, 0700) != nil {
 		return
 	}
@@ -240,7 +261,6 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 	header := make([]byte, headerSize)
 	copy(header, "MYCACHE1")
 	binary.LittleEndian.PutUint64(header[8:16], uint64(time.Now().UnixNano()))
-	sum := sha256.Sum256(b)
 	copy(header[16:], sum[:])
 	_, e1 := f.Write(header)
 	_, e2 := f.Write(b)
@@ -251,7 +271,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 	// Commit under mu as well: Forget cannot be accepted between the final
 	// order check and the rename that makes the entry readable again.
 	s.mu.Lock()
-	committed := s.pending[file] == seq && s.Epoch() == epoch && !s.clearing.Load() && os.Rename(path, filepath.Join(s.dir, file)) == nil
+	committed := s.pending[file] == seq && s.Epoch() == epoch && !s.clearing.Load() && os.Rename(path, dest) == nil
 	if committed {
 		delete(s.forgotten, file)
 	}
@@ -260,6 +280,21 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64) {
 		s.latest = file
 		s.prune(int64(headerSize+len(b)), file)
 	}
+}
+
+func snapshotMatches(path string, size int, sum [sha256.Size]byte) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || info.Size() != int64(headerSize+size) {
+		return false
+	}
+	var header [headerSize]byte
+	_, err = io.ReadFull(f, header[:])
+	return err == nil && string(header[:8]) == "MYCACHE1" && bytes.Equal(header[16:], sum[:])
 }
 
 // Clear invalidates requests immediately; deletion and accounting stay off

@@ -116,18 +116,19 @@ type app struct {
 	homeAt      time.Time // when what the home page shows was asked for
 	homeGen     int       // generation counter to discard stale responses
 
-	playlists  map[int64]*netease.Playlist
-	loadingPl  map[int64]bool
-	plPlay     map[int64]bool // playlists asked to play once they are in
-	plErr      map[int64]string
-	artists    pageCache[int64, *artistData]
-	artistTab  int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
-	albums     pageCache[int64, *albumData]
-	users      pageCache[int64, *userData]
-	podcasts   pageCache[int64, *podcastData]
-	podcastTab *podcastTab // the podcasts tab's lists
-	trackList  ui.ListState
-	local      localMusic
+	playlists    map[int64]*netease.Playlist
+	loadingPl    map[int64]bool
+	plPlay       map[int64]bool // playlists asked to play once they are in
+	plErr        map[int64]string
+	artists      pageCache[int64, *artistData]
+	artistTab    int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
+	albums       pageCache[int64, *albumData]
+	users        pageCache[int64, *userData]
+	podcasts     pageCache[int64, *podcastData]
+	podcastTab   *podcastTab // the podcasts tab's lists
+	trackList    ui.ListState
+	playlistRows playlistRows
+	local        localMusic
 	// Where the page and the sidebar are scrolled, kept while Now Playing
 	// covers them, unbuilt.
 	pageScroll ui.ScrollState
@@ -245,14 +246,26 @@ type app struct {
 	// Workers can finish before NewWindow returns. Protect their early queue
 	// and dispatcher publication; callbacks always run unlocked.
 	postMu sync.Mutex
-	postTo func(func()) // main-thread dispatcher, published with the window
+	postTo func(func(), bool) // main-thread dispatcher, published with the window
 	kept   []func()
 }
 
-// post queues early results until a dispatcher exists. Native windows and
+func (a *app) post(fn func()) { a.dispatch(fn, true) }
+
+// postIfChanged lets a worker finish bookkeeping without rebuilding the view
+// when the result does not change what any window shows.
+func (a *app) postIfChanged(update func() bool) {
+	a.dispatch(func() {
+		if update() {
+			a.redraw()
+		}
+	}, false)
+}
+
+// dispatch queues early results until a dispatcher exists. Native windows and
 // headless tests each own their queue; a late worker cannot use another app's
 // dispatcher. Never invoke callbacks while holding postMu.
-func (a *app) post(fn func()) {
+func (a *app) dispatch(fn func(), redraw bool) {
 	a.postMu.Lock()
 	send := a.postTo
 	if send == nil {
@@ -261,7 +274,7 @@ func (a *app) post(fn func()) {
 		return
 	}
 	a.postMu.Unlock()
-	send(fn)
+	send(fn, redraw)
 }
 
 // flushKept runs what post kept while the window was being made.
@@ -389,7 +402,13 @@ func Run() error {
 		})
 		a.postMu.Lock()
 		a.win = win
-		a.postTo = func(fn func()) { win.Update(func() { fn(); a.redraw() }) }
+		a.postTo = func(fn func(), redraw bool) {
+			if redraw {
+				win.Update(func() { fn(); a.redraw() })
+			} else {
+				mygo.RunOnMain(fn)
+			}
+		}
 		a.postMu.Unlock()
 		// The view the window laid out as it was made asked for pictures
 		// before there was a window to read them back into.

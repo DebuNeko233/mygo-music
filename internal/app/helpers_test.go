@@ -36,7 +36,7 @@ func newTestApp() *app {
 func testPosts(a *app) chan func() {
 	posts := make(chan func(), 64)
 	a.postMu.Lock()
-	a.postTo = func(fn func()) { posts <- fn }
+	a.postTo = func(fn func(), _ bool) { posts <- fn }
 	a.postMu.Unlock()
 	return posts
 }
