@@ -96,8 +96,8 @@ type settings struct {
 	LyricLines int `json:"lyricLines,omitempty"`
 	// LyricAlign and LyricNextAlign align the first and second desktop lines:
 	// 0 for left, 1 for centre and 2 for right. A single line uses LyricAlign.
-	LyricAlign     int `json:"lyricAlign,omitempty"`
-	LyricNextAlign int `json:"lyricNextAlign,omitempty"`
+	LyricAlign     int `json:"lyricAlign"`
+	LyricNextAlign int `json:"lyricNextAlign"`
 	// LyricLineGap is the space between two desktop lines in points.
 	LyricLineGap float64 `json:"lyricLineGap,omitempty"`
 	// LyricLocked keeps the lyrics window where it is: it is dragged by
