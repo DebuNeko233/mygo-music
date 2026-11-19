@@ -118,7 +118,7 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 				}
 				ui.Text(c, meta)
 			})
-			a.descriptionSummary(c, al.Name, al.Description, coverSize)
+			a.headerDescription(c, al.Name+" · 简介", al.Description, coverSize)
 			ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
 				if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
 					if a.pl.Shuffle() {

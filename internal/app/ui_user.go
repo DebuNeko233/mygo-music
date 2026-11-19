@@ -134,7 +134,7 @@ func (a *app) userPage(c *ui.Context) {
 	u := d.user
 	own := a.profile != nil && a.profile.UserID == id
 	a.scrollPage(c, func() {
-		ui.Row(c).Gap(28).AlignItems(ui.End).Children(func() {
+		ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Children(func() {
 			ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 				a.coverFill(c, u.AvatarURL, 600, artistPhotoSize/2)
 			})
@@ -142,9 +142,7 @@ func (a *app) userPage(c *ui.Context) {
 				ui.Text(c, "用户").FontSize(12).FontWeight(600).TextColor(p.accent)
 				ui.Text(c, u.Nickname).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
 				ui.Text(c, fmt.Sprintf("%s 关注 · %s 粉丝", count(u.Follows), count(u.Followeds))).FontSize(13).TextColor(p.muted)
-				if u.Signature != "" {
-					ui.Text(c, u.Signature).FontSize(12.5).TextColor(p.muted).MaxLines(2).LineHeight(1.45).Margin(2, 0, 0, 0)
-				}
+				a.headerDescription(c, u.Nickname+" · 个人签名", u.Signature, artistPhotoSize)
 			})
 		})
 		a.section(c, "创建的歌单")
@@ -172,11 +170,7 @@ func (a *app) userPage(c *ui.Context) {
 			if len(d.podcasts) == 0 {
 				a.empty(c, "还没有订阅播客")
 			}
-			ui.Grid(c).Columns(a.columns(c, 340)).GapX(8).GapY(4).Margin(0, -12).Children(func() {
-				for i := range d.podcasts {
-					a.podcastRow(c.Key(d.podcasts[i].ID), &d.podcasts[i])
-				}
-			})
+			a.podcastGrid(c, len(d.podcasts), func(i int) *netease.Podcast { return &d.podcasts[i] })
 		}
 		if own && d.artistsShown {
 			a.section(c, "关注的歌手")
@@ -195,17 +189,16 @@ func (a *app) userPage(c *ui.Context) {
 // userRow is a user in a list, opening their page.
 func (a *app) userRow(c *ui.Context, u *netease.User) {
 	p := a.pal
-	row := ui.ButtonBase(c).Padding(10, 12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(u.Nickname)
+	const pad, gap, cover = 12, 14, 48
+	row := ui.ButtonBase(c).Padding(10, pad).Gap(gap).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(u.Nickname)
 	if row.Hovered() {
 		row.Background(p.hover)
 	}
 	row.Children(func() {
-		a.cover(c, u.AvatarURL, 120, 48, 24)
+		a.cover(c, u.AvatarURL, 120, cover, cover/2)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
 			ui.Text(c, u.Nickname).FontSize(14).FontWeight(600).SingleLine()
-			if u.Signature != "" {
-				ui.Text(c, u.Signature).FontSize(12.5).TextColor(p.muted).SingleLine()
-			}
+			a.descriptionSummary(c, u.Nickname+" · 个人签名", u.Signature, trackPageWidth(c)-2*pad-gap-cover, 1)
 		})
 	})
 	if row.Clicked() {
