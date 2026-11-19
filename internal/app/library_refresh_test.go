@@ -2,11 +2,17 @@ package app
 
 import (
 	"errors"
-	"github.com/egoist/mygo/ui"
-	"netease-music-mygo/internal/netease"
+	"fmt"
+	"reflect"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/netease"
 )
 
 func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {
@@ -28,6 +34,145 @@ func refreshPost(t *testing.T, posts chan func()) {
 		f()
 	case <-time.After(3 * time.Second):
 		t.Fatal("refresh never posted")
+	}
+}
+
+// A matching refresh keeps the displayed playlist and its disk snapshot,
+// while an absent snapshot can still be restored for offline use.
+func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
+	a, posts, now := refreshFixture(t)
+	a.browseCache = diskcache.New(t.TempDir(), 64<<20)
+	t.Cleanup(a.browseCache.Close)
+	pl := &netease.Playlist{ID: 7, Name: "歌单", Tracks: []netease.Track{{ID: 1, Name: "歌曲"}}}
+	a.playlists[pl.ID] = pl
+	req := a.cacheRequest("playlist/7")
+	playlistDetail = func(int64) (*netease.Playlist, error) {
+		result := copyPlaylist(*pl)
+		return &result, nil
+	}
+
+	a.loadPlaylist(pl.ID, false)
+	refreshPost(t, posts)
+	a.waitForPlaylistSnapshot(req)
+	var stored netease.Playlist
+	written := req.read(&stored)
+	if written.IsZero() || !reflect.DeepEqual(*pl, stored) {
+		t.Fatal("matching refresh did not fill a missing offline snapshot")
+	}
+	*now = now.Add(listsFresh)
+	a.loadPlaylist(pl.ID, false)
+	refreshPost(t, posts)
+	a.waitForPlaylistSnapshot(req)
+	if again := req.read(&stored); !again.Equal(written) {
+		t.Fatal("matching refresh rewrote the offline snapshot")
+	}
+	if a.playlists[pl.ID] != pl || a.playlistRequest(pl.ID).busy {
+		t.Fatal("matching refresh replaced the displayed list or stayed busy")
+	}
+}
+
+// Header-only refreshes keep the track data, while new song privileges still
+// reach the list even when its IDs and order have not changed.
+func TestPlaylistRefreshAppliesHeaderAndPrivileges(t *testing.T) {
+	a, posts, now := refreshFixture(t)
+	pl := &netease.Playlist{ID: 7, Name: "歌单", Tracks: []netease.Track{{ID: 1, Name: "歌曲"}}}
+	a.playlists[pl.ID] = pl
+	header := copyPlaylist(*pl)
+	header.PlayCount = 10
+	withPrivilege := copyPlaylist(header)
+	withPrivilege.Tracks[0].Privilege = &netease.Privilege{ID: 1, St: -1}
+
+	playlistDetail = func(int64) (*netease.Playlist, error) { return &header, nil }
+	a.loadPlaylist(pl.ID, false)
+	refreshPost(t, posts)
+	got := a.playlists[pl.ID]
+	if got.PlayCount != 10 || &got.Tracks[0] != &pl.Tracks[0] {
+		t.Fatal("header refresh lost the new count or replaced unchanged tracks")
+	}
+	*now = now.Add(listsFresh)
+	playlistDetail = func(int64) (*netease.Playlist, error) { return &withPrivilege, nil }
+	a.loadPlaylist(pl.ID, false)
+	refreshPost(t, posts)
+	if a.playlists[pl.ID].Tracks[0].Playable() || !pl.Tracks[0].Playable() {
+		t.Fatal("privilege refresh was lost or changed the old track")
+	}
+}
+
+// A refresh keeps the top song and its inset when it survives a nearby edit,
+// falls back to a surviving song after deletion, and leaves playback alone.
+func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
+	for _, edit := range []string{"insert above", "remove above", "reorder", "long move", "remove top", "duplicate"} {
+		t.Run(edit, func(t *testing.T) {
+			a, posts, _ := refreshFixture(t)
+			const id = 7
+			pl := &netease.Playlist{ID: id, Name: "歌单", Tracks: make([]netease.Track, 1600)}
+			for i := range pl.Tracks {
+				pl.Tracks[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌曲 %04d", i+1), Duration: 200000}
+			}
+			// Distinct rows can name the same recording. Test following the
+			// second occurrence, with the first above the visible region.
+			if edit == "duplicate" {
+				for i := 240; i < 260; i++ {
+					pl.Tracks[i].ID = pl.Tracks[i-200].ID
+				}
+			}
+			a.route = route{page: pagePlaylist, id: id}
+			a.playlists[id] = pl
+			a.pl.Cue(pl.Tracks)
+			a.pl.Hold(43 * time.Second)
+			queue := slices.Clone(a.pl.Queue())
+			tt := ui.NewTester(a.view, 1100, 760)
+			tt.Frame()
+			a.trackList.ScrollTo(249, ui.Start)
+			tt.Frame()
+			tt.Scroll(750, 400, 0, 57)
+			tt.Advance(time.Second)
+			tt.Frame()
+			first, _ := a.trackList.Visible()
+			if first < 241 || first > 260 {
+				t.Fatalf("test did not scroll into the target range: first row %d", first)
+			}
+			before, ok := tt.AccessByRole(ui.RoleButton, pl.Tracks[first-1].Name)
+			if !ok {
+				t.Fatal("test top song was not built")
+			}
+			fresh := copyPlaylist(*pl)
+			want := pl.Tracks[first-1].Name
+			switch edit {
+			case "insert above", "duplicate":
+				fresh.Tracks = slices.Insert(fresh.Tracks, 1, netease.Track{ID: 2000, Name: "新增歌曲"})
+			case "remove above":
+				fresh.Tracks = slices.Delete(fresh.Tracks, 1, 2)
+			case "reorder":
+				fresh.Tracks[first-1], fresh.Tracks[first+18] = fresh.Tracks[first+18], fresh.Tracks[first-1]
+			case "long move":
+				fresh.Tracks[first-1], fresh.Tracks[1400] = fresh.Tracks[1400], fresh.Tracks[first-1]
+			case "remove top":
+				want = pl.Tracks[first].Name
+				fresh.Tracks = slices.Delete(fresh.Tracks, first-1, first)
+			}
+			playlistDetail = func(int64) (*netease.Playlist, error) { return &fresh, nil }
+			a.loadPlaylist(id, false)
+			refreshPost(t, posts)
+			tt.Frame()
+			tt.Frame()
+			first, _ = a.trackList.Visible()
+			if edit == "long move" || edit == "remove top" {
+				locatedRow(t, tt, want, 760)
+			} else {
+				if first < 1 || fresh.Tracks[first-1].Name != want {
+					t.Fatalf("refresh did not keep %q at the top: first row %d", want, first)
+				}
+				after, ok := tt.AccessByRole(ui.RoleButton, want)
+				if !ok || after.Bounds.Y != before.Bounds.Y {
+					t.Fatalf("refresh changed the top song's inset: %g -> %g", before.Bounds.Y, after.Bounds.Y)
+				}
+			}
+			if !reflect.DeepEqual(queue, a.pl.Queue()) || a.pl.Current().ID != queue[0].ID ||
+				!a.pl.Playing() || a.pl.Position() != 43*time.Second {
+				t.Fatal("refresh changed the active queue or playback")
+			}
+		})
 	}
 }
 

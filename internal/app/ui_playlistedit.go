@@ -126,13 +126,13 @@ func (a *app) setSaved(pl netease.Playlist, save bool, at int) int {
 	return was
 }
 
-// playlistChanged forgets what was loaded of playlist id, which NetEase
-// changed: loaded anew if shown, and the sidebar's covers with it.
+// playlistChanged checks NetEase's new list order and the sidebar's covers
+// while keeping the loaded songs visible.
 func (a *app) playlistChanged(id int64) {
-	a.forgetPlaylist(id)
-	if a.route.page == pagePlaylist && a.route.id == id {
-		a.loadPlaylist(id, false)
+	if a.playlists[id] == nil && a.editable(id) == nil {
+		return // the playlist was deleted while the edit was pending
 	}
+	a.revalidatePlaylist(id)
 	if a.profile != nil {
 		a.loadMine(a.profile.UserID)
 	}
@@ -279,11 +279,15 @@ func (a *app) setPlaylistName(id int64, name string) {
 // addTo adds tr to the listener's playlist pid; a toast says how it went.
 func (a *app) addTo(pid int64, tr *netease.Track) {
 	id := tr.ID
+	gen := a.homeGen
 	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := addToPlaylist(pid, id)
 		a.post(func() {
 			finishEdit()
+			if a.homeGen != gen {
+				return
+			}
 			defer a.persistLibrary(pid)
 			switch {
 			case errors.Is(err, netease.ErrInPlaylist):
@@ -298,35 +302,52 @@ func (a *app) addTo(pid int64, tr *netease.Track) {
 	}()
 }
 
+// playlistWithoutSong makes a new track list and ID list for a removal.
+// The playback queue may still share the old tracks.
+func playlistWithoutSong(pl *netease.Playlist, song int64) *netease.Playlist {
+	next := *pl
+	next.Tracks = slices.DeleteFunc(slices.Clone(pl.Tracks), func(tr netease.Track) bool { return tr.ID == song })
+	next.TrackIDs = slices.DeleteFunc(slices.Clone(pl.TrackIDs), func(id netease.TrackID) bool { return id.ID == song })
+	removed := max(len(pl.Tracks)-len(next.Tracks), len(pl.TrackIDs)-len(next.TrackIDs))
+	if removed == 0 {
+		return pl
+	}
+	next.TrackCount = max(0, pl.TrackCount-removed)
+	return &next
+}
+
 // removeFrom takes tr out of the listener's playlist pid, at once in the
 // app and then with NetEase, which may refuse: the song comes back then.
 func (a *app) removeFrom(pid int64, tr *netease.Track) {
 	id := tr.ID
-	pl := a.playlists[pid]
-	var before []netease.Track
-	if pl != nil {
-		// A new list: the player may be playing the old one.
-		before = pl.Tracks
-		pl.Tracks = slices.DeleteFunc(slices.Clone(before), func(t netease.Track) bool { return t.ID == id })
+	before := a.playlists[pid]
+	var reduced *netease.Playlist
+	if before != nil {
+		reduced = playlistWithoutSong(before, id)
+		a.playlists[pid] = reduced
 	}
+	gen := a.homeGen
 	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := removeFromPlaylist(pid, id)
 		a.post(func() {
 			finishEdit()
+			if a.homeGen != gen {
+				return
+			}
 			defer a.persistLibrary(pid)
 			if err != nil {
-				if pl != nil && a.playlists[pid] == pl {
-					pl.Tracks = before
+				if current := a.playlists[pid]; current != nil && reduced != before {
+					if current == reduced {
+						current.Tracks, current.TrackIDs, current.TrackCount = before.Tracks, before.TrackIDs, before.TrackCount
+					} else {
+						a.revalidatePlaylist(pid)
+					}
 				}
 				a.toast = "移除失败，请稍后再试"
 				return
 			}
-			// The songs listed are right: only the sidebar's covers may
-			// have changed.
-			if a.profile != nil {
-				a.loadMine(a.profile.UserID)
-			}
+			a.playlistChanged(pid)
 		})
 	}()
 }

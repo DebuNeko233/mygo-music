@@ -11,7 +11,7 @@ const (
 // A playlist can be evicted before its snapshot reaches disk. Keep the
 // latest accepted write visible to readers even after eviction.
 func (a *app) savePlaylistSnapshot(req cacheRequest, encode func() []byte) {
-	write := req.store.Prepare(req.scope, req.key, req.epoch)
+	write := req.store.PrepareIfChanged(req.scope, req.key, req.epoch)
 	if write == nil {
 		return
 	}
@@ -56,7 +56,8 @@ func (a *app) trimPlaylistCache() {
 		var used uint64
 		found := false
 		for id := range a.playlists {
-			if (a.route.page == pagePlaylist && a.route.id == id) || a.plPlay[id] || a.dirtySnapshots[id] {
+			_, editing := a.listRefresh.editedLists[id]
+			if (a.route.page == pagePlaylist && a.route.id == id) || a.plPlay[id] || a.dirtySnapshots[id] || editing {
 				continue
 			}
 			r := a.listRefresh.playlists[id]

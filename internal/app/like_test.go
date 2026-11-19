@@ -1,6 +1,8 @@
 package app
 
 import (
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -55,6 +58,154 @@ func TestLikeFromPlayerBar(t *testing.T) {
 		t.Error("asked NetEase to like again")
 	}
 	refreshPost(t, posts)
+}
+
+// A confirmed unlike removes the row before revalidation, while a rejected
+// unlike keeps the row and restores its heart.
+func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
+	for _, rejected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("rejected=%t", rejected), func(t *testing.T) {
+			a, posts, _ := refreshFixture(t)
+			a.profile = &netease.Profile{UserID: 1}
+			a.browseCache = diskcache.New(t.TempDir(), 64<<20)
+			t.Cleanup(a.browseCache.Close)
+			const pid, song = 5, 50
+			pl := &netease.Playlist{ID: pid, Name: "我喜欢的音乐", SpecialType: 5, TrackCount: 100}
+			for i := int64(1); i <= 100; i++ {
+				pl.Tracks = append(pl.Tracks, netease.Track{ID: i, Name: fmt.Sprintf("歌曲 %03d", i), Duration: 200000})
+				pl.TrackIDs = append(pl.TrackIDs, netease.TrackID{ID: i})
+			}
+			a.route = route{page: pagePlaylist, id: pid}
+			a.playlists[pid] = pl
+			if !rejected {
+				a.mine = []netease.Playlist{{ID: pid, Name: pl.Name, SpecialType: 5}}
+			}
+			a.liked = map[int64]bool{song: true}
+			a.pl.Cue(pl.Tracks)
+			a.pl.Hold(43 * time.Second)
+			queueRevision := a.pl.QueueRevision()
+			requests := make(chan int64, 1)
+			reply := make(chan error, 1)
+			oldLike := likeSong
+			t.Cleanup(func() { likeSong = oldLike })
+			likeSong = func(id int64, like bool) error {
+				if like {
+					return errors.New("expected unlike")
+				}
+				requests <- id
+				return <-reply
+			}
+			defer close(reply)
+			detailRequests := make(chan int64, 1)
+			detailReply := make(chan *netease.Playlist, 1)
+			defer close(detailReply)
+			playlistDetail = func(pid int64) (*netease.Playlist, error) {
+				detailRequests <- pid
+				return <-detailReply, nil
+			}
+
+			tt := ui.NewTester(a.view, 1200, 800)
+			tt.Frame()
+			a.trackList.ScrollTo(song, ui.Center)
+			tt.Frame()
+			first, _ := a.trackList.Visible()
+			y := a.pageScroll.Y
+			if err := tt.Click("取消喜欢 歌曲 050"); err != nil {
+				t.Fatal(err)
+			}
+			if got := wait(t, requests, "the unlike"); got != song {
+				t.Fatalf("unliked song %d, want %d", got, song)
+			}
+			if a.liked[song] || a.playlists[pid] != pl || a.loadingPl[pid] {
+				t.Fatal("unlike should update the heart while leaving the list visible")
+			}
+			var err error
+			if rejected {
+				err = errors.New("unlike rejected")
+			}
+			reply <- err
+			refreshPost(t, posts)
+			tt.Frame()
+			if top, _ := a.trackList.Visible(); top != first || a.pageScroll.Y != y {
+				t.Fatal("unlike moved the list")
+			}
+			if a.playlists[pid] == nil || a.loadingPl[pid] {
+				t.Fatal("unlike blanked the liked playlist")
+			}
+			if a.pl.QueueRevision() != queueRevision || a.pl.Queue()[song-1].ID != song ||
+				!a.pl.Playing() || a.pl.Position() != 43*time.Second {
+				t.Fatal("unlike changed the active playback queue")
+			}
+			if rejected {
+				if !a.liked[song] || a.playlists[pid] != pl || a.playlistRequest(pid).busy {
+					t.Fatal("rejected unlike lost the original row or its heart")
+				}
+				return
+			}
+			if requested := wait(t, detailRequests, "the liked playlist refresh"); requested != pid {
+				t.Fatalf("refreshed playlist %d, want %d", requested, pid)
+			}
+			next := a.playlists[pid]
+			if a.liked[song] || next.TrackCount != 99 || len(next.Tracks) != 99 || len(next.TrackIDs) != 99 ||
+				next.Tracks[song-1].ID != song+1 || next.TrackIDs[song-1].ID != song+1 {
+				t.Fatal("the confirmed unlike did not remove the song from the cached list")
+			}
+			remote := copyPlaylist(*next)
+			remote.PlayCount = 1
+			detailReply <- &remote
+			refreshPost(t, posts)
+			tt.Frame()
+			if a.playlists[pid].PlayCount != 1 || a.pageScroll.Y != y {
+				t.Fatal("the background refresh did not apply in place")
+			}
+			req := a.cacheRequest("playlist/5")
+			a.waitForPlaylistSnapshot(req)
+			var kept netease.Playlist
+			if at := req.read(&kept); at.IsZero() || len(kept.Tracks) != 99 || kept.TrackIDs[song-1].ID != song+1 {
+				t.Fatal("the offline snapshot did not record the unlike")
+			}
+		})
+	}
+}
+
+// A heart pressed outside the favorites page still refreshes that playlist
+// once the sidebar has supplied its ID, even when a prior lookup was pending.
+func TestLikeRefreshesOffscreenPlaylist(t *testing.T) {
+	a, posts, _ := refreshFixture(t)
+	a.profile = &netease.Profile{UserID: 1}
+	a.route = route{page: pageHome}
+	const pid, song = 5, 7
+	tr := netease.Track{ID: song, Name: "宝船"}
+	a.pl.Cue([]netease.Track{tr})
+	mineReply := make(chan struct{}, 1)
+	defer close(mineReply)
+	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
+		<-mineReply
+		return []netease.Playlist{{ID: pid, SpecialType: 5}}, nil, nil
+	}
+	oldLike := likeSong
+	t.Cleanup(func() { likeSong = oldLike })
+	likeSong = func(int64, bool) error { return nil }
+	requested := make(chan int64, 1)
+	playlistDetail = func(id int64) (*netease.Playlist, error) {
+		requested <- id
+		return &netease.Playlist{ID: id, SpecialType: 5, Tracks: []netease.Track{tr}}, nil
+	}
+	a.loadMine(1)
+	a.toggleLike(&tr)
+	refreshPost(t, posts)
+	mineReply <- struct{}{}
+	refreshPost(t, posts)
+	a.retryLibraryRefresh()
+	mineReply <- struct{}{}
+	refreshPost(t, posts)
+	if id := wait(t, requested, "the offscreen favorites refresh"); id != pid {
+		t.Fatalf("refreshed playlist %d, want %d", id, pid)
+	}
+	refreshPost(t, posts)
+	if pl := a.playlists[pid]; pl == nil || len(pl.Tracks) != 1 || pl.Tracks[0].ID != song || a.route.page != pageHome {
+		t.Fatal("offscreen favorites did not update in place")
+	}
 }
 
 // The heart of an episode playing likes the episode, not its audio, once

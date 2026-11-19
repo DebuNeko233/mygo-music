@@ -41,7 +41,7 @@ func (a *app) toggleLike(tr *netease.Track) {
 		a.liked = map[int64]bool{}
 	}
 	id, like := tr.ID, !a.liked[tr.ID]
-	uid := a.profile.UserID // Capture UID for validation
+	uid, gen := a.profile.UserID, a.homeGen
 	a.setLiked(id, like)
 	finishEdit := a.beginLibraryEdit()
 	ask := likeSong
@@ -49,28 +49,47 @@ func (a *app) toggleLike(tr *netease.Track) {
 		err := ask(id, like)
 		a.post(func() {
 			finishEdit()
-			defer a.persistLibrary()
-			// Validate that the user is still logged in with the same account
-			if a.profile == nil || a.profile.UserID != uid {
+			if a.listenerID() != uid || a.homeGen != gen {
 				return
 			}
 			if err != nil {
 				log.Printf("like song %d: %v", id, err)
-				a.setLiked(id, !like)
+				if a.liked[id] == like {
+					a.setLiked(id, !like)
+				}
 				a.toast = "操作失败，请稍后再试"
+			} else if changed := a.updateLikedPlaylist(id, like); changed != 0 {
+				a.persistLibrary(changed)
 				return
 			}
-			// The liked songs' playlist changed: load it anew when shown.
-			for _, pl := range a.mine {
-				if pl.SpecialType == 5 {
-					a.forgetPlaylist(pl.ID)
-					if a.route.page == pagePlaylist && a.route.id == pl.ID {
-						a.loadPlaylist(pl.ID, false)
-					}
-				}
-			}
+			a.persistLibrary()
 		})
 	}()
+}
+
+// updateLikedPlaylist shows a confirmed removal right away, then checks the
+// server for the current song order after either kind of heart edit.
+func (a *app) updateLikedPlaylist(song int64, like bool) int64 {
+	pid := a.likedPlaylist()
+	if pid == 0 && a.route.page == pagePlaylist {
+		if visible := a.playlists[a.route.id]; visible != nil && visible.SpecialType == 5 {
+			pid = visible.ID
+		}
+	}
+	if pid == 0 {
+		a.listRefresh.findLiked = true
+		return 0
+	}
+	pl := a.playlists[pid]
+	var changed int64
+	if !like && pl != nil {
+		if next := playlistWithoutSong(pl, song); next != pl {
+			a.playlists[pid] = next
+			changed = pid
+		}
+	}
+	a.revalidatePlaylist(pid)
+	return changed
 }
 
 func (a *app) toggleProgramLike(id int64) {
