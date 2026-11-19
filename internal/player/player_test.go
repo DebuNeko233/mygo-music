@@ -4,7 +4,9 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/egoist/mygo/audio"
@@ -108,7 +110,7 @@ func TestPlaybackRetryPreservesHeardTime(t *testing.T) {
 	p.info = &netease.Stream{Bitrate: 128000, Level: "standard"}
 	p.begin()
 	clock = clock.Add(8 * time.Second)
-	p.retry(0, 0, 12*time.Second, netease.ErrUnavailable)
+	p.retry(0, 12*time.Second, netease.ErrUnavailable)
 	clock = clock.Add(time.Hour)
 	p.loadSkipping(0, 0, true, 12*time.Second)
 	p.info = &netease.Stream{Bitrate: 320000, Level: "exhigh"}
@@ -359,6 +361,87 @@ func TestRadioRefills(t *testing.T) {
 	if p.Radio() != "" || p.feed != nil {
 		t.Error("radio still on")
 	}
+}
+
+// Enqueue deduplicates upcoming songs in play order without confusing local and cloud IDs.
+func TestEnqueueDeduplicatesInPlayOrder(t *testing.T) {
+	p := &Player{shuffle: true}
+	candidate := netease.Track{LocalID: 1}
+	p.Cue([]netease.Track{{ID: 1}, {LocalID: 2}, candidate, {ID: 3}})
+	p.order, p.at, p.track = []int{0, 1, 3, 2}, 1, &p.queue[1]
+	rev := p.QueueRevision()
+	p.Enqueue(candidate, false)
+	p.Enqueue(netease.Track{LocalID: 2}, true)
+	if len(p.queue) != 4 || p.QueueRevision() != rev {
+		t.Fatal("appending an upcoming or current song edited the queue")
+	}
+	p.Enqueue(candidate, true)
+	p.Enqueue(candidate, true)
+	if len(p.queue) != 4 || p.QueueRevision() != rev+1 || !slices.Equal(p.order, []int{0, 1, 2, 3}) {
+		t.Fatalf("play next changed the wrong entries: %v", p.order)
+	}
+	p.Enqueue(netease.Track{ID: 1}, false)
+	if len(p.queue) != 5 || p.queue[4].ID != 1 || p.queue[4].IsLocal() {
+		t.Fatalf("could not add a previously played cloud song: %+v", p.queue)
+	}
+}
+
+// Adding a previously played local song moves its old row without interrupting playback.
+func TestEnqueueReusesPlayedLocalTrack(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		next  bool
+		order []int
+	}{
+		{name: "next", next: true, order: []int{2, 1, 0, 3}},
+		{name: "end", order: []int{2, 1, 3, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &Player{shuffle: true}
+			p.SuspendCache()
+			track := netease.Track{LocalID: 1}
+			p.Cue([]netease.Track{track, {ID: 1}, {ID: 2}, {ID: 3}})
+			p.order, p.at, p.track = []int{2, 0, 1, 3}, 2, &p.queue[1]
+			p.Hold(13 * time.Second)
+			p.Enqueue(track, tc.next)
+			p.Enqueue(track, tc.next)
+			if !slices.Equal(p.order, tc.order) || len(p.queue) != 4 || p.at != 1 || p.Current().ID != 1 ||
+				!p.Playing() || p.Position() != 13*time.Second {
+				t.Fatalf("enqueue changed playback or inserted a duplicate: order %v at %d, queue %+v", p.order, p.at, p.queue)
+			}
+		})
+	}
+}
+
+// Removing a duplicate from earlier in shuffle order keeps the other occurrence and current playback.
+func TestRemoveQueueEntryPreservesShuffleOrder(t *testing.T) {
+	p := &Player{shuffle: true}
+	p.Cue([]netease.Track{{LocalID: 1, Name: "next"}, {LocalID: 2}, {LocalID: 1, Name: "earlier"}, {LocalID: 3}})
+	p.order, p.at, p.track = []int{2, 1, 0, 3}, 1, &p.queue[1]
+	p.Hold(13 * time.Second)
+	p.RemoveQueueEntry(2)
+	p.RemoveQueueEntry(1) // The current entry can't be removed.
+	if len(p.queue) != 3 || !slices.Equal(p.order, []int{1, 0, 2}) || p.at != 0 || p.queue[0].Name != "next" ||
+		p.Current().LocalID != 2 || !p.Playing() || p.Position() != 13*time.Second {
+		t.Fatalf("unexpected order %v at %d, queue %+v", p.order, p.at, p.queue)
+	}
+}
+
+// A pending retry must still load the same song if removing a row moves its position.
+func TestRemoveQueueEntryPreservesPendingRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		posts := make(chan func(), 1)
+		p := &Player{post: func(fn func()) { posts <- fn }}
+		p.Cue([]netease.Track{{LocalID: 1}, {ID: 2}})
+		p.at, p.track = 1, &p.queue[1]
+		p.SuspendCache()
+		p.retry(0, 4*time.Second, netease.ErrRiskControl)
+		p.RemoveQueueEntry(0)
+		(<-posts)()
+		if p.Current().ID != 2 || p.at != 0 || p.Position() != 4*time.Second {
+			t.Fatalf("the retry moved to %+v at %v", p.Current(), p.Position())
+		}
+	})
 }
 
 func TestNormGain(t *testing.T) {

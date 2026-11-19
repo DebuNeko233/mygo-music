@@ -25,7 +25,7 @@ func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.
 // it is listed in, if set.
 func (a *app) songItems(tr *netease.Track, pid int64) func(m *ui.Menu) {
 	if tr.IsLocal() {
-		return a.localSongItems(tr)
+		return a.localSongItems(tr, false)
 	}
 	return func(m *ui.Menu) {
 		if tr.ProgramID != 0 {

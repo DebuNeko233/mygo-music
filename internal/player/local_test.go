@@ -61,6 +61,26 @@ func TestLocalTemporaryAtQueueEnd(t *testing.T) {
 	}
 }
 
+// Opening a queued file plays its existing entry and then returns to the original next song.
+func TestOpenQueuedLocalFileReusesEntry(t *testing.T) {
+	path := filepath.Join("testdata", "seek.flac")
+	posts, p := newLoadPlayer(t, nil)
+	p.LocalPath = func(int64) string { return path }
+	track := netease.Track{LocalID: 3}
+	p.Restore(Session{Queue: []netease.Track{{LocalID: 1}, {LocalID: 2}, track}, Order: []int{0, 1, 2}})
+	audio, err := PrepareLocalAudio(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.PlayTemporary(track, audio)
+	pump(t, posts, "queued file", func() bool { return p.Ready() })
+	if !slices.Equal(p.order, []int{0, 2, 1}) || p.at != 1 || p.Current().LocalID != 3 || p.hasTemporary() {
+		t.Fatalf("opened file did not reuse its queue entry: %v at %d, queue %+v", p.order, p.at, p.queue)
+	}
+	p.Next()
+	pump(t, posts, "original next song", func() bool { return p.Ready() && p.Current().LocalID == 2 })
+}
+
 // Restoring and navigating a mixed queue offline reads local lyrics and cached cloud audio.
 func TestLocalMixedQueueRestoresOffline(t *testing.T) {
 	b := song(t)
@@ -100,6 +120,37 @@ func TestLocalMixedQueueRestoresOffline(t *testing.T) {
 	pump(t, posts, "cached cloud song", func() bool { return p.Ready() && p.Current().ID == cloud.ID })
 	p.Jump(1)
 	pump(t, posts, "local song playing again", func() bool { return p.Ready() && p.Current().IsLocal() })
+}
+
+// Restoring an old queue removes duplicates on both sides of the current song and preserves its checkpoint.
+func TestRestoreDeduplicatesLocalTracks(t *testing.T) {
+	p := &Player{}
+	p.SuspendCache()
+	p.Restore(Session{
+		Queue: []netease.Track{
+			{LocalID: 7, Name: "later duplicate"},
+			{LocalID: 7, Name: "played before requeue"},
+			{LocalID: 8, Name: "current"},
+			{ID: 7, Name: "cloud"},
+			{LocalID: 7, Name: "first upcoming"},
+			{LocalID: 8, Name: "duplicate of current"},
+			{LocalID: 7, Name: "third upcoming"},
+			{LocalID: 8, Name: "played copy of current"},
+			{LocalID: 9, Name: "most recent history"},
+			{LocalID: 9, Name: "older history"},
+		},
+		Order: []int{9, 1, 7, 8, 2, 4, 3, 0, 5, 6}, At: 4, Shuffle: true, Position: 1500,
+	})
+	order, at := p.PlayOrder()
+	var names []string
+	for _, index := range order {
+		names = append(names, p.Queue()[index].Name)
+	}
+	if !slices.Equal(names, []string{"most recent history", "current", "first upcoming", "cloud"}) ||
+		len(p.Queue()) != 4 || at != 1 || p.Current().Name != "current" || !p.Shuffle() ||
+		p.Playing() || p.Position() != 1500*time.Millisecond {
+		t.Fatalf("restored queue %v, at %d, position %v, current %+v", names, at, p.Position(), p.Current())
+	}
 }
 
 // A local FLAC decodes and seeks with the same sample alignment as a complete stream.

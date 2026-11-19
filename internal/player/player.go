@@ -283,10 +283,48 @@ func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySou
 	p.playQueue(tracks, max(start, 0))
 }
 
-// Enqueue adds one song after the current song or at the end of play order.
+// QueuePosition finds a song anywhere in play order, preferring the current
+// or first upcoming entry over a played one. It returns -1 if absent.
+func (p *Player) QueuePosition(key int64) int {
+	at := min(max(p.at, 0), len(p.order))
+	if position := p.queuePosition(key, at, len(p.order)); position >= 0 {
+		return position
+	}
+	return p.queuePosition(key, 0, at)
+}
+
+func (p *Player) queuePosition(key int64, start, end int) int {
+	if key != 0 {
+		for i := start; i < end; i++ {
+			if p.queue[p.order[i]].Key() == key {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// Enqueue adds a song after the current song or at the end of play order.
+// Existing local entries are reused even after they have played.
 func (p *Player) Enqueue(track netease.Track, next bool) {
 	if len(p.order) == 0 {
 		p.PlayQueue([]netease.Track{track}, 0)
+		return
+	}
+	position := p.QueuePosition(track.Key())
+	if position >= 0 && (position >= p.at || track.IsLocal()) {
+		if position < p.at {
+			p.endRadio()
+			p.at--
+		} else if !next || position <= p.at+1 {
+			return
+		}
+		target := len(p.order) - 1
+		if next {
+			target = p.at + 1
+		}
+		p.moveQueueEntry(position, target)
+		p.queueEdited()
 		return
 	}
 	p.endRadio()
@@ -297,6 +335,39 @@ func (p *Player) Enqueue(track netease.Track, next bool) {
 	} else {
 		p.order = append(p.order, index)
 	}
+	p.queueEdited()
+}
+
+func (p *Player) moveQueueEntry(from, to int) {
+	if from != to {
+		index := p.order[from]
+		order := slices.Delete(slices.Clone(p.order), from, from+1)
+		p.order = slices.Insert(order, to, index)
+	}
+}
+
+// RemoveQueueEntry removes the indexed entry and keeps the current track playing.
+func (p *Player) RemoveQueueEntry(index int) {
+	position := slices.Index(p.order, index)
+	if position < 0 || position == p.at {
+		return
+	}
+	if p.hasTemporary() {
+		switch {
+		case p.temporaryAnchor == index:
+			p.temporaryAnchor = -1
+		case p.temporaryAnchor > index:
+			p.temporaryAnchor--
+		}
+	}
+	p.queue, p.order = p.withoutQueueEntry(position)
+	if position < p.at {
+		p.at--
+	}
+	p.queueEdited()
+}
+
+func (p *Player) queueEdited() {
 	p.queueRevision++
 	if !p.cacheChanging {
 		p.prefetch(p.at + 1)
@@ -1088,7 +1159,7 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 			}
 			p.loading = false
 			if err != nil {
-				p.failed(at, skipped, t, from, err)
+				p.failed(p.at, skipped, t, from, err)
 				return
 			}
 			p.stream, p.info = s, info
@@ -1119,7 +1190,7 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 			}
 			// The one after it is fetched while this one plays, so that
 			// it starts at once when this one ends.
-			p.prefetch(at + 1)
+			p.prefetch(p.at + 1)
 			p.sync()
 		})
 	}()
@@ -1160,7 +1231,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 	}
 	if errors.Is(err, netease.ErrRiskControl) {
 		if p.tries < riskTries {
-			p.retry(at, skipped, from, err)
+			p.retry(skipped, from, err)
 			return
 		}
 		p.err = "网易云正在校验网络，请稍后重试"
@@ -1173,7 +1244,7 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 		// What did not come now may come again: a stream URL gone stale,
 		// or a connection dropped, is asked for again a moment later.
 		if p.tries < loadTries {
-			p.retry(at, skipped, from, err)
+			p.retry(skipped, from, err)
 			return
 		}
 		p.err = "加载失败，请重试"
@@ -1218,10 +1289,10 @@ const riskTries = 1
 // are given up on: a request that fails is not a song without words.
 const lyricTries = 3
 
-// retry loads the track at at again in a moment, still loading as it
+// retry loads the current track again in a moment, still loading as it
 // waits: a stream URL gone stale, or a connection dropped, may work once
 // more.
-func (p *Player) retry(at, skipped int, from time.Duration, err error) {
+func (p *Player) retry(skipped int, from time.Duration, err error) {
 	p.pause()
 	p.tries++
 	p.retrying = true
@@ -1230,7 +1301,7 @@ func (p *Player) retry(at, skipped int, from time.Duration, err error) {
 	time.AfterFunc(loadGap(tries, err), func() {
 		p.post(func() {
 			if gen == p.gen {
-				p.loadSkipping(at, skipped, p.playing, from)
+				p.loadSkipping(p.at, skipped, p.playing, from)
 			}
 		})
 	})
@@ -1271,7 +1342,7 @@ func (p *Player) cutOff() {
 	dl, _ := p.stream.source()
 	dl.discard()
 	if !p.track.IsLocal() && p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
-		p.retry(p.at, 0, p.Position(), err)
+		p.retry(0, p.Position(), err)
 		return
 	}
 	// It cannot be had: stop where it stopped, for the listener to play
@@ -1504,6 +1575,55 @@ type Session struct {
 	Radio    string          `json:"radio,omitempty"`
 }
 
+// deduplicateLocalQueue prefers the current song, the earliest upcoming
+// entry, then the most recent played entry. Order and At are validated.
+func (s *Session) deduplicateLocalQueue() {
+	seen := make(map[int64]bool)
+	var removed map[int]bool
+	keep := func(index int) {
+		id := s.Queue[index].LocalID
+		if id <= 0 {
+			return
+		}
+		if seen[id] {
+			if removed == nil {
+				removed = make(map[int]bool)
+			}
+			removed[index] = true
+		}
+		seen[id] = true
+	}
+	for _, index := range s.Order[s.At:] {
+		keep(index)
+	}
+	for i := s.At - 1; i >= 0; i-- {
+		keep(s.Order[i])
+	}
+	if len(removed) == 0 {
+		return
+	}
+
+	queue := make([]netease.Track, 0, len(s.Queue)-len(removed))
+	newIndex := make([]int, len(s.Queue))
+	for i, track := range s.Queue {
+		if !removed[i] {
+			newIndex[i] = len(queue)
+			queue = append(queue, track)
+		}
+	}
+	order := make([]int, 0, len(queue))
+	current := s.Order[s.At]
+	for _, i := range s.Order {
+		if !removed[i] {
+			if i == current {
+				s.At = len(order)
+			}
+			order = append(order, newIndex[i])
+		}
+	}
+	s.Queue, s.Order = queue, order
+}
+
 // QueueRevision identifies the current queue and play order. Position,
 // repeat mode, and playback state do not change it.
 func (p *Player) QueueRevision() uint64 { return p.queueRevision }
@@ -1524,7 +1644,7 @@ func (p *Player) Session() (Session, bool) {
 		Radio:    p.radio,
 	}
 	if p.hasTemporary() {
-		s.Queue, s.Order = p.withoutTemporary()
+		s.Queue, s.Order = p.withoutQueueEntry(p.at)
 		if len(s.Queue) == 0 {
 			return Session{}, false
 		}
@@ -1548,6 +1668,7 @@ func (p *Player) Restore(s Session) {
 		}
 		seen[i] = true
 	}
+	s.deduplicateLocalQueue()
 	p.queue, p.order = s.Queue, s.Order
 	p.queueRevision++
 	p.step = 0

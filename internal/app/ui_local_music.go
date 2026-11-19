@@ -155,7 +155,7 @@ func (a *app) localFoldersView(c *ui.Context) {
 	})
 }
 
-func (a *app) localSongItems(tr *netease.Track) func(*ui.Menu) {
+func (a *app) localSongItems(tr *netease.Track, fromLibrary bool) func(*ui.Menu) {
 	if tr.Temporary {
 		name := tr.Name
 		return func(m *ui.Menu) {
@@ -170,16 +170,27 @@ func (a *app) localSongItems(tr *netease.Track) func(*ui.Menu) {
 		if song.Path == "" {
 			return
 		}
-		if !a.local.missing[track.LocalID] {
-			if m.Item("下一首播放").Chosen() {
+		order, at := a.pl.PlayOrder()
+		position := a.pl.QueuePosition(track.Key())
+		scheduled := position >= 0 && position >= at
+		missing := a.local.missing[track.LocalID]
+		canRemove := fromLibrary && position >= 0 && position != at
+		if !missing {
+			if m.Item("下一首播放").Disabled(scheduled && position <= at+1).Chosen() {
 				a.pl.Enqueue(track, true)
 			}
-			if m.Item("加入队列").Chosen() {
+		}
+		if canRemove {
+			if m.Item("移除队列").Chosen() {
+				a.pl.RemoveQueueEntry(order[position])
+			}
+		} else if !missing {
+			if m.Item("加入队列").Disabled(scheduled).Chosen() {
 				a.pl.Enqueue(track, false)
 			}
 		}
-		if !song.Scanned || a.local.missing[track.LocalID] {
-			if !a.local.missing[track.LocalID] {
+		if !song.Scanned || missing {
+			if !missing || canRemove {
 				m.Separator()
 			}
 			if m.Item("重新定位").Chosen() {

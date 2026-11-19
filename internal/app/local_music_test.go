@@ -3,7 +3,9 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -11,6 +13,137 @@ import (
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
+
+// A local song's queue menu removes its entry instead of offering to add it again.
+func TestLocalQueueMenuRemovesEntry(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	current := netease.Track{ID: 31, Name: "正在播放的歌"}
+	local := netease.Track{LocalID: 1, Name: "本地待播歌曲"}
+	const path = "../player/testdata/seek.flac"
+	a.local.replace(localCatalog{Songs: []localSong{{Track: local, Path: path}}})
+	a.pl.Cue([]netease.Track{current})
+	a.pl.Hold(17 * time.Second)
+	a.pl.SetLyrics(nil)
+	a.comments = commentState{track: current.Key(), loaded: true}
+	a.route = route{page: pageLocal}
+	tt := ui.NewTester(a.view, 1200, 800)
+
+	if err := tt.RightClick(local.Name); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("下一首播放"); err != nil {
+		t.Fatal(err)
+	}
+	a.nowPlaying, a.npPane = true, paneQueue
+	tt.Frame()
+	tt.Advance(time.Second)
+	if err := tt.RightClick(local.Name); err != nil {
+		t.Fatal(err)
+	}
+	if menu := tt.Menu(); slices.Contains(menu, "下一首播放") || slices.Contains(menu, "加入队列") {
+		t.Fatalf("the queued song still offers the library actions: %q", menu)
+	}
+	if err := tt.ChooseMenuItem("从待播清单移除"); err != nil {
+		t.Fatal(err)
+	}
+	if q := a.pl.Queue(); len(q) != 1 || q[0].ID != current.ID || a.pl.Current().ID != current.ID ||
+		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.song(local.LocalID).Path != path {
+		t.Fatalf("removal changed playback or the library: %+v", q)
+	}
+}
+
+// The library can promote a queued song, remove it, and add it again.
+func TestLocalLibraryQueueActions(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	current := netease.Track{LocalID: 1, Name: "当前本地歌曲"}
+	local := netease.Track{LocalID: 2, Name: "另一首本地歌曲"}
+	const path = "../player/testdata/seek.flac"
+	a.local.replace(localCatalog{Songs: []localSong{{Track: current, Path: path}, {Track: local, Path: path}}})
+	a.pl.Cue([]netease.Track{current, {ID: 2, Name: "在线歌曲"}})
+	a.route = route{page: pageLocal}
+	tt := ui.NewTester(a.view, 1200, 800)
+	open := func(name string) {
+		t.Helper()
+		row, ok := tt.AccessByRole(ui.RoleButton, name)
+		if !ok {
+			t.Fatalf("no library row for %s", name)
+		}
+		r := row.Bounds
+		tt.RightClickAt(r.X+r.W/2, r.Y+r.H/2)
+	}
+	disabled := func(item string) {
+		t.Helper()
+		if !slices.Contains(tt.Menu(), item) || tt.ChooseMenuItem(item) == nil {
+			t.Fatalf("%s should be visible and disabled", item)
+		}
+	}
+
+	open(current.Name)
+	disabled("下一首播放")
+	disabled("加入队列")
+	tt.CloseMenu()
+	open(local.Name)
+	if err := tt.ChooseMenuItem("加入队列"); err != nil {
+		t.Fatal(err)
+	}
+	open(local.Name)
+	if err := tt.ChooseMenuItem("下一首播放"); err != nil {
+		t.Fatal(err)
+	}
+	if next, _ := a.pl.AdjacentTracks(); next == nil || next.LocalID != local.LocalID || len(a.pl.Queue()) != 3 {
+		t.Fatalf("play next should move the original local entry: %+v", a.pl.Queue())
+	}
+	open(local.Name)
+	disabled("下一首播放")
+	if slices.Contains(tt.Menu(), "加入队列") {
+		t.Fatal("the queued song still offers to join the queue")
+	}
+	if err := tt.ChooseMenuItem("移除队列"); err != nil {
+		t.Fatal(err)
+	}
+	if next, _ := a.pl.AdjacentTracks(); len(a.pl.Queue()) != 2 || next == nil || next.ID != 2 ||
+		a.pl.Current().LocalID != current.LocalID || a.local.song(local.LocalID).Path != path {
+		t.Fatalf("removing the queued song changed playback or the library: %+v", a.pl.Queue())
+	}
+	open(local.Name)
+	if err := tt.ChooseMenuItem("加入队列"); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.pl.Queue()) != 3 || a.pl.QueuePosition(local.Key()) != 2 {
+		t.Fatalf("the removed song could not be requeued: %+v", a.pl.Queue())
+	}
+}
+
+// The local library can remove a played song that is still listed before the current song.
+func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.route = route{page: pageLocal}
+	played := netease.Track{LocalID: 1, Name: "已播本地歌曲"}
+	current := netease.Track{ID: 1, Name: "当前在线歌曲"}
+	next := netease.Track{ID: 2, Name: "下一首在线歌曲"}
+	const path = "../player/testdata/seek.flac"
+	a.local.replace(localCatalog{Songs: []localSong{{Track: played, Path: path}}})
+	a.pl.SuspendCache()
+	a.pl.Restore(player.Session{
+		Queue: []netease.Track{current, next, played}, Order: []int{2, 0, 1}, At: 1, Shuffle: true,
+	})
+	a.pl.Hold(17 * time.Second)
+	tt := ui.NewTester(a.view, 1200, 800)
+	if err := tt.RightClick(played.Name); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("移除队列"); err != nil {
+		t.Fatal(err)
+	}
+	order, at := a.pl.PlayOrder()
+	if !slices.Equal(order, []int{0, 1}) || at != 0 || a.pl.Current().Key() != current.Key() ||
+		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.song(played.LocalID).Path != path {
+		t.Fatalf("removal changed playback or the library: order %v, current %d at %v", order, at, a.pl.Position())
+	}
+}
 
 // A file chosen before startup finishes plays after restoring the old queue,
 // and a corrupt file leaves the playing song and the library alone.
