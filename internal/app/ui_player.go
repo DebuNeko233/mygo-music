@@ -381,14 +381,18 @@ func (a *app) transport(c *ui.Context, color, dim, on ui.Color, size float32) {
 		if iconButton(c.Key("next"), iconNext, size*0.85, color, "下一首").Clicked() {
 			pl.Next()
 		}
-		repeat, ricon := dim, iconRepeat
-		switch pl.Repeat() {
-		case player.RepeatAll:
-			repeat = on
-		case player.RepeatOne:
-			repeat, ricon = on, iconRepeat1
+		mode := pl.Repeat()
+		repeating := mode == player.RepeatAll || mode == player.RepeatOne
+		repeatColor, repeatIcon := dim, iconRepeat
+		if repeating {
+			repeatColor = on
 		}
-		if iconButton(c.Key("repeat"), ricon, size*0.62, repeat, "循环").Clicked() {
+		if mode == player.RepeatOne {
+			repeatIcon = iconRepeat1
+		}
+		repeatButton := roundButton(c.Key("repeat"), size*0.62, repeatColor, "循环", repeating)
+		repeatButton.Children(func() { ui.Icon(c, repeatIcon).Size(size*0.62, size*0.62) })
+		if repeatButton.Clicked() {
 			pl.CycleRepeat()
 		}
 	})
