@@ -24,6 +24,7 @@ import (
 // artwork is a cover, decoded and ready to draw, with what the player
 // derives from it: its color, and a blurred copy to fill a backdrop.
 type artwork struct {
+	family    string // public CDN variants of the same cover
 	retryable bool
 	bmp       *ui.Bitmap
 	backdrop  *ui.Bitmap
@@ -41,7 +42,11 @@ type artwork struct {
 // their data, which takes a fraction of the pixels. Its methods run on
 // the main thread; post runs a function there.
 type artCache struct {
-	art map[string]*artwork
+	art         map[string]*artwork
+	variants    map[string]map[string]*artwork
+	page        route
+	pageVisible bool
+	returnPages [2]artPage
 	// gone are the covers dropped, for as long as something else holds
 	// them: Now Playing keeps the cover it shows, which comes back as it
 	// was rather than loading again.
@@ -60,16 +65,22 @@ type artCache struct {
 	closed      bool // guarded by results.L
 }
 
+type artPage struct {
+	route route
+	keys  map[string]struct{}
+}
+
 const artJobs = 8
 const artResultLimit = 16 << 20
 const artRefreshAfter = 24 * time.Hour
 const artRefreshRetry = time.Minute
+const artScrollGrace = time.Second
 
 // artLimit bounds encoded data and estimated decoded pixels in the cache.
 const artLimit = 64 << 20
 
 func newArtCache(post func(func())) *artCache {
-	return &artCache{art: map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{},
+	return &artCache{art: map[string]*artwork{}, variants: map[string]map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{},
 		sem: make(chan struct{}, artJobs), post: post, now: time.Now, limit: artLimit,
 		seen: map[string]struct{}{}, rejected: map[string]int{},
 		results: sync.NewCond(&sync.Mutex{})}
@@ -121,7 +132,14 @@ func (c *artCache) add(key string, a *artwork) bool {
 		return false
 	}
 	delete(c.rejected, key)
+	c.remove(key)
 	c.art[key] = a
+	if a.family != "" && a.bmp != nil {
+		if c.variants[a.family] == nil {
+			c.variants[a.family] = map[string]*artwork{}
+		}
+		c.variants[a.family][key] = a
+	}
 	c.size = size
 	if c.size <= c.limit {
 		return true
@@ -131,23 +149,57 @@ func (c *artCache) add(key string, a *artwork) bool {
 			delete(c.gone, key)
 		}
 	}
-	keys := make([]string, 0, len(c.art))
-	for candidate, held := range c.art {
-		if _, visible := c.seen[candidate]; !visible && candidate != key && held.size > 0 {
-			keys = append(keys, candidate)
+	type candidate struct {
+		key  string
+		keep bool
+		used time.Time
+	}
+	candidates := make([]candidate, 0, len(c.art))
+	recent := c.now().Add(-artScrollGrace)
+	for candidateKey, held := range c.art {
+		if _, visible := c.seen[candidateKey]; !visible && candidateKey != key && held.size > 0 {
+			keep := c.keepForReturn(candidateKey) || (held.bmp != nil && held.used.After(recent))
+			candidates = append(candidates, candidate{key: candidateKey, keep: keep, used: held.used})
 		}
 	}
-	slices.SortFunc(keys, func(x, y string) int { return c.art[x].used.Compare(c.art[y].used) })
-	for _, key := range keys {
-		if c.size <= c.limit*3/4 {
+	slices.SortFunc(candidates, func(x, y candidate) int {
+		if x.keep != y.keep {
+			if x.keep {
+				return 1
+			}
+			return -1
+		}
+		return x.used.Compare(y.used)
+	})
+	for _, candidate := range candidates {
+		if c.size <= c.limit*3/4 || (c.size <= c.limit && candidate.keep) {
 			break
 		}
-		a := c.art[key]
-		delete(c.art, key)
-		c.size -= a.size
-		c.gone[key] = weak.Make(a)
+		c.gone[candidate.key] = weak.Make(c.remove(candidate.key))
 	}
 	return true
+}
+
+func (c *artCache) remove(key string) *artwork {
+	a := c.art[key]
+	if a == nil {
+		return nil
+	}
+	delete(c.art, key)
+	c.size -= a.size
+	if variants := c.variants[a.family]; variants != nil {
+		delete(variants, key)
+		if len(variants) == 0 {
+			delete(c.variants, a.family)
+		}
+	}
+	return a
+}
+
+func (c *artCache) keepForReturn(key string) bool {
+	_, latest := c.returnPages[0].keys[key]
+	_, previous := c.returnPages[1].keys[key]
+	return latest || previous
 }
 
 func (c *artCache) fitsVisible(key string, size int) bool {
@@ -175,10 +227,32 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 // content. MyGo rebuilds when InView changes, and a warm cover can paint
 // on the first frame without waiting for that measurement.
 func (c *artCache) getInView(url string, backdrop bool, box ui.Element) *artwork {
-	if box.InView() {
-		return c.get(url, backdrop)
+	visible := box.InView()
+	key := artworkKey(url, backdrop)
+	a := c.art[key]
+	if visible {
+		a = c.get(url, backdrop)
+	} else if a == nil {
+		a = c.gone[key].Value()
 	}
-	return c.art[artworkKey(url, backdrop)]
+	if (a != nil && !a.retryable) || backdrop || len(c.variants) == 0 || url == "" {
+		return a
+	}
+	// Draw another decoded size while the requested size loads. Keep this
+	// as a display fallback so the original request still runs normally.
+	var bestKey string
+	var bestSize int
+	for candidate, art := range c.variants[netease.PublicCoverFamily(url)] {
+		w, h := art.bmp.Size()
+		if size := min(w, h); size > bestSize {
+			a, bestKey, bestSize = art, candidate, size
+		}
+	}
+	if visible && bestKey != "" {
+		c.seen[bestKey] = struct{}{}
+		a.used = c.now()
+	}
+	return a
 }
 
 func (c *artCache) prefetch(url string, backdrop bool) {
@@ -231,6 +305,7 @@ func (c *artCache) requestCover(url string, backdrop, visible bool, load func(st
 	request := c.serial
 	c.busy[key] = request
 	go func() {
+		family := netease.PublicCoverFamily(url)
 		bmp, img, size, err := load(url)
 		var blurred *image.RGBA
 		var tint ui.Color
@@ -269,7 +344,7 @@ func (c *artCache) requestCover(url string, backdrop, visible bool, load func(st
 			// The pixels count against the limit as well as the data: they
 			// come and go as the GPU needs them, and the limit has to bound
 			// both.
-			a := &artwork{loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size}
+			a := &artwork{family: family, loaded: c.now(), bmp: bmp, tint: tint, used: c.now(), size: size}
 			if blurred != nil {
 				a.backdrop = ui.NewBitmap(blurred)
 			}
@@ -564,12 +639,31 @@ func boxBlur(px, tmp [][3]float64, n, r int) {
 }
 
 // Visibility is collected during normal drawing, without retaining page objects.
+// pageFrame remembers the artwork of pages the listener might return to.
+// These keys only affect eviction priority within the existing memory limit.
+func (c *artCache) pageFrame(page route, visible bool) {
+	if c.pageVisible && (c.page != page || !visible) {
+		keys := make(map[string]struct{}, len(c.seen))
+		for key := range c.seen {
+			if a := c.art[key]; a != nil && a.bmp != nil {
+				keys[key] = struct{}{}
+			}
+		}
+		if c.returnPages[0].route != c.page {
+			c.returnPages[1] = c.returnPages[0]
+		}
+		c.returnPages[0] = artPage{route: c.page, keys: keys}
+	}
+	c.page, c.pageVisible = page, visible
+	c.beginFrame()
+}
+
 func (c *artCache) beginFrame() {
 	if len(c.art) > 512 {
 		for key, a := range c.art {
 			if a.failed {
 				if _, visible := c.seen[key]; !visible {
-					delete(c.art, key)
+					c.remove(key)
 				}
 			}
 		}
@@ -592,7 +686,7 @@ func (c *artCache) hasFailed(manual bool) bool {
 func (c *artCache) retryFailed(manual bool) {
 	for key := range c.seen {
 		if a := c.art[key]; a != nil && a.failed && (manual || a.retryable) {
-			delete(c.art, key)
+			c.remove(key)
 		}
 	}
 }
@@ -615,10 +709,7 @@ func (c *artCache) invalidate(url string, replacement bool) {
 				continue
 			}
 		}
-		if current != nil {
-			c.size -= current.size
-			delete(c.art, key)
-		}
+		c.remove(key)
 		delete(c.gone, key)
 	}
 }

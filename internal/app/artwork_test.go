@@ -153,6 +153,76 @@ func TestVisibleArtworkSurvivesOffscreenCompletions(t *testing.T) {
 	}
 }
 
+// An eviction only slightly over budget should keep a cover the user just scrolled past.
+func TestRecentlyVisibleCoverSurvivesBatchEviction(t *testing.T) {
+	now := time.Unix(1e9, 0)
+	c := newArtCache(func(func()) {})
+	c.now, c.limit = func() time.Time { return now }, 100
+	bmp := ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 4, 4)))
+	c.add("old", &artwork{size: 20, bmp: bmp})
+	c.add("recent", &artwork{size: 40, bmp: bmp})
+	c.get("recent", false)
+	c.beginFrame()
+	c.add("arrived", &artwork{size: 60})
+	if c.art["recent"] == nil || c.art["old"] != nil || c.size != c.limit {
+		t.Fatal("batch trimming evicted the recently visible cover despite room for it")
+	}
+	c.add("required", &artwork{size: 70})
+	if c.art["recent"] != nil || c.size > c.limit {
+		t.Fatal("a recently visible cover exceeded the memory limit")
+	}
+}
+
+// A previously decoded size fills in while the requested cover size loads.
+func TestCoverUsesDecodedSizeWhileLoadingAnother(t *testing.T) {
+	const source = "https://p1.music.126.net/cover.jpg"
+	const different = "https://p1.music.126.net/another.jpg"
+	a := newTestApp()
+	posts := make(chan func(), artJobs)
+	a.art.post = func(fn func()) { posts <- fn }
+	t.Cleanup(a.art.close)
+	requests := make(chan string, artJobs)
+	old := loadArt
+	t.Cleanup(func() { loadArt = old })
+	large := image.NewRGBA(image.Rect(0, 0, 128, 128))
+	loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
+		requests <- url
+		return ui.NewBitmap(large), large, 0, nil
+	}
+	small := &artwork{family: source, bmp: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 32, 32)))}
+	a.art.add(netease.Sized(source, 32), small)
+	url := netease.Sized(source, 128)
+	var shown *artwork
+	view := ui.NewTester(func(c *ui.Context) {
+		box := ui.Box(c).Size(40, 40)
+		shown = a.art.getInView(url, false, box)
+	}, 100, 100)
+	if shown != small || wait(t, requests, "requested cover size") != url {
+		t.Fatal("the decoded cover did not fill in while the larger size loaded")
+	}
+	wait(t, posts, "larger cover")()
+	view.Frame()
+	if shown == nil || shown == small {
+		t.Fatal("the decoded fallback was not replaced by the requested size")
+	}
+	a.art.add(url, &artwork{failed: true, retryable: true})
+	view.Frame()
+	if shown != small {
+		t.Fatal("a temporary error removed the decoded fallback")
+	}
+	a.art.imageChanged(url, netease.ImageRevoked)
+	view.Frame()
+	if shown == nil || shown.bmp != nil {
+		t.Fatal("the smaller variant masked a revoked cover")
+	}
+	url = netease.Sized(different, 128)
+	view.Frame()
+	if shown != nil {
+		t.Fatal("a different cover used this image as a fallback")
+	}
+	wait(t, posts, "unrelated cover")()
+}
+
 // A revocation hides the image, cancels old results and retains a manual-retry failure.
 func TestRevokedCoverLeavesFailure(t *testing.T) {
 	url := "https://fixture.invalid/cover"

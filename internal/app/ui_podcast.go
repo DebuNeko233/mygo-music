@@ -189,8 +189,9 @@ func (a *app) podcastPage(c *ui.Context) {
 	pod := d.podcast
 	cur := a.pl.Current()
 	a.scrollPage(c, func() {
-		ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
-			ui.Box(c).Size(212, 212).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		const coverSize = 212
+		ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
+			ui.Box(c).Size(coverSize, coverSize).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
 				a.coverFill(c, pod.PicURL, 600, 14)
 			})
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
@@ -207,9 +208,7 @@ func (a *app) podcastPage(c *ui.Context) {
 					}
 					ui.Text(c, fmt.Sprintf("%d 期 · %s 人订阅", pod.ProgramCount, count(int(pod.SubCount))))
 				})
-				if desc := strings.TrimSpace(pod.Description); desc != "" {
-					ui.Text(c, strings.ReplaceAll(desc, "\n", " ")).FontSize(12.5).TextColor(p.muted).MaxLines(2).LineHeight(1.45).Margin(2, 0, 0, 0)
-				}
+				a.headerDescription(c, pod.Name+" · 简介", pod.Description, coverSize)
 				ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
 					if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
 						a.playProgram(d, 0)
@@ -278,15 +277,28 @@ func (a *app) programRow(c *ui.Context, d *podcastData, i int, cur *netease.Trac
 	}
 }
 
+func (a *app) podcastGrid(c *ui.Context, count int, podcast func(int) *netease.Podcast) {
+	const gap, outset = 8, 12
+	cols := a.columns(c, 340)
+	width := (trackPageWidth(c) + 2*outset - gap*float32(cols-1)) / float32(cols)
+	ui.Grid(c).Columns(cols).GapX(gap).GapY(4).Margin(0, -outset).Children(func() {
+		for i := 0; i < count; i++ {
+			pod := podcast(i)
+			a.podcastRow(c.Key(pod.ID), pod, width)
+		}
+	})
+}
+
 // podcastRow is a podcast in a list, opening its page.
-func (a *app) podcastRow(c *ui.Context, pod *netease.Podcast) {
+func (a *app) podcastRow(c *ui.Context, pod *netease.Podcast, width float32) {
 	p := a.pal
-	row := ui.ButtonBase(c).Padding(10, 12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(pod.Name)
+	const pad, gap, cover = 12, 14, 64
+	row := ui.ButtonBase(c).Padding(10, pad).Gap(gap).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(pod.Name)
 	if row.Hovered() {
 		row.Background(p.hover)
 	}
 	row.Children(func() {
-		a.cover(c, pod.PicURL, 160, 64, 8)
+		a.cover(c, pod.PicURL, 160, cover, 8)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(4).Children(func() {
 			ui.Text(c, pod.Name).FontSize(14).FontWeight(600).SingleLine()
 			meta := []string{fmt.Sprintf("%d 期", pod.ProgramCount)}
@@ -294,9 +306,7 @@ func (a *app) podcastRow(c *ui.Context, pod *netease.Podcast) {
 				meta = append([]string{pod.DJ.Nickname}, meta...)
 			}
 			ui.Text(c, strings.Join(meta, " · ")).FontSize(12.5).TextColor(p.muted).SingleLine()
-			if pod.Description != "" {
-				ui.Text(c, pod.Description).FontSize(12.5).TextColor(p.muted).SingleLine()
-			}
+			a.descriptionSummary(c, pod.Name+" · 简介", pod.Description, width-2*pad-gap-cover, 1)
 		})
 	})
 	if row.Clicked() {
@@ -306,13 +316,18 @@ func (a *app) podcastRow(c *ui.Context, pod *netease.Podcast) {
 
 // programPane is what the episode playing is about, in Now Playing, in
 // place of a song's lyrics.
-func (a *app) programPane(c *ui.Context, tr *netease.Track) {
-	ui.Scroll(c.Key(tr.ProgramID)).Grow(1).Padding(4, 12, 48, 0).Children(func() {
-		desc := strings.TrimSpace(tr.Description)
-		if desc == "" {
-			desc = "这期节目没有简介"
+func (a *app) programPane(c *ui.Context, tr *netease.Track, width, height float32) {
+	const topPad, rightPad, bottomPad = 4, 12, 48
+	column := ui.Scroll(c.Key(tr.ProgramID)).Grow(1).Gap(6).Padding(topPad, rightPad, bottomPad, 0)
+	column.Children(func() {
+		font := ui.Font{Family: c.Theme().Font, Size: 15, LineHeight: 1.7}
+		text := strings.TrimSpace(tr.Description)
+		if text == "" {
+			text = "这期节目没有简介"
+		} else if d := measureDescription(column, text, width-rightPad, font, false); d.height > height-topPad-bottomPad {
+			a.descriptionMore(c, tr.Name+" · 简介", text, true)
 		}
-		ui.Text(c, desc).FontSize(15).LineHeight(1.7).TextColor(white.Alpha(0.75))
+		ui.Text(c, text).FontSize(font.Size).LineHeight(font.LineHeight).TextColor(white.Alpha(0.75))
 	})
 }
 

@@ -343,6 +343,16 @@ func CoverRequestSize(raw string) int {
 	return size
 }
 
+// PublicCoverFamily identifies decoded variants that the UI can share while loading.
+func PublicCoverFamily(raw string) string {
+	address, err := url.Parse(raw)
+	if err != nil || (httpClient.Jar != nil && len(httpClient.Jar.Cookies(address)) != 0) {
+		return ""
+	}
+	family, _, _ := imageFamily(&http.Request{URL: address})
+	return family
+}
+
 func coverRevokedCode(code int) bool {
 	switch code {
 	case 401, 403, 404, 410:

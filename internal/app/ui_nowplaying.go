@@ -264,7 +264,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				case paneComments:
 					a.commentsPane(c, tr)
 				case paneProgram:
-					a.programPane(c, tr)
+					a.programPane(c, tr, w-2*padX-side-gap, h-barHeight-npTabsHeight-npTabsGap-npPaneBottom)
 				case paneCaptions:
 					a.captionsPane(c, tr, h)
 				default:
