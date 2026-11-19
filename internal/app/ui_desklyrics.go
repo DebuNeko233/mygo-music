@@ -475,6 +475,19 @@ func (d *deskLyrics) paintDesktopWords(c *ui.Context, line *lyrics.Line, size fl
 	})
 }
 
+// lyricLineAlignment applies the current line's setting. In two-line mode
+// i is zero for its first line; in one-line mode it is the shared setting.
+func lyricLineAlignment(choice int) ui.Align {
+	switch choice {
+	case 0:
+		return ui.Start
+	case 2:
+		return ui.End
+	default:
+		return ui.Center
+	}
+}
+
 func (d *deskLyrics) view(c *ui.Context) {
 	a := d.a
 	s := &a.settings
@@ -572,7 +585,9 @@ func (d *deskLyrics) view(c *ui.Context) {
 			ui.Text(c, pl.LyricsError()).FontSize(size * .8).FontWeight(weight).TextColor(idle).PassThrough()
 		})
 	case len(lines) == 0 && loaded:
-		ui.Column(c).Fill().Center().Children(func() {
+		// Instrumental and unavailable notices use the current line's alignment,
+		// just as the first of two sung lines and the one shared line do.
+		ui.Column(c).Fill().AlignItems(lyricLineAlignment(s.LyricAlign)).Justify(ui.Center).Children(func() {
 			display, _ := pl.LyricsDisplay()
 			ui.Text(c, display.EmptyText()).FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
 		})
@@ -585,16 +600,11 @@ func (d *deskLyrics) view(c *ui.Context) {
 				if on {
 					tint = played
 				}
-				alignment := ui.Center
 				choice := s.LyricAlign
 				if i > 0 {
 					choice = s.LyricNextAlign
 				}
-				if choice == 0 {
-					alignment = ui.Start
-				} else if choice == 2 {
-					alignment = ui.End
-				}
+				alignment := lyricLineAlignment(choice)
 				line := ui.Column(c).Gap(4).AlignItems(alignment).PassThrough()
 				line.Children(func() {
 					fontSize := size
