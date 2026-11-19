@@ -57,7 +57,7 @@ func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, 
 		return nil, 0
 	}
 	cs := &a.comments
-	if cs.track != tr.ID || len(cs.quietHot) == 0 {
+	if cs.track != tr.Key() || len(cs.quietHot) == 0 {
 		return nil, 0
 	}
 	qs := &a.quiet
@@ -67,8 +67,8 @@ func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, 
 		first = &lines[0]
 	}
 	length := tr.Length()
-	if qs.track != tr.ID || qs.first != first || qs.lines != len(lines) || qs.loaded != loaded || qs.length != length {
-		qs.track, qs.first, qs.lines, qs.loaded, qs.length = tr.ID, first, len(lines), loaded, length
+	if qs.track != tr.Key() || qs.first != first || qs.lines != len(lines) || qs.loaded != loaded || qs.length != length {
+		qs.track, qs.first, qs.lines, qs.loaded, qs.length = tr.Key(), first, len(lines), loaded, length
 		qs.quiets = lyrics.Quiets(lines, length, quietLeast)
 		if len(lines) == 0 && loaded && length >= quietLeast {
 			qs.quiets = []lyrics.Quiet{{From: 0, To: length}}

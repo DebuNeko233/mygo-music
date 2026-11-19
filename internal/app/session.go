@@ -189,6 +189,12 @@ func (a *app) restoreSession() {
 		return
 	}
 	a.restored = true
+	defer func() {
+		if file := a.local.pendingFile; file != "" {
+			a.local.pendingFile = ""
+			a.openTemporaryAudio(file)
+		}
+	}()
 	path, err := sessionPath()
 	if err != nil {
 		return
@@ -196,6 +202,11 @@ func (a *app) restoreSession() {
 	s, ok := readSession(path)
 	if !ok {
 		return
+	}
+	for i, track := range s.Queue {
+		if song := a.local.song(track.LocalID); track.IsLocal() && song.Track.IsLocal() {
+			s.Queue[i] = song.Track
+		}
 	}
 	a.pl.Restore(s)
 	if s.Radio != "" && a.pl.Current() != nil {

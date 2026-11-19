@@ -5,13 +5,23 @@
   "version": "0.2.12",
   "out": "build",
   "urlSchemes": ["orpheus"],
+  "fileAssociations": [
+    {"ext": ["mp3"], "name": "MP3 音频", "mimeType": "audio/mpeg", "role": "Viewer"},
+    {"ext": ["flac"], "name": "FLAC 音频", "mimeType": "audio/flac", "role": "Viewer"}
+  ],
   "updates": {
     "publicKey": "I4d3vfue5JdMTLh3Gar9BkwxhjhcvhOuEVTJ3lgJUA0=",
     "github": "zhangnjsd/mygo-music"
   },
   "macos": {
     "icon": "icon/AppIcon.icon",
-    "minimumSystemVersion": "13.0"
+    "minimumSystemVersion": "13.0",
+    "infoPlist": {
+      "CFBundleDocumentTypes": [
+        {"CFBundleTypeName": "MP3 音频", "CFBundleTypeRole": "Viewer", "LSHandlerRank": "Alternate", "LSItemContentTypes": ["public.mp3"]},
+        {"CFBundleTypeName": "FLAC 音频", "CFBundleTypeRole": "Viewer", "LSHandlerRank": "Alternate", "LSItemContentTypes": ["org.xiph.flac"]}
+      ]
+    }
   },
   "linux": {
     "comment": "第三方某音乐桌面客户端",

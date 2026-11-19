@@ -25,6 +25,9 @@ var (
 // and then with NetEase, which may refuse: the heart goes back then. Signed
 // out, it asks the listener to sign in.
 func (a *app) toggleLike(tr *netease.Track) {
+	if tr.IsLocal() {
+		return
+	}
 	if a.profile == nil {
 		a.showMain()
 		a.openLogin()
@@ -95,6 +98,9 @@ func (a *app) toggleProgramLike(id int64) {
 
 // isLiked reports whether the listener likes tr, a song or an episode.
 func (a *app) isLiked(tr *netease.Track) bool {
+	if tr.IsLocal() {
+		return false
+	}
 	if tr.ProgramID != 0 {
 		return a.likedPrograms[tr.ProgramID]
 	}
@@ -105,7 +111,7 @@ func (a *app) isLiked(tr *netease.Track) bool {
 // keyboard (⌘D), which shows no heart: a toast says which it did.
 func (a *app) likeCurrent() {
 	tr := a.pl.Current()
-	if tr == nil {
+	if tr == nil || tr.IsLocal() {
 		return
 	}
 	a.toggleLike(tr)
@@ -190,6 +196,9 @@ func (a *app) programLikesAnswered(uid int64, asked []int64, liked map[int64]boo
 // pops it in on a spring while a ring swells around it and confetti flies
 // out; unliking lets it give a little.
 func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color ui.Color) ui.Element {
+	if tr.IsLocal() {
+		return ui.Element{}
+	}
 	if tr.ProgramID != 0 {
 		a.askProgramLikes([]int64{tr.ProgramID})
 	}

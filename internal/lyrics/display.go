@@ -29,6 +29,12 @@ type Display struct {
 
 func (d Display) HasSinging() bool { return len(d.sung) > 0 }
 
+// WithUnavailableNotice distinguishes missing lyrics from instrumentals.
+func (d Display) WithUnavailableNotice() Display {
+	d.unavailable = true
+	return d
+}
+
 // SungLines shares the parsed timing and translations with views that omit metadata.
 func (d Display) SungLines() []Line {
 	if len(d.sung) == len(d.Lines) {

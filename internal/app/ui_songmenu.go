@@ -24,6 +24,9 @@ func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.
 // signed in, adding it to a playlist or taking it out of pid, the playlist
 // it is listed in, if set.
 func (a *app) songItems(tr *netease.Track, pid int64) func(m *ui.Menu) {
+	if tr.IsLocal() {
+		return a.localSongItems(tr)
+	}
 	return func(m *ui.Menu) {
 		if tr.ProgramID != 0 {
 			a.programItems(m, tr)

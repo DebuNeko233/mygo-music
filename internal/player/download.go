@@ -49,6 +49,7 @@ type download struct {
 	closed    bool
 	onRelease func()
 	drop      string // a bad cache file to remove after closing (Windows)
+	local     bool   // a music-library file that the cache does not own
 }
 
 type byteRange struct {
@@ -390,7 +391,7 @@ func (d *download) discard() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.keep = nil
-	if d.file == nil || d.part != "" {
+	if d.local || d.file == nil || d.part != "" {
 		return
 	}
 	path := d.file.Name()

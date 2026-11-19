@@ -138,7 +138,7 @@ func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h fl
 		// Not Now Playing's cover, which the pointer tilts and flings: here
 		// the wall is what the pointer moves.
 		size := h - 48
-		cov := ui.Box(c.Key(coverKey{tr.ID, 0})).Size(size, size).Radius(16).Shadow(0, 24, 50, -12, ui.RGBA(0, 0, 0, 0.55))
+		cov := ui.Box(c.Key(coverKey{tr.Key(), 0})).Size(size, size).Radius(16).Shadow(0, 24, 50, -12, ui.RGBA(0, 0, 0, 0.55))
 		scale := float32(1)
 		if !pl.Playing() {
 			scale = 0.92
@@ -196,13 +196,13 @@ func (a *app) wall(c *ui.Context, y, w, h, top, foot, frost float32) {
 	}
 	// Shown, the wall brings the song playing to its middle; after, it
 	// glides to the next as little as shows it, unless held.
-	if tr := pl.Current(); tr != nil && tr.ID != ws.track && playing >= 0 {
+	if tr := pl.Current(); tr != nil && tr.Key() != ws.track && playing >= 0 {
 		if ws.track == 0 {
 			ws.pan, ws.off = ui.Point{}, l.centre(playing, w, h, top, foot)
 		} else if !l.shows(playing, addPoint(ws.shown, ws.pan), w, h, top, foot) {
 			ws.off = subPoint(l.centre(playing, w, h, top, foot), ws.pan)
 		}
-		ws.track = tr.ID
+		ws.track = tr.Key()
 	}
 
 	// Covers go only into the frost, never past it over the song: the area
@@ -342,7 +342,7 @@ func (a *app) wallTile(c *ui.Context, tr *netease.Track, i int, x float32, playi
 		tile.Shadow(0, 14, 30, -8, ui.RGBA(0, 0, 0, 0.6))
 	}
 	tile.Children(func() {
-		a.cover(c, tr.Album.PicURL, 240, wallTile, 12)
+		a.trackCover(c, tr, 240, wallTile, 12)
 		if hovered {
 			// Its name and artists over a shade along its foot, on the
 			// cover, so that they move with it.

@@ -62,8 +62,8 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 	if cur >= 0 && pos >= lines[cur].End && a.captionsWriting(pos) {
 		cur = -1
 	}
-	if a.lyricTrack != tr.ID {
-		a.lyricTrack, a.lyricAt = tr.ID, -2
+	if a.lyricTrack != tr.Key() {
+		a.lyricTrack, a.lyricAt = tr.Key(), -2
 		a.lyricScroll, a.lyricGlide = ui.ScrollState{}, lyricGlide{}
 	}
 	scroll := ui.Scroll(c.Key("captions")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, h*0.5, 0)

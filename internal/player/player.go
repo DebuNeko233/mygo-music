@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -81,6 +82,13 @@ type Player struct {
 	Normalize func() bool
 	// Cache keeps the songs played, if set.
 	Cache *Cache
+	// LocalPath resolves a library ID on the main thread before a worker opens it.
+	LocalPath func(int64) string
+	// LocalLyrics captures the selected match on the main thread and returns
+	// a loader that may read its cached lyrics on a worker.
+	LocalLyrics func(netease.Track) func() (original, translation, words string)
+	// LocalMissing is called on the main thread when a library file cannot be opened.
+	LocalMissing func(int64)
 	// FetchLyrics optionally supplies persistent lyrics; captured per load.
 	FetchLyrics func(int64) (string, string, string, error)
 	// FetchCachedLyrics may post fresher lyrics while returning the cached source.
@@ -93,14 +101,16 @@ type Player struct {
 	// session ends. Pausing and seeking do not end that session.
 	Playback func(PlaybackEvent)
 
-	queue         []netease.Track
-	order         []int  // the queue's indices in play order: shuffled or not
-	queueRevision uint64 // changes when the queue or its order changes
-	at            int    // where in order the current track is, -1 for none
-	step          int    // the latest move in play order: 1 on, -1 back, 0 undirected
-	shuffle       bool
-	repeat        RepeatMode
-	volume        float64
+	queue             []netease.Track
+	order             []int  // the queue's indices in play order: shuffled or not
+	queueRevision     uint64 // changes when the queue or its order changes
+	at                int    // where in order the current track is, -1 for none
+	step              int    // the latest move in play order: 1 on, -1 back, 0 undirected
+	shuffle           bool
+	repeat            RepeatMode
+	volume            float64
+	temporaryAnchor   int
+	temporaryPosition time.Duration
 	// systemVolume is set while the system's mixer holds the listener's
 	// volume: what plays then carries only the track's gain and the fades,
 	// as the mixer applies the volume itself.
@@ -237,6 +247,14 @@ func (p *Player) announce(t *netease.Track, artwork []byte) {
 
 func (p *Player) ended() {
 	p.finish(Playthrough)
+	if p.hasTemporary() {
+		if p.at+1 < len(p.order) || p.feed != nil || p.repeat == RepeatAll && len(p.order) > 1 {
+			p.Next()
+		} else {
+			p.stopTemporary()
+		}
+		return
+	}
 	if p.repeat == RepeatOne {
 		p.out.Seek(0)
 		p.out.Play()
@@ -264,6 +282,48 @@ func (p *Player) PlayQueue(tracks []netease.Track, start int) {
 func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySource) {
 	p.source = source
 	p.playQueue(tracks, max(start, 0))
+}
+
+// Enqueue adds one song after the current song or at the end of play order.
+func (p *Player) Enqueue(track netease.Track, next bool) {
+	if len(p.order) == 0 {
+		p.PlayQueue([]netease.Track{track}, 0)
+		return
+	}
+	p.endRadio()
+	index := len(p.queue)
+	p.queue = append(p.queue, track)
+	if next {
+		p.order = slices.Insert(p.order, p.at+1, index)
+	} else {
+		p.order = append(p.order, index)
+	}
+	p.queueRevision++
+	if !p.cacheChanging {
+		p.prefetch(p.at + 1)
+	}
+	p.sync()
+}
+
+// UpdateLocalTrack keeps the queue display and next load in sync after relinking.
+func (p *Player) UpdateLocalTrack(track netease.Track) {
+	if !track.IsLocal() {
+		return
+	}
+	changed := false
+	for i := range p.queue {
+		if p.queue[i].LocalID == track.LocalID && !p.queue[i].Temporary {
+			p.queue[i] = track
+			changed = true
+		}
+	}
+	if p.track != nil && p.track.LocalID == track.LocalID && !p.track.Temporary {
+		p.track = &track
+	}
+	if changed {
+		p.queueRevision++
+		p.sync()
+	}
 }
 
 // PlayShuffled starts a whole list with any song at its head. Explicitly
@@ -362,6 +422,9 @@ func (p *Player) EndRadio() {
 	p.endRadio()
 	if p.at >= 0 && p.at+1 < len(p.order) {
 		kept := make([]netease.Track, p.at+1)
+		if p.hasTemporary() {
+			p.temporaryAnchor = slices.Index(p.order[:p.at+1], p.temporaryAnchor)
+		}
 		for i, k := range p.order[:p.at+1] {
 			kept[i] = p.queue[k]
 		}
@@ -409,6 +472,9 @@ func (p *Player) refill() {
 			p.load(p.at + 1)
 		default:
 			// The radio has nothing more: it stops at its end.
+			if p.hasTemporary() {
+				p.stopTemporary()
+			}
 			p.awaiting, p.playing = false, false
 			p.err = "电台暂时没有更多歌曲"
 			p.sync()
@@ -427,11 +493,11 @@ func (p *Player) appendTracks(tracks []netease.Track) {
 	before := len(p.queue)
 	in := make(map[int64]bool, len(p.queue))
 	for _, t := range p.queue {
-		in[t.ID] = true
+		in[t.Key()] = true
 	}
 	for _, t := range tracks {
-		if !in[t.ID] {
-			in[t.ID] = true
+		if !in[t.Key()] {
+			in[t.Key()] = true
 			p.order = append(p.order, len(p.queue))
 			p.queue = append(p.queue, t)
 		}
@@ -595,6 +661,10 @@ func (p *Player) Next() {
 	at := p.nextIndex()
 	if at < 0 {
 		p.finish(MovedOn)
+		if p.feed == nil {
+			p.stopTemporary()
+			return
+		}
 		p.stop()
 		p.awaitFeed()
 		return
@@ -608,6 +678,9 @@ func (p *Player) nextIndex() int {
 		return at
 	}
 	if p.feed != nil {
+		return -1
+	}
+	if len(p.order) == 1 && p.hasTemporary() {
 		return -1
 	}
 	return 0
@@ -931,6 +1004,12 @@ func (p *Player) Finish() { p.finish(Interrupted) }
 // load plays the track at order[at], skipping those that cannot play.
 func (p *Player) load(at int) {
 	p.finish(MovedOn)
+	if p.hasTemporary() && at != p.at {
+		p.removeTemporary()
+		if at > p.at {
+			at--
+		}
+	}
 	p.tries = 0
 	p.loadSkipping(at, 0, true, 0)
 }
@@ -938,6 +1017,10 @@ func (p *Player) load(at int) {
 // loadSkipping loads the track at order[at], to play or not, from from,
 // skipping those that cannot play: skipped of them so far.
 func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
+	p.loadTrack(at, skipped, play, from, nil)
+}
+
+func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local *LocalAudio) {
 	// A retry replaces the audio, not the listening session. Otherwise loading
 	// and pause-resume discard time already heard.
 	p.pause()
@@ -973,14 +1056,30 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 		if ahead != nil {
 			ahead.cancel()
 		}
+		if local != nil {
+			local.Close()
+		}
 		return
 	}
 	p.refill()
 
 	p.RetryMetadata()
+	var localPath string
+	if t.IsLocal() && p.LocalPath != nil {
+		localPath = p.LocalPath(t.LocalID)
+	}
 
 	go func() {
-		info, s, err := p.open(t, level, ahead, ask, cache)
+		var info *netease.Stream
+		var s stream
+		var err error
+		if local != nil {
+			info, s = local.info, local.stream
+		} else if t.IsLocal() {
+			info, s, err = openLocal(localPath)
+		} else {
+			info, s, err = p.open(t, level, ahead, ask, cache)
+		}
 		p.post(func() {
 			if gen != p.gen {
 				if s != nil {
@@ -1031,6 +1130,18 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 // come now, skipped if it cannot play at all, and else left where it is
 // for the listener to play again.
 func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, err error) {
+	if t.IsLocal() {
+		p.playing, p.loading = false, false
+		p.err = "无法播放本地歌曲"
+		if errors.Is(err, errLocalFile) {
+			p.err = "文件已移动或不可访问"
+			if p.LocalMissing != nil {
+				p.LocalMissing(t.LocalID)
+			}
+		}
+		p.sync()
+		return
+	}
 	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	if errors.Is(err, netease.ErrOffline) {
 		p.loading, p.playing = false, false
@@ -1160,7 +1271,7 @@ func (p *Player) cutOff() {
 	p.offlineAudioError = errors.Is(err, netease.ErrOffline)
 	dl, _ := p.stream.source()
 	dl.discard()
-	if p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
+	if !p.track.IsLocal() && p.tries < loadTries && !errors.Is(err, netease.ErrOffline) {
 		p.retry(p.at, 0, p.Position(), err)
 		return
 	}
@@ -1189,6 +1300,10 @@ func (p *Player) prefetch(at int) {
 		return
 	}
 	t := p.queue[p.order[at]]
+	if t.IsLocal() {
+		p.dropAhead()
+		return
+	}
 	level := p.level()
 	if a := p.ahead; a != nil && a.id == t.ID && a.level == level {
 		return // fetched already, or coming in
@@ -1417,7 +1532,7 @@ func (p *Player) Session() (Session, bool) {
 	if p.track == nil || p.at < 0 {
 		return Session{}, false
 	}
-	return Session{
+	s := Session{
 		Queue:    p.queue,
 		Order:    p.order,
 		At:       p.at,
@@ -1425,7 +1540,16 @@ func (p *Player) Session() (Session, bool) {
 		Repeat:   p.repeat,
 		Position: p.Position().Milliseconds(),
 		Radio:    p.radio,
-	}, true
+	}
+	if p.hasTemporary() {
+		s.Queue, s.Order = p.withoutTemporary()
+		if len(s.Queue) == 0 {
+			return Session{}, false
+		}
+		at, pos := p.temporaryCheckpoint()
+		s.At, s.Position = at, pos.Milliseconds()
+	}
+	return s, true
 }
 
 // Restore picks up a session where it was left, paused, and loads its

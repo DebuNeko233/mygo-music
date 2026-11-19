@@ -35,6 +35,8 @@ func (a *app) networkChanged(status mygo.NetworkStatus) {
 	netease.SetOffline(offline)
 	if offline {
 		a.pl.NetworkOffline()
+	} else {
+		a.syncLocalArtwork()
 	}
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()

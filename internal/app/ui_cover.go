@@ -111,15 +111,15 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 		cs.previous, cs.switching = nil, false
 	}
 	entering := cs.enter != 0
-	if cs.track != tr.ID {
-		cs.track = tr.ID
+	if cs.track != tr.Key() {
+		cs.track = tr.Key()
 		cs.swipe, cs.decided = 0, false
 		if !entering {
 			cs.off, cs.flung = ui.Point{}, 0
 		}
 	}
-	ready := art != nil || tr.Album.PicURL == ""
-	if ready && cs.shown != tr.ID {
+	ready := art != nil || !a.hasTrackCover(tr)
+	if ready && cs.shown != tr.Key() {
 		dir := a.coverDirection()
 		if cs.shown != 0 && !entering {
 			cs.previous, cs.direction = cs.art, dir
@@ -132,14 +132,14 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 			cs.previous = nil
 			cs.switching = false
 		}
-		cs.art, cs.shown = art, tr.ID
+		cs.art, cs.shown = art, tr.Key()
 	} else if ready {
 		cs.art = art
 	}
 	// A fling has already taken the old picture away. Its incoming card
 	// uses Draggable's motion, even when its new image is not ready yet.
 	if entering {
-		cs.previous, cs.shown = nil, tr.ID
+		cs.previous, cs.shown = nil, tr.Key()
 		cs.switching = false
 	}
 	// A view can build more than once in its first frame. Keep the seed
@@ -217,7 +217,7 @@ func (a *app) npCoverCard(c *ui.Context, tr *netease.Track, art *artwork, size f
 		cs.flung = dir
 		cs.off = ui.Point{X: -float32(dir) * far}
 	}
-	wrap := ui.Box(c.Key(coverKey{tr.ID, cs.gen})).Size(size, size).AlignSelf(ui.Center).Label("专辑封面")
+	wrap := ui.Box(c.Key(coverKey{tr.Key(), cs.gen})).Size(size, size).AlignSelf(ui.Center).Label("专辑封面")
 	entering := cs.enter != 0
 	if entering {
 		// A new cover's first frame: it shows where it comes in from.

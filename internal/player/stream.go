@@ -144,13 +144,27 @@ type mp3Stream struct {
 
 func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
 	s := &mp3Stream{dl: dl, drop: dl.Close}
-	dec, err := gomp3.NewDecoder(&downloadReader{d: dl})
+	var reader io.Reader = &downloadReader{d: dl}
+	if dl.local {
+		dl.mu.Lock()
+		file := dl.file
+		dl.mu.Unlock()
+		if file == nil {
+			return nil, io.ErrClosedPipe
+		}
+		reader = io.NewSectionReader(file, 0, dl.size)
+	}
+	dec, err := gomp3.NewDecoder(reader)
 	if err != nil {
 		return nil, err
 	}
 	s.dec, s.rate = dec, dec.SampleRate()
-	s.frames = durationMs * int64(s.rate) / 1000
-	s.start = id3Size(dl)
+	if dl.local {
+		s.frames = dec.Length() / 4
+	} else {
+		s.frames = durationMs * int64(s.rate) / 1000
+		s.start = id3Size(dl)
+	}
 	s.spec = newSpectrum(s.rate)
 	return s, nil
 }
@@ -220,6 +234,17 @@ func (s *mp3Stream) Read(dst []float32) (int, error) {
 const preroll = 4 * 1152
 
 func (s *mp3Stream) SetPosition(frame int64) error {
+	if s.dl.local {
+		frame = min(max(frame, 0), s.frames)
+		from := max(frame-preroll, 0)
+		if _, err := s.dec.Seek(from*4, io.SeekStart); err != nil {
+			s.failure.record(err)
+			return err
+		}
+		s.pos, s.skip = frame, int(frame-from)*4
+		s.failure.clear()
+		return nil
+	}
 	// The frame to decode from, and where its bytes are, which is unknown:
 	// the bytes are spread over the song in proportion to the frames.
 	off := s.start

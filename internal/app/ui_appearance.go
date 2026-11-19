@@ -269,7 +269,8 @@ func backdropShown(pics []*backdropPicture, tr *netease.Track) *backdropPicture 
 	if len(pics) == 1 || tr == nil {
 		return pics[0]
 	}
-	return pics[int(tr.ID%int64(len(pics)))]
+	i := tr.Key() % int64(len(pics))
+	return pics[max(i, -i)]
 }
 
 // drawPicture paints pic over r, covering it, as opaque as alpha says.
