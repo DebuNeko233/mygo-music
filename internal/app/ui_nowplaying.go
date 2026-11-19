@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -1146,7 +1147,9 @@ func lyricPoseLag(scroll, content ui.Element) float32 {
 // among the others: a click plays one there, and the list stays as it is.
 func (a *app) queuePane(c *ui.Context) {
 	pl := a.pl
+	queue := pl.Queue()
 	order, at := pl.PlayOrder()
+	revision := pl.QueueRevision()
 	// Opened, it shows the track playing at its top; after, it follows it
 	// as little as keeps it in view.
 	if at >= 0 && at != a.queueAt {
@@ -1160,10 +1163,20 @@ func (a *app) queuePane(c *ui.Context) {
 	a.queueList.Key = func(row int) any { return order[row] }
 	ui.List(c.Key("queue"), &a.queueList, len(order), func(r int) {
 		i := order[r]
-		tr := &pl.Queue()[i]
+		tr := &queue[i]
 		playing := r == at
-		row := ui.ButtonBase(c.Key(i)).Height(58).PaddingX(10).Gap(14).Radius(12).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
-			ContextMenu(a.songItems(tr, 0))
+		local := tr.IsLocal()
+		row := ui.ButtonBase(c.Key(i)).Height(58).PaddingX(10).Gap(14).Radius(12).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
+		if local {
+			row.ContextMenu(func(m *ui.Menu) {
+				// The same index can hold another song after a queue edit.
+				if m.Item("从待播清单移除").ID(strconv.FormatUint(revision, 10)).Disabled(playing).Chosen() {
+					pl.RemoveQueueEntry(i)
+				}
+			})
+		} else {
+			row.ContextMenu(a.songItems(tr, 0))
+		}
 		switch {
 		case playing:
 			row.Background(white.Alpha(0.12))
@@ -1179,6 +1192,9 @@ func (a *app) queuePane(c *ui.Context) {
 				ui.Text(c, tr.Name).FontSize(14).FontWeight(600).SingleLine()
 				a.artistLinks(c, tr, white.Alpha(0.55), white).FontSize(12.5).SingleLine()
 			})
+			if local {
+				ui.Text(c, "本地").FontSize(11).TextColor(white.Alpha(0.6)).SingleLine().Shrink(0)
+			}
 			ui.Text(c, clock(tr.Length())).FontSize(12).FontFeatures("tnum").TextColor(white.Alpha(0.4))
 		})
 		if row.Clicked() && tr.Playable() && !playing {

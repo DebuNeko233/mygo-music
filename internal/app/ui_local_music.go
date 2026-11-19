@@ -171,10 +171,12 @@ func (a *app) localSongItems(tr *netease.Track) func(*ui.Menu) {
 			return
 		}
 		if !a.local.missing[track.LocalID] {
-			if m.Item("下一首播放").Chosen() {
+			_, at := a.pl.PlayOrder()
+			scheduled := a.pl.ScheduledPosition(track.Key())
+			if m.Item("下一首播放").Disabled(scheduled >= 0 && scheduled <= at+1).Chosen() {
 				a.pl.Enqueue(track, true)
 			}
-			if m.Item("加入队列").Chosen() {
+			if m.Item("加入队列").Disabled(scheduled >= 0).Chosen() {
 				a.pl.Enqueue(track, false)
 			}
 		}

@@ -8,13 +8,27 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// PlayTemporary inserts a prepared local file after the current track and
-// plays it once. It takes ownership of the prepared decoder.
+// PlayTemporary plays a prepared local file after the current track. A file
+// already in the queue reuses its entry. It takes ownership of the decoder.
 func (p *Player) PlayTemporary(track netease.Track, local *LocalAudio) {
 	p.finish(MovedOn)
 	track.Temporary = true
 	at := p.at
-	if p.hasTemporary() {
+	if existing := p.queuePosition(track.Key(), 0); existing >= 0 {
+		if existing != at {
+			if p.hasTemporary() {
+				p.queue, p.order = p.withoutQueueEntry(at)
+				if existing > at {
+					existing--
+				} else {
+					at--
+				}
+			} else if existing > at {
+				at++
+			}
+			p.moveQueueEntry(existing, at)
+		}
+	} else if p.hasTemporary() {
 		p.queue[p.order[at]] = track
 	} else {
 		p.temporaryPosition = p.Position()
@@ -43,12 +57,11 @@ func (p *Player) hasTemporary() bool {
 		p.queue[p.order[p.at]].Temporary
 }
 
-// withoutTemporary gives a queue with the temporary entry removed from both
-// track order and play order, without changing the live slices.
-func (p *Player) withoutTemporary() ([]netease.Track, []int) {
-	index := p.order[p.at]
+// withoutQueueEntry removes an entry from copies of the tracks and play order.
+func (p *Player) withoutQueueEntry(position int) ([]netease.Track, []int) {
+	index := p.order[position]
 	queue := slices.Delete(slices.Clone(p.queue), index, index+1)
-	order := slices.Delete(slices.Clone(p.order), p.at, p.at+1)
+	order := slices.Delete(slices.Clone(p.order), position, position+1)
 	for i, v := range order {
 		if v > index {
 			order[i]--
@@ -58,7 +71,7 @@ func (p *Player) withoutTemporary() ([]netease.Track, []int) {
 }
 
 func (p *Player) removeTemporary() {
-	p.queue, p.order = p.withoutTemporary()
+	p.queue, p.order = p.withoutQueueEntry(p.at)
 	p.queueRevision++
 }
 
