@@ -53,8 +53,8 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	}
 }
 
-// The library disables duplicate queue actions and can still move a pending song to next.
-func TestLocalLibraryDisablesDuplicateQueueActions(t *testing.T) {
+// The library can promote a queued song, remove it, and add it again.
+func TestLocalLibraryQueueActions(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	current := netease.Track{LocalID: 1, Name: "当前本地歌曲"}
@@ -89,7 +89,6 @@ func TestLocalLibraryDisablesDuplicateQueueActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	open(local.Name)
-	disabled("加入队列")
 	if err := tt.ChooseMenuItem("下一首播放"); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +97,23 @@ func TestLocalLibraryDisablesDuplicateQueueActions(t *testing.T) {
 	}
 	open(local.Name)
 	disabled("下一首播放")
-	disabled("加入队列")
+	if slices.Contains(tt.Menu(), "加入队列") {
+		t.Fatal("the queued song still offers to join the queue")
+	}
+	if err := tt.ChooseMenuItem("移除队列"); err != nil {
+		t.Fatal(err)
+	}
+	if next, _ := a.pl.AdjacentTracks(); len(a.pl.Queue()) != 2 || next == nil || next.ID != 2 ||
+		a.pl.Current().LocalID != current.LocalID || a.local.song(local.LocalID).Path != path {
+		t.Fatalf("removing the queued song changed playback or the library: %+v", a.pl.Queue())
+	}
+	open(local.Name)
+	if err := tt.ChooseMenuItem("加入队列"); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.pl.Queue()) != 3 || a.pl.ScheduledPosition(local.Key()) != 2 {
+		t.Fatalf("the removed song could not be requeued: %+v", a.pl.Queue())
+	}
 }
 
 // A file chosen before startup finishes plays after restoring the old queue,

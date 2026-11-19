@@ -381,8 +381,12 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		missing := tr.IsLocal() && a.local.missing[tr.LocalID]
 		playable := tr.Playable()
 		playing := cur != nil && cur.Key() == tr.Key()
-		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name).
-			ContextMenu(a.songItems(tr, pid))
+		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
+		if a.route.page == pageLocal {
+			row.ContextMenu(a.localSongItems(tr, true))
+		} else {
+			row.ContextMenu(a.songItems(tr, pid))
+		}
 		if playing {
 			// The bars overlay the list. Even a partially visible row counts,
 			// but rows wholly covered by either bar do not.
