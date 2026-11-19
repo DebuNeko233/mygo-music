@@ -5,6 +5,7 @@
 ### What's Changed
 * fix: persist left desktop lyric alignment by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/93
 * fix: register Windows audio associations after updates by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/94
+* fix: 为循环按钮显示启用高亮 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/95
 
 
 **Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.13...v0.2.14
