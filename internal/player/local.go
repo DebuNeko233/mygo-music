@@ -54,6 +54,8 @@ func openLocal(path string) (*netease.Stream, stream, error) {
 		st.Type, st.Level = "wav", "lossless"
 	case *oggStream:
 		st.Type = "ogg"
+	case *adtsFAADStream:
+		st.Type = "aac"
 	case *decoderStream:
 		st.Type = "m4a"
 		if isADTS(dl.peek(id3Size(dl), 2)) {

@@ -53,7 +53,7 @@ type localMusic struct {
 	openRequest     uint64
 }
 
-var localExtensions = []string{"mp3", "flac", "wav", "ogg", "m4a", "aac"}
+var localExtensions = []string{"mp3", "flac", "wav", "ogg", "m4a", "aac", "3gp", "3g2"}
 
 func (a *app) initLocalMusic() {
 	if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {

@@ -299,6 +299,7 @@ func openMP4Stream(dl *download) (*decoderStream, error) {
 		return nil, io.ErrClosedPipe
 	}
 	r := io.NewSectionReader(file, 0, dl.size)
+	registerLocalAACCodec()
 	dec, err := mp4.NewDecoder(r)
 	if err != nil {
 		return nil, err
@@ -306,7 +307,7 @@ func openMP4Stream(dl *download) (*decoderStream, error) {
 	return newDecoderStream(dl, dec), nil
 }
 
-func openAACStream(dl *download) (*decoderStream, error) {
+func openAACStream(dl *download) (stream, error) {
 	dl.mu.Lock()
 	file := dl.file
 	dl.mu.Unlock()
@@ -315,6 +316,16 @@ func openAACStream(dl *download) (*decoderStream, error) {
 	}
 	dec, err := aac.NewADTSDecoder(io.NewSectionReader(file, 0, dl.size))
 	if err != nil {
+		return openFAADADTS(dl)
+	}
+	// The small ADTS decoder cannot reject unsupported SBR at construction.
+	// Probe its first real packet before choosing the fast LC-only path.
+	var probe [2]float32
+	n, readErr := dec.Read(probe[:])
+	if readErr != nil || n == 0 {
+		return openFAADADTS(dl)
+	}
+	if err := dec.SetPosition(0); err != nil {
 		return nil, err
 	}
 	return newDecoderStream(dl, dec), nil

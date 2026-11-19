@@ -17,7 +17,8 @@ import (
 )
 
 // Fixtures for compressed formats were generated from a two-second 440 Hz
-// sine wave with FFmpeg's libvorbis, AAC and ALAC encoders.
+// sine wave with FFmpeg's libvorbis, AAC and ALAC encoders. HE-AAC comes from
+// FFmpeg's public ct_nero-heaac.mp4 sample, trimmed without re-encoding.
 func TestLocalPCMFormatsDecodeAndSeek(t *testing.T) {
 	for _, test := range []struct {
 		name, ext string
@@ -40,6 +41,18 @@ func TestLocalPCMFormatsDecodeAndSeek(t *testing.T) {
 		}},
 		{name: "ALAC M4A", ext: "m4a", makeFile: func(t *testing.T) []byte {
 			return testAudio(t, "seek-alac.m4a")
+		}},
+		{name: "HE-AAC M4A", ext: "m4a", makeFile: func(t *testing.T) []byte {
+			return testAudio(t, "seek-he.m4a")
+		}},
+		{name: "HE-AAC ADTS", ext: "aac", makeFile: func(t *testing.T) []byte {
+			return testAudio(t, "seek-he.aac")
+		}},
+		{name: "AAC 3GPP", ext: "m4a", makeFile: func(t *testing.T) []byte {
+			return testAudio(t, "seek.3gp")
+		}},
+		{name: "AAC 3GPP2", ext: "m4a", makeFile: func(t *testing.T) []byte {
+			return testAudio(t, "seek.3g2")
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

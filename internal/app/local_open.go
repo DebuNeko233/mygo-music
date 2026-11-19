@@ -14,7 +14,10 @@ func (a *app) chooseTemporaryAudio() {
 	a.showMain()
 	paths, err := openLocalDialog(mygo.OpenDialogOptions{
 		Parent: a.win, Title: "打开音频文件",
-		Filters: []mygo.FileFilter{{Name: "本地音频文件", Extensions: localExtensions}},
+		Filters: []mygo.FileFilter{{
+			Name: "本地音频文件", Extensions: localExtensions,
+			MIMETypes: []string{"audio/aac", "audio/aacp", "audio/3gpp", "audio/3gpp2", "audio/mp4", "audio/mp4a-latm", "audio/mpeg4-generic"},
+		}},
 	})
 	if err != nil {
 		a.toast = "无法打开文件选择窗口"

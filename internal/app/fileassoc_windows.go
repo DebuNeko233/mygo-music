@@ -34,6 +34,8 @@ var fileAssociations = []fileAssociation{
 	{ext: "ogg", name: "Ogg Vorbis 音频"},
 	{ext: "m4a", name: "M4A 音频"},
 	{ext: "aac", name: "AAC 音频"},
+	{ext: "3gp", name: "3GPP 音频"},
+	{ext: "3g2", name: "3GPP2 音频"},
 }
 
 // registerFileAssociations publishes the same per-user ProgIDs and open-with
