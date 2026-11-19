@@ -1,5 +1,22 @@
 # 更新日志
 
+## 0.2.13
+
+### What's Changed
+* 修复正在播放页鼠标静止后的控件渐隐 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/82
+* feat: 为正在播放页加入实时频谱 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/83
+* feat: 增加 UI 和播放页歌词字体设置 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/84
+* chore: 升级 MyGo 到 v0.10.0 并自动限制搜索建议弹层高度 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/85
+* fix: 下一首预加载优先使用本地歌曲缓存 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/86
+* feat: 支持查看歌手和专辑简介全文 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/88
+* feat: 支持本地歌曲和音乐文件夹 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/89
+* feat: 扩展简介全文弹窗到其他页面 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/90
+* fix: 减少返回页面时的封面闪烁 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/91
+* fix: align desktop instrumental notices by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/92
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.12...v0.2.13
+
 ## 0.2.12
 
 ### What's Changed
