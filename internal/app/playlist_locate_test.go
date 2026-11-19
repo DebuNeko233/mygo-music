@@ -284,8 +284,10 @@ func TestPlaylistLocateFollowsHeaderChanges(t *testing.T) {
 			if !ok || row.Bounds.Y < float32(h-playerBarHeight) {
 				t.Fatal("fixture header did not cover the row")
 			}
-			if lo, hi := a.trackList.Visible(); lo != first || hi != last || a.pageScroll.Y != offset {
-				t.Fatal("fixture changed the list range or scroll offset")
+			// The taller header can shrink the last partially visible row.
+			// It must not shift the current row or scroll the list.
+			if lo, hi := a.trackList.Visible(); lo != first || hi > last || a.pageScroll.Y != offset {
+				t.Fatalf("fixture changed the visible rows or scroll offset: %d/%d -> %d/%d, %g -> %g", first, last, lo, hi, offset, a.pageScroll.Y)
 			}
 			if _, shown := tt.Find("定位正在播放的歌曲"); !shown {
 				t.Fatal("locate remained hidden after header covered current row")
