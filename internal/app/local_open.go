@@ -14,7 +14,10 @@ func (a *app) chooseTemporaryAudio() {
 	a.showMain()
 	paths, err := openLocalDialog(mygo.OpenDialogOptions{
 		Parent: a.win, Title: "打开音频文件",
-		Filters: []mygo.FileFilter{{Name: "MP3 和 FLAC 音频", Extensions: localExtensions}},
+		Filters: []mygo.FileFilter{{
+			Name: "本地音频文件", Extensions: localExtensions,
+			MIMETypes: []string{"audio/aac", "audio/aacp", "audio/3gpp", "audio/3gpp2", "audio/mp4", "audio/mp4a-latm", "audio/mpeg4-generic"},
+		}},
 	})
 	if err != nil {
 		a.toast = "无法打开文件选择窗口"
@@ -46,7 +49,7 @@ func (a *app) openTemporaryAudio(path string) {
 				return
 			}
 			if audio == nil {
-				a.toast = "无法播放所选音频，请选择可读取的 MP3 或 FLAC"
+				a.toast = "无法播放所选音频，请选择支持的音频文件"
 				return
 			}
 			if i := slices.IndexFunc(a.local.catalog.Songs, func(known localSong) bool { return known.Path == song.Path }); i >= 0 {

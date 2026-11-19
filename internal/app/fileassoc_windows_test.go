@@ -11,12 +11,12 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// TestRegisterFileAssociations checks that an app upgraded without the
-// installer publishes both audio types in the current user's open-with list.
+// An app upgraded without the installer publishes every supported audio type
+// in the current user's open-with list.
 func TestRegisterFileAssociations(t *testing.T) {
 	const progID = "dev.egoist.cloudmusic."
 	var keys []string
-	for _, ext := range []string{"mp3", "flac"} {
+	for _, ext := range []string{"mp3", "flac", "wav", "ogg", "m4a", "aac"} {
 		keys = append(keys, `Software\Classes\`+progID+ext)
 	}
 	for _, key := range keys {
@@ -25,7 +25,7 @@ func TestRegisterFileAssociations(t *testing.T) {
 		registry.DeleteKey(registry.CURRENT_USER, key+`\DefaultIcon`)
 		registry.DeleteKey(registry.CURRENT_USER, key)
 	}
-	for _, ext := range []string{"mp3", "flac"} {
+	for _, ext := range []string{"mp3", "flac", "wav", "ogg", "m4a", "aac"} {
 		key, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Classes\.`+ext+`\OpenWithProgids`, registry.ALL_ACCESS)
 		if err != nil {
 			t.Fatal(err)
@@ -46,7 +46,7 @@ func TestRegisterFileAssociations(t *testing.T) {
 			registry.DeleteKey(registry.CURRENT_USER, key+`\DefaultIcon`)
 			registry.DeleteKey(registry.CURRENT_USER, key)
 		}
-		for _, ext := range []string{"mp3", "flac"} {
+		for _, ext := range []string{"mp3", "flac", "wav", "ogg", "m4a", "aac"} {
 			key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Classes\.`+ext+`\OpenWithProgids`, registry.SET_VALUE)
 			if err == nil {
 				key.DeleteValue(progID + ext)
@@ -61,7 +61,7 @@ func TestRegisterFileAssociations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, ext := range []string{"mp3", "flac"} {
+	for _, ext := range []string{"mp3", "flac", "wav", "ogg", "m4a", "aac"} {
 		key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Classes\`+progID+ext+`\shell\open\command`, registry.QUERY_VALUE)
 		if err != nil {
 			t.Fatalf("open command for %s: %v", ext, err)

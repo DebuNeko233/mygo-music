@@ -53,7 +53,7 @@ type localMusic struct {
 	openRequest     uint64
 }
 
-var localExtensions = []string{"mp3", "flac"}
+var localExtensions = []string{"mp3", "flac", "wav", "ogg", "m4a", "aac", "3gp", "3g2"}
 
 func (a *app) initLocalMusic() {
 	if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
@@ -258,7 +258,7 @@ func (a *app) addLocalFolders(paths []string) {
 			}
 		}
 		if len(catalog.Folders) == 0 {
-			return false, "请选择包含 MP3 或 FLAC 的文件夹"
+			return false, "请选择包含可播放音频的文件夹"
 		}
 		scanned, status := scanLocalFolders(catalog, present)
 		if invalid != 0 {

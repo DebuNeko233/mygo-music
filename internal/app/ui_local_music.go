@@ -50,7 +50,10 @@ func (a *app) chooseLocalFile(id int64) {
 	a.local.picking = true
 	paths, err := openLocalDialog(mygo.OpenDialogOptions{
 		Parent: a.win, Title: "重新定位音频文件",
-		Filters: []mygo.FileFilter{{Name: "MP3 和 FLAC 音频", Extensions: localExtensions}},
+		Filters: []mygo.FileFilter{{
+			Name: "本地音频文件", Extensions: localExtensions,
+			MIMETypes: []string{"audio/aac", "audio/aacp", "audio/3gpp", "audio/3gpp2", "audio/mp4", "audio/mp4a-latm", "audio/mpeg4-generic"},
+		}},
 	})
 	a.local.picking = false
 	if err == nil && len(paths) != 0 {

@@ -30,6 +30,12 @@ type fileAssociation struct {
 var fileAssociations = []fileAssociation{
 	{ext: "mp3", name: "MP3 音频"},
 	{ext: "flac", name: "FLAC 音频"},
+	{ext: "wav", name: "WAV 音频"},
+	{ext: "ogg", name: "Ogg Vorbis 音频"},
+	{ext: "m4a", name: "M4A 音频"},
+	{ext: "aac", name: "AAC 音频"},
+	{ext: "3gp", name: "3GPP 音频"},
+	{ext: "3g2", name: "3GPP2 音频"},
 }
 
 // registerFileAssociations publishes the same per-user ProgIDs and open-with
@@ -69,7 +75,7 @@ func registerFileAssociations() error {
 		}
 	}
 	if len(errs) != 0 {
-		return fmt.Errorf("register MP3/FLAC audio files: %w", errors.Join(errs...))
+		return fmt.Errorf("register local audio files: %w", errors.Join(errs...))
 	}
 	procSHChangeNotify.Call(assocNotify, assocFlush, 0, 0)
 	return nil
