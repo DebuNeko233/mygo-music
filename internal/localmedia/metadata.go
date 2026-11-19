@@ -13,7 +13,7 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
-// Tags reads the descriptive tags from an MP3 or FLAC file.
+// Tags reads descriptive tags and embedded artwork from a supported local file.
 func Tags(path string) tag.Metadata {
 	if st, err := os.Stat(path); err != nil || !st.Mode().IsRegular() {
 		return nil

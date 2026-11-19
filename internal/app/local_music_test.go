@@ -120,6 +120,9 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	}
 	mp3 := file(music, "seek.mp3", "First.mp3")
 	flac := file(nested, "seek.flac", "Second.FLAC")
+	for _, name := range []string{"seek.ogg", "seek.m4a", "seek.aac"} {
+		file(nested, name, name)
+	}
 	moved := filepath.Join(dir, "relocated.mp3")
 	old := openLocalDialog
 	openLocalDialog = func(o mygo.OpenDialogOptions) ([]string, error) {
@@ -141,7 +144,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	for a.local.busy {
 		wait(t, posts, "local import")()
 	}
-	if len(a.local.catalog.Songs) != 2 || len(a.local.catalog.Folders) != 2 {
+	if len(a.local.catalog.Songs) != 5 || len(a.local.catalog.Folders) != 2 {
 		t.Fatal(a.local.status)
 	}
 	entry := a.local.catalog.Songs[0]
@@ -163,7 +166,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	for a.local.busy {
 		wait(t, posts, "folder refresh")()
 	}
-	if len(a.local.catalog.Songs) != 3 || a.local.song(id).Track.LocalID != id {
+	if len(a.local.catalog.Songs) != 6 || a.local.song(id).Track.LocalID != id {
 		t.Fatal("refresh did not discover the new file or changed an existing ID")
 	}
 	if err := os.Rename(mp3, moved); err != nil {
@@ -198,7 +201,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	for a.local.busy {
 		wait(t, posts, "folder removal")()
 	}
-	if len(a.local.catalog.Folders) != 1 || len(a.local.catalog.Songs) != 3 {
+	if len(a.local.catalog.Folders) != 1 || len(a.local.catalog.Songs) != 6 {
 		t.Fatal("removing a parent folder lost overlapping or independently kept songs")
 	}
 	manager.Frame()
