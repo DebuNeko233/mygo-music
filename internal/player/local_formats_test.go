@@ -91,6 +91,34 @@ func TestLocalPCMFormatsDecodeAndSeek(t *testing.T) {
 	}
 }
 
+// A truncated tail must be excluded from the seekable packets. Indexing its
+// offset but not its payload used to make an end-of-file seek decode an empty packet.
+func TestLocalHEAACTruncatedTail(t *testing.T) {
+	data := testAudio(t, "seek-he.aac")
+	path := filepath.Join(t.TempDir(), "local.aac")
+	if err := os.WriteFile(path, data[:len(data)-5], 0600); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := PrepareLocalAudio(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	s := prepared.stream
+	if err := s.SetPosition(s.Len()); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Read(make([]float32, 512)); n != 0 || err != io.EOF {
+		t.Fatalf("read at end: %d, %v", n, err)
+	}
+	if err := s.SetPosition(s.Len() - 4096); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.Read(make([]float32, 512)); n == 0 || err != nil {
+		t.Fatalf("read final complete packet: %d, %v", n, err)
+	}
+}
+
 func makeWAV(format uint16, bits int, rate int, sample func(int) int16) []byte {
 	const frames = 1000
 	channels, block := 2, 2*(bits/8)

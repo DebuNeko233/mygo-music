@@ -171,10 +171,12 @@ func openFAADADTS(dl *download) (*adtsFAADStream, error) {
 		if s.config == nil {
 			s.config = config
 		}
-		s.offs = append(s.offs, off)
 		if off+int64(length) > dl.size {
+			// Ignore a partial tail instead of leaving a seekable packet without
+			// its payload. Complete packets before it remain playable.
 			break
 		}
+		s.offs = append(s.offs, off)
 		s.sizes = append(s.sizes, length)
 		off += int64(length)
 	}
@@ -194,16 +196,29 @@ func openFAADADTS(dl *download) (*adtsFAADStream, error) {
 	if err != nil {
 		return nil, err
 	}
+	// FAAD2 may return no PCM while consuming the priming packet. Read a
+	// complete packet before deriving the HE-AAC output rate and seek units.
+	for s.next < len(s.offs) && len(pcm) == 0 {
+		packet, err = s.packet(s.next)
+		if err != nil {
+			return nil, err
+		}
+		s.next++
+		pcm, err = s.dec.Decode(context.Background(), packet)
+		if err != nil {
+			return nil, err
+		}
+	}
 	s.rate = int(s.dec.SampleRate())
-	s.next = 1
 	s.pend = adtsPCM(pcm, int(s.dec.Channels()))
-	if n := len(pcm) / max(int(s.dec.Channels()), 1); n > 0 && s.rate > 0 {
-		s.rate = n * s.rate / aac.FrameLength
+	packetFrames := len(s.pend) / 2
+	if packetFrames <= 0 || s.rate <= 0 {
+		s.dec.Close(context.Background())
+		s.dec = nil
+		return nil, errors.New("aac: invalid HE-AAC output")
 	}
-	if s.rate <= 0 {
-		return nil, errors.New("aac: invalid HE-AAC output rate")
-	}
-	s.frames = int64(len(s.offs)) * aac.FrameLength * int64(s.rate/int(s.dec.SampleRate()))
+	s.rate = packetFrames * s.rate / aac.FrameLength
+	s.frames = int64(len(s.offs)-s.next+1) * int64(packetFrames)
 	s.spec = newSpectrum(s.rate)
 	return s, nil
 }
@@ -290,6 +305,9 @@ func (s *adtsFAADStream) Read(dst []float32) (int, error) {
 		drop := min(s.skip, int64(len(s.pend)/2))
 		s.skip -= drop
 		s.pend = s.pend[drop*2:]
+		if len(s.pend) != 0 {
+			break
+		}
 	}
 	n := copy(dst[:len(dst)/2*2], s.pend)
 	s.pend = s.pend[n:]
@@ -299,12 +317,13 @@ func (s *adtsFAADStream) Read(dst []float32) (int, error) {
 }
 func (s *adtsFAADStream) SetPosition(frame int64) error {
 	frame = min(max(frame, 0), s.frames)
-	packet := int(frame / aac.FrameLength)
+	packetFrames := s.frames / int64(len(s.offs))
+	packet := int(frame / packetFrames)
 	from := max(packet-1, 0)
 	if err := s.resetDecoder(from); err != nil {
 		return err
 	}
-	s.pos, s.skip = frame, frame-int64(from)*aac.FrameLength
+	s.pos, s.skip = frame, frame-int64(from)*packetFrames
 	s.failure.clear()
 	return nil
 }
