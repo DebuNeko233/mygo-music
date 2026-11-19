@@ -99,7 +99,7 @@ func TestMoveRecoversAfterProcessExit(t *testing.T) {
 	exists(t, stage, true)
 	unrelated := filepath.Join(target, stagePrefix+"personal")
 	write(t, filepath.Join(unrelated, "notes.txt"), []byte("keep"))
-	if err := Recover(journal); err != nil {
+	if err := Recover(journal, Layout{}); err != nil {
 		t.Fatal(err)
 	}
 	exists(t, stage, false)
@@ -120,12 +120,12 @@ func TestMoveRecoveryRejectsMismatchedMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	journal := filepath.Join(root, "data", "move.json")
-	if err := recordStage(journal, target, stage); err != nil {
+	if _, err := recordStage(journal, target, stage); err != nil {
 		t.Fatal(err)
 	}
 	write(t, filepath.Join(stage, stageMarker), []byte("{}"))
 	write(t, filepath.Join(stage, "notes.txt"), []byte("keep"))
-	if err := Recover(journal); err == nil {
+	if err := Recover(journal, Layout{}); err == nil {
 		t.Fatal("deleted an unverified directory")
 	}
 	exists(t, filepath.Join(stage, "notes.txt"), true)
@@ -144,14 +144,14 @@ func TestMoveRecoveryRetainsDisconnectedTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	journal := filepath.Join(root, "data", "move.json")
-	if err := recordStage(journal, target, stage); err != nil {
+	if _, err := recordStage(journal, target, stage); err != nil {
 		t.Fatal(err)
 	}
 	hidden := filepath.Join(root, "disconnected")
 	if err := os.Rename(target, hidden); err != nil {
 		t.Fatal(err)
 	}
-	if err := Recover(journal); err != nil {
+	if err := Recover(journal, Layout{}); err != nil {
 		t.Fatal(err)
 	}
 	records, err := readJournal(journal)
@@ -166,7 +166,7 @@ func TestMoveRecoveryRetainsDisconnectedTarget(t *testing.T) {
 	if err := os.Rename(hidden, target); err != nil {
 		t.Fatal(err)
 	}
-	if err := Recover(journal); err != nil {
+	if err := Recover(journal, Layout{}); err != nil {
 		t.Fatal(err)
 	}
 	exists(t, stage, false)
@@ -242,4 +242,83 @@ func TestMovePublicationPreservesUnexpectedRegularFile(t *testing.T) {
 		t.Fatal("changed unrelated destination", err)
 	}
 	exists(t, source, true)
+}
+
+// A restart after publication rolls back an uncommitted target and preserves a committed one.
+func TestMoveRecoversAfterPublication(t *testing.T) {
+	if root := os.Getenv("MYGO_TEST_PUBLISHED_MOVE"); root != "" {
+		source, target := layout(filepath.Join(root, "old")), layout(filepath.Join(root, "new"))
+		MoveLayoutWithOptions(source, target.Root, true, false, func() error {
+			if os.Getenv("MYGO_TEST_PUBLISHED_COMMIT") == "yes" {
+				if err := os.WriteFile(filepath.Join(root, "saved-target"), []byte(target.Root), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			os.Exit(73)
+			return nil
+		}, Options{Journal: filepath.Join(root, "move.json")})
+		t.Fatal("transaction did not reach settings commit")
+	}
+	for _, phase := range []string{"uncommitted", "committed", "committed-disconnected"} {
+		t.Run(phase, func(t *testing.T) {
+			root := t.TempDir()
+			source, target := layout(filepath.Join(root, "old")), layout(filepath.Join(root, "new"))
+			song(t, source.Songs)
+			snapshot(t, source.Browse)
+			snapshot(t, source.Artwork)
+			commit := "no"
+			if phase != "uncommitted" {
+				commit = "yes"
+			}
+			cmd := exec.Command(os.Args[0], "-test.run=^TestMoveRecoversAfterPublication$")
+			cmd.Env = append(os.Environ(), "MYGO_TEST_PUBLISHED_MOVE="+root, "MYGO_TEST_PUBLISHED_COMMIT="+commit)
+			output, err := cmd.CombinedOutput()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 73 {
+				t.Fatalf("child did not exit after publication: %v\n%s", err, output)
+			}
+			journal := filepath.Join(root, "move.json")
+			audio := filepath.Join(target.Songs, "123-exhigh.mp3")
+			exists(t, audio, true)
+			active := source
+			if saved, err := os.ReadFile(filepath.Join(root, "saved-target")); err == nil {
+				active = layout(string(saved))
+			} else if !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if phase == "committed-disconnected" {
+				offline := filepath.Join(root, "offline")
+				if err := os.Rename(target.Root, offline); err != nil {
+					t.Fatal(err)
+				}
+				if err := Recover(journal, active); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Rename(offline, target.Root); err != nil {
+					t.Fatal(err)
+				}
+				active = source // The saved location changed while the volume was away.
+			}
+			personal := filepath.Join(target.Root, "personal.txt")
+			write(t, personal, []byte("keep"))
+			if err := Recover(journal, active); err != nil {
+				t.Fatal(err)
+			}
+			exists(t, journal, false)
+			exists(t, personal, true)
+			if commit == "no" {
+				exists(t, audio, false)
+				exists(t, filepath.Join(source.Songs, "123-exhigh.mp3"), true)
+				checkSnapshot(t, target.Browse, "")
+				checkSnapshot(t, target.Artwork, "")
+				warning, err := MoveLayoutWithOptions(source, target.Root, true, false, func() error { return nil }, Options{Journal: journal})
+				if err != nil || warning != nil {
+					t.Fatal("same-target retry failed", warning, err)
+				}
+			}
+			exists(t, audio, true)
+			checkSnapshot(t, target.Browse, "cached")
+			checkSnapshot(t, target.Artwork, "cached")
+		})
+	}
 }

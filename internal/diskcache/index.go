@@ -87,6 +87,13 @@ func (j *indexLog) reset() {
 	j.live, j.size, j.lines = 0, 0, 0
 	j.pending = nil
 }
+
+// invalidate drops the old view even when the index could not be unlinked.
+// The next successful flush rewrites it from the now-empty view.
+func (j *indexLog) invalidate() {
+	j.loaded, j.corrupt = true, true
+	j.entries = make(map[string]*list.Element)
+}
 func (j *indexLog) apply(r indexRecord, size int) {
 	if old := j.entries[r.Key]; old != nil {
 		v := old.Value.(indexValue)
@@ -275,7 +282,7 @@ func (j *indexLog) forget(dir, key string) error {
 		return err
 	}
 	if j.entries[key] == nil {
-		return nil
+		return j.flush(dir)
 	}
 	if err := j.enqueue(indexRecord{Version: indexVersion, Op: "del", Key: key}); err != nil {
 		return err

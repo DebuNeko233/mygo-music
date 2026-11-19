@@ -260,9 +260,14 @@ func (a *app) recoverCacheDirectory() {
 		a.cacheError = err.Error()
 		return
 	}
+	active, err := cachePaths(a.settings)
+	if err != nil {
+		a.cacheError = err.Error()
+		return
+	}
 	a.cacheMoving = true
 	go func() {
-		err := cachemove.Recover(journal)
+		err := cachemove.Recover(journal, active)
 		a.post(func() {
 			a.cacheMoving = false
 			if a.cacheQuit {

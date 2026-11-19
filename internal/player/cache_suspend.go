@@ -3,32 +3,18 @@ package player
 // Cache relocation closes readers and downloads before moving files, while
 // retaining playback state for resumption on the main thread.
 
-// track registers a shared download so relocation can close every file handle.
-func (c *Cache) track(d *download) *download {
-	if c == nil || d == nil {
-		return d
-	}
-	c.mu.Lock()
+// trackLocked registers a download before it can open or use cache files.
+func (c *Cache) trackLocked(d *download) {
 	if c.active == nil {
 		c.active = map[*download]struct{}{}
 	}
 	c.active[d] = struct{}{}
-	c.mu.Unlock()
-	d.mu.Lock()
-	gone := d.users <= 0
+	d.cache = c
 	d.onRelease = func() {
 		c.mu.Lock()
 		delete(c.active, d)
 		c.mu.Unlock()
 	}
-	d.mu.Unlock()
-	if gone {
-		// Release may have finished before onRelease was installed.
-		c.mu.Lock()
-		delete(c.active, d)
-		c.mu.Unlock()
-	}
-	return d
 }
 
 // Quiesce blocks new cache access and waits for active downloads to close.

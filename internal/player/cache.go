@@ -2,10 +2,13 @@ package player
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -70,6 +73,18 @@ type keptSong struct {
 	File string `json:"file,omitempty"`
 }
 
+func (s keptSong) audioName(key string) string {
+	if s.File == "" {
+		return key + "." + s.Type
+	}
+	stamp, prefixed := strings.CutPrefix(s.File, key+"-")
+	stamp, suffixed := strings.CutSuffix(stamp, "."+s.Type)
+	if _, err := strconv.ParseInt(stamp, 10, 64); !prefixed || !suffixed || err != nil {
+		return ""
+	}
+	return s.File
+}
+
 // keepable reports whether a song of level and type ext may be kept: they
 // name its file, so only those known, which keep it in the cache's folder.
 func keepable(level, ext string) bool {
@@ -118,6 +133,11 @@ func (c *Cache) lookupOffline(id int64, level string) (*download, *netease.Strea
 
 // openKept opens a complete file at level, requiring a request for asked if set.
 func (c *Cache) openKept(id int64, level, asked string) (*download, *netease.Stream) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.blocked {
+		return nil, nil
+	}
 	key := cacheKey(id, level)
 	meta, err := os.ReadFile(filepath.Join(c.dir, key+".json"))
 	if err != nil {
@@ -128,10 +148,11 @@ func (c *Cache) openKept(id int64, level, asked string) (*download, *netease.Str
 		return nil, nil
 	}
 	st := kept.Stream
-	path := filepath.Join(c.dir, key+"."+st.Type)
-	if kept.File != "" {
-		path = filepath.Join(c.dir, kept.File)
+	name := kept.audioName(key)
+	if name == "" {
+		return nil, nil
 	}
+	path := filepath.Join(c.dir, name)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, nil
@@ -143,20 +164,26 @@ func (c *Cache) openKept(id int64, level, asked string) (*download, *netease.Str
 	// Played now: the last to go.
 	now := time.Now()
 	os.Chtimes(path, now, now)
-	return c.track(opened(f, st.Size)), &st
+	d := opened(f, st.Size)
+	c.trackLocked(d)
+	return d, &st
 }
 
 // download fetches the song of the stream st, asked for at level, into a
-// file, to keep once it has all come in; or into memory, if the cache would
-// not keep it.
+// cache file, to keep once it has all come in. Uncached downloads use a
+// bounded memory buffer and spill larger responses into a temporary file.
 func (c *Cache) download(id int64, level string, st *netease.Stream) *download {
-	part := c.part(st)
-	if part == nil {
-		return c.track(startDownload(st.URL, st.Size, nil, nil))
+	if c == nil {
+		return startDownload(st.URL, st.Size, nil, nil)
 	}
-	return c.track(startDownload(st.URL, st.Size, part, func(path string, n int64) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	d := newDownload(st.URL, st.Size, c.part(st), func(path string, n int64) (string, bool) {
 		return c.keep(id, level, st, path, n)
-	}))
+	})
+	c.trackLocked(d)
+	d.start()
+	return d
 }
 
 // Keeps reports whether the cache would keep a song of size bytes: one of
@@ -174,9 +201,9 @@ func (c *Cache) Keeps(size int64) bool {
 
 // part makes a file for a song of the stream st to come into, or returns
 // nil if the cache would not keep it. Each has a name of its own: the same
-// song played again while it still comes in has another.
+// song played again while it still comes in has another. The caller holds mu.
 func (c *Cache) part(st *netease.Stream) *os.File {
-	if !c.Keeps(st.Size) || c.stopped() {
+	if c.blocked || c.limit <= 0 || st.Size > c.limit/4 {
 		return nil
 	}
 	if os.MkdirAll(c.dir, 0o700) != nil {
@@ -195,9 +222,8 @@ func (c *Cache) part(st *netease.Stream) *os.File {
 // kept beside the one served so that asking for it again finds it.
 func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n int64) (string, bool) {
 	c.mu.Lock()
-	limit, blocked := c.limit, c.blocked
-	c.mu.Unlock()
-	if blocked || n > limit/4 {
+	defer c.mu.Unlock()
+	if c.blocked || c.limit <= 0 || n > c.limit/4 {
 		return part, false
 	}
 	kept := keptSong{Stream: *st, Asked: asked}
@@ -209,28 +235,63 @@ func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n 
 		return part, false
 	}
 	key := cacheKey(id, kept.Level)
+	metaPath := filepath.Join(c.dir, key+".json")
+	previous, _ := os.ReadFile(metaPath)
 	path := filepath.Join(c.dir, key+"."+kept.Type)
-	if os.Rename(part, path) != nil {
-		// Windows replaces no file another stream still reads: rather than
-		// lose the song, it is kept under a name of its own, which its
-		// metadata names, and the one it could not take goes when that
-		// stream lets go of it.
-		aside := fmt.Sprintf("%s-%d.%s", key, time.Now().UnixNano(), kept.Type)
-		path = filepath.Join(c.dir, aside)
-		if os.Rename(part, path) != nil {
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		// Keep the old audio readable until its metadata is replaced. This
+		// also works when Windows has an active reader of the original file.
+		kept.File = fmt.Sprintf("%s-%d.%s", key, time.Now().UnixNano(), kept.Type)
+		path = filepath.Join(c.dir, kept.File)
+		if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 			return part, false
 		}
-		kept.File = aside
 	}
-	meta, _ := json.Marshal(kept)
-	os.WriteFile(filepath.Join(c.dir, key+".json"), meta, 0o600)
-	c.prune(path)
+	meta, err := json.Marshal(kept)
+	if err != nil {
+		log.Printf("song cache: encode metadata: %v", err)
+		return part, false
+	}
+	tmp, err := os.CreateTemp(c.dir, ".song-meta-*")
+	if err != nil {
+		log.Printf("song cache: stage metadata: %v", err)
+		return part, false
+	}
+	defer os.Remove(tmp.Name())
+	_, err = tmp.Write(meta)
+	if err = errors.Join(err, tmp.Close()); err != nil {
+		log.Printf("song cache: write metadata: %v", err)
+		return part, false
+	}
+	if err := os.Rename(part, path); err != nil {
+		return part, false
+	}
+	if err := os.Rename(tmp.Name(), metaPath); err != nil {
+		log.Printf("song cache: publish metadata: %v", err)
+		if err := os.Rename(path, part); err != nil {
+			// Playback can still use this copy and remove it when closed.
+			return path, false
+		}
+		return part, false
+	}
+	var old keptSong
+	if json.Unmarshal(previous, &old) == nil && keepable(kept.Level, old.Type) {
+		if name := old.audioName(key); name != "" && name != filepath.Base(path) {
+			os.Remove(filepath.Join(c.dir, name))
+		}
+	}
+	c.pruneLocked(path)
 	return path, true
 }
 
 // Size returns how many bytes the songs kept take.
 func (c *Cache) Size() int64 {
-	if c.stopped() {
+	if c == nil {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.blocked {
 		return 0
 	}
 	var n int64
@@ -266,7 +327,7 @@ func (c *Cache) songs() []cachedSong {
 	var out []cachedSong
 	for _, e := range entries {
 		ext := filepath.Ext(e.Name())
-		if ext != ".mp3" && ext != ".flac" {
+		if !e.Type().IsRegular() || (ext != ".mp3" && ext != ".flac") {
 			continue
 		}
 		info, err := e.Info()
@@ -278,26 +339,32 @@ func (c *Cache) songs() []cachedSong {
 	return out
 }
 
-func (c *Cache) remove(path string) {
-	os.Remove(path)
-	// For aside files (key-nanos.ext), the metadata is stored in key.json
-	// We need to find the base key and remove its metadata
+func (c *Cache) remove(path string) bool {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	removeSongMetadata(path)
+	return true
+}
+
+// Copies of the same quality share a sidecar. Only its current audio file
+// may invalidate it. Cache callers hold mu through this check and removal.
+func removeSongMetadata(path string) {
 	base := filepath.Base(path)
-	ext := filepath.Ext(base)
-	name := strings.TrimSuffix(base, ext)
-	// Check if this is an aside file (contains a timestamp suffix)
-	if idx := strings.LastIndex(name, "-"); idx > 0 {
-		// Extract the base key (everything before the last dash)
-		baseKey := name[:idx]
-		// Check if the remainder is a timestamp (numeric)
-		if _, err := fmt.Sscanf(name[idx+1:], "%d", new(int64)); err == nil {
-			// This is an aside file, remove the base key's metadata
-			os.Remove(filepath.Join(filepath.Dir(path), baseKey+".json"))
-			return
+	key := strings.TrimSuffix(base, filepath.Ext(base))
+	if prefix, suffix, ok := strings.Cut(key, "-"); ok {
+		if level, stamp, ok := strings.Cut(suffix, "-"); ok {
+			if _, err := strconv.ParseInt(stamp, 10, 64); err == nil {
+				key = prefix + "-" + level
+			}
 		}
 	}
-	// Normal file, remove its own metadata
-	os.Remove(strings.TrimSuffix(path, filepath.Ext(path)) + ".json")
+	meta := filepath.Join(filepath.Dir(path), key+".json")
+	b, err := os.ReadFile(meta)
+	var kept keptSong
+	if err == nil && json.Unmarshal(b, &kept) == nil && kept.audioName(key) == base {
+		os.Remove(meta)
+	}
 }
 
 // prune drops the songs played longest ago until the rest fit the limit,
@@ -305,6 +372,10 @@ func (c *Cache) remove(path string) {
 func (c *Cache) prune(keep string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.pruneLocked(keep)
+}
+
+func (c *Cache) pruneLocked(keep string) {
 	if c.blocked {
 		return
 	}
@@ -319,8 +390,7 @@ func (c *Cache) prune(keep string) {
 		if total <= c.limit {
 			return
 		}
-		if f.path != keep {
-			c.remove(f.path)
+		if f.path != keep && c.remove(f.path) {
 			total -= f.size
 		}
 	}
