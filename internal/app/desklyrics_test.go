@@ -282,6 +282,38 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 	}
 }
 
+// The instrumental notice follows the current line's horizontal alignment
+// in both one-line and two-line modes.
+func TestDeskLyricsAlignInstrumentalNotice(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.pl.Cue([]netease.Track{{ID: 1, Name: "纯音乐"}})
+	a.pl.SetLyrics(nil)
+	tt := ui.NewTester((&deskLyrics{a: a}).view, 840, 400)
+	for _, lines := range []int{1, 2} {
+		for _, choice := range []int{0, 1, 2} {
+			a.settings.LyricLines = lines
+			a.settings.LyricAlign = choice
+			tt.Frame()
+			notice, ok := tt.Find(lyrics.InstrumentalText)
+			if !ok {
+				t.Fatalf("%d lines, alignment %d: no instrumental notice", lines, choice)
+			}
+			var want float32
+			switch choice {
+			case 1:
+				want = (840 - notice.W) / 2
+			case 2:
+				want = 840 - notice.W
+			}
+			if diff := notice.X - want; diff < -1 || diff > 1 {
+				t.Errorf("%d lines, alignment %d: x %.2f, want %.2f", lines, choice, notice.X, want)
+			}
+		}
+	}
+}
+
 // A font setting stands for the families an older settings file named by a
 // name of the app's, for the family the system gives, and for none at all
 // when it names the system's own.
