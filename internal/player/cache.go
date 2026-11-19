@@ -172,19 +172,6 @@ func (c *Cache) Keeps(size int64) bool {
 	return limit > 0 && size <= limit/4
 }
 
-// Holds reports whether the cache would keep the song st streams: one of a
-// level and a kind it keeps, of a size it has room for.
-func (c *Cache) Holds(st *netease.Stream) bool {
-	if st == nil || !c.Keeps(st.Size) {
-		return false
-	}
-	ext := st.Type
-	if ext == "" {
-		ext = "mp3"
-	}
-	return keepable(st.Level, ext)
-}
-
 // part makes a file for a song of the stream st to come into, or returns
 // nil if the cache would not keep it. Each has a name of its own: the same
 // song played again while it still comes in has another.

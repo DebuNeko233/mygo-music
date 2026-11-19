@@ -143,8 +143,7 @@ type Player struct {
 	// loads meanwhile, and what plays is let go of.
 	cacheChanging bool
 
-	// ahead is the next track's download, fetched while this one plays,
-	// so that it starts at once when this one ends: nil without one.
+	// ahead is the next track's cached audio or playback URL.
 	ahead *ahead
 	// tries counts the times the current track was tried again, as its load
 	// failed, or its download was cut off: it starts over with another
@@ -169,8 +168,8 @@ type Player struct {
 	seekRevision uint64
 }
 
-// ahead prepares a track while the one before it plays. Fetching is claimed
-// before the URL request so playback can take over that request or download.
+// ahead prepares a track while the one before it plays. It claims the lookup
+// before asking for the URL so playback can reuse the request.
 type ahead struct {
 	id    int64
 	level string
@@ -1293,7 +1292,7 @@ func (p *Player) cutOff() {
 }
 
 // prefetch prepares the track at order[at] once this one has come in whole.
-// It uses the cache or fetches the track, retrying while this one still plays.
+// It opens a cached copy or prepares the playback URL.
 func (p *Player) prefetch(at int) {
 	if at < 0 || at >= len(p.order) || !p.playing {
 		p.dropAhead()
@@ -1309,8 +1308,6 @@ func (p *Player) prefetch(at int) {
 		return // fetched already, or coming in
 	}
 	p.dropAhead()
-	// What plays comes in first: fetching the one after it sooner would
-	// take the bytes of the song being played, which is what stutters.
 	p.startPrefetch(t.ID, level, p.stream, songURL, 0)
 }
 
@@ -1320,16 +1317,12 @@ func (p *Player) startPrefetch(id int64, level string, now stream, ask asker, tr
 	go p.prefetching(p.gen, a, now, ask, p.Cache, try)
 }
 
-// prefetchTries is how many times the track after this one is fetched ahead
-// before it is left for when it is due. Risk checks are limited too: an
-// account-level refusal can last hours, so retrying until the song ends
-// would only keep it active. An ordinary network that is out for a moment
-// is back within them, where one fetch that came in badly left the listener
-// waiting on the next song for what one more ask would have fetched.
+// prefetchTries limits playback URL retries before leaving the request for
+// when the track is due. Account risk checks have their own smaller budget.
 const prefetchTries = 3
 
 // prepare publishes the cache hit or the result of the URL request to ready.
-// The caller closes ready before waiting for an unfinished download.
+// Only the foreground load downloads audio on a cache miss.
 func (a *ahead) prepare(now stream, ask asker, cache *Cache) error {
 	if netease.Offline() {
 		return nil
@@ -1358,11 +1351,6 @@ func (a *ahead) prepare(now stream, ask asker, cache *Cache) error {
 		return err
 	}
 	a.info = info
-	// A foreground load that took this request can use the URL even if the
-	// track does not fit on disk. Only prefetch the bytes if we can keep them.
-	if a.state.Load() != aheadCanceled && cache.Holds(info) {
-		a.dl = cache.download(a.id, a.level, info)
-	}
 	return nil
 }
 
@@ -1374,14 +1362,8 @@ func (p *Player) prefetching(gen int, a *ahead, now stream, ask asker, cache *Ca
 		return
 	}
 	err := a.err
-	if a.dl != nil {
-		// Wait for the final result even when the size was unknown. Playback
-		// can take the download before then and handle its own errors.
-		a.dl.waitFor(math.MaxInt64)
-		err = a.dl.Err()
-		if err == nil {
-			return
-		}
+	if err == nil && a.info != nil {
+		return
 	}
 	if err == nil || errors.Is(err, netease.ErrUnavailable) || errors.Is(err, netease.ErrNotLoggedIn) ||
 		errors.Is(err, netease.ErrOffline) || try >= prefetchTries || (errors.Is(err, netease.ErrRiskControl) && try >= riskTries) {
