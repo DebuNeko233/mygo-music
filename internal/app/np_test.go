@@ -220,27 +220,39 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 	if !ok {
 		t.Fatal("no 歌词 tab")
 	}
-	for _, tab := range []string{"律动", "待播清单", "选歌", "歌词"} {
-		tt.Click(tab)
-		settle()
-		if a.npPane == paneLyrics && tab != "歌词" {
-			t.Fatalf("%s was not chosen", tab)
+	for _, tab := range []npTab{{paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}, {paneLyrics, "歌词"}} {
+		if err := tt.Click(tab.label); err != nil {
+			t.Fatal(err)
 		}
-		if r, _ := tt.Find("歌词"); r.X != first.X || r.Y != first.Y {
-			t.Errorf("on %s the 歌词 tab is at %v,%v, was at %v,%v", tab, r.X, r.Y, first.X, first.Y)
+		settle()
+		if a.npPane != tab.pane {
+			t.Fatalf("%s chose pane %d, want %d", tab.label, a.npPane, tab.pane)
+		}
+		r, ok := tt.Find("歌词")
+		if !ok {
+			t.Fatalf("no 歌词 tab on %s", tab.label)
+		}
+		if r.X != first.X || r.Y != first.Y {
+			t.Errorf("on %s the 歌词 tab is at %v,%v, was at %v,%v", tab.label, r.X, r.Y, first.X, first.Y)
 		}
 	}
 	for _, pane := range []int{paneStage, paneLyrics} {
 		a.npPane = pane
 		a.comments.loaded, a.comments.total = true, 0
 		settle()
-		start, _ := tt.Find("歌词")
-		end, _ := tt.Find("评论")
+		start, startOK := tt.Find("歌词")
+		end, endOK := tt.Find("评论")
+		if !startOK || !endOK {
+			t.Fatalf("missing navigation tabs in pane %d", pane)
+		}
 		axis := (start.X + end.X + end.W) / 2
 		a.comments.total = 12345678
 		settle()
-		start, _ = tt.Find("歌词")
-		end, _ = tt.Find(a.commentsTab())
+		start, startOK = tt.Find("歌词")
+		end, endOK = tt.Find(a.commentsTab())
+		if !startOK || !endOK {
+			t.Fatalf("missing navigation tabs after the comment count changed in pane %d", pane)
+		}
 		if got := (start.X + end.X + end.W) / 2; math.Abs(float64(got-axis)) > 1 || start.Y != first.Y {
 			t.Errorf("in pane %d, the comment count moved the navigation axis from %v to %v", pane, axis, got)
 		}

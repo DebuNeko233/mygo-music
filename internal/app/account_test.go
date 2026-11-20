@@ -133,9 +133,16 @@ func TestAccountMenu(t *testing.T) {
 		t.Fatal("Escape left the menu open")
 	}
 
-	tt.Click("小明")
+	if err := tt.Click("小明"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
-	tt.Click("小明")
+	if !a.accountOpen {
+		t.Fatal("the second opening did not show the account menu")
+	}
+	if err := tt.Click("小明"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
 	if a.accountOpen {
 		t.Fatal("a second click left the menu open")
