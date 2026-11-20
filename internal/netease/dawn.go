@@ -20,11 +20,6 @@ const (
 	dawnBuildVersion  = "3.1.35.205293"
 )
 
-// ReportDawnStart records the beginning of an audible desktop play session.
-func ReportDawnStart(track Track, bitrate int, level string, source PlaySource) error {
-	return playReporter{}.DawnStart(track, bitrate, level, source)
-}
-
 // DawnStart records an audible start using this reporter's login.
 func (r playReporter) DawnStart(track Track, bitrate int, level string, source PlaySource) error {
 	plv := dawnFields(track, bitrate, level, source)
@@ -32,12 +27,6 @@ func (r playReporter) DawnStart(track Track, bitrate int, level string, source P
 	now := time.Now()
 	dawnRefer(plv, now, track, source, 23, 933)
 	return r.uploadDawnRecord("_plv", plv, now)
-}
-
-// ReportDawnEnd records how long audio was actually heard and why it ended.
-// These are BI log records, not entries in the older feedback weblog.
-func ReportDawnEnd(track Track, played time.Duration, end string, bitrate int, level string, source PlaySource) error {
-	return playReporter{}.DawnEnd(track, played, end, bitrate, level, source)
 }
 
 // DawnEnd records the end of audible playback using this reporter's login.

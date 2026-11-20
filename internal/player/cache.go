@@ -390,15 +390,6 @@ func removeCacheFile(path string) bool {
 	return true
 }
 
-// prune drops the songs played longest ago until the rest fit the limit,
-// but keep, the song just kept.
-func (c *Cache) prune(keep string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.spare = 0
-	c.pruneLocked(keep, 0)
-}
-
 func (c *Cache) pruneLocked(keep string, added int64) {
 	if c.blocked {
 		return

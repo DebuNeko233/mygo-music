@@ -21,10 +21,10 @@ func TestDawnLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ReportDawnStart(track, 320, "exhigh", PlaySource{Source: "list", ID: 3778678}); err != nil {
+	if err := (playReporter{}).DawnStart(track, 320, "exhigh", PlaySource{Source: "list", ID: 3778678}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ReportDawnEnd(track, 35*time.Second, Playthrough, 320, "exhigh", PlaySource{Source: "list", ID: 3778678}); err != nil {
+	if err := (playReporter{}).DawnEnd(track, 35*time.Second, Playthrough, 320, "exhigh", PlaySource{Source: "list", ID: 3778678}); err != nil {
 		t.Fatal(err)
 	}
 	// The count is maintained asynchronously after the upload acknowledgement.

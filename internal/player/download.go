@@ -84,16 +84,6 @@ func (d *download) start() {
 	go d.run(ctx, stallGap)
 }
 
-// downloaded returns an in-memory download that has all of b in already.
-func downloaded(b []byte) *download {
-	d := opened(nil, int64(len(b)))
-	d.pages = make(map[int64][]byte)
-	for off := 0; off < len(b); off += downloadPageSize {
-		d.pages[int64(off/downloadPageSize)] = b[off:min(off+downloadPageSize, len(b))]
-	}
-	return d
-}
-
 // opened returns a download backed by a complete cache file.
 func opened(f *os.File, size int64) *download {
 	d := &download{file: f, n: size, size: size, length: size, done: true, cancel: func() {}, users: 1}

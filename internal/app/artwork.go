@@ -410,14 +410,6 @@ func decodeArtSized(b []byte, limit int) (*ui.Bitmap, image.Image, int, error) {
 	return bmp, img, len(b), err
 }
 
-func fetchImage(url string) (image.Image, error) {
-	b, err := netease.Fetch(url)
-	if err != nil {
-		return nil, err
-	}
-	return decodeImage(b)
-}
-
 func decodeImage(b []byte) (image.Image, error) {
 	img, _, err := image.Decode(bytes.NewReader(stillCover(b)))
 	return img, err

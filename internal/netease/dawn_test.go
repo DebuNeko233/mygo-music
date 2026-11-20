@@ -63,10 +63,10 @@ func TestDawnUploadAcknowledgesEachRecord(t *testing.T) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 	})
 	source := PlaySource{Source: "list", ID: 3778678}
-	if err := ReportDawnStart(Track{ID: 7, Duration: 100000}, 320, "exhigh", source); err != nil {
+	if err := (playReporter{}).DawnStart(Track{ID: 7, Duration: 100000}, 320, "exhigh", source); err != nil {
 		t.Fatal(err)
 	}
-	if err := ReportDawnEnd(Track{ID: 7, Duration: 100000}, 35*time.Second, "playend", 320, "exhigh", source); err != nil {
+	if err := (playReporter{}).DawnEnd(Track{ID: 7, Duration: 100000}, 35*time.Second, "playend", 320, "exhigh", source); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -154,7 +154,7 @@ func TestDawnUploadRequiresFilenameAcknowledgement(t *testing.T) {
 	httpClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"code":200,"data":{"successfiles":[]}}`)), Header: make(http.Header)}, nil
 	})
-	if err := ReportDawnStart(Track{ID: 7}, 320, "exhigh", PlaySource{}); err == nil {
+	if err := (playReporter{}).DawnStart(Track{ID: 7}, 320, "exhigh", PlaySource{}); err == nil {
 		t.Fatal("an unacknowledged upload was treated as sent")
 	}
 }

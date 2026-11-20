@@ -82,7 +82,7 @@ func (s *sentLog) log(t *testing.T) (action string, fields map[string]any) {
 func TestReportPlayStartSendsAStartLog(t *testing.T) {
 	sent := captureLog(t)
 	const id = 3448738711
-	if err := ReportPlayStart(id, PlaySource{Source: "list", ID: 42, Alg: "itembased"}); err != nil {
+	if err := (playReporter{}).PlayStart(id, PlaySource{Source: "list", ID: 42, Alg: "itembased"}); err != nil {
 		t.Fatal(err)
 	}
 	action, fields := sent.log(t)
@@ -106,7 +106,7 @@ func TestReportPlayStartSendsAStartLog(t *testing.T) {
 // Unknown attribution is omitted instead of sending empty source fields.
 func TestReportPlayStartOmitsUnknownSource(t *testing.T) {
 	sent := captureLog(t)
-	if err := ReportPlayStart(7, PlaySource{}); err != nil {
+	if err := (playReporter{}).PlayStart(7, PlaySource{}); err != nil {
 		t.Fatal(err)
 	}
 	_, fields := sent.log(t)
@@ -121,7 +121,7 @@ func TestReportPlayStartOmitsUnknownSource(t *testing.T) {
 // desktop listening duration belongs to the separate Dawn record.
 func TestReportPlayStartUsesWeblogIdentity(t *testing.T) {
 	sent := captureLog(t)
-	if err := ReportPlayStart(7, PlaySource{}); err != nil {
+	if err := (playReporter{}).PlayStart(7, PlaySource{}); err != nil {
 		t.Fatal(err)
 	}
 	sent.log(t)

@@ -23,11 +23,6 @@ type PlaySource struct {
 	Alg    string
 }
 
-// ReportPlayStart announces a song only after its audio actually starts.
-func ReportPlayStart(id int64, source PlaySource) error {
-	return playReporter{}.PlayStart(id, source)
-}
-
 type playReporter struct{ jar http.CookieJar }
 
 // NewPlayReporter binds the queued reports to the current login.

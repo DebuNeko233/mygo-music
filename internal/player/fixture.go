@@ -46,3 +46,9 @@ func (p *Player) Attach(out *audio.Player) {
 
 // SetStream makes st what the current track streams.
 func (p *Player) SetStream(st *netease.Stream) { p.info = st }
+
+// RefreshLyrics applies parsed replacement lyrics without moving playback.
+func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
+	lines, display := lyrics.BuildDisplay(original, translation, words)
+	p.applyRefreshedLyrics(id, lines, display)
+}

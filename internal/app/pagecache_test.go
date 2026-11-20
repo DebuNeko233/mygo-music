@@ -34,9 +34,4 @@ func TestPageCacheKeepsTheLastPages(t *testing.T) {
 	if c.peek(-pageLimit+1) != loading {
 		t.Error("dropped a page whose data was still on its way")
 	}
-	// Signing out forgets every page.
-	c.reset()
-	if len(c.items) != 0 || c.peek(1) != nil {
-		t.Error("kept pages after signing out")
-	}
 }

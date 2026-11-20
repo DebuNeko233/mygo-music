@@ -45,11 +45,6 @@ func (c *pageCache[K, V]) set(k K, v V) {
 	c.use(k)
 }
 
-// reset forgets every page, as signing out does.
-func (c *pageCache[K, V]) reset() {
-	c.items, c.order = nil, nil
-}
-
 // use marks a page as opened now, and drops the ones beyond the limit.
 func (c *pageCache[K, V]) use(k K) {
 	if i := slices.Index(c.order, k); i >= 0 {

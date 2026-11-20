@@ -20,7 +20,7 @@ func TestPlayReportVerificationLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ReportPlayStart(347230, PlaySource{Source: "list", ID: 3778678}); err != nil {
+	if err := (playReporter{}).PlayStart(347230, PlaySource{Source: "list", ID: 3778678}); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(3 * time.Second)

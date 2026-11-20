@@ -107,16 +107,6 @@ func (p *Player) retryMetadata(manual bool) {
 	}()
 }
 
-// RefreshLyrics applies background revalidation without moving playback. A
-// cached result already in flight cannot overwrite this newer server answer.
-func (p *Player) RefreshLyrics(id int64, original, translation, words string) {
-	if p.track == nil || p.track.ID != id {
-		return
-	}
-	lines, display := lyrics.BuildDisplay(original, translation, words)
-	p.applyRefreshedLyrics(id, lines, display)
-}
-
 func (p *Player) applyRefreshedLyrics(id int64, lines []lyrics.Line, display lyrics.Display) {
 	if p.track == nil || p.track.ID != id {
 		return
