@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -27,8 +26,7 @@ func TestNotchGreetsOnce(t *testing.T) {
 	if n.hello {
 		t.Fatal("greeted before the song played")
 	}
-	out := audio.NewPlayer(&silence{})
-	out.SetVolume(0)
+	out := newSilentAudio()
 	a.pl.Attach(out)
 	defer out.Close()
 	a.syncWindows()

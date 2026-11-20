@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -67,8 +66,7 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			a.settings.Fog = false
 			a.pl.Cue([]netease.Track{{ID: 1, Name: "Song", Duration: 200000}})
 			a.pl.SetLyrics(nil)
-			out := audio.NewPlayer(&silence{})
-			out.SetVolume(0)
+			out := newSilentAudio()
 			out.Play()
 			defer out.Close()
 			a.pl.Attach(out)
