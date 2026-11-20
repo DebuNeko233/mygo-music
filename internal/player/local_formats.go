@@ -17,19 +17,20 @@ import (
 // Extensible WAV headers use the subtype GUID's format code, as ordinary PCM
 // headers do, so CD rips with either header can be played without conversion.
 type wavStream struct {
-	dl       *download
-	file     *os.File
-	data     int64
-	frames   int64
-	channels int
-	bits     int
-	format   uint16
-	rate     int
-	pos      int64
-	buf      []byte
-	spec     *spectrum
-	once     sync.Once
-	failure  decoderFailure
+	dl        *download
+	file      *os.File
+	data      int64
+	frames    int64
+	channels  int
+	bits      int
+	validBits int
+	format    uint16
+	rate      int
+	pos       int64
+	buf       []byte
+	spec      *spectrum
+	once      sync.Once
+	failure   decoderFailure
 }
 
 func openWAVStream(dl *download) (*wavStream, error) {
@@ -76,11 +77,17 @@ func openWAVStream(dl *download) (*wavStream, error) {
 			s.rate = int(binary.LittleEndian.Uint32(b[4:]))
 			block := int(binary.LittleEndian.Uint16(b[12:]))
 			s.bits = int(binary.LittleEndian.Uint16(b[14:]))
+			s.validBits = s.bits
 			if s.format == 0xfffe && len(b) >= 40 {
 				s.format = binary.LittleEndian.Uint16(b[24:])
+				s.validBits = int(binary.LittleEndian.Uint16(b[18:]))
+				if s.validBits == 0 {
+					s.validBits = s.bits
+				}
 			}
 			if s.channels < 1 || s.channels > 32 || s.rate < 1 ||
-				block != s.channels*((s.bits+7)/8) {
+				block != s.channels*((s.bits+7)/8) ||
+				s.validBits < 1 || s.validBits > s.bits {
 				return nil, errors.New("wav: invalid PCM layout")
 			}
 		case "data":
@@ -127,16 +134,16 @@ func (s *wavStream) Read(dst []float32) (int, error) {
 	s.failure.record(err)
 	for i := 0; i < got/block; i++ {
 		sample := s.buf[i*block:]
-		left := wavSample(sample, s.format, s.bits)
+		left := wavSample(sample, s.format, s.bits, s.validBits)
 		right := left
 		if s.channels > 1 {
-			right = wavSample(sample[(s.bits+7)/8:], s.format, s.bits)
+			right = wavSample(sample[(s.bits+7)/8:], s.format, s.bits, s.validBits)
 		}
 		// More than two channels are reduced equally, without wrapping integer PCM.
 		if s.channels > 2 {
 			left, right = 0, 0
 			for ch := range s.channels {
-				value := wavSample(sample[ch*((s.bits+7)/8):], s.format, s.bits)
+				value := wavSample(sample[ch*((s.bits+7)/8):], s.format, s.bits, s.validBits)
 				if ch%2 == 0 {
 					left += value * 2 / float32(s.channels)
 				} else {
@@ -155,7 +162,7 @@ func (s *wavStream) Read(dst []float32) (int, error) {
 	return 0, err
 }
 
-func wavSample(b []byte, format uint16, bits int) float32 {
+func wavSample(b []byte, format uint16, bits, validBits int) float32 {
 	switch {
 	case format == 3 && bits == 32:
 		return float32(math.Float32frombits(binary.LittleEndian.Uint32(b)))
@@ -169,7 +176,9 @@ func wavSample(b []byte, format uint16, bits int) float32 {
 		v := int32(b[0]) | int32(b[1])<<8 | int32(b[2])<<16
 		return float32(v<<8>>8) / (1 << 23)
 	default:
-		return float32(int32(binary.LittleEndian.Uint32(b))) / (1 << 31)
+		v := int32(binary.LittleEndian.Uint32(b))
+		// Extensible PCM stores fewer valid bits left-aligned in the container.
+		return float32(v>>(bits-validBits)) / float32(int64(1)<<(validBits-1))
 	}
 }
 
