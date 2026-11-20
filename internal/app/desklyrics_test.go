@@ -330,20 +330,14 @@ func TestDeskLyricsAlignInstrumentalNotice(t *testing.T) {
 	}
 }
 
-// A font setting stands for the families an older settings file named by a
-// name of the app's, for the family the system gives, and for none at all
-// when it names the system's own.
+// A font setting uses the selected system family, or the default family
+// when no family is selected.
 func TestTheFamiliesAFontSettingStandsFor(t *testing.T) {
 	if got := lyricFamily(lyricFontSystem); got != "" {
 		t.Errorf("the system's own stands for %q", got)
 	}
 	if got := lyricFamily(""); got != "" {
 		t.Errorf("no choice stands for %q", got)
-	}
-	for old, families := range lyricOldFonts {
-		if got := lyricFamily(old); got != families {
-			t.Errorf("%q stands for %q", old, got)
-		}
 	}
 	names := lyricFontNames()
 	if len(names) > 1 {

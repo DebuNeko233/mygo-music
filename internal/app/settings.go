@@ -72,9 +72,8 @@ type settings struct {
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
 	// CacheDir contains songs, artwork and browsing data; empty uses the
-	// system cache. Layout zero is the older, song-only directory setting.
-	CacheDir    string `json:"cacheDir,omitempty"`
-	CacheLayout int    `json:"cacheLayout,omitempty"`
+	// system cache.
+	CacheDir string `json:"cacheDir,omitempty"`
 	// Accent is the colour the app takes, from accents; empty for the one
 	// its appearance gives.
 	Accent string `json:"accent,omitempty"`
@@ -173,7 +172,7 @@ func (k shortcutKeys) filled() shortcutKeys {
 func defaultSettings() settings {
 	return settings{
 		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
-		AppIcon: "dock-and-menubar", CacheMB: 2048, CacheLayout: 1, Captions: true,
+		AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true,
 		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
 		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
@@ -202,31 +201,10 @@ func loadSettings() settings {
 	if err != nil {
 		return s
 	}
-	// Older settings have no layout version. Keep their paths until the
-	// background conversion has copied every cache and saved the new layout.
 	decoded := s
-	decoded.CacheLayout = 0
-	// Track which opacity values were present so explicit zero and split
-	// values take precedence over the old shared setting.
-	file := struct {
-		*settings
-		Shared  *float64 `json:"backdropOpacity"`
-		Home    *float64 `json:"backdropHomeOpacity"`
-		Playing *float64 `json:"backdropPlayingOpacity"`
-	}{settings: &decoded}
-	if err := json.Unmarshal(b, &file); err != nil {
-		// Unmarshal may partially fill decoded before failing. Never use its
-		// cache path or layout to start a migration from rejected settings.
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		// Invalid JSON may partially populate decoded. Reject the whole file.
 		return s
-	}
-	if file.Shared != nil {
-		decoded.BackdropHomeOpacity, decoded.BackdropPlayingOpacity = *file.Shared, *file.Shared
-	}
-	if file.Home != nil {
-		decoded.BackdropHomeOpacity = *file.Home
-	}
-	if file.Playing != nil {
-		decoded.BackdropPlayingOpacity = *file.Playing
 	}
 	decoded.clamp()
 	return decoded

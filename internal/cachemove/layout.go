@@ -20,7 +20,7 @@ const ArtworkDir = "artwork-v2"
 var ErrConflict = errors.New("目标缓存已有不同内容")
 
 // Layout names all managed caches. Root can also hold unrelated files; they
-// are never copied or removed. Legacy layouts may keep these folders apart.
+// are never copied or removed.
 type Layout struct {
 	Root, Songs, Browse, Artwork string
 }
@@ -37,7 +37,7 @@ type cacheFile struct {
 var entryName = regexp.MustCompile(`^[a-f0-9]{64}-[a-f0-9]{64}\.entry$`)
 
 // MoveLayoutWithOptions publishes a new root. shared publishes only managed children,
-// for the system cache root or an in-place legacy conversion.
+// for the system cache root.
 // The caller freezes writers first. A failed copy/save retains every old file;
 // save rebinds snapshot readers before originals retire, including across disks.
 // Options control cancellation, progress and crash recovery for the transaction.

@@ -70,31 +70,11 @@ func lyricColor(name string, fallback ui.Color) ui.Color {
 	return fallback
 }
 
-// lyricOldFonts are the fonts that settings files written before the
-// settings listed the system's own names call by the app's names, and the
-// families each one stood for: an older choice keeps showing in the fonts
-// it did, and the settings keep offering it as it is until it is replaced.
-var lyricOldFonts = map[string]string{
-	"微软雅黑": "微软雅黑, Microsoft YaHei, PingFang SC, Noto Sans CJK SC",
-	"苹方":   "PingFang SC, Hiragino Sans GB, Microsoft YaHei",
-	"思源黑体": "Source Han Sans SC, Noto Sans CJK SC, Noto Sans SC",
-	"等线":   "DengXian, DengXian Light",
-	"黑体":   "SimHei, Heiti SC",
-	"宋体":   "SimSun, Songti SC",
-	"楷体":   "KaiTi, Kaiti SC",
-	"圆体":   "Yuanti SC, YouYuan",
-}
-
-// lyricFamily returns the families the font named stands for: the system's
-// own for an empty name and for the choice meaning it, the families of an
-// older name for one of those, and the name itself for a family the system
-// gives, which a system without such a family sets in the system's own.
+// lyricFamily returns the selected system family, or an empty family for
+// the system default.
 func lyricFamily(name string) string {
 	if name == "" || name == lyricFontSystem {
 		return ""
-	}
-	if families, ok := lyricOldFonts[name]; ok {
-		return families
 	}
 	return name
 }
