@@ -406,7 +406,7 @@ func (a *app) playerBar(c *ui.Context) {
 	tr := pl.Current()
 	a.tickTimes(c)
 	if tr == nil {
-		a.barCover = barCoverState{}
+		a.barCover = coverFadeState{}
 	}
 	if a.picked.id != 0 && (tr == nil || tr.ID != a.picked.id || pl.Playing()) {
 		// Played, or gone: it says what it is again.

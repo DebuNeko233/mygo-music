@@ -206,7 +206,8 @@ type app struct {
 	// bars, which show their scroll edges then.
 	underTop, underBottom bool
 	barScrub              scrubState
-	barCover              barCoverState
+	barCover              coverFadeState
+	stageCover, wallCover coverFadeState
 	npScrub               scrubState
 	backdropCache         backdropCache // the backdrop of Now Playing, as last painted
 	npSpectrum            lyricSpectrum // the filled frequency spectrum behind the lyrics
