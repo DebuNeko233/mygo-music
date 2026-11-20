@@ -185,14 +185,18 @@ func BenchmarkFAADCodecDecode(b *testing.B) {
 }
 
 func BenchmarkADTSStreamRead(b *testing.B) {
-	data := mustReadFile(b, "testdata/seek-he.aac")
+	path := filepath.Join(b.TempDir(), "seek-he.aac")
+	if err := os.WriteFile(path, mustReadFile(b, "testdata/seek-he.aac"), 0600); err != nil {
+		b.Fatal(err)
+	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		s, err := openBaselineADTS(b, data)
+		_, raw, err := openLocal(path)
 		if err != nil {
 			b.Fatal(err)
 		}
+		s := raw.(*adtsFAADStream)
 		buf := make([]float32, 4096)
 		for {
 			_, err := s.Read(buf)
