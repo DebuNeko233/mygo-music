@@ -93,18 +93,43 @@ func TestCheckForUpdatesFromSettings(t *testing.T) {
 func TestMoveOldData(t *testing.T) {
 	root := t.TempDir()
 	old, dir := filepath.Join(root, oldName), filepath.Join(root, "MyGo 云音乐")
-	os.MkdirAll(old, 0o700)
-	os.WriteFile(filepath.Join(old, "settings.json"), []byte("old"), 0o600)
-	os.MkdirAll(dir, 0o700)
+	if err := os.MkdirAll(old, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "settings.json"), []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	moveDir(old, dir)
-	if b, _ := os.ReadFile(filepath.Join(dir, "settings.json")); string(b) != "old" {
+	b, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "old" {
 		t.Fatalf("settings %q after moving", b)
 	}
 
-	os.MkdirAll(old, 0o700)
-	os.WriteFile(filepath.Join(old, "settings.json"), []byte("older"), 0o600)
+	if err := os.MkdirAll(old, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(old, "settings.json"), []byte("older"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	moveDir(old, dir)
-	if b, _ := os.ReadFile(filepath.Join(dir, "settings.json")); string(b) != "old" {
+	b, err = os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "old" {
 		t.Fatalf("settings %q, moved over what was there", b)
+	}
+	b, err = os.ReadFile(filepath.Join(old, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "older" {
+		t.Fatalf("source settings %q after preserving existing data", b)
 	}
 }
