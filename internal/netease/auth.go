@@ -1,6 +1,7 @@
 package netease
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -122,21 +123,67 @@ type Profile struct {
 
 // Account returns the profile of who is signed in, or nil.
 func Account() (*Profile, error) {
+	return accountWithClient(httpClient)
+}
+
+func accountWithClient(client *http.Client) (*Profile, error) {
 	var res struct {
 		Profile *Profile `json:"profile"`
 	}
-	err := get("/api/nuser/account/get", nil, &res)
+	req, err := http.NewRequest("GET", apiBase+"/api/nuser/account/get", nil)
+	if err != nil {
+		return nil, err
+	}
+	err = doWithClient(client, req, &res)
 	return res.Profile, err
 }
 
-// QRKey starts a QR code login: the code shows LoginURL(key). The login
+// QRLogin holds one attempt's cookies until the app accepts the confirmation.
+type QRLogin struct {
+	jar *qrCookieJar
+}
+
+type qrCookieJar struct {
+	http.CookieJar
+	changes []qrCookieChange
+}
+
+type qrCookieChange struct {
+	url     *url.URL
+	cookies []*http.Cookie
+}
+
+func (j *qrCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	j.CookieJar.SetCookies(u, cookies)
+	j.changes = append(j.changes, qrCookieChange{u, cookies})
+}
+
+func NewQRLogin() *QRLogin {
+	jar, _ := cookiejar.New(nil)
+	jar.SetCookies(siteURL, httpClient.Jar.Cookies(siteURL))
+	return &QRLogin{jar: &qrCookieJar{CookieJar: jar}}
+}
+
+// Commit publishes cookies received during this attempt to the shared session.
+func (l *QRLogin) Commit() {
+	for _, ch := range l.jar.changes {
+		httpClient.Jar.SetCookies(ch.url, ch.cookies)
+	}
+}
+
+func (l *QRLogin) post(path string, data map[string]any, out any) error {
+	endpoint := eapiDomain + "/eapi/" + strings.TrimPrefix(path, "/api/")
+	return eapiPostEndpoint(context.Background(), endpoint, path, data, out, l.jar)
+}
+
+// Key starts a QR code login: the code shows LoginURL(key). The login
 // goes through the eapi, as the desktop client's does.
-func QRKey() (string, error) {
+func (l *QRLogin) Key() (string, error) {
 	var res struct {
 		Code   int    `json:"code"`
 		Unikey string `json:"unikey"`
 	}
-	if err := eapiPost("/api/login/qrcode/unikey", map[string]any{"type": 3}, &res); err != nil {
+	if err := l.post("/api/login/qrcode/unikey", map[string]any{"type": 3}, &res); err != nil {
 		return "", err
 	}
 	if res.Unikey == "" {
@@ -155,18 +202,25 @@ const (
 	QRConfirmed = 803
 )
 
-// QRCheck reports where the login of key is: a QR state, or another code
-// with NetEase's message when it refuses. Once scanned, it names who
-// scanned; once confirmed, the session cookie is in the jar.
-func QRCheck(key string) (code int, msg, nickname, avatar string, err error) {
-	var r struct {
-		Code      int    `json:"code"`
-		Message   string `json:"message"`
-		Nickname  string `json:"nickname"`
-		AvatarURL string `json:"avatarUrl"`
+type QRStatus struct {
+	Code      int      `json:"code"`
+	Message   string   `json:"message"`
+	Nickname  string   `json:"nickname"`
+	AvatarURL string   `json:"avatarUrl"`
+	Profile   *Profile `json:"-"`
+}
+
+// Check reports the QR state and looks up a confirmed profile in the
+// attempt's own session, leaving the current account alone until Commit.
+func (l *QRLogin) Check(key string) (QRStatus, error) {
+	var r QRStatus
+	err := l.post("/api/login/qrcode/client/login", map[string]any{"key": key, "type": 3}, &r)
+	if err == nil && r.Code == QRConfirmed {
+		client := *httpClient
+		client.Jar = l.jar
+		r.Profile, _ = accountWithClient(&client)
 	}
-	err = eapiPost("/api/login/qrcode/client/login", map[string]any{"key": key, "type": 3}, &r)
-	return r.Code, r.Message, r.Nickname, r.AvatarURL, err
+	return r, err
 }
 
 // SessionCookies returns the cookies the session is kept by, for Logout to
