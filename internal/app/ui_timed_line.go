@@ -215,6 +215,23 @@ func lyricWordsText(words []lyrics.Word) string {
 	return text.String()
 }
 
+// lyricWordClips maps timed words to the shaped text's UTF-16 selection ranges.
+func lyricWordClips(words []lyrics.Word, layout *ui.TextLayout) [][]ui.Rect {
+	clips := make([][]ui.Rect, len(words))
+	offset := 0
+	for i, word := range words {
+		end := offset
+		for _, r := range word.Text {
+			end += utf16.RuneLen(r)
+		}
+		if end > offset {
+			clips[i] = layout.SelectionRects(ui.TextInputRange{Start: offset, End: end})
+		}
+		offset = end
+	}
+	return clips
+}
+
 func (a *app) paintLyricWords(c *ui.Context, line *lyrics.Line, width float32, st linesStyle) {
 	font := lyricFont(c, st)
 	direction := c.Direction()
@@ -222,18 +239,7 @@ func (a *app) paintLyricWords(c *ui.Context, line *lyrics.Line, width float32, s
 	if cache.line != line || cache.width != width || cache.font != font || cache.direction != direction {
 		layout := shapeLyric(lyricWordsText(line.Words), font, width, direction)
 		_, height := layout.Size()
-		clips := make([][]ui.Rect, len(line.Words))
-		offset := 0
-		for i, word := range line.Words {
-			end := offset
-			for _, r := range word.Text {
-				end += utf16.RuneLen(r)
-			}
-			if end > offset {
-				clips[i] = layout.SelectionRects(ui.TextInputRange{Start: offset, End: end})
-			}
-			offset = end
-		}
+		clips := lyricWordClips(line.Words, layout)
 		*cache = paintedLyric{line: line, width: width, font: font, direction: direction, layout: layout, clips: clips, height: height}
 	}
 	layout, clips := cache.layout, cache.clips
