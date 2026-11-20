@@ -70,6 +70,66 @@ func recentTestApp(t *testing.T) (*app, chan func(), *ui.Tester) {
 	return a, posts, tt
 }
 
+// The five recent-play requests start together instead of waiting for each other.
+func TestRecentRequestsRunConcurrently(t *testing.T) {
+	fakeRecent(t)
+	a := newTestApp()
+	a.profile = &netease.Profile{UserID: 1}
+	posts := testPosts(a)
+	started := make(chan string, 5)
+	release := make(chan struct{})
+	block := func(kind string) { started <- kind; <-release }
+	recentPlays = func(int) ([]netease.Play, error) {
+		block("songs")
+		return nil, nil
+	}
+	recentPlaylists = func(int) ([]netease.Played[netease.Playlist], error) {
+		block("playlists")
+		return nil, nil
+	}
+	recentAlbums = func(int) ([]netease.Played[netease.AlbumProfile], error) {
+		block("albums")
+		return nil, nil
+	}
+	recentPodcasts = func(int) ([]netease.Played[netease.Podcast], error) {
+		block("podcasts")
+		return nil, nil
+	}
+	recentVoices = func(int) ([]netease.Played[netease.Voice], error) {
+		block("voices")
+		return nil, nil
+	}
+	a.loadRecent()
+	for i := 0; i < 5; i++ {
+		select {
+		case <-started:
+		case <-time.After(2 * time.Second):
+			close(release)
+			refreshPost(t, posts)
+			t.Fatalf("only %d of five requests started", i)
+		}
+	}
+	close(release)
+	refreshPost(t, posts)
+	if a.recent.loading || !a.recent.shown {
+		t.Fatalf("recent plays did not finish: %+v", a.recent)
+	}
+}
+
+// A failed songs request must not discard the other four kinds of records.
+func TestRecentKeepsOtherKindsWhenSongsFail(t *testing.T) {
+	fakeRecent(t)
+	recentPlays = func(int) ([]netease.Play, error) { return nil, netease.ErrOffline }
+	a := newTestApp()
+	a.profile = &netease.Profile{UserID: 1}
+	posts := testPosts(a)
+	a.loadRecent()
+	refreshPost(t, posts)
+	if len(a.recent.playlists) != 1 || len(a.recent.albums) != 1 || len(a.recent.voices) != 1 {
+		t.Fatalf("songs failure discarded other records: %+v", a.recent)
+	}
+}
+
 // The recent page plays the songs NetEase says were played, wherever they
 // were played.
 func TestRecentPagePlaysWhatWasPlayed(t *testing.T) {

@@ -22,6 +22,7 @@ type suggestState struct {
 	failed   bool
 	playlist playlistSuggestState
 	timer    *time.Timer // waiting for typing to pause
+	gen      uint64      // which request the query is waiting for
 }
 
 // suggestion is a page a query may be after: a song's search, or an
@@ -41,12 +42,14 @@ func (a *app) suggest(q string) {
 	}
 	a.dismissSuggestions()
 	s.query, s.loading = q, true
+	s.gen++
+	gen := s.gen
 	fetch := searchSuggest
 	s.timer = time.AfterFunc(suggestDelay, func() {
 		res, err := fetch(q)
 		a.post(func() {
 			// Typed on, or searched since.
-			if q != s.query {
+			if q != s.query || gen != s.gen {
 				return
 			}
 			s.timer, s.loading, s.failed = nil, false, err != nil

@@ -119,10 +119,10 @@ func (a *app) loadRecent() {
 				if !d.shown {
 					d.err = "最近播放加载失败"
 				}
-				return
+			} else {
+				d.err = ""
+				d.setSongs(songs)
 			}
-			d.err = ""
-			d.setSongs(songs)
 			if playlistsErr == nil {
 				d.playlists = playlists
 			}
