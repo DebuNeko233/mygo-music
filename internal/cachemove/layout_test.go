@@ -95,63 +95,6 @@ func TestMoveLayoutAdoptsExistingSharedCaches(t *testing.T) {
 	exists(t, filepath.Join(target.Songs, "personal.txt"), true)
 }
 
-// Legacy custom song folders convert in place, including an identical child
-// folder published before a crash; a failed save is safe to retry.
-func TestMoveLayoutLegacyRestart(t *testing.T) {
-	root := t.TempDir()
-	target := filepath.Join(root, "custom")
-	source := Layout{target, target, filepath.Join(root, "system-browse"), filepath.Join(root, "system-art")}
-	song(t, source.Songs)
-	snapshot(t, source.Browse)
-	snapshot(t, source.Artwork)
-	write(t, filepath.Join(target, "personal.txt"), []byte("keep"))
-	// Reproduce publication of songs before the layout setting was saved.
-	for _, name := range []string{"123-exhigh.mp3", "123-exhigh.json"} {
-		if err := os.MkdirAll(filepath.Join(target, "songs"), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := copyFile(filepath.Join(target, name), filepath.Join(target, "songs", name)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	injected := errors.New("save failed")
-	_, err := MoveLayoutWithOptions(source, target, true, true, func() error { return injected }, Options{})
-	if !errors.Is(err, injected) {
-		t.Fatal(err)
-	}
-	exists(t, filepath.Join(target, "123-exhigh.mp3"), true)
-	exists(t, filepath.Join(target, "songs", "123-exhigh.mp3"), true)
-	checkSnapshot(t, source.Browse, "cached")
-	warning, err := MoveLayoutWithOptions(source, target, true, true, func() error { return nil }, Options{})
-	if err != nil || warning != nil {
-		t.Fatal(warning, err)
-	}
-	exists(t, filepath.Join(target, "123-exhigh.mp3"), false)
-	exists(t, filepath.Join(target, "songs", "123-exhigh.mp3"), true)
-	exists(t, filepath.Join(target, "personal.txt"), true)
-	checkSnapshot(t, layout(target).Browse, "cached")
-	checkSnapshot(t, layout(target).Artwork, "cached")
-}
-
-// Conversion refuses a conflicting child directory and never treats its
-// personal files as a partially published application cache.
-func TestMoveLayoutLegacyConflict(t *testing.T) {
-	root := t.TempDir()
-	source := layout(filepath.Join(root, "custom"))
-	source.Songs = source.Root
-	song(t, source.Songs)
-	write(t, filepath.Join(source.Root, "songs", "personal.txt"), []byte("keep"))
-	_, err := MoveLayoutWithOptions(source, source.Root, true, true, func() error { t.Fatal("saved conflicting conversion"); return nil }, Options{})
-	if err == nil {
-		t.Fatal("overwrote conflicting folder")
-	}
-	exists(t, filepath.Join(source.Root, "123-exhigh.mp3"), true)
-	b, err := os.ReadFile(filepath.Join(source.Root, "songs", "personal.txt"))
-	if err != nil || string(b) != "keep" {
-		t.Fatal("changed personal file")
-	}
-}
-
 // If a destination child is occupied during staging, rollback removes only
 // children already published and preserves the file that caused the conflict.
 func TestMoveLayoutPartialPublication(t *testing.T) {

@@ -19,29 +19,16 @@ func cacheDirectory(configured string) (string, error) {
 	return mygo.App.Path(mygo.PathCache)
 }
 
-// Until a legacy conversion commits, continue reading the old song folder
-// and the system's artwork/browsing folders, including after a failed move.
+// cachePaths keeps all managed caches under the selected root.
 func cachePaths(s settings) (cachemove.Layout, error) {
 	root, err := cacheDirectory(s.CacheDir)
 	if err != nil {
 		return cachemove.Layout{}, err
 	}
-	paths := cachemove.Layout{Root: root, Songs: filepath.Join(root, "songs"), Browse: filepath.Join(root, "browse-v1"), Artwork: filepath.Join(root, cachemove.ArtworkDir)}
-	if s.CacheLayout == 0 {
-		if s.CacheDir != "" {
-			paths.Songs = s.CacheDir
-		}
-		system, err := cacheDirectory("")
-		if err != nil {
-			return cachemove.Layout{}, err
-		}
-		paths.Browse, paths.Artwork = filepath.Join(system, "browse-v1"), filepath.Join(system, cachemove.ArtworkDir)
-	}
-	return paths, nil
+	return cachemove.Layout{Root: root, Songs: filepath.Join(root, "songs"), Browse: filepath.Join(root, "browse-v1"), Artwork: filepath.Join(root, cachemove.ArtworkDir)}, nil
 }
 
-// newSongCache follows the committed layout, including a failed legacy
-// conversion whose files still live at their original paths.
+// newSongCache opens songs under the committed cache root.
 func newSongCache(s settings) *player.Cache {
 	paths, err := cachePaths(s)
 	if err != nil {
