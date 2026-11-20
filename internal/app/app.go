@@ -364,6 +364,11 @@ func Run() error {
 		a.settings.applyAppearance()
 		a.npPane = a.lyricsPaneChosen()
 		a.preloadPictures()
+		if runtime.GOOS == "darwin" {
+			// Start Metal's shader and pipeline compilation before the first
+			// spectrum draw, without making the window wait for it.
+			go lyricSpectrumShader()
+		}
 		// Before the window: on Windows it lays out its content as it is
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)

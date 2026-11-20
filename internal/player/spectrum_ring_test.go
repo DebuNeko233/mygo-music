@@ -1,10 +1,41 @@
 package player
 
 import (
+	"fmt"
 	"math"
+	"slices"
 	"testing"
 	"time"
 )
+
+// Entering the detailed display must use already-buffered audio without waiting for more decoding.
+func TestSpectrumDetailAvailableForBufferedAudio(t *testing.T) {
+	for _, rate := range []int{44100, 48000, 192000} {
+		t.Run(fmt.Sprint(rate), func(t *testing.T) {
+			s := newSpectrum(rate)
+			stereo := make([]float32, 2*rate*2)
+			for i := range len(stereo) / 2 {
+				v := float32(0.2 * math.Sin(2*math.Pi*1000*float64(i)/float64(rate)))
+				stereo[2*i], stereo[2*i+1] = v, v
+			}
+			s.feed(0, stereo)
+			m, ok := s.at(int64(rate / 2))
+			if !ok {
+				t.Fatal("the buffered playhead has no measurement")
+			}
+			if peak := slices.Max(m.detail[:]); peak < 0.1 {
+				t.Fatalf("the buffered audio has no detailed spectrum: peak %g", peak)
+			}
+			// Seeking back must replace detailed data as well as the coarse bands.
+			clear(stereo)
+			s.feed(0, stereo)
+			m, ok = s.at(int64(rate / 2))
+			if !ok || slices.Max(m.detail[:]) != 0 {
+				t.Fatal("seeking to silence kept the previous detailed spectrum")
+			}
+		})
+	}
+}
 
 // The spectrum keeps the last seconds decoded, however long the audio: hours
 // in, it measures what plays, forgets what played long ago, and measures again
@@ -71,52 +102,9 @@ func TestSpectrumUnknownLength(t *testing.T) {
 	}
 }
 
-// Until the detailed display is requested, analysis skips its 64 bands and their layout.
-func TestSpectrumDetailIsOnDemand(t *testing.T) {
-	s := newSpectrum(44100)
-	if s.detailEnabled() {
-		t.Fatal("a new spectrum already has detail enabled")
-	}
-	stereo := make([]float32, fftSize*2)
-	s.feed(0, stereo)
-	m, ok := s.at(0)
-	if !ok {
-		t.Fatal("the coarse measurement is missing")
-	}
-	for _, level := range m.detail {
-		if level != 0 {
-			t.Fatal("an unrequested detailed spectrum measured its bands")
-		}
-	}
-	s.enableDetail()
-	if !s.detailEnabled() {
-		t.Fatal("enabling detail did not initialize its layout")
-	}
-	s.feed(fftSize, stereo)
-	m, ok = s.at(fftSize)
-	if !ok {
-		t.Fatal("the detailed measurement is missing")
-	}
-	for i := range fftSize {
-		stereo[2*i], stereo[2*i+1] = 0.5, 0.5
-	}
-	s.feed(2*fftSize, stereo)
-	m, ok = s.at(2 * fftSize)
-	if !ok {
-		t.Fatal("the enabled measurement is missing")
-	}
-	for _, level := range m.detail {
-		if level != 0 {
-			return
-		}
-	}
-	t.Fatal("enabling detail did not measure the 64 bands")
-}
-
 // The detailed spectrum resolves two tones that occupy the same original band.
 func TestSpectrumDetailSeparatesTones(t *testing.T) {
 	s := newSpectrum(44100)
-	s.enableDetail()
 	peak := func(bands []float32) int {
 		best := 0
 		for i, v := range bands {
@@ -150,7 +138,6 @@ func TestSpectrumDetailSeparatesTones(t *testing.T) {
 func TestSpectrumDetailTilt(t *testing.T) {
 	const rate = 44100
 	s := newSpectrum(rate)
-	s.enableDetail()
 	center := func(i int) float64 {
 		from, to := s.detail[i]*rate/fftSize, s.detail[i+1]*rate/fftSize
 		return math.Sqrt((700+from)*(700+to)) - 700
@@ -181,20 +168,14 @@ func TestSpectrumDetailTilt(t *testing.T) {
 	t.Fatal("the detailed spectrum did not reach 1 kHz")
 }
 
-func BenchmarkSpectrumDetailOff(b *testing.B) {
+func BenchmarkSpectrumAnalysis(b *testing.B) {
 	s := newSpectrum(44100)
 	s.acc = s.acc[:fftSize]
-	b.ReportAllocs()
-	for b.Loop() {
-		s.analyze(0)
+	for i := range s.acc {
+		s.acc[i] = float32(0.2 * math.Sin(2*math.Pi*1000*float64(i)/44100))
 	}
-}
-
-func BenchmarkSpectrumDetailOn(b *testing.B) {
-	s := newSpectrum(44100)
-	s.enableDetail()
-	s.acc = s.acc[:fftSize]
 	b.ReportAllocs()
+	b.ResetTimer()
 	for b.Loop() {
 		s.analyze(0)
 	}
