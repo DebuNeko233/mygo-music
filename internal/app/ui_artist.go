@@ -299,17 +299,21 @@ func (a *app) loadEvents(id int64) {
 	if d.profile == nil || d.profile.AccountID == 0 || d.eventsPage.loading {
 		return
 	}
-	d.eventsPage.loading, d.eventsPage.err = true, ""
+	d.eventsPage.loading, d.eventsPage.err, d.eventsPage.failure = true, "", nil
 	uid, before := d.profile.AccountID, d.eventsBefore
 	if !d.eventsPage.loaded {
 		before = -1
 	}
+	fetch, gen := accountEvents, a.homeGen
 	go func() {
-		events, last, more, err := accountEvents(uid, eventsPage, before)
+		events, last, more, err := fetch(uid, eventsPage, before)
 		a.post(func() {
+			if a.homeGen != gen || a.artists.peek(id) != d {
+				return
+			}
 			d.eventsPage.loading = false
 			if err != nil {
-				d.eventsPage.err = "动态加载失败"
+				d.eventsPage.err, d.eventsPage.failure = "动态加载失败", err
 				return
 			}
 			// The first page replaces what an earlier one kept, and the

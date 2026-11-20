@@ -216,6 +216,10 @@ func (a *app) failedLoads(manual bool) bool {
 				if !d.albumsPage.loading && d.albumsPage.err != "" && retry(d.albumsPage.failure) {
 					return true
 				}
+			case artistEvents:
+				if !d.eventsPage.loading && d.eventsPage.err != "" && retry(d.eventsPage.failure) {
+					return true
+				}
 			}
 		}
 	case pageSearch:
@@ -274,6 +278,9 @@ func (a *app) retryLoads(manual bool) {
 			}
 			if d.albumsPage.err != "" && a.artistTab == artistAlbums && retry(d.albumsPage.failure) {
 				a.loadAlbums(a.route.id)
+			}
+			if d.eventsPage.err != "" && a.artistTab == artistEvents && retry(d.eventsPage.failure) {
+				a.loadEvents(a.route.id)
 			}
 		}
 	case pageSearch:
@@ -434,7 +441,7 @@ func (a *app) recoveryBusy() bool {
 		return d != nil && d.loading
 	case pageArtist:
 		d := a.artists.get(a.route.id)
-		return d != nil && (d.loading || a.artistTab == artistLatest && d.latestLoading || a.artistTab == artistAlbums && d.albumsPage.loading)
+		return d != nil && (d.loading || a.artistTab == artistLatest && d.latestLoading || a.artistTab == artistAlbums && d.albumsPage.loading || a.artistTab == artistEvents && d.eventsPage.loading)
 	case pageSearch:
 		d := a.searches.get(a.route)
 		return d != nil && d.page.loading
