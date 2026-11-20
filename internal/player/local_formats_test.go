@@ -188,6 +188,55 @@ func TestLocalWAVMatchesPCMSamples(t *testing.T) {
 	}
 }
 
+// WAVE_FORMAT_EXTENSIBLE PCM scales 24 valid bits in a 32-bit container by
+// their valid range. Ignoring wValidBitsPerSample used to attenuate 0.5 to 1/512.
+func TestLocalWAVExtensible24In32(t *testing.T) {
+	var pcm bytes.Buffer
+	for _, sample := range []int32{0x40000000, 0x7fffff00, -0x40000000, -0x80000000} {
+		binary.Write(&pcm, binary.LittleEndian, sample)
+		binary.Write(&pcm, binary.LittleEndian, sample)
+	}
+	var b bytes.Buffer
+	b.WriteString("RIFF")
+	binary.Write(&b, binary.LittleEndian, uint32(4+8+40+8+pcm.Len()))
+	b.WriteString("WAVEfmt ")
+	binary.Write(&b, binary.LittleEndian, uint32(40))
+	binary.Write(&b, binary.LittleEndian, uint16(0xfffe))
+	binary.Write(&b, binary.LittleEndian, uint16(2))
+	binary.Write(&b, binary.LittleEndian, uint32(48000))
+	binary.Write(&b, binary.LittleEndian, uint32(48000*8))
+	binary.Write(&b, binary.LittleEndian, uint16(8))
+	binary.Write(&b, binary.LittleEndian, uint16(32))
+	binary.Write(&b, binary.LittleEndian, uint16(22))
+	binary.Write(&b, binary.LittleEndian, uint16(24))
+	binary.Write(&b, binary.LittleEndian, uint32(3))
+	b.Write([]byte{1, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xaa, 0, 0x38, 0x9b, 0x71})
+	b.WriteString("data")
+	binary.Write(&b, binary.LittleEndian, uint32(pcm.Len()))
+	b.Write(pcm.Bytes())
+
+	path := filepath.Join(t.TempDir(), "local.wav")
+	if err := os.WriteFile(path, b.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, s, err := openLocal(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	got := make([]float32, 8)
+	n, err := s.Read(got)
+	if n != len(got) || err != nil {
+		t.Fatal(n, err)
+	}
+	want := []float32{0.5, 0.5, float32(0x7fffff) / (1 << 23), float32(0x7fffff) / (1 << 23), -0.5, -0.5, -1, -1}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sample %d = %v, want %v; all samples %v", i, got[i], want[i], got)
+		}
+	}
+}
+
 // Decoder wrappers propagate sample-accurate seeks for the framework's AAC decoders.
 func TestLocalDecoderStreamMatchesDirectDecoder(t *testing.T) {
 	for _, name := range []string{"seek.aac", "seek.m4a", "seek-alac.m4a"} {
