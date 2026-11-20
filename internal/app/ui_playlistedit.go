@@ -250,11 +250,15 @@ func (a *app) deleteChosen() {
 		}
 		a.show(r)
 	}
+	gen := a.homeGen
 	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := deletePlaylist(id)
 		a.post(func() {
 			finishEdit()
+			if a.homeGen != gen {
+				return
+			}
 			defer a.persistLibrary()
 			if err != nil {
 				a.mine = slices.Insert(a.mine, min(i, len(a.mine)), pl)
