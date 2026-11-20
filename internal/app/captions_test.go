@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"slices"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -14,6 +17,78 @@ import (
 )
 
 const sec = time.Second
+
+func isolateTranscripts(t *testing.T) {
+	t.Helper()
+	oldCache, err := mygo.App.Path(mygo.PathCache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mygo.App.SetPath(mygo.PathCache, t.TempDir())
+	t.Cleanup(func() { mygo.App.SetPath(mygo.PathCache, oldCache) })
+}
+
+// A late save still writes its own episode and cannot overwrite newer captions for that episode.
+func TestTranscriptSavesOutOfOrder(t *testing.T) {
+	isolateTranscripts(t)
+	a := &app{}
+	snapshot := func(program int64, end time.Duration) func() {
+		a.captions.program = program
+		a.captions.tr = &transcript{Model: speech.ModelName, Spans: []span{{0, end}}}
+		write := a.transcriptWrite()
+		if write == nil {
+			t.Fatal("no transcript write")
+		}
+		return write
+	}
+	old := snapshot(1, sec)
+	first := snapshot(1, 2*sec)
+	second := snapshot(2, 3*sec)
+	second()
+	first()
+	old()
+
+	for program, end := range map[int64]time.Duration{1: 2 * sec, 2: 3 * sec} {
+		path, err := transcriptPath(program)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got transcript
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(got.Spans, []span{{0, end}}) {
+			t.Errorf("episode %d saved %v, want coverage through %v", program, got.Spans, end)
+		}
+	}
+}
+
+// Returning to an episode before its save lands loads the latest queued captions.
+func TestTranscriptReloadWhileSavePending(t *testing.T) {
+	isolateTranscripts(t)
+	a := newTestApp()
+	posts := testPosts(a)
+	a.pl.Cue([]netease.Track{{ID: 5, ProgramID: 42}})
+	a.captions.program = 42
+	latest := &transcript{Model: speech.ModelName, Spans: []span{{0, sec}}}
+	a.captions.tr = latest
+	write := a.transcriptWrite()
+	if write == nil {
+		t.Fatal("no transcript write")
+	}
+	defer write()
+
+	a.captions.tr = nil
+	a.loadTranscript(42)
+	refreshPost(t, posts)
+	if got := a.captions.tr; got == nil || !slices.Equal(got.Spans, latest.Spans) {
+		t.Fatalf("loaded %+v, want pending coverage %v", got, latest.Spans)
+	}
+}
 
 // Transcribing starts where the listener is, or past what is written down
 // there already, and stops where what was written down before begins.
