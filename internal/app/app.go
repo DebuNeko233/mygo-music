@@ -177,8 +177,6 @@ type app struct {
 	fmSynced      string // the radio fmMode was last taken from
 	radioStarting string // the radio asked for its first songs, or ""
 
-	scrub            float64
-	scrubbing        bool
 	volume           float64
 	volumeOpen       bool // the volume popover of the player bar shows
 	mutedFrom        float64

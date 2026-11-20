@@ -23,7 +23,7 @@ func TestMoveLayoutPreservesUnmanagedTargetContent(t *testing.T) {
 				}
 			}
 			saved := false
-			warning, err := MoveLayout(source, target, migrate, false, func() error { saved = true; return nil })
+			warning, err := MoveLayoutWithOptions(source, target, migrate, false, func() error { saved = true; return nil }, Options{})
 			if err != nil || warning != nil || !saved {
 				t.Fatal("unrelated files blocked relocation", warning, err)
 			}

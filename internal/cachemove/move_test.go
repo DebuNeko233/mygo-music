@@ -55,7 +55,7 @@ func TestMove(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved := false
-	warning, err := MoveLayout(layout(source), target, true, false, func() error {
+	warning, err := MoveLayoutWithOptions(layout(source), target, true, false, func() error {
 		exists(t, filepath.Join(layout(source).Songs, "123-exhigh.mp3"), true)
 		data, err := os.ReadFile(filepath.Join(layout(target).Songs, "123-exhigh.mp3"))
 		if err != nil || string(data) != "music" {
@@ -63,7 +63,7 @@ func TestMove(t *testing.T) {
 		}
 		saved = true
 		return nil
-	})
+	}, Options{})
 	if err != nil || warning != nil || !saved {
 		t.Fatalf("move: %v, %v, saved=%v", err, warning, saved)
 	}
@@ -133,7 +133,7 @@ func TestMoveWithoutMigration(t *testing.T) {
 	root := t.TempDir()
 	source, target := filepath.Join(root, "old"), filepath.Join(root, "new")
 	song(t, layout(source).Songs)
-	warning, err := MoveLayout(layout(source), target, false, false, func() error { return nil })
+	warning, err := MoveLayoutWithOptions(layout(source), target, false, false, func() error { return nil }, Options{})
 	if err != nil || warning != nil {
 		t.Fatalf("move: %v %v", err, warning)
 	}
@@ -156,7 +156,7 @@ func TestMoveRejectsUnsafeTargets(t *testing.T) {
 	write(t, blocked, []byte("not a directory"))
 	for _, target := range []string{source, filepath.Join(layout(source).Songs, "child"), root, occupied, blocked, filepath.Join(blocked, "child"), "relative"} {
 		t.Run(filepath.Base(target), func(t *testing.T) {
-			if _, err := MoveLayout(layout(source), target, true, false, func() error { t.Fatal("saved invalid path"); return nil }); err == nil {
+			if _, err := MoveLayoutWithOptions(layout(source), target, true, false, func() error { t.Fatal("saved invalid path"); return nil }, Options{}); err == nil {
 				t.Fatal("accepted unsafe target")
 			}
 			exists(t, filepath.Join(layout(source).Songs, "123-exhigh.mp3"), true)
@@ -174,7 +174,7 @@ func TestMoveSkipsIncompleteSongs(t *testing.T) {
 	source, target := filepath.Join(root, "old"), filepath.Join(root, "new")
 	song(t, layout(source).Songs)
 	write(t, filepath.Join(layout(source).Songs, "123-exhigh.mp3"), []byte("shorter than metadata"))
-	warning, err := MoveLayout(layout(source), target, true, false, func() error { return nil })
+	warning, err := MoveLayoutWithOptions(layout(source), target, true, false, func() error { return nil }, Options{})
 	if err != nil || warning != nil {
 		t.Fatalf("move: %v %v", err, warning)
 	}
@@ -198,7 +198,7 @@ func TestMoveAcrossVolumes(t *testing.T) {
 	}
 	t.Cleanup(func() { os.RemoveAll(target) })
 	song(t, layout(source).Songs)
-	warning, err := MoveLayout(layout(source), target, true, false, func() error { return nil })
+	warning, err := MoveLayoutWithOptions(layout(source), target, true, false, func() error { return nil }, Options{})
 	if err != nil || warning != nil {
 		t.Fatalf("cross-volume move: %v %v", err, warning)
 	}

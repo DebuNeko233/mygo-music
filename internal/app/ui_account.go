@@ -38,13 +38,9 @@ var clearLoginSession = netease.ClearSession
 var logoutSession = netease.Logout
 var loginIdentity = netease.SessionIdentity
 
-// saveLogin keeps a successful login usable in this process, but does not
-// report its credentials as saved when the keychain refuses them.
-func (a *app) saveLogin(gen int, onSaved func()) {
-	a.saveLoginWith(saveLoginSession, gen, onSaved)
-}
-
-// saveLoginWith takes save before its goroutine starts, away from global test setup.
+// saveLoginWith keeps a successful login usable in this process, but does not
+// report its credentials as saved when the keychain refuses them. The caller
+// takes save before starting the goroutine, away from global test setup.
 func (a *app) saveLoginWith(save func() error, gen int, onSaved func()) {
 	if err := save(); err != nil {
 		a.post(func() {

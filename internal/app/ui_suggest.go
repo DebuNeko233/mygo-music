@@ -18,8 +18,6 @@ const suggestDelay = 220 * time.Millisecond
 type suggestState struct {
 	query    string // what they are for
 	items    []suggestion
-	loading  bool
-	failed   bool
 	playlist playlistSuggestState
 	timer    *time.Timer // waiting for typing to pause
 	gen      uint64      // which request the query is waiting for
@@ -41,18 +39,18 @@ func (a *app) suggest(q string) {
 		return
 	}
 	a.dismissSuggestions()
-	s.query, s.loading = q, true
+	s.query = q
 	s.gen++
 	gen := s.gen
 	fetch := searchSuggest
 	s.timer = time.AfterFunc(suggestDelay, func() {
-		res, err := fetch(q)
+		res, _ := fetch(q)
 		a.post(func() {
 			// Typed on, or searched since.
 			if q != s.query || gen != s.gen {
 				return
 			}
-			s.timer, s.loading, s.failed = nil, false, err != nil
+			s.timer = nil
 			s.items = suggestionList(res)
 		})
 	})

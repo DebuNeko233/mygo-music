@@ -404,12 +404,6 @@ func (p *Player) UpdateLocalTracks(tracks []netease.Track) {
 	}
 }
 
-// PlayShuffled starts a whole list with any song at its head. Explicitly
-// choosing a song through PlayQueue still keeps that song first.
-func (p *Player) PlayShuffled(tracks []netease.Track) {
-	p.PlayShuffledFrom(tracks, PlaySource{})
-}
-
 // PlayShuffledFrom shuffles a queue and carries its source into play logs.
 func (p *Player) PlayShuffledFrom(tracks []netease.Track, source PlaySource) {
 	if len(tracks) == 0 {
@@ -673,9 +667,8 @@ func (p *Player) Downloaded() (float64, bool) {
 	return dl.Progress(), true
 }
 
-// Audio is the current track's sound decoded apart from what plays, as
-// OpenAudio opens it: interleaved stereo at its rate, read as it
-// downloads.
+// Audio is the current track's sound decoded apart from what plays:
+// interleaved stereo at its rate, read as it downloads.
 type Audio interface {
 	SampleRate() int
 	Channels() int
@@ -685,23 +678,10 @@ type Audio interface {
 	Close() error
 }
 
-// OpenAudio opens the current track's sound again, for decoding apart
-// from what plays, as for transcribing an episode. It reads the same
-// download, waiting for what has not come in, and fails once the track
-// changes. It works on any goroutine once opened; close it when done.
-func (p *Player) OpenAudio() (Audio, error) {
-	open, err := p.AudioOpener()
-	if err != nil {
-		return nil, err
-	}
-	return open()
-}
-
-// AudioOpener returns the current track's sound as an opener, as OpenAudio
-// returns it open, for a caller that opens it on another goroutine: opening
-// reads the song's first bytes to find how to decode them, which waits for
-// the network, while this reads only what the caller's goroutine may, as the
-// goroutine that draws does.
+// AudioOpener returns a function that opens the current track's sound again
+// for decoding apart from playback, as for transcribing an episode. Call it
+// on a worker: opening reads the first bytes and may wait for the network.
+// The audio shares the download and must be closed when done.
 func (p *Player) AudioOpener() (open func() (Audio, error), err error) {
 	if p.stream == nil || p.track == nil {
 		return nil, errors.New("player: nothing loaded")

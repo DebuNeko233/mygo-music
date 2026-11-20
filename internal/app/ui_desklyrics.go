@@ -30,45 +30,11 @@ type deskLyrics struct {
 	shaped string // what the window is laid out as, as the settings last made it
 	shown  bool   // whether the window was shown at its last update
 	hot    bool   // the pointer over the padlock of a locked window
-	resize *lyricResize
 }
 
 // lyricPoll is how often a locked window looks for its padlock: it takes no
 // pointer elsewhere, so it hears no pointer arriving.
 const lyricPoll = 60 * time.Millisecond
-
-// lyricResize remembers where a transparent resize edge was grabbed. Windows
-// has no native resize edge without a thick frame, whose DWM shadow it draws.
-type lyricResize struct {
-	bounds        mygo.Rectangle
-	x, y          float32 // screen coordinates at grab
-	left, top     bool
-	right, bottom bool
-}
-
-// moved resizes from the edges held, never smaller than the words allow.
-// x, y are the pointer's current screen coordinates.
-func (r *lyricResize) moved(x, y float32, minW, minH int) mygo.Rectangle {
-	b := r.bounds
-	dx, dy := int(x-r.x), int(y-r.y)
-	if r.right {
-		b.Width = max(minW, b.Width+dx)
-	}
-	if r.bottom {
-		b.Height = max(minH, b.Height+dy)
-	}
-	if r.left {
-		w := max(minW, b.Width-dx)
-		b.X += b.Width - w
-		b.Width = w
-	}
-	if r.top {
-		h := max(minH, b.Height-dy)
-		b.Y += b.Height - h
-		b.Height = h
-	}
-	return b
-}
 
 // iconUnlock is the open padlock, drawn as paths rather than assembled from
 // boxes, so its arm stays round and its gap clear at every size.
@@ -219,7 +185,6 @@ func newDeskLyrics(a *app) *deskLyrics {
 		Height:        int(h),
 		Content:       ui.View(d.view),
 	})
-	// No native frame: resizeEdges supplies the invisible resizing edges.
 	clearFrame(d.win)
 	// Escape and the like close a panel: these lyrics stay, until the
 	// listener turns them off or the app quits.
@@ -624,72 +589,5 @@ func (d *deskLyrics) view(c *ui.Context) {
 	}
 	if pl.Playing() || !s.LyricLocked {
 		c.After(max(wait, 20*time.Millisecond))
-	}
-}
-
-// resizeEdges gives the undecorated window invisible edges and corners to
-// resize from. They do not cover any buttons, which sit further inside it.
-func (d *deskLyrics) resizeEdges(c *ui.Context) {
-	const edge = 5.0
-	for _, side := range []struct {
-		key                      string
-		left, top, right, bottom bool
-		cursor                   ui.Cursor
-	}{
-		{"top", false, true, false, false, ui.CursorResizeN},
-		{"bottom", false, false, false, true, ui.CursorResizeS},
-		{"left", true, false, false, false, ui.CursorResizeW},
-		{"right", false, false, true, false, ui.CursorResizeE},
-		{"topleft", true, true, false, false, ui.CursorResizeNWSE},
-		{"bottomright", false, false, true, true, ui.CursorResizeNWSE},
-		{"topright", false, true, true, false, ui.CursorResizeNESW},
-		{"bottomleft", true, false, false, true, ui.CursorResizeNESW},
-	} {
-		e := ui.Box(c.Key("resize-" + side.key)).Absolute().Cursor(side.cursor)
-		if side.left {
-			e.Left(0).Width(edge)
-		}
-		if side.right {
-			e.Right(0).Width(edge)
-		}
-		if side.top {
-			e.Top(0).Height(edge)
-		}
-		if side.bottom {
-			e.Bottom(0).Height(edge)
-		}
-		if !side.left && !side.right {
-			e.Left(edge).Right(edge)
-		}
-		if !side.top && !side.bottom {
-			e.Top(edge).Bottom(edge)
-		}
-		side := side
-		e.HandleInput(func(ev ui.InputEvent) bool {
-			switch ev.Kind {
-			case ui.InputPointerDown:
-				if ev.Button != 0 || d.win == nil {
-					return false
-				}
-				b := d.win.Bounds()
-				pt := mygo.Screen.CursorScreenPoint()
-				d.resize = &lyricResize{bounds: b, x: float32(pt.X), y: float32(pt.Y),
-					left: side.left, top: side.top, right: side.right, bottom: side.bottom}
-				return true
-			case ui.InputPointerMove:
-				if d.resize == nil {
-					return false
-				}
-				r := d.resize
-				w, h := lyricWindowSize(d.a.settings.LyricSize, d.a.settings.LyricLines)
-				pt := mygo.Screen.CursorScreenPoint()
-				d.win.SetBounds(r.moved(float32(pt.X), float32(pt.Y), int(w), int(h)))
-				return true
-			case ui.InputPointerUp:
-				d.resize = nil
-				return true
-			}
-			return false
-		})
 	}
 }

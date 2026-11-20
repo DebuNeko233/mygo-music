@@ -75,7 +75,7 @@ func TestLoginSaveFailureStaysVisible(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.login = loginState{open: true, gen: 1, finished: true}
-	go a.saveLogin(1, func() {
+	go a.saveLoginWith(saveLoginSession, 1, func() {
 		a.login.open = false
 	})
 	wait(t, posts, "the failed session save")()
@@ -92,7 +92,7 @@ func TestLoginSaveSuccessClosesDialog(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.login = loginState{open: true, gen: 1}
-	go a.saveLogin(1, func() {
+	go a.saveLoginWith(saveLoginSession, 1, func() {
 		a.login.finished = true
 		a.login.open = false
 	})

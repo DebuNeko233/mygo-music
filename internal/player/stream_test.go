@@ -64,7 +64,7 @@ func TestMP3SeekIsClean(t *testing.T) {
 	}
 	ref := decodeAll(t, b)
 	dl := downloaded(b)
-	s, err := openMP3Stream(dl, int64(len(ref)/2)*1000/44100)
+	s, err := openMP3StreamSpectrum(dl, int64(len(ref)/2)*1000/44100, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -707,7 +707,7 @@ func TestMP3SeekBackToTheStart(t *testing.T) {
 	dl, _ := stalled(t, b, func(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b))
 	})
-	s, err := openMP3Stream(dl, int64(len(ref)/2)*1000/44100)
+	s, err := openMP3StreamSpectrum(dl, int64(len(ref)/2)*1000/44100, true)
 	if err != nil {
 		t.Fatal(err)
 	}
