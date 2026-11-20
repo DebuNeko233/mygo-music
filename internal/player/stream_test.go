@@ -366,6 +366,9 @@ func TestSharedStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, spec := shared.source(); spec != nil {
+		t.Error("a shared decoding-only stream allocated a spectrum")
+	}
 	shared.Close()
 	if got := readAll(playing); len(got) != len(ref) || maxDiff(got, ref) != 0 {
 		t.Errorf("played %d of %d samples after the second stream closed", len(got), len(ref))

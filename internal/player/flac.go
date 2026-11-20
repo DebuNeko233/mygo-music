@@ -41,6 +41,10 @@ type flacStream struct {
 }
 
 func openFLACStream(dl *download) (*flacStream, error) {
+	return openFLACStreamSpectrum(dl, true)
+}
+
+func openFLACStreamSpectrum(dl *download, measure bool) (*flacStream, error) {
 	start, err := flacDataStart(dl)
 	if err != nil {
 		return nil, err
@@ -54,7 +58,9 @@ func openFLACStream(dl *download) (*flacStream, error) {
 	if s.info.NChannels == 0 || s.info.SampleRate == 0 {
 		return nil, errors.New("flac: no stream info")
 	}
-	s.spec = newSpectrum(int(s.info.SampleRate))
+	if measure {
+		s.spec = newSpectrum(int(s.info.SampleRate))
+	}
 	s.readFrom = downloadReader{d: dl, pos: start}
 	s.r = bufio.NewReaderSize(&s.readFrom, 64<<10)
 	return s, nil
