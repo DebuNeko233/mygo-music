@@ -172,6 +172,44 @@ func lyricWindowLines(lines []lyrics.Line, cur int, count int) (shown []lyrics.L
 	return lines[start:min(len(lines), start+n)], start
 }
 
+// lyricWindowArea returns the work area where the saved window has most of
+// its area, so its screen coordinates select the display, not the primary one.
+// A window wholly off the connected displays belongs to the nearest display.
+func lyricWindowArea(x, y int, w, h float32, displays []mygo.Display) mygo.Rectangle {
+	if x == 0 && y == 0 || len(displays) == 0 {
+		if len(displays) > 0 {
+			return displays[0].WorkArea
+		}
+		return mygo.Rectangle{}
+	}
+	bounds := mygo.Rectangle{X: x, Y: y, Width: int(w), Height: int(h)}
+	best, bestArea := 0, -1
+	for i, d := range displays {
+		a := d.WorkArea
+		ow := min(a.X+a.Width, bounds.X+bounds.Width) - max(a.X, bounds.X)
+		oh := min(a.Y+a.Height, bounds.Y+bounds.Height) - max(a.Y, bounds.Y)
+		if area := max(ow, 0) * max(oh, 0); area > bestArea {
+			best, bestArea = i, area
+		}
+	}
+	if bestArea > 0 {
+		return displays[best].WorkArea
+	}
+	// MyGo's DisplayNearestPoint matches an edge-inclusive point to a display;
+	// use the saved window's centre once its display has been removed.
+	cx, cy := x+int(w)/2, y+int(h)/2
+	bestDist := -1
+	for i, d := range displays {
+		b := d.Bounds
+		dx := max(b.X-cx, 0, cx-(b.X+b.Width))
+		dy := max(b.Y-cy, 0, cy-(b.Y+b.Height))
+		if dist := dx*dx + dy*dy; bestDist < 0 || dist < bestDist {
+			best, bestDist = i, dist
+		}
+	}
+	return displays[best].WorkArea
+}
+
 // lyricWindowPlace centres a newly opened window, its centre three quarters
 // of the way down the screen's work area. It keeps the window on that screen.
 func lyricWindowPlace(x, y int, w, h float32, area mygo.Rectangle) (int, int) {
@@ -201,7 +239,7 @@ func newDeskLyrics(a *app) *deskLyrics {
 	if w == 0 || h == 0 {
 		w, h = lyricWindowSize(s.LyricSize, s.LyricLines)
 	}
-	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
+	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, lyricWindowArea(s.LyricX, s.LyricY, w, h, mygo.Screen.Displays()))
 	d.win = mygo.NewWindow(mygo.WindowOptions{
 		Title:  mygo.App.Name() + "桌面歌词",
 		Hidden: true,
@@ -268,11 +306,7 @@ func (d *deskLyrics) apply() {
 		if w == 0 || h == 0 {
 			w, h = needW, needH
 		}
-		x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
-		// Use saved position if available, otherwise center on first open
-		if s.LyricX == 0 && s.LyricY == 0 {
-			x, y = lyricWindowPlace(0, 0, w, h, mygo.Screen.PrimaryDisplay().WorkArea)
-		}
+		x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, lyricWindowArea(s.LyricX, s.LyricY, w, h, mygo.Screen.Displays()))
 		d.win.SetMinimumSize(int(needW), int(needH))
 		d.win.SetBounds(mygo.Rectangle{X: x, Y: y, Width: int(w), Height: int(h)})
 		d.win.SetHasShadow(false)
