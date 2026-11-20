@@ -38,23 +38,33 @@ var clearLoginSession = netease.ClearSession
 var logoutSession = netease.Logout
 var loginIdentity = netease.SessionIdentity
 
-// saveLoginWith keeps a successful login usable in this process, but does not
-// report its credentials as saved when the keychain refuses them. The caller
-// takes save before starting the goroutine, away from global test setup.
-func (a *app) saveLoginWith(save func() error, gen int, onSaved func()) {
-	if err := save(); err != nil {
+// saveLogin keeps a successful login usable in this process and reports
+// persistence failures in the matching dialog or on the main window.
+func (a *app) saveLogin(onSaved func()) {
+	save := saveLoginSession
+	gen, homeGen := a.login.gen, a.homeGen
+	go func() {
+		err := save()
+		if err == nil && onSaved == nil {
+			return
+		}
 		a.post(func() {
-			if gen != a.login.gen {
+			dialog := onSaved != nil && a.login.open && gen == a.login.gen
+			if err == nil {
+				if dialog {
+					onSaved()
+				}
 				return
 			}
-			a.login.finished = false
-			a.login.err = "登录凭据保存失败，本次登录仅在应用运行期间有效"
+			const message = "登录凭据保存失败，本次登录仅在应用运行期间有效"
+			if dialog {
+				a.login.finished = false
+				a.login.err = message
+			} else if homeGen == a.homeGen {
+				a.toast = message
+			}
 		})
-		return
-	}
-	if onSaved != nil {
-		a.post(onSaved)
-	}
+	}()
 }
 
 // boot signs in with the session in the keychain, if any, then loads the
@@ -133,7 +143,7 @@ func (a *app) confirmAccount() {
 			} else {
 				a.profile = prof
 			}
-			go a.saveLoginWith(saveLoginSession, a.login.gen, nil)
+			a.saveLogin(nil)
 			a.bindOfflineLyrics()
 			if identity != "" {
 				a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
@@ -259,11 +269,9 @@ func (a *app) checkLogin(gen int, key string, attempt qrLoginAttempt) bool {
 			l.status = status.Code
 			a.discardAccount()
 			a.signedIn(status.Profile)
-			go a.saveLoginWith(saveLoginSession, gen, func() {
-				if gen == a.login.gen && a.login.open {
-					a.login.finished = true
-					a.closeLoginSoon(gen)
-				}
+			a.saveLogin(func() {
+				a.login.finished = true
+				a.closeLoginSoon(gen)
 			})
 			if status.Profile == nil {
 				a.recovery.accountPending = true
@@ -282,7 +290,7 @@ func (a *app) checkLogin(gen int, key string, attempt qrLoginAttempt) bool {
 				l.err = "登录失败，请稍后再试"
 			}
 		}
-		done <- l.status == netease.QRExpired || l.finished || l.err != ""
+		done <- l.status == netease.QRExpired || l.status == netease.QRConfirmed || l.err != ""
 	})
 	return <-done
 }

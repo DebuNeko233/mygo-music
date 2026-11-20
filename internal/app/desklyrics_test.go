@@ -55,6 +55,32 @@ func TestLyricWindowLinesFollowTheLineSung(t *testing.T) {
 // screen; a remembered one stays on the screen when its display has changed.
 func TestLyricWindowStaysOnScreen(t *testing.T) {
 	area := mygo.Rectangle{X: 0, Y: 25, Width: 1440, Height: 875}
+	displays := []mygo.Display{
+		{Primary: true, Bounds: mygo.Rectangle{Width: 1440, Height: 900}, WorkArea: area},
+		{Bounds: mygo.Rectangle{X: 2200, Width: 1920, Height: 1080}, WorkArea: mygo.Rectangle{X: 2200, Width: 1920, Height: 1040}},
+	}
+	secondary := displays[1].WorkArea
+
+	// A saved window on a secondary display must not be clamped into the
+	// primary display when the app reopens or the display configuration changes.
+	if got := lyricWindowArea(2200, 400, 840, 172, displays); got != secondary {
+		t.Errorf("secondary work area: %+v, want %+v", got, secondary)
+	}
+	if x, y := lyricWindowPlace(2200, 400, 840, 172, secondary); x != 2200 || y != 400 {
+		t.Errorf("secondary position: %d, %d", x, y)
+	}
+	// Keep the window within its secondary display, including near its edge.
+	if x, y := lyricWindowPlace(3300, 500, 840, 172, secondary); x != 3280 || y != 500 {
+		t.Errorf("secondary right edge: %d, %d", x, y)
+	}
+	// With that display removed, the saved position is off every display and
+	// falls back to the nearest remaining one.
+	if got := lyricWindowArea(2200, 400, 840, 172, displays[:1]); got != area {
+		t.Errorf("removed display work area: %+v, want %+v", got, area)
+	}
+	if x, y := lyricWindowPlace(2200, 400, 840, 172, area); x != 600 || y != 400 {
+		t.Errorf("removed display position: %d, %d", x, y)
+	}
 
 	if x, y := lyricWindowPlace(0, 0, 840, 172, area); x != 300 || y != area.Y+area.Height*3/4-86 {
 		t.Errorf("never placed: %d, %d", x, y)

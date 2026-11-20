@@ -40,7 +40,6 @@ func (a *app) suggest(q string) {
 	}
 	a.dismissSuggestions()
 	s.query = q
-	s.gen++
 	gen := s.gen
 	fetch := searchSuggest
 	s.timer = time.AfterFunc(suggestDelay, func() {
@@ -61,7 +60,7 @@ func (a *app) dismissSuggestions() {
 	if s.timer != nil {
 		s.timer.Stop()
 	}
-	*s = suggestState{}
+	*s = suggestState{gen: s.gen + 1}
 }
 
 // suggestionList is the first ten suggestions, the kinds in the order

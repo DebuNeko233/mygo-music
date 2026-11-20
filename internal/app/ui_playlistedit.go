@@ -170,12 +170,16 @@ func (a *app) submitName() {
 			return
 		}
 		old := pl.Name
+		uid, gen := a.profile.UserID, a.homeGen
 		a.setPlaylistName(id, name)
 		finishEdit := a.beginLibraryEdit()
 		go func() {
 			err := renamePlaylist(id, name)
 			a.post(func() {
 				finishEdit()
+				if a.listenerID() != uid || a.homeGen != gen {
+					return
+				}
 				defer a.persistLibrary(id)
 				if err != nil {
 					a.setPlaylistName(id, old)
@@ -250,11 +254,15 @@ func (a *app) deleteChosen() {
 		}
 		a.show(r)
 	}
+	gen := a.homeGen
 	finishEdit := a.beginLibraryEdit()
 	go func() {
 		err := deletePlaylist(id)
 		a.post(func() {
 			finishEdit()
+			if a.homeGen != gen {
+				return
+			}
 			defer a.persistLibrary()
 			if err != nil {
 				a.mine = slices.Insert(a.mine, min(i, len(a.mine)), pl)

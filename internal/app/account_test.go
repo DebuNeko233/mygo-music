@@ -75,12 +75,27 @@ func TestLoginSaveFailureStaysVisible(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.login = loginState{open: true, gen: 1, finished: true}
-	go a.saveLoginWith(saveLoginSession, 1, func() {
+	a.saveLogin(func() {
 		a.login.open = false
 	})
 	wait(t, posts, "the failed session save")()
 	if a.login.finished || !a.login.open || a.login.err == "" {
 		t.Fatalf("failed session save reported success: %+v", a.login)
+	}
+}
+
+// A failed save for the current account is visible without a QR dialog.
+func TestLoginSaveFailureWithoutDialogShowsToast(t *testing.T) {
+	save := saveLoginSession
+	t.Cleanup(func() { saveLoginSession = save })
+	saveLoginSession = func() error { return errors.New("keychain unavailable") }
+	a := newTestApp()
+	posts := testPosts(a)
+	a.profile = &netease.Profile{UserID: 1}
+	a.saveLogin(nil)
+	wait(t, posts, "the failed session save")()
+	if a.toast == "" {
+		t.Fatal("the current account's session save failure was hidden")
 	}
 }
 
@@ -92,7 +107,7 @@ func TestLoginSaveSuccessClosesDialog(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.login = loginState{open: true, gen: 1}
-	go a.saveLoginWith(saveLoginSession, 1, func() {
+	a.saveLogin(func() {
 		a.login.finished = true
 		a.login.open = false
 	})

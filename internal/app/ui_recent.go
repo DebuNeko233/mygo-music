@@ -1,7 +1,6 @@
 package app
 
 import (
-	"sync"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -28,21 +27,36 @@ var (
 
 // recentData is what the app has of the listener's recent plays.
 type recentData struct {
-	loading bool
-	shown   bool // whether it has loaded once
-	err     string
-	failure error
-	at      time.Time // when what it holds was asked for
-	songs   []netease.Play
-	// tracks are the songs of songs, as the rows of a list want them, made
-	// as the record comes in: a frame does not copy them all again.
-	tracks []netease.Track
-	// The other kinds of play record, the ones NetEase keeps beside the
-	// songs, the latest first as they are.
+	tabs            [recentTabCount]recentTabState
+	snapshotChecked bool
+	readingSnapshot bool
+	snapshotDirty   bool
+	songs           []netease.Play
+	// The rows use tracks drawn from the record when it arrives.
+	tracks    []netease.Track
 	playlists []netease.Played[netease.Playlist]
 	albums    []netease.Played[netease.AlbumProfile]
 	podcasts  []netease.Played[netease.Podcast]
 	voices    []netease.Played[netease.Voice]
+}
+
+type recentTabState struct {
+	loading bool
+	shown   bool
+	failure error
+	at      time.Time // when the last request finished
+}
+
+func (d *recentData) loading() bool {
+	if d.readingSnapshot {
+		return true
+	}
+	for _, tab := range d.tabs {
+		if tab.loading {
+			return true
+		}
+	}
+	return false
 }
 
 // setSongs takes the songs of the record, and the tracks its rows list.
@@ -62,98 +76,115 @@ type keptRecent struct {
 	Podcasts  []netease.Played[netease.Podcast]
 	Voices    []netease.Played[netease.Voice]
 	At        time.Time
+	Tabs      uint8 // one bit per available tab; legacy snapshots have no mask
 }
 
-// loadRecent asks NetEase what the listener played lately, unless that is
-// already on its way: the songs, which are the page, and the playlists,
-// albums, podcasts and episodes it keeps beside them.
+// loadRecent refreshes the five records concurrently. Each tab can display
+// its own result as soon as it arrives.
 func (a *app) loadRecent() {
 	d := &a.recent
-	if a.profile == nil || d.loading {
+	if a.profile == nil || d.readingSnapshot {
 		return
 	}
-	uid, gen := a.profile.UserID, a.homeGen
-	d.loading = true
-	req := a.cacheRequest("recent")
-	readSnapshot := !d.shown && req.store != nil
-	current := func() bool { return a.profile != nil && a.profile.UserID == uid && a.homeGen == gen }
-	plays, lists, albumsPlayed := recentPlays, recentPlaylists, recentAlbums
-	podcastsPlayed, voicesPlayed := recentPodcasts, recentVoices
-	go func() {
-		if readSnapshot {
-			var kept keptRecent
-			if at := req.read(&kept); !at.IsZero() {
+	if !d.snapshotChecked {
+		d.snapshotChecked = true
+		if req := a.cacheRequest("recent"); req.store != nil {
+			d.readingSnapshot = true
+			gen := a.homeGen
+			go func() {
+				var kept keptRecent
+				at := req.read(&kept)
 				a.post(func() {
-					if !current() || !d.loading || req.store.Epoch() != req.epoch {
+					if a.homeGen != gen {
 						return
 					}
-					d.setSongs(kept.Songs)
-					d.playlists, d.albums = kept.Playlists, kept.Albums
-					d.podcasts, d.voices = kept.Podcasts, kept.Voices
-					d.at, d.shown = kept.At, true
+					d.readingSnapshot = false
+					if !at.IsZero() && a.browseCache == req.store && req.store.Epoch() == req.epoch {
+						d.setSongs(kept.Songs)
+						d.playlists, d.albums = kept.Playlists, kept.Albums
+						d.podcasts, d.voices = kept.Podcasts, kept.Voices
+						for i := range d.tabs {
+							d.tabs[i].shown = kept.Tabs == 0 || kept.Tabs&(1<<i) != 0
+						}
+					}
+					a.loadRecent()
 				})
-			}
+			}()
+			return
 		}
-		var wg sync.WaitGroup
-		var songs []netease.Play
-		var playlists []netease.Played[netease.Playlist]
-		var albums []netease.Played[netease.AlbumProfile]
-		var podcasts []netease.Played[netease.Podcast]
-		var voices []netease.Played[netease.Voice]
-		var songsErr, playlistsErr, albumsErr, podcastsErr, voicesErr error
-		wg.Add(5)
-		go func() { defer wg.Done(); songs, songsErr = plays(recentLimit) }()
-		go func() { defer wg.Done(); playlists, playlistsErr = lists(recentLimit) }()
-		go func() { defer wg.Done(); albums, albumsErr = albumsPlayed(recentLimit) }()
-		go func() { defer wg.Done(); podcasts, podcastsErr = podcastsPlayed(recentLimit) }()
-		go func() { defer wg.Done(); voices, voicesErr = voicesPlayed(recentLimit) }()
-		wg.Wait()
+	}
+	now := a.listsNow()
+	for i, tab := range d.tabs {
+		if !tab.loading && listDue(tab.at, now) {
+			a.loadRecentTab(i)
+		}
+	}
+}
+
+func (a *app) loadRecentTab(tab int) {
+	d := &a.recent
+	if a.profile == nil || d.readingSnapshot || d.tabs[tab].loading {
+		return
+	}
+	switch tab {
+	case recentSongsTab:
+		fetchRecent(a, tab, recentPlays, d.setSongs)
+	case recentPlaylistsTab:
+		fetchRecent(a, tab, recentPlaylists, func(v []netease.Played[netease.Playlist]) { d.playlists = v })
+	case recentAlbumsTab:
+		fetchRecent(a, tab, recentAlbums, func(v []netease.Played[netease.AlbumProfile]) { d.albums = v })
+	case recentPodcastsTab:
+		fetchRecent(a, tab, recentPodcasts, func(v []netease.Played[netease.Podcast]) { d.podcasts = v })
+	case recentVoicesTab:
+		fetchRecent(a, tab, recentVoices, func(v []netease.Played[netease.Voice]) { d.voices = v })
+	}
+}
+
+func fetchRecent[T any](a *app, tab int, fetch func(int) ([]T, error), apply func([]T)) {
+	d := &a.recent
+	d.tabs[tab].loading = true
+	gen, req := a.homeGen, a.cacheRequest("recent")
+	go func() {
+		items, err := fetch(recentLimit)
 		a.post(func() {
-			if !current() {
+			if a.homeGen != gen {
 				return
 			}
-			d.loading = false
-			d.failure = songsErr
-			if songsErr != nil {
-				// What came is kept, and an empty page says why it is empty.
-				if !d.shown {
-					d.err = "最近播放加载失败"
+			state := &d.tabs[tab]
+			state.loading, state.failure, state.at = false, err, a.listsNow()
+			if err == nil {
+				apply(items)
+				state.shown = true
+				d.snapshotDirty = true
+			}
+			// Coalesce the concurrent replies into one snapshot. A failure
+			// preserves any previously available records for that tab.
+			if d.snapshotDirty && !d.loading() {
+				d.snapshotDirty = false
+				if req.store != nil {
+					d.keep(req, state.at)
 				}
-			} else {
-				d.err = ""
-				d.setSongs(songs)
 			}
-			if playlistsErr == nil {
-				d.playlists = playlists
-			}
-			if albumsErr == nil {
-				d.albums = albums
-			}
-			if podcastsErr == nil {
-				d.podcasts = podcasts
-			}
-			if voicesErr == nil {
-				d.voices = voices
-			}
-			d.at, d.shown = a.listsNow(), true
-			req.keep(cacheBytes(keptRecent{
-				Songs:     d.songs,
-				Playlists: d.playlists,
-				Albums:    d.albums,
-				Podcasts:  d.podcasts,
-				Voices:    d.voices,
-				At:        d.at,
-			}))
 		})
 	}()
 }
 
-// freshenRecent loads the records again once they are a while old: the
-// listener may have played something on another device since.
-func (a *app) freshenRecent() {
-	if a.profile != nil && !a.recent.loading && listDue(a.recent.at, a.listsNow()) {
-		a.loadRecent()
+func (d *recentData) keep(req cacheRequest, at time.Time) {
+	var tabs uint8
+	for i, tab := range d.tabs {
+		if tab.shown {
+			tabs |= 1 << i
+		}
 	}
+	req.keep(cacheBytes(keptRecent{
+		Songs:     d.songs,
+		Playlists: d.playlists,
+		Albums:    d.albums,
+		Podcasts:  d.podcasts,
+		Voices:    d.voices,
+		At:        at,
+		Tabs:      tabs,
+	}))
 }
 
 // What the recent page lists, in the order its tabs are in.
@@ -163,6 +194,7 @@ const (
 	recentAlbumsTab
 	recentPodcastsTab
 	recentVoicesTab
+	recentTabCount
 )
 
 var recentTabTitles = [...]string{"歌曲", "歌单", "专辑", "播客", "声音"}
@@ -172,17 +204,22 @@ func (a *app) recentPage(c *ui.Context) {
 		a.centered(c, "登录后查看最近播放", nil)
 		return
 	}
-	a.freshenRecent()
+	a.loadRecent()
 	d := &a.recent
-	if !d.shown {
-		if d.loading {
-			a.trackSkeleton(c, a.pageShimmer(c), false, func(c *ui.Context) { a.recentSkeletonHeader(c) })
+	tab := a.recentTab
+	state := &d.tabs[tab]
+	header := func(c *ui.Context) { a.recentHeader(c) }
+	if !state.shown {
+		if d.readingSnapshot || state.loading {
+			a.trackSkeleton(c, a.pageShimmer(c), false, header)
 			return
 		}
-		a.centered(c, d.err, a.loadRecent)
+		a.scrollPage(c, func() {
+			header(c)
+			a.centered(c, "最近播放加载失败", func() { a.loadRecentTab(tab) })
+		})
 		return
 	}
-	header := func(c *ui.Context) { a.recentHeader(c) }
 	switch a.recentTab {
 	case recentPlaylistsTab:
 		a.scrollPage(c, func() {
@@ -256,11 +293,6 @@ func (a *app) recentHeader(c *ui.Context) {
 		ui.Spacer(c)
 		segmented(c.Key("tab"), &a.recentTab, recentTabTitles[:]...)
 	})
-}
-
-func (a *app) recentSkeletonHeader(c *ui.Context) {
-	a.heading(c, "最近播放", "手机、电脑和网页版上听过的")
-	ui.Text(c, recentTabTitles[recentSongsTab]).FontSize(19).FontWeight(700).LetterSpacing(-0.3).Margin(34, 0, 14, 0)
 }
 
 // voiceRow is an episode the listener played under 声音, which plays when

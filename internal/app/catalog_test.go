@@ -222,35 +222,49 @@ func TestSuggestionOpensPage(t *testing.T) {
 	}
 }
 
-// A slow suggestion response must not replace the results of a newer query.
+// A late response for the first query must not replace the results after typing it again.
 func TestSuggestionIgnoresSupersededResponse(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	oldSearch := searchSuggest
 	defer func() { searchSuggest = oldSearch }()
-	asked := make(chan string, 2)
-	answers := map[string]chan netease.Suggestions{"old": make(chan netease.Suggestions, 1), "new": make(chan netease.Suggestions, 1)}
+	type request struct {
+		query string
+		reply chan netease.Suggestions
+	}
+	asked := make(chan request, 3)
+	stop := make(chan struct{})
+	defer close(stop)
 	searchSuggest = func(q string) (netease.Suggestions, error) {
-		asked <- q
-		return <-answers[q], nil
+		r := request{q, make(chan netease.Suggestions, 1)}
+		asked <- r
+		select {
+		case result := <-r.reply:
+			return result, nil
+		case <-stop:
+			return netease.Suggestions{}, nil
+		}
 	}
-	a.suggest("old")
-	if got := wait(t, asked, "old suggestions"); got != "old" {
-		t.Fatalf("asked for %q", got)
+	ask := func(query string) request {
+		t.Helper()
+		a.suggest(query)
+		r := wait(t, asked, "suggestions for "+query)
+		if r.query != query {
+			t.Fatalf("asked for %q, want %q", r.query, query)
+		}
+		return r
 	}
-	a.suggest("new")
-	if got := wait(t, asked, "new suggestions"); got != "new" {
-		t.Fatalf("asked for %q", got)
-	}
-	answers["new"] <- netease.Suggestions{Songs: []netease.Track{{ID: 2, Name: "new result"}}}
+	first := ask("a")
+	middle := ask("ab")
+	last := ask("a")
+	last.reply <- netease.Suggestions{Songs: []netease.Track{{ID: 2, Name: "new result"}}}
+	refreshPost(t, posts)
+	first.reply <- netease.Suggestions{Songs: []netease.Track{{ID: 1, Name: "old result"}}}
+	refreshPost(t, posts)
+	middle.reply <- netease.Suggestions{}
 	refreshPost(t, posts)
 	if len(a.suggestions.items) != 1 || a.suggestions.items[0].name != "new result" {
-		t.Fatalf("new suggestions = %+v", a.suggestions.items)
-	}
-	answers["old"] <- netease.Suggestions{Songs: []netease.Track{{ID: 1, Name: "old result"}}}
-	refreshPost(t, posts)
-	if len(a.suggestions.items) != 1 || a.suggestions.items[0].name != "new result" {
-		t.Fatalf("old response replaced new suggestions: %+v", a.suggestions.items)
+		t.Fatalf("stale response replaced new suggestions: %+v", a.suggestions.items)
 	}
 }
 

@@ -339,6 +339,30 @@ func TestRenamePlaylist(t *testing.T) {
 	}
 }
 
+// A failed rename from an earlier account epoch must not restore its old
+// name over a different account's playlist with the same ID.
+func TestRenameFailureFromPreviousAccount(t *testing.T) {
+	a := editTestApp()
+	posts := testPosts(a)
+	reply := make(chan error, 1)
+	oldRename := renamePlaylist
+	t.Cleanup(func() { renamePlaylist = oldRename })
+	renamePlaylist = func(int64, string) error { return <-reply }
+
+	a.naming = nameDialog{open: true, rename: 10, name: "A new"}
+	a.submitName()
+	a.profile = &netease.Profile{UserID: 2}
+	a.homeGen++
+	a.resetLibraryFreshness()
+	a.mine[1].Name = "B name"
+	a.playlists[10].Name = "B name"
+	reply <- errors.New("rename failed")
+	refreshPost(t, posts)
+	if a.mine[1].Name != "B name" || a.playlists[10].Name != "B name" {
+		t.Fatalf("previous account's failed rename restored %q and %q", a.mine[1].Name, a.playlists[10].Name)
+	}
+}
+
 // The liked songs can't be renamed: they offer no menu.
 func TestNoRenamingLikedSongs(t *testing.T) {
 	a := editTestApp()
@@ -392,6 +416,51 @@ func TestDeletePlaylist(t *testing.T) {
 	}
 	if a.route.page != pageCharts || len(a.history) != 0 || len(a.forward) != 0 {
 		t.Errorf("on %+v, history %v, forward %v; want the charts with nowhere to go", a.route, a.history, a.forward)
+	}
+}
+
+// A deletion reply from an earlier account neither restores the old playlist
+// nor clears the current account's same-ID cache (UID 1 -> UID 2).
+func TestDeletePlaylistReplyAccountIsolation(t *testing.T) {
+	for _, result := range []struct {
+		name string
+		err  error
+	}{
+		{name: "failure", err: errors.New("offline")},
+		{name: "success"},
+	} {
+		t.Run(result.name, func(t *testing.T) {
+			a := editTestApp()
+			posts := testPosts(a)
+			oldDelete := deletePlaylist
+			t.Cleanup(func() { deletePlaylist = oldDelete })
+			started := make(chan struct{})
+			response := make(chan error, 1)
+			deletePlaylist = func(id int64) error {
+				close(started)
+				return <-response
+			}
+
+			uid := a.profile.UserID
+			gen := a.homeGen
+			a.confirmDelete(a.editable(10))
+			a.deleteChosen()
+			<-started
+			a.profile = &netease.Profile{UserID: 2}
+			a.homeGen++
+			newPlaylist := &netease.Playlist{ID: 10, Name: "新账号歌单"}
+			a.mine = []netease.Playlist{*newPlaylist}
+			a.playlists[10] = newPlaylist
+			response <- result.err
+			refreshPost(t, posts)
+
+			if uid != 1 || a.homeGen != gen+1 || a.profile.UserID != 2 || len(a.mine) != 1 || a.mine[0].ID != 10 || a.mine[0].Name != newPlaylist.Name {
+				t.Fatalf("old delete changed current account: gen %d, UID %d, playlists %+v", a.homeGen, a.profile.UserID, a.mine)
+			}
+			if a.playlists[10] != newPlaylist {
+				t.Fatal("old delete cleared the current account's same-ID cache")
+			}
+		})
 	}
 }
 
