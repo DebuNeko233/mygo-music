@@ -226,9 +226,7 @@ func (a *app) changeLocal(work func(*localCatalog, map[string]struct{}) (bool, s
 				a.local.replace(catalog)
 			}
 			a.local.missing = missing
-			for _, track := range updated {
-				a.pl.UpdateLocalTrack(track)
-			}
+			a.pl.UpdateLocalTracks(updated)
 			a.redrawLocalFolders()
 		})
 	}()

@@ -375,20 +375,29 @@ func (p *Player) queueEdited() {
 	p.sync()
 }
 
-// UpdateLocalTrack keeps the queue display and next load in sync after relinking.
-func (p *Player) UpdateLocalTrack(track netease.Track) {
-	if !track.IsLocal() {
+// UpdateLocalTracks keeps the queue display and next loads in sync after a
+// batch relink. The index replaces one full queue scan per changed song.
+func (p *Player) UpdateLocalTracks(tracks []netease.Track) {
+	updates := make(map[int64]netease.Track, len(tracks))
+	for _, track := range tracks {
+		if track.IsLocal() {
+			updates[track.LocalID] = track
+		}
+	}
+	if len(updates) == 0 {
 		return
 	}
 	changed := false
 	for i := range p.queue {
-		if p.queue[i].LocalID == track.LocalID && !p.queue[i].Temporary {
+		if track, ok := updates[p.queue[i].LocalID]; ok && !p.queue[i].Temporary {
 			p.queue[i] = track
 			changed = true
 		}
 	}
-	if p.track != nil && p.track.LocalID == track.LocalID && !p.track.Temporary {
-		p.track = &track
+	if p.track != nil && !p.track.Temporary {
+		if track, ok := updates[p.track.LocalID]; ok {
+			p.track = &track
+		}
 	}
 	if changed {
 		p.queueRevision++
