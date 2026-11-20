@@ -5,6 +5,7 @@ import (
 	"math/bits"
 	"math/cmplx"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,15 +26,18 @@ const (
 )
 
 type spectrum struct {
-	mu     sync.RWMutex
-	ring   []measured // chunk c in ring[c%len(ring)], if it's still there
-	window [fftSize]float32
-	acc    []float32 // mono samples of the chunk being filled
-	accAt  int64     // its first frame
-	edges  [Bands + 1]int
-	detail [DetailBands + 1]float64
-	tilt   [DetailBands]float64
-	fft    [fftSize]complex128
+	mu       sync.RWMutex
+	ring     []measured // chunk c in ring[c%len(ring)], if it's still there
+	window   [fftSize]float32
+	acc      []float32 // mono samples of the chunk being filled
+	accAt    int64     // its first frame
+	edges    [Bands + 1]int
+	detail   [DetailBands + 1]float64
+	tilt     [DetailBands]float64
+	fft      [fftSize]complex128
+	rate     int
+	detailed atomic.Bool
+	detailMu sync.Mutex
 }
 
 // measured is the bands of a chunk, and which chunk: -1 for none yet.
@@ -45,7 +49,7 @@ type measured struct {
 
 func newSpectrum(rate int) *spectrum {
 	n := max(16, int(int64(rate)*int64(spectrumKeep/time.Second)/fftSize)+1)
-	s := &spectrum{ring: make([]measured, n), acc: make([]float32, 0, fftSize), accAt: -1}
+	s := &spectrum{ring: make([]measured, n), acc: make([]float32, 0, fftSize), accAt: -1, rate: rate}
 	for i := range s.ring {
 		s.ring[i].chunk = -1
 	}
@@ -61,8 +65,23 @@ func newSpectrum(rate int) *spectrum {
 	for i := 1; i < len(s.edges); i++ {
 		s.edges[i] = max(s.edges[i], s.edges[i-1]+1)
 	}
-	detailLayout(rate, s.detail[:], s.tilt[:])
 	return s
+}
+
+func (s *spectrum) detailEnabled() bool {
+	return s != nil && s.detailed.Load()
+}
+
+func (s *spectrum) enableDetail() {
+	if s == nil || s.detailEnabled() {
+		return
+	}
+	s.detailMu.Lock()
+	if !s.detailed.Load() {
+		detailLayout(s.rate, s.detail[:], s.tilt[:])
+		s.detailed.Store(true)
+	}
+	s.detailMu.Unlock()
 }
 
 // feed takes stereo samples decoded from frame at, unless the stream
@@ -101,7 +120,11 @@ func (s *spectrum) analyze(chunk int64) {
 	// Both displays reuse the same transform and magnitudes. A prefix
 	// sum lets the finer buckets split FFT bins at fractional boundaries.
 	var sums [fftSize + 1]float64
-	end := max(s.edges[Bands], int(math.Ceil(s.detail[DetailBands])))
+	detail := s.detailEnabled()
+	end := s.edges[Bands]
+	if detail {
+		end = max(end, int(math.Ceil(s.detail[DetailBands])))
+	}
 	for k := range end {
 		sums[k+1] = sums[k] + cmplx.Abs(s.fft[k])
 	}
@@ -111,7 +134,9 @@ func (s *spectrum) analyze(chunk int64) {
 		// Higher bands carry less energy: tilt them up, as the ear hears.
 		m.bands[b] = normalizedBand(sums[to]-sums[from], float64(to-from), 1+float64(b)/6)
 	}
-	measureDetail(m.detail[:], sums[:], s.detail[:], s.tilt[:])
+	if detail {
+		measureDetail(m.detail[:], sums[:], s.detail[:], s.tilt[:])
+	}
 	s.mu.Lock()
 	s.ring[chunk%int64(len(s.ring))] = m
 	s.mu.Unlock()

@@ -96,11 +96,15 @@ type stream interface {
 // openStream opens the song dl fetches, MP3 or FLAC, as its first bytes
 // say. An MP3 says nothing of its length: durationMs is it.
 func openStream(dl *download, durationMs int64) (stream, error) {
+	return openStreamSpectrum(dl, durationMs, true)
+}
+
+func openStreamSpectrum(dl *download, durationMs int64, measure bool) (stream, error) {
 	off := id3Size(dl)
 	if dl.waitFor(off+4) >= off+4 && string(dl.peek(off, 4)) == "fLaC" {
-		return openFLACStream(dl)
+		return openFLACStreamSpectrum(dl, measure)
 	}
-	return openMP3Stream(dl, durationMs)
+	return openMP3StreamSpectrum(dl, durationMs, measure)
 }
 
 // openShared opens a second stream of what dl fetches, for decoding apart
@@ -110,16 +114,16 @@ func openShared(dl *download, durationMs int64) (stream, error) {
 	if !dl.share() {
 		return nil, errors.New("player: the song is gone")
 	}
-	s, err := openStream(dl, durationMs)
+	s, err := openStreamSpectrum(dl, durationMs, false)
 	if err != nil {
 		dl.release()
 		return nil, err
 	}
 	switch s := s.(type) {
 	case *mp3Stream:
-		s.spec, s.drop = nil, dl.release
+		s.drop = dl.release
 	case *flacStream:
-		s.spec, s.drop = nil, dl.release
+		s.drop = dl.release
 	}
 	return s, nil
 }
@@ -143,6 +147,10 @@ type mp3Stream struct {
 }
 
 func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
+	return openMP3StreamSpectrum(dl, durationMs, true)
+}
+
+func openMP3StreamSpectrum(dl *download, durationMs int64, measure bool) (*mp3Stream, error) {
 	s := &mp3Stream{dl: dl, drop: dl.Close}
 	var reader io.Reader = &downloadReader{d: dl}
 	if dl.local {
@@ -165,7 +173,9 @@ func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
 		s.frames = durationMs * int64(s.rate) / 1000
 		s.start = id3Size(dl)
 	}
-	s.spec = newSpectrum(s.rate)
+	if measure {
+		s.spec = newSpectrum(s.rate)
+	}
 	return s, nil
 }
 
