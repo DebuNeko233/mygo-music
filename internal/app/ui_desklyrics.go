@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"time"
-	"unicode/utf16"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -454,18 +453,7 @@ func (d *deskLyrics) paintDesktopWords(c *ui.Context, line *lyrics.Line, size fl
 	width -= 2 * outlineWidth
 	layout := measureLyricWords(line, width, font, c.Direction())
 	w, h := layout.Size()
-	clips := make([][]ui.Rect, len(line.Words))
-	offset := 0
-	for i, word := range line.Words {
-		end := offset
-		for _, r := range word.Text {
-			end += utf16.RuneLen(r)
-		}
-		if end > offset {
-			clips[i] = layout.SelectionRects(ui.TextInputRange{Start: offset, End: end})
-		}
-		offset = end
-	}
+	clips := lyricWordClips(line.Words, layout)
 	w += 2 * outlineWidth
 	h += 2 * outlineWidth
 	ui.Box(c).Width(w).Height(h).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
