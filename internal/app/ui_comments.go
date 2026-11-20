@@ -55,8 +55,9 @@ func (a *app) loadComments() {
 	}
 	thread, offset := cs.thread, len(cs.latest)
 	cs.loading, cs.err = true, ""
+	fetch := threadComments
 	go func() {
-		page, err := threadComments(thread, offset, commentPage)
+		page, err := fetch(thread, offset, commentPage)
 		a.post(func() {
 			if cs.thread != thread {
 				return
