@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/egoist/mygo"
 )
@@ -24,6 +25,9 @@ import (
 // them read it.
 
 const sessionSecret = "netease-session"
+
+// A pending save must finish before sign-out removes its credentials.
+var sessionMu sync.Mutex
 
 func sessionFile() (string, error) {
 	dir, err := mygo.App.Path(mygo.PathUserData)
@@ -58,14 +62,19 @@ func writeSession(b []byte) error {
 	return os.WriteFile(path, b, 0o600)
 }
 
-func deleteSession() {
+func deleteSession() error {
 	if !mygo.IsDev() {
-		mygo.Secrets.Delete(sessionSecret)
-		return
+		return mygo.Secrets.Delete(sessionSecret)
 	}
-	if path, err := sessionFile(); err == nil {
-		os.Remove(path)
+	path, err := sessionFile()
+	if err != nil {
+		return err
 	}
+	err = os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 var siteURL, _ = url.Parse(apiBase)
@@ -77,6 +86,8 @@ func init() {
 // RestoreSession puts the session from the keychain in the cookie jar, and
 // reports whether there was one.
 func RestoreSession() bool {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	b, err := readSession()
 	if err != nil || len(b) == 0 {
 		return false
@@ -94,6 +105,8 @@ func RestoreSession() bool {
 
 // SaveSession keeps the login cookies of the jar in the keychain.
 func SaveSession() error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	var parts []string
 	for _, c := range httpClient.Jar.Cookies(siteURL) {
 		if c.Name == "MUSIC_U" || c.Name == "__csrf" {
@@ -107,12 +120,17 @@ func SaveSession() error {
 }
 
 // ClearSession forgets the session, here and in the keychain.
-func ClearSession() {
+func ClearSession() error {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
 	httpClient.Jar.SetCookies(siteURL, []*http.Cookie{
 		{Name: "MUSIC_U", Path: "/", MaxAge: -1},
 		{Name: "__csrf", Path: "/", MaxAge: -1},
 	})
-	deleteSession()
+	if err := deleteSession(); err != nil {
+		return fmt.Errorf("netease: clear session: %w", err)
+	}
+	return nil
 }
 
 type Profile struct {
@@ -242,9 +260,11 @@ func SessionCookies() []*http.Cookie {
 // the app clears them here first, and a request without them ends nothing
 // there.
 func Logout(cookies []*http.Cookie) error {
-	err := postAs("/api/logout", url.Values{}, cookies, &struct{}{})
-	ClearSession()
-	return err
+	// This request belongs to the account that signed out. Its response
+	// must not expire a new account's cookies or delete its saved session.
+	client := *httpClient
+	client.Jar = nil
+	return postAsClient(&client, "/api/logout", url.Values{}, cookies, &struct{}{})
 }
 
 // UserPlaylists returns the playlists a listener made, the liked songs

@@ -35,6 +35,7 @@ var accountAsk = netease.Account
 var restoreLoginSession = netease.RestoreSession
 var saveLoginSession = netease.SaveSession
 var clearLoginSession = netease.ClearSession
+var logoutSession = netease.Logout
 var loginIdentity = netease.SessionIdentity
 
 // saveLogin keeps a successful login usable in this process, but does not
@@ -121,10 +122,13 @@ func (a *app) confirmAccount() {
 			}
 			a.recovery.accountPending = false
 			if prof == nil {
-				clearLoginSession()
+				err := clearLoginSession()
 				a.identityCache.Clear("", nil)
 				a.discardAccount()
 				a.signedIn(nil)
+				if err != nil {
+					a.toast = "登录凭据清除失败"
+				}
 				return
 			}
 			if a.profile == nil || a.profile.UserID != prof.UserID {
@@ -308,12 +312,27 @@ func (a *app) signOut() {
 	// stays open with NetEase: ended there too, once the window shows the
 	// listener is out.
 	session := netease.SessionCookies()
-	clearLoginSession()
+	clearErr := clearLoginSession()
 	a.signedIn(nil)
+	if clearErr != nil {
+		a.toast = "退出凭据清除失败，重启后可能恢复登录"
+	}
+	gen, logout := a.login.gen, logoutSession
 	go func() {
-		if err := netease.Logout(session); err != nil {
-			a.post(func() { a.toast = "已退出登录，服务器未响应" })
-		}
+		err := logout(session)
+		a.post(func() {
+			if gen != a.login.gen || a.profile != nil {
+				return
+			}
+			switch {
+			case clearErr != nil && err != nil:
+				a.toast = "本地凭据清除失败且服务器未响应，重启后可能恢复登录"
+			case clearErr != nil:
+				a.toast = "已退出登录，本地凭据清除失败"
+			case err != nil:
+				a.toast = "已退出登录，服务器未响应"
+			}
+		})
 	}()
 }
 
