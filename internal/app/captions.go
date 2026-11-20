@@ -464,9 +464,17 @@ func (a *app) loadTranscript(program int64) {
 		a.captions.tr = &transcript{Model: speech.ModelName}
 		return
 	}
+	// A quick return to an episode can beat its last background save.
+	pending, _ := transcriptPending.Load(path)
 	go func() {
+		var b []byte
+		if pending != nil {
+			b = pending.(*transcriptSnapshot).data
+		} else {
+			b, _ = os.ReadFile(path)
+		}
 		tr := &transcript{}
-		if b, err := os.ReadFile(path); err != nil || json.Unmarshal(b, tr) != nil || tr.Model != speech.ModelName {
+		if json.Unmarshal(b, tr) != nil || tr.Model != speech.ModelName {
 			tr = &transcript{Model: speech.ModelName}
 		}
 		a.post(func() {
@@ -505,15 +513,18 @@ func (a *app) transcriptWrite() func() {
 	if err != nil {
 		return nil
 	}
-	seq := atomic.AddInt64(&transcriptAsked, 1)
+	seq := transcriptAsked.Add(1)
+	pending := &transcriptSnapshot{data: b}
+	transcriptPending.Store(path, pending)
 	return func() {
+		defer transcriptPending.CompareAndDelete(path, pending)
 		// The writes of a transcript go one at a time: they all write one
 		// temporary file, and one renaming it as another writes it left a
 		// transcript half written, which the next launch threw away.
 		transcriptMu.Lock()
 		defer transcriptMu.Unlock()
-		if seq <= atomic.LoadInt64(&transcriptLanded) {
-			// A later transcript landed already: this one is older.
+		if seq <= transcriptLanded[path] {
+			// A newer snapshot of this episode already landed.
 			return
 		}
 		if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
@@ -521,19 +532,20 @@ func (a *app) transcriptWrite() func() {
 		}
 		tmp := path + ".tmp"
 		if os.WriteFile(tmp, b, 0o644) == nil && os.Rename(tmp, path) == nil {
-			atomic.StoreInt64(&transcriptLanded, seq)
+			transcriptLanded[path] = seq
 		}
 	}
 }
 
+type transcriptSnapshot struct{ data []byte }
+
 var (
-	// transcriptMu keeps the writes of a transcript one at a time, and
-	// transcriptAsked and transcriptLanded are the sequence of the write
-	// asked for last and of the one that landed last: what an earlier
-	// write made does not land over what a later one wrote.
-	transcriptMu     sync.Mutex
-	transcriptAsked  int64
-	transcriptLanded int64
+	// transcriptMu serializes writes and protects each file's last
+	// successful sequence, so episodes never suppress one another.
+	transcriptMu      sync.Mutex
+	transcriptAsked   atomic.Uint64
+	transcriptLanded  = map[string]uint64{}
+	transcriptPending sync.Map // path to the latest queued *transcriptSnapshot
 )
 
 // captionStart returns where to write down from for a listener at pos of
