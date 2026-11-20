@@ -25,6 +25,10 @@ type Layout struct {
 	Root, Songs, Browse, Artwork string
 }
 
+func (l Layout) groups() [3]struct{ name, source string } {
+	return [3]struct{ name, source string }{{"songs", l.Songs}, {"browse-v1", l.Browse}, {ArtworkDir, l.Artwork}}
+}
+
 type cacheFile struct {
 	source, name string
 	reused       bool
@@ -43,7 +47,7 @@ func MoveLayout(source Layout, target string, migrate, shared bool, save func() 
 // MoveLayoutWithOptions adds cancellation, progress and crash recovery to the
 // same transaction. Read-only stores may remain open until save commits.
 func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, save func() error, options Options) (error, error) {
-	if err := Recover(options.Journal); err != nil {
+	if err := Recover(options.Journal, source); err != nil {
 		return nil, err
 	}
 	var err error
@@ -57,7 +61,6 @@ func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, s
 	}
 	var files []cacheFile
 	var publications []string
-	groups := []struct{ name, source string }{{"songs", source.Songs}, {"browse-v1", source.Browse}, {ArtworkDir, source.Artwork}}
 	validate := func(string) error { return Validate(source.Root, target) }
 	if shared {
 		validate = func(string) error { return nil }
@@ -71,7 +74,7 @@ func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, s
 			}
 		}
 	}
-	for _, group := range groups {
+	for _, group := range source.groups() {
 		destination := filepath.Join(target, group.name)
 		if shared {
 			same, err := SameDirectory(group.source, destination)

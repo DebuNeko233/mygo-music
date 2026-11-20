@@ -65,15 +65,16 @@ type backdropPicture struct {
 	w, h float32 // its pixels
 }
 
+// Each request owns an entry so a discarded read cannot overwrite a later
+// request for the same path.
+type backdropEntry struct {
+	pic *backdropPicture // nil while loading or if decoding failed
+}
+
 // backdropSide is how long the longer side of a picture is kept, in
 // pixels: larger costs that many more bytes in the memory, and no display
 // shows more.
 const backdropSide = 2560
-
-// backdropLimit is how many pictures stay in the memory at a time: a
-// listener who chose many sees them all, reading one again when it comes
-// back after others pushed it out.
-const backdropLimit = 8
 
 // pictureExts are the extensions of the pictures a page can stand on: the
 // ones the app's decoders read.
@@ -118,18 +119,21 @@ func (a *app) addPictures(files []string, paths *[]string) {
 // preloadPictures starts reading the chosen backdrops before their first
 // frame. The home and playing paths overlap at most once in the read queue.
 func (a *app) preloadPictures() {
-	// Keep the chosen bitmaps decoded. Releasing their pixels a few seconds
-	// after reading makes an unopened page decode again on its first frame.
 	for _, path := range slices.Concat(a.settings.BackdropHome, a.settings.BackdropPlaying) {
-		if _, done := a.pics[path]; done {
-			continue
-		}
-		if a.pics == nil {
-			a.pics = map[string]*backdropPicture{}
-		}
-		a.pics[path] = nil
-		go a.readPicture(path)
+		a.loadPicture(path)
 	}
+}
+
+func (a *app) loadPicture(path string) {
+	if a.pics[path] != nil {
+		return
+	}
+	if a.pics == nil {
+		a.pics = make(map[string]*backdropEntry)
+	}
+	entry := &backdropEntry{}
+	a.pics[path] = entry
+	go a.readPicture(path, entry)
 }
 
 // pictures returns the pictures of the paths that could be read, skipping
@@ -137,60 +141,39 @@ func (a *app) preloadPictures() {
 func (a *app) pictures(paths []string) []*backdropPicture {
 	out := make([]*backdropPicture, 0, len(paths))
 	for _, path := range paths {
-		pic, done := a.pics[path]
-		if !done {
-			if a.pics == nil {
-				a.pics = map[string]*backdropPicture{}
-			}
-			// On its way: the pages standing on it show it as it lands.
-			a.pics[path] = nil
-			go a.readPicture(path)
-			continue
-		}
-		if pic != nil {
-			out = append(out, pic)
+		if entry := a.pics[path]; entry == nil {
+			a.loadPicture(path)
+		} else if entry.pic != nil {
+			out = append(out, entry.pic)
 		}
 	}
-	a.forgetPictures(paths)
 	return out
 }
 
-// forgetPictures drops the pictures no page stands on anymore, and those
-// past backdropLimit that the page drawn now does not show: choosing other
-// pictures must not keep every one ever chosen in the memory.
-func (a *app) forgetPictures(showing []string) {
-	if len(a.pics) == 0 {
-		return
-	}
-	chosen := make(map[string]bool, len(showing))
-	for _, path := range showing {
-		chosen[path] = true
-	}
-	for _, path := range a.settings.BackdropHome {
-		chosen[path] = true
-	}
-	for _, path := range a.settings.BackdropPlaying {
-		chosen[path] = true
-	}
-	for path, pic := range a.pics {
-		// A picture still on its way stays: what it lands in is looked at
-		// again.
-		if !chosen[path] || pic != nil && len(a.pics) > backdropLimit && !slices.Contains(showing, path) {
+// Both pages can build in the same frame. Keep their configured pictures
+// together so neither page forces the other to decode its pictures again.
+func (a *app) forgetPictures() {
+	for path := range a.pics {
+		if !a.pictureChosen(path) {
 			delete(a.pics, path)
 		}
 	}
 }
 
+func (a *app) pictureChosen(path string) bool {
+	return slices.Contains(a.settings.BackdropHome, path) || slices.Contains(a.settings.BackdropPlaying, path)
+}
+
 // readPicture reads and decodes the picture at path, off the main thread,
 // and keeps it, or that it cannot be read.
-func (a *app) readPicture(path string) {
+func (a *app) readPicture(path string, entry *backdropEntry) {
 	pic := decodePicture(path)
-	a.post(func() {
-		if a.pics == nil {
-			a.pics = map[string]*backdropPicture{}
+	a.postIfChanged(func() bool {
+		if a.pics[path] != entry {
+			return false
 		}
-		a.pics[path] = pic
-		a.redraw()
+		entry.pic = pic
+		return pic != nil
 	})
 }
 

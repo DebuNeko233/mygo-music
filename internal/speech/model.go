@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -119,17 +120,20 @@ func Download(ctx context.Context, root string, progress func(done, total int64)
 	}
 	for _, f := range natives() {
 		path := filepath.Join(libs, f.name)
+		archive := path + ".gz"
 		if info, err := os.Stat(path); err == nil && info.Size() == f.size && digest(path) == f.sha256 {
+			retireArchive(archive)
 			before += f.gzSize
 			progress(before, total)
 			continue
 		}
 		gz := modelFile{path: f.name + ".gz", size: f.gzSize, sha256: f.gzSHA256}
-		err := fetch(ctx, nativeURL(f), path+".gz", gz, func(n int64) { progress(before+n, total) })
-		if err == nil {
-			err = gunzip(path+".gz", path, f)
+		if info, err := os.Stat(archive); err != nil || info.Size() != gz.size || digest(archive) != gz.sha256 {
+			if err := fetch(ctx, nativeURL(f), archive, gz, func(n int64) { progress(before+n, total) }); err != nil {
+				return err
+			}
 		}
-		if err != nil {
+		if err := gunzip(archive, path, f); err != nil {
 			return err
 		}
 		before += f.gzSize
@@ -149,7 +153,8 @@ func Download(ctx context.Context, root string, progress func(done, total int64)
 		var err error
 		for _, src := range modelSources {
 			err = fetch(ctx, src(f), path, f, func(n int64) { progress(before+n, total) })
-			if err == nil || ctx.Err() != nil {
+			var fileErr *os.PathError
+			if err == nil || ctx.Err() != nil || errors.As(err, &fileErr) {
 				break
 			}
 		}
@@ -167,23 +172,31 @@ var errDigest = errors.New("speech: the download does not match the model")
 
 // fetch downloads url to path, through path.part, which it goes on from
 // where it stopped, calling got with how much of the file is in.
-func fetch(ctx context.Context, url, path string, f modelFile, got func(int64)) error {
+func fetch(ctx context.Context, url, path string, f modelFile, got func(int64)) (err error) {
 	part := path + ".part"
 	out, err := os.OpenFile(part, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		if out != nil {
+			err = errors.Join(err, out.Close())
+		}
+	}()
+	info, err := out.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() > f.size {
+		if err := out.Truncate(0); err != nil {
+			return fmt.Errorf("speech: reset oversized partial download: %w", err)
+		}
+	}
 	h := sha256.New()
 	// What is in already counts toward the digest.
 	have, err := io.Copy(h, out)
 	if err != nil {
 		return err
-	}
-	if have > f.size {
-		have, h = 0, sha256.New()
-		out.Truncate(0)
-		out.Seek(0, io.SeekStart)
 	}
 	if have < f.size {
 		if err := get(ctx, url, out, h, have, f.size, got); err != nil {
@@ -192,12 +205,14 @@ func fetch(ctx context.Context, url, path string, f modelFile, got func(int64)) 
 	}
 	if hex.EncodeToString(h.Sum(nil)) != f.sha256 {
 		// It is no good to go on from: the next try starts over.
-		out.Close()
-		os.Remove(part)
-		return errDigest
+		closeErr := out.Close()
+		out = nil
+		return errors.Join(errDigest, closeErr, removeDownload(part))
 	}
-	if err := out.Close(); err != nil {
-		return err
+	closeErr := out.Close()
+	out = nil
+	if closeErr != nil {
+		return closeErr
 	}
 	return os.Rename(part, path)
 }
@@ -256,12 +271,16 @@ func get(ctx context.Context, url string, out *os.File, h hash.Hash, have, size 
 }
 
 // gunzip unpacks the file at gz to path, as f, and removes gz.
-func gunzip(gz, path string, f nativeFile) error {
+func gunzip(gz, path string, f nativeFile) (err error) {
 	in, err := os.Open(gz)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() {
+		if in != nil {
+			err = errors.Join(err, in.Close())
+		}
+	}()
 	r, err := gzip.NewReader(in)
 	if err != nil {
 		return err
@@ -271,21 +290,42 @@ func gunzip(gz, path string, f nativeFile) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err != nil {
+			if cleanupErr := removeDownload(tmp); cleanupErr != nil {
+				err = errors.Join(err, cleanupErr)
+			}
+		}
+	}()
 	h := sha256.New()
-	_, err = io.Copy(io.MultiWriter(out, h), r)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil && hex.EncodeToString(h.Sum(nil)) != f.sha256 {
-		err = errDigest
-	}
+	n, err := io.Copy(io.MultiWriter(out, h), r)
+	err = errors.Join(err, r.Close(), out.Close(), in.Close())
+	in = nil
 	if err != nil {
-		os.Remove(tmp)
 		return err
 	}
-	in.Close()
-	os.Remove(gz)
-	return os.Rename(tmp, path)
+	if n != f.size || hex.EncodeToString(h.Sum(nil)) != f.sha256 {
+		return errDigest
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	retireArchive(gz)
+	return nil
+}
+
+func retireArchive(path string) {
+	if err := removeDownload(path); err != nil {
+		log.Printf("speech: remove installed download: %v", err)
+	}
+}
+
+func removeDownload(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // digest returns the SHA-256 of the file at path, or "".

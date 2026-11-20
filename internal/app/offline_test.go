@@ -269,29 +269,35 @@ func fakeOfflineHome(t *testing.T) {
 // Offline boot restores only the account bound to the actual saved session,
 // and renders its sidebar without waiting for the account request to finish.
 func TestOfflineBootUsesBoundIdentity(t *testing.T) {
-	for _, matched := range []bool{true, false} {
-		t.Run(map[bool]string{true: "matching", false: "other-session"}[matched], func(t *testing.T) {
+	for _, tc := range []struct {
+		name, identity     string
+		matched, malformed bool
+	}{
+		{name: "matching", identity: "bound", matched: true},
+		{name: "other-session", identity: "other"},
+		{name: "malformed", identity: "bound", malformed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			a, posts := offlineFixture(t)
 			fakeOfflineHome(t)
 			restore, identity, ask := restoreLoginSession, loginIdentity, accountAsk
 			t.Cleanup(func() { restoreLoginSession, loginIdentity, accountAsk = restore, identity, ask })
 			restoreLoginSession = func() bool { return true }
-			loginIdentity = func() string {
-				if matched {
-					return "bound"
-				}
-				return "other"
-			}
+			loginIdentity = func() string { return tc.identity }
 			release := make(chan struct{})
 			accountAsk = func() (*netease.Profile, error) { <-release; return nil, netease.ErrOffline }
 			userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return nil, nil, netease.ErrOffline }
 			likedIDs = func(int64) ([]int64, error) { return nil, netease.ErrOffline }
-			a.identityCache.Put("bound", "profile", cacheBytes(a.profile), 0)
+			profile := cacheBytes(a.profile)
+			if tc.malformed {
+				profile = []byte(`{"userId":7,"nickname":123}`)
+			}
+			a.identityCache.Put("bound", "profile", profile, 0)
 			a.browseCache.Put("7", "mine", cacheBytes(keptLists{Mine: []netease.Playlist{{ID: 9, Name: "Offline list"}}}), 0)
 			a.profile = nil
 			a.boot()
 			refreshPost(t, posts)
-			if matched {
+			if tc.matched {
 				for a.mine == nil {
 					refreshPost(t, posts)
 				}
@@ -299,7 +305,7 @@ func TestOfflineBootUsesBoundIdentity(t *testing.T) {
 					t.Fatal("account confirmation blocked cached sidebar")
 				}
 			} else if a.profile != nil || a.mine != nil {
-				t.Fatal("used an unrelated session's account")
+				t.Fatal("restored an unrelated or malformed offline profile")
 			}
 			close(release)
 			for a.homeLoading || a.recovery.accountBusy || a.listRefresh.mine.busy || a.listRefresh.likes.busy {

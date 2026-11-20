@@ -141,7 +141,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 		a.post(func() {
 			a.cacheMoving, a.cacheTarget = false, ""
 			a.cacheCancel, a.cacheCancelling = nil, false
-			if errors.Is(err, context.Canceled) {
+			if err == context.Canceled {
 				a.cacheError = "已取消迁移，仍使用原目录"
 			} else if err != nil {
 				a.cacheError = "更改缓存目录失败，仍使用原目录：" + err.Error()
@@ -153,7 +153,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 				// not recreate files at its former location.
 				a.pl.Cache = newSongCache(a.settings)
 				if warning != nil {
-					a.cacheError = "新目录已启用，但部分旧缓存未能删除：" + warning.Error()
+					a.cacheError = "新目录已启用，但迁移清理未完成：" + warning.Error()
 				}
 			}
 			if a.cacheQuit {
@@ -260,9 +260,14 @@ func (a *app) recoverCacheDirectory() {
 		a.cacheError = err.Error()
 		return
 	}
+	active, err := cachePaths(a.settings)
+	if err != nil {
+		a.cacheError = err.Error()
+		return
+	}
 	a.cacheMoving = true
 	go func() {
-		err := cachemove.Recover(journal)
+		err := cachemove.Recover(journal, active)
 		a.post(func() {
 			a.cacheMoving = false
 			if a.cacheQuit {

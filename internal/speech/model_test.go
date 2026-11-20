@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -69,8 +70,12 @@ func TestDownloadResumes(t *testing.T) {
 		}))
 	root := t.TempDir()
 	dir := filepath.Join(root, ModelName)
-	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "model.onnx.part"), files["model.onnx"][:120000], 0o644)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "model.onnx.part"), files["model.onnx"][:120000], 0o644); err != nil {
+		t.Fatal(err)
+	}
 	var last, total int64
 	if err := Download(context.Background(), root, func(d, t int64) { last, total = d, t }); err != nil {
 		t.Fatal(err)
@@ -84,7 +89,7 @@ func TestDownloadResumes(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(dir, "model.onnx")); !bytes.Equal(got, files["model.onnx"]) {
 		t.Error("model.onnx differs")
 	}
-	if ranges[0] != "bytes=120000-" || ranges[1] != "" {
+	if len(ranges) != 2 || ranges[0] != "bytes=120000-" || ranges[1] != "" {
 		t.Errorf("asked for %q", ranges)
 	}
 	if last != total || total != 200009+int64(len(gzipped(lib))) {
@@ -119,11 +124,15 @@ func TestChangedLibraryRefused(t *testing.T) {
 	withModel(t, map[string][]byte{}, "")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "libtest.dylib")
-	os.WriteFile(path, lib, 0o755)
+	if err := os.WriteFile(path, lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := verifyLibs(dir); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(path, append(lib, "evil"...), 0o755)
+	if err := os.WriteFile(path, append(lib, "evil"...), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if verifyLibs(dir) == nil {
 		t.Error("a changed library loads")
 	}
@@ -138,18 +147,94 @@ func TestInstalledRefusesACorruptLibrary(t *testing.T) {
 	root := t.TempDir()
 	for _, f := range modelFiles {
 		path := filepath.Join(root, ModelName, filepath.FromSlash(f.path))
-		os.MkdirAll(filepath.Dir(path), 0o755)
-		os.WriteFile(path, files[f.path], 0o644)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, files[f.path], 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	corrupt := slices.Clone(lib)
 	corrupt[0] ^= 0xff
-	os.MkdirAll(libDir(root), 0o755)
-	os.WriteFile(filepath.Join(libDir(root), "libtest.dylib"), corrupt, 0o755)
+	if err := os.MkdirAll(libDir(root), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(libDir(root), "libtest.dylib"), corrupt, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if Installed(root) {
 		t.Error("a corrupt library counts as installed")
 	}
-	os.WriteFile(filepath.Join(libDir(root), "libtest.dylib"), lib, 0o755)
+	if err := os.WriteFile(filepath.Join(libDir(root), "libtest.dylib"), lib, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if !Installed(root) {
 		t.Error("the library that was downloaded counts as missing")
+	}
+}
+
+// A blocked library publication leaves the verified download reusable on retry.
+func TestDownloadReusesVerifiedArchiveAfterPublicationFailure(t *testing.T) {
+	files := map[string][]byte{"model.onnx": []byte("model"), "tokenizer/vocab.json": []byte("{}")}
+	gz := gzipped(lib)
+	var nativeRequests atomic.Int32
+	source := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/lib.gz" {
+			nativeRequests.Add(1)
+			w.Write(gz)
+		} else {
+			w.Write(files[strings.TrimPrefix(r.URL.Path, "/repo/")])
+		}
+	})
+	withModel(t, files, source(modelFile{from: "lib.gz"}), source)
+	root := t.TempDir()
+	path := filepath.Join(libDir(root), "libtest.dylib")
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := func(int64, int64) {}
+	if err := Download(context.Background(), root, got); err == nil {
+		t.Fatal("published a library on top of a directory")
+	}
+	if archive, err := os.ReadFile(path + ".gz"); err != nil || !bytes.Equal(archive, gz) {
+		t.Fatalf("did not preserve the verified download: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("partial publication was not cleaned up: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := Download(context.Background(), root, got); err != nil {
+		t.Fatal(err)
+	}
+	if nativeRequests.Load() != 1 || !Installed(root) {
+		t.Fatalf("retry did not reuse the archive: %d downloads", nativeRequests.Load())
+	}
+	if _, err := os.Stat(path + ".gz"); !os.IsNotExist(err) {
+		t.Fatalf("verified archive was retained after installation: %v", err)
+	}
+}
+
+// A partial file larger than its expected size restarts without a Range request.
+func TestDownloadResetsOversizedPartial(t *testing.T) {
+	payload := []byte("model")
+	download := serve(t, func(w http.ResponseWriter, r *http.Request) {
+		if header := r.Header.Get("Range"); header != "" {
+			t.Errorf("asked to resume an oversized file at %s", header)
+		}
+		w.Write(payload)
+	})
+	path := filepath.Join(t.TempDir(), "model.onnx")
+	if err := os.WriteFile(path+".part", []byte("invalid bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(payload)
+	f := modelFile{size: int64(len(payload)), sha256: hex.EncodeToString(sum[:])}
+	if err := fetch(context.Background(), download(f), path, f, func(int64) {}); err != nil {
+		t.Fatal(err)
+	}
+	if actual, err := os.ReadFile(path); err != nil || !bytes.Equal(actual, payload) {
+		t.Fatalf("restarted download was invalid: %q, %v", actual, err)
 	}
 }

@@ -48,6 +48,7 @@ type app struct {
 	network                                networkState
 	homeFailures                           map[string]error
 	dirtySnapshots                         map[int64]bool
+	dirtyLibrary                           librarySnapshots
 	playlistWrites                         sync.Map // cacheRequest to the latest accepted write's done channel
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState
@@ -64,9 +65,7 @@ type app struct {
 	art    *artCache
 	pl     *player.Player
 	pal    palette
-	// pics are the backdrops read so far, by path: nil while one is on its
-	// way, and nil once one could not be read.
-	pics map[string]*backdropPicture
+	pics   map[string]*backdropEntry // shared by the home and playing backdrops
 
 	route   route
 	history []route

@@ -45,8 +45,7 @@ func (a *app) boot() {
 		identity := identityOf()
 		if restored && identity != "" {
 			b, _ := store.Read(identity, "profile")
-			json.Unmarshal(b, &kept)
-			if kept != nil && kept.UserID <= 0 {
+			if json.Unmarshal(b, &kept) != nil || kept != nil && kept.UserID <= 0 {
 				kept = nil
 			}
 		}
@@ -142,6 +141,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.homeErr = ""
 	a.homeFailures = nil
 	a.dirtySnapshots = nil
+	a.dirtyLibrary = 0
 	a.featured, a.charts, a.daily = nil, nil, nil
 	a.homeAt = time.Time{}
 	// Playback picks up where it was left, once the session that lets

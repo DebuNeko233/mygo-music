@@ -30,6 +30,9 @@ const entrySuffix = ".entry"
 type Store struct {
 	index     *indexLog // configured once; all mutable index state belongs to io
 	forgotten map[string]uint64
+	access    map[string]entryAccess // entries whose disk timestamp or removal failed
+	// After a failed clear, only successful replacements in that scope are readable.
+	uncleared map[string]map[string]bool // empty prefix covers every scope; owned by mu
 	dir       string
 	limit     int64
 	spare     int64        // conservative headroom; owned by io, reset after clear/move
@@ -47,6 +50,16 @@ type Store struct {
 	cleaners  sync.WaitGroup // removals may also be accepted during a move
 	clears    int            // protected by mu
 	resumed   chan struct{}  // protected by mu; removals wait while source files are copied
+}
+
+type entryAccess struct {
+	info os.FileInfo
+	used time.Time
+	bad  bool
+}
+
+func (a entryAccess) matches(info os.FileInfo) bool {
+	return os.SameFile(a.info, info) && a.info.Size() == info.Size() && a.info.ModTime().Equal(info.ModTime())
 }
 
 func New(dir string, limit int64) *Store {
@@ -77,7 +90,8 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 		defer s.io.RUnlock()
 	}
 	s.mu.Lock()
-	unavailable := s.closed.Load() || s.clearing.Load() || s.forgotten[file] != 0
+	unavailable := s.closed.Load() || s.clearing.Load() || s.hidden(file)
+	access := s.access[file]
 	s.mu.Unlock()
 	if unavailable {
 		return nil, time.Time{}
@@ -86,29 +100,83 @@ func (s *Store) Read(scope, key string) ([]byte, time.Time) {
 		return s.index.read(s.dir, file)
 	}
 	path := filepath.Join(s.dir, file)
-	info, err := os.Stat(path)
-	if err != nil || info.Size() < headerSize || info.Size() > maxEntry+headerSize {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, time.Time{}
+	}
+	knownBad := access.bad && access.matches(info)
+	if knownBad || info.Size() < headerSize || info.Size() > maxEntry+headerSize {
+		s.removeBrokenEntry(path, file, info, knownBad)
 		return nil, time.Time{}
 	}
 	b, err := os.ReadFile(path)
-	if err != nil || len(b) < headerSize {
+	if err != nil {
+		return nil, time.Time{}
+	}
+	if len(b) < headerSize {
+		s.removeBrokenEntry(path, file, info, false)
 		return nil, time.Time{}
 	}
 	sum := sha256.Sum256(b[headerSize:])
 	if string(b[:8]) != "MYCACHE1" || !bytes.Equal(sum[:], b[16:48]) {
-		if !s.moving.Load() {
-			os.Remove(path)
-		}
-		// Unexpected filesystem damage invalidates our last size estimate;
-		// the next write also removes any interrupted temporary files.
-		s.dirty.Store(true)
+		s.removeBrokenEntry(path, file, info, false)
 		return nil, time.Time{}
 	}
 	now := time.Now()
 	if !s.moving.Load() {
-		os.Chtimes(path, now, now)
+		if err := os.Chtimes(path, now, now); err != nil {
+			s.noteAccess(file, entryAccess{info: info, used: now})
+		} else if access.info != nil {
+			s.noteAccess(file, entryAccess{})
+		}
 	}
 	return b[headerSize:], time.Unix(0, int64(binary.LittleEndian.Uint64(b[8:16])))
+}
+
+func (s *Store) removeBrokenEntry(path, file string, info os.FileInfo, knownBad bool) {
+	s.dirty.Store(true)
+	if s.moving.Load() {
+		return
+	}
+	if err := removeEntry(path); err != nil {
+		if !knownBad {
+			log.Printf("cache: remove corrupt entry: %v", err)
+			s.noteAccess(file, entryAccess{info: info, bad: true})
+		}
+	} else {
+		s.noteAccess(file, entryAccess{})
+	}
+}
+
+// Readers share the I/O lock, so their exceptional state also takes mu.
+func (s *Store) noteAccess(file string, access entryAccess) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if access.info == nil {
+		delete(s.access, file)
+		return
+	}
+	if s.access == nil {
+		s.access = make(map[string]entryAccess)
+	}
+	s.access[file] = access
+}
+
+// hidden and replaced are called with mu held.
+func (s *Store) hidden(file string) bool {
+	all, clearedAll := s.uncleared[""]
+	scope, clearedScope := s.uncleared[file[:digestLength]]
+	return s.forgotten[file] != 0 || clearedAll && !all[file] || clearedScope && !scope[file]
+}
+
+func (s *Store) replaced(file string) {
+	delete(s.forgotten, file)
+	if all := s.uncleared[""]; all != nil {
+		all[file] = true
+	}
+	if scope := s.uncleared[file[:digestLength]]; scope != nil {
+		scope[file] = true
+	}
 }
 
 // Queue accepts already serialized bytes, not mutable view state. The epoch
@@ -190,14 +258,21 @@ func (s *Store) prepareForget(scope, key string) func() {
 		if !current {
 			return
 		}
+		var err error
 		if s.index.accepts(file) {
 			before := s.index.size
-			s.indexError(s.index.forget(s.dir, file))
+			err = s.index.forget(s.dir, file)
+			s.indexError(err)
 			s.prune(max(0, s.index.size-before), s.latest)
 		} else {
-			os.Remove(filepath.Join(s.dir, file))
+			err = removeEntry(filepath.Join(s.dir, file))
+		}
+		if err != nil {
+			log.Printf("cache: forget failed: %v", err)
+			return
 		}
 		s.mu.Lock()
+		delete(s.access, file)
 		if s.forgotten[file] == seq {
 			delete(s.forgotten, file)
 		}
@@ -231,7 +306,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64, skipEqual bool) 
 		if accepted {
 			s.mu.Lock()
 			if s.pending[file] == seq {
-				delete(s.forgotten, file)
+				s.replaced(file)
 			}
 			s.mu.Unlock()
 			s.scheduleIndex()
@@ -243,7 +318,7 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64, skipEqual bool) 
 	sum := sha256.Sum256(b)
 	if skipEqual && snapshotMatches(dest, len(b), sum) {
 		s.mu.Lock()
-		forgotten := s.forgotten[file] != 0
+		forgotten := s.hidden(file)
 		s.mu.Unlock()
 		if !forgotten {
 			return
@@ -273,7 +348,8 @@ func (s *Store) write(file string, b []byte, epoch, seq uint64, skipEqual bool) 
 	s.mu.Lock()
 	committed := s.pending[file] == seq && s.Epoch() == epoch && !s.clearing.Load() && os.Rename(path, dest) == nil
 	if committed {
-		delete(s.forgotten, file)
+		s.replaced(file)
+		delete(s.access, file)
 	}
 	s.mu.Unlock()
 	if committed {
@@ -333,26 +409,60 @@ func (s *Store) prepareClear(scope string) func() {
 		defer s.cleaners.Done()
 		s.lockRemoval()
 		defer s.io.Unlock()
-		if s.index != nil {
-			if scope == "" {
-				s.index.reset()
-			} else if s.index.scopes[digest(scope)] {
-				s.indexError(s.index.clearScope(s.dir, scope))
+		prefix := ""
+		if scope != "" {
+			prefix = digest(scope)
+		}
+		entries, err := os.ReadDir(s.dir)
+		if errors.Is(err, os.ErrNotExist) {
+			err = nil
+		}
+		if s.index != nil && scope != "" && s.index.scopes[prefix] {
+			err = errors.Join(err, s.index.clearScope(s.dir, scope))
+		}
+		for _, e := range entries {
+			if !e.IsDir() && (scope == "" || strings.HasPrefix(e.Name(), prefix+"-")) {
+				if removeErr := removeEntry(filepath.Join(s.dir, e.Name())); removeErr != nil {
+					err = errors.Join(err, removeErr)
+				} else {
+					delete(s.access, e.Name())
+				}
 			}
 		}
-		entries, _ := os.ReadDir(s.dir)
-		for _, e := range entries {
-			if !e.IsDir() && (scope == "" || strings.HasPrefix(e.Name(), digest(scope)+"-")) {
-				os.Remove(filepath.Join(s.dir, e.Name()))
+		if s.index != nil && scope == "" {
+			s.index.reset()
+			if err != nil {
+				s.index.invalidate()
 			}
+		}
+		if err != nil {
+			log.Printf("cache: clear failed: %v", err)
 		}
 		s.spare = 0
 		s.latest = ""
 		s.mu.Lock()
+		if err != nil {
+			if scope == "" || s.uncleared == nil {
+				s.uncleared = make(map[string]map[string]bool)
+			}
+			s.uncleared[prefix] = make(map[string]bool)
+		} else if scope == "" {
+			s.uncleared = nil
+		} else {
+			delete(s.uncleared, prefix)
+		}
 		s.clears--
 		s.clearing.Store(s.clears != 0)
 		s.mu.Unlock()
 	}
+}
+
+func removeEntry(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func (s *Store) Size() int64 {
@@ -387,8 +497,13 @@ func (s *Store) prune(added int64, keep string) {
 		s.spare -= added
 		return
 	}
-	entries, _ := os.ReadDir(s.dir)
-	var files []os.FileInfo
+	entries, scanErr := os.ReadDir(s.dir)
+	type candidate struct {
+		os.FileInfo
+		used time.Time
+		bad  bool
+	}
+	var files []candidate
 	var size int64
 	var fixed int64 // the index cannot be evicted as an ordinary content file
 	if s.index != nil {
@@ -397,27 +512,51 @@ func (s *Store) prune(added int64, keep string) {
 	}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), ".part-") {
-			os.Remove(filepath.Join(s.dir, e.Name()))
-			continue
+			if err := removeEntry(filepath.Join(s.dir, e.Name())); err == nil {
+				continue
+			} else {
+				log.Printf("cache: remove abandoned snapshot: %v", err)
+			}
 		}
 		if i, err := e.Info(); err == nil && !i.IsDir() {
 			if s.index == nil || e.Name() != IndexFile {
-				files = append(files, i)
+				f := candidate{FileInfo: i, used: i.ModTime()}
+				if access := s.access[e.Name()]; access.matches(i) {
+					f.bad = access.bad
+					if f.bad && removeEntry(filepath.Join(s.dir, e.Name())) == nil {
+						delete(s.access, e.Name())
+						continue
+					}
+					if access.used.After(f.used) {
+						f.used = access.used
+					}
+				}
+				files = append(files, f)
 			} else {
 				fixed += i.Size()
 			}
 			size += i.Size()
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			scanErr = errors.Join(scanErr, err)
 		}
 	}
-	defer func() { s.spare = max(0, s.limit-size) }()
+	defer func() {
+		s.spare = 0
+		if scanErr == nil || errors.Is(scanErr, os.ErrNotExist) {
+			s.spare = max(0, s.limit-size)
+		}
+	}()
 	if size <= s.limit {
 		return
 	}
 	sort.Slice(files, func(i, j int) bool {
-		if files[i].ModTime().Equal(files[j].ModTime()) {
+		if files[i].bad != files[j].bad {
+			return files[i].bad
+		}
+		if files[i].used.Equal(files[j].used) {
 			return files[i].Name() < files[j].Name()
 		}
-		return files[i].ModTime().Before(files[j].ModTime())
+		return files[i].used.Before(files[j].used)
 	})
 	for _, f := range files {
 		if size <= s.limit*3/4 {
@@ -428,7 +567,8 @@ func (s *Store) prune(added int64, keep string) {
 		if f.Name() == keep && f.Size() <= s.limit-fixed {
 			continue
 		}
-		if os.Remove(filepath.Join(s.dir, f.Name())) == nil {
+		if removeEntry(filepath.Join(s.dir, f.Name())) == nil {
+			delete(s.access, f.Name())
 			size -= f.Size()
 		}
 	}
@@ -496,6 +636,7 @@ func (s *Store) Suspend() (func(string), error) {
 				s.dir = dir
 				s.spare = 0
 				s.latest = ""
+				s.access = nil
 				if s.index != nil {
 					s.index.reset()
 				}

@@ -83,6 +83,7 @@ func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string)
 			}
 			if ui.Button(c.Key(key+"-clear"), "清空").Disabled(len(*paths) == 0).Clicked() {
 				*paths = nil
+				a.forgetPictures()
 				a.changed()
 			}
 			summary := pictureList(*paths)

@@ -24,6 +24,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"go/format"
@@ -133,7 +134,11 @@ func run(identity, out string, platforms []string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	vad, err := fetch(vadURL, vadSHA256)
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	vad, err := fetch(cache, vadURL, vadSHA256)
 	if err != nil {
 		return err
 	}
@@ -149,39 +154,49 @@ func run(identity, out string, platforms []string) error {
 	for _, p := range platforms {
 		a := archives[p]
 		url := fmt.Sprintf("https://github.com/k2-fsa/sherpa-onnx/releases/download/v%s/sherpa-onnx-v%s-%s.tar.bz2", version, version, a.name)
-		file, err := fetch(url, a.sha256)
+		file, err := fetch(cache, url, a.sha256)
 		if err != nil {
 			return err
 		}
-		tmp, err := os.MkdirTemp("", "sherpa-"+p)
+		libs[p], err = packPlatform(out, identity, p, file, a.files)
 		if err != nil {
 			return err
-		}
-		defer os.RemoveAll(tmp)
-		if err := extract(file, tmp, a.files); err != nil {
-			return err
-		}
-		for _, name := range a.files {
-			lib := filepath.Join(tmp, name)
-			if strings.HasPrefix(p, "darwin-") {
-				cmd := exec.Command("codesign", "--force", "--sign", identity, "--options", "runtime", "--timestamp", lib)
-				if b, err := cmd.CombinedOutput(); err != nil {
-					return fmt.Errorf("codesign %s/%s: %v\n%s", p, name, err, b)
-				}
-			}
-			b, err := os.ReadFile(lib)
-			if err != nil {
-				return err
-			}
-			f, err := pack(out, name, p+"-"+name+".gz", b)
-			if err != nil {
-				return err
-			}
-			libs[p] = append(libs[p], f)
 		}
 		fmt.Printf("packed sherpa-onnx %s for %s\n", version, p)
 	}
 	return writeManifest(filepath.Join("internal", "speech", "natives.go"), platforms, libs, vadFile)
+}
+
+// Extract at most one platform at a time, including when packaging fails.
+func packPlatform(out, identity, platform, archive string, names []string) (_ []packed, err error) {
+	tmp, err := os.MkdirTemp("", "sherpa-"+platform)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, os.RemoveAll(tmp)) }()
+	if err := extract(archive, tmp, names); err != nil {
+		return nil, err
+	}
+	files := make([]packed, 0, len(names))
+	for _, name := range names {
+		lib := filepath.Join(tmp, name)
+		if strings.HasPrefix(platform, "darwin-") {
+			cmd := exec.Command("codesign", "--force", "--sign", identity, "--options", "runtime", "--timestamp", lib)
+			if b, err := cmd.CombinedOutput(); err != nil {
+				return nil, fmt.Errorf("codesign %s/%s: %v\n%s", platform, name, err, b)
+			}
+		}
+		b, err := os.ReadFile(lib)
+		if err != nil {
+			return nil, err
+		}
+		f, err := pack(out, name, platform+"-"+name+".gz", b)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
 }
 
 // pack gzips b into out as asset.
@@ -226,11 +241,7 @@ func writeManifest(file string, platforms []string, libs map[string][]packed, va
 
 // fetch returns the path of url's file in the user's cache, downloading it
 // there first, unless it is there already: what has sha256 as its digest.
-func fetch(url, sum string) (string, error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
+func fetch(cache, url, sum string) (_ string, err error) {
 	file := filepath.Join(cache, "mygo-cloudmusic", "sherpa-onnx", sum, path.Base(url))
 	if digest(file) == sum {
 		return file, nil
@@ -247,10 +258,18 @@ func fetch(url, sum string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return "", err
 	}
-	out, err := os.Create(file + ".part")
+	out, err := os.CreateTemp(filepath.Dir(file), ".download-*.part")
 	if err != nil {
 		return "", err
 	}
+	part := out.Name()
+	defer func() {
+		if err != nil {
+			if removeErr := os.Remove(part); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				err = errors.Join(err, removeErr)
+			}
+		}
+	}()
 	h := sha256.New()
 	_, err = io.Copy(io.MultiWriter(out, h), res.Body)
 	if cerr := out.Close(); err == nil {
@@ -260,10 +279,9 @@ func fetch(url, sum string) (string, error) {
 		return "", err
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != sum {
-		os.Remove(file + ".part")
 		return "", fmt.Errorf("%s: digest %s, want %s", url, got, sum)
 	}
-	return file, os.Rename(file+".part", file)
+	return file, os.Rename(part, file)
 }
 
 func digest(file string) string {

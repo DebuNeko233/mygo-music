@@ -49,7 +49,7 @@ func (p *Player) PlayTemporary(track netease.Track, local *LocalAudio) {
 	}
 	p.queueRevision++
 	p.step, p.tries = 1, 0
-	p.loadTrack(at, 0, true, 0, local)
+	p.loadTrack(at, 0, true, 0, local, false)
 }
 
 func (p *Player) hasTemporary() bool {
@@ -93,7 +93,7 @@ func (p *Player) stopTemporary() {
 	p.removeTemporary()
 	if len(p.order) != 0 {
 		p.step, p.tries = 0, 0
-		p.loadSkipping(at, 0, false, pos)
+		p.restorePaused(at, pos)
 		return
 	}
 	p.stop()

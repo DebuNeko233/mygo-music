@@ -1,18 +1,21 @@
 package app
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 )
 
 // fakeRecent answers for what the listener played lately, as NetEase does:
 // two songs, a playlist, an album and an episode, counted as they are asked
 // for.
-func fakeRecent(t *testing.T) *int {
+func fakeRecent(t *testing.T) *atomic.Int32 {
 	t.Helper()
 	oldPlays, oldPlaylists, oldAlbums := recentPlays, recentPlaylists, recentAlbums
 	oldPodcasts, oldVoices := recentPodcasts, recentVoices
@@ -21,9 +24,9 @@ func fakeRecent(t *testing.T) *int {
 		recentPodcasts, recentVoices = oldPodcasts, oldVoices
 	})
 	heard := time.Now().Add(-3 * time.Minute)
-	calls := 0
+	var calls atomic.Int32
 	recentPlays = func(limit int) ([]netease.Play, error) {
-		calls++
+		calls.Add(1)
 		return []netease.Play{
 			{Track: netease.Track{ID: 900, Name: "玫瑰色的你", Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, Duration: 240000}, At: heard, Device: "iphone"},
 			{Track: netease.Track{ID: 901, Name: "蓝天白云", Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, Duration: 220000}, At: heard.Add(-time.Hour), Device: "osx"},
@@ -103,16 +106,16 @@ func TestRecentVoicesTabPlaysEpisode(t *testing.T) {
 func TestRecentPageAsksAgainWhenOld(t *testing.T) {
 	calls := fakeRecent(t)
 	a, posts, tt := recentTestApp(t)
-	if *calls != 1 {
-		t.Fatalf("asked for the songs %d times, want once", *calls)
+	if calls.Load() != 1 {
+		t.Fatalf("asked for the songs %d times, want once", calls.Load())
 	}
 	a.recent.at = time.Now().Add(-time.Hour)
 	tt.Frame()
-	for i := 0; i < 20 && *calls == 1; i++ {
+	for i := 0; i < 20 && calls.Load() == 1; i++ {
 		refreshPost(t, posts)
 	}
-	if *calls != 2 {
-		t.Errorf("asked for the songs %d times, want twice", *calls)
+	if calls.Load() != 2 {
+		t.Errorf("asked for the songs %d times, want twice", calls.Load())
 	}
 }
 
@@ -133,5 +136,39 @@ func TestRecentPlaysSayWhen(t *testing.T) {
 		if got := playedAt(c.at, c.device, now); got != c.want {
 			t.Errorf("playedAt(%v, %q) = %q, want %q", c.at, c.device, got, c.want)
 		}
+	}
+}
+
+// A saved recent list can be published while its network refresh is still blocked.
+func TestRecentLoadsSnapshotOffTheUIThread(t *testing.T) {
+	fakeRecent(t)
+	a := newTestApp()
+	a.profile = &netease.Profile{UserID: 7}
+	store := diskcache.New(t.TempDir(), 1<<20)
+	defer store.Close()
+	a.browseCache = store
+	store.Put("7", "recent", cacheBytes(keptRecent{
+		Songs: []netease.Play{{Track: netease.Track{ID: 42}}},
+	}), store.Epoch())
+	posts := testPosts(a)
+	release := make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	defer unblock()
+	recentPlays = func(int) ([]netease.Play, error) {
+		<-release
+		return nil, netease.ErrOffline
+	}
+	a.loadRecent()
+	if a.recent.shown {
+		t.Fatal("loadRecent read the disk snapshot before returning")
+	}
+	refreshPost(t, posts)
+	if !a.recent.shown || !a.recent.loading || len(a.recent.tracks) != 1 || a.recent.tracks[0].ID != 42 {
+		t.Fatalf("cached list did not appear before the refresh: %+v", a.recent)
+	}
+	unblock()
+	refreshPost(t, posts)
+	if a.recent.loading || len(a.recent.tracks) != 1 {
+		t.Fatal("offline refresh discarded the cached list")
 	}
 }

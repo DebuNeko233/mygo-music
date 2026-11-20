@@ -675,3 +675,40 @@ func TestLikeCurrent(t *testing.T) {
 		t.Fatalf("episode liked %v, its audio %v", a.likedPrograms[3], a.liked[13])
 	}
 }
+
+// Liking a song saves the likes snapshot without replacing unchanged list or album snapshots.
+func TestSongLikeOnlyPersistsChangedSnapshots(t *testing.T) {
+	old := likeSong
+	defer func() { likeSong = old }()
+	likeSong = func(int64, bool) error { return nil }
+	a := newTestApp()
+	a.profile = &netease.Profile{UserID: 7}
+	a.mine = []netease.Playlist{{ID: 12, Name: "existing"}}
+	a.subsShown = true
+	a.subAlbums = []netease.AlbumProfile{{Album: netease.Album{ID: 13, Name: "existing"}}}
+	dir := t.TempDir()
+	store := diskcache.New(dir, 1<<20)
+	defer store.Close()
+	a.browseCache = store
+	store.Put("7", "mine", cacheBytes(keptLists{Mine: a.mine}), store.Epoch())
+	store.Put("7", "albums", cacheBytes(a.subAlbums), store.Epoch())
+	_, mineAt := store.Read("7", "mine")
+	_, albumsAt := store.Read("7", "albums")
+	if mineAt.IsZero() || albumsAt.IsZero() {
+		t.Fatal("could not prepare cached library")
+	}
+	posts := testPosts(a)
+	a.toggleLike(&netease.Track{ID: 42})
+	refreshPost(t, posts)
+	store.Close() // Drain the writes before reading their persisted timestamps.
+	reopened := diskcache.New(dir, 1<<20)
+	defer reopened.Close()
+	if value, _ := reopened.Read("7", "likes"); string(value) != "[42]" {
+		t.Fatalf("confirmed likes snapshot was not saved: %s", value)
+	}
+	for key, want := range map[string]time.Time{"mine": mineAt, "albums": albumsAt} {
+		if _, at := reopened.Read("7", key); !at.Equal(want) {
+			t.Errorf("%s was rewritten by a like", key)
+		}
+	}
+}

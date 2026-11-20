@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -346,8 +347,7 @@ func TestCacheDirectoryFrames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	if err := png.Encode(f, tt.Image()); err != nil {
+	if err := errors.Join(png.Encode(f, tt.Image()), f.Close()); err != nil {
 		t.Fatal(err)
 	}
 }

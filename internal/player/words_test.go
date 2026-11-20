@@ -23,7 +23,7 @@ func TestAFailedLyricRequestIsNotAnInstrumental(t *testing.T) {
 		return "", "", "", io.ErrUnexpectedEOF
 	}
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}}, 0)
 
 	pump(t, ch, "the words to be given up on", func() bool {
@@ -50,7 +50,7 @@ func TestTheWordsComeWhenTheyCanBeAskedAgain(t *testing.T) {
 		return "[00:01.00]你好\n", "", "", nil
 	}
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}}, 0)
 
 	pump(t, ch, "the words to come", func() bool {

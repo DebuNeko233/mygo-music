@@ -120,8 +120,11 @@ func TestImageCacheStaleThenConditionalRequest(t *testing.T) {
 	close(release)
 	<-flight.done
 	b, _ = store.Read("requests", imageIdentity(req))
-	json.Unmarshal(b, &record)
-	if record.Expires.Before(time.Now()) || record.Content != content {
+	var refreshed imageRecord
+	if err := json.Unmarshal(b, &refreshed); err != nil {
+		t.Fatal(err)
+	}
+	if refreshed.Expires.Before(time.Now()) || refreshed.Content != content {
 		t.Fatal("304 did not preserve and freshen content")
 	}
 }

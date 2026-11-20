@@ -38,16 +38,59 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 	// or any unrelated file created meanwhile, is never removed.
 	defer func() {
 		if err != nil && created {
-			os.Remove(target)
+			if removeErr := removeIfPresent(target); removeErr != nil {
+				err = errors.Join(err, removeErr)
+			}
 		}
 	}()
 	stage, err := os.MkdirTemp(target, stagePrefix)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { os.RemoveAll(stage); forgetJournal(options.Journal, stage) }()
-	if err = recordStage(options.Journal, target, stage); err != nil {
-		return nil, err
+	var record stageRecord
+	var published []string
+	journaled := false
+	defer func() {
+		if !journaled {
+			if err != nil {
+				if cleanupErr := errors.Join(rollback(target, files, published), os.RemoveAll(stage)); cleanupErr != nil {
+					err = errors.Join(err, cleanupErr)
+				}
+			} else {
+				warning = errors.Join(warning, os.RemoveAll(stage))
+			}
+			return
+		}
+		var active Layout
+		if err == nil {
+			active = Layout{Root: target, Songs: filepath.Join(target, "songs"), Browse: filepath.Join(target, "browse-v1"), Artwork: filepath.Join(target, ArtworkDir)}
+		}
+		cleanupErr := recoverStage(record, active)
+		if cleanupErr == nil {
+			if err != nil {
+				for _, name := range published {
+					if removeErr := removeIfPresent(filepath.Join(target, name)); removeErr != nil {
+						err = errors.Join(err, removeErr)
+					}
+				}
+			}
+			cleanupErr = forgetJournal(options.Journal, record.Stage)
+		}
+		if cleanupErr == nil {
+			return
+		}
+		if err != nil {
+			err = errors.Join(err, cleanupErr)
+		} else {
+			warning = errors.Join(warning, cleanupErr)
+		}
+	}()
+	if options.Journal != "" {
+		record, err = recordStage(options.Journal, target, stage)
+		if err != nil {
+			return nil, err
+		}
+		journaled = true
 	}
 	for _, name := range publications {
 		if err = os.MkdirAll(filepath.Join(stage, name), 0o700); err != nil {
@@ -104,52 +147,21 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 	if err = validate(stage); err != nil {
 		return nil, err
 	}
-	// Flat song-only moves and whole layouts use the same child publication,
-	// so a target mount point is never removed or renamed.
-	if len(publications) == 1 && publications[0] == "" {
-		publications = nil
-		entries, readErr := os.ReadDir(stage)
-		if readErr != nil {
-			return nil, readErr
-		}
-		for _, entry := range entries {
-			if entry.Name() != stageMarker {
-				publications = append(publications, entry.Name())
-			}
-		}
-	}
-	var published []string
-	rollback := func() {
-		owned := func(name string) bool {
-			for _, root := range published {
-				if name == root || filepath.Dir(name) == root {
-					return true
-				}
-			}
-			return false
-		}
-		for _, file := range files {
-			if !file.reused && owned(file.name) {
-				os.Remove(filepath.Join(target, file.name))
-			}
-		}
-		for _, name := range published {
-			os.Remove(filepath.Join(target, name))
-		}
-	}
 	for _, name := range publications {
 		if err = ctx.Err(); err != nil {
-			rollback()
 			return nil, err
+		}
+		if journaled {
+			if err = record.markPublication(name); err != nil {
+				return nil, err
+			}
 		}
 		to := filepath.Join(target, name)
 		info, statErr := os.Lstat(to)
 		if statErr == nil && !info.IsDir() {
-			rollback()
 			return nil, fmt.Errorf("%w：%s", ErrConflict, to)
 		}
 		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-			rollback()
 			return nil, statErr
 		}
 		if statErr == nil {
@@ -158,21 +170,17 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 			err = nil
 		}
 		if err != nil {
-			rollback()
 			return nil, err
 		}
 		if err = os.Rename(filepath.Join(stage, name), to); err != nil {
-			rollback()
 			return nil, err
 		}
 		published = append(published, name)
 	}
 	if err = ctx.Err(); err != nil {
-		rollback()
 		return nil, err
 	}
 	if err = save(); err != nil {
-		rollback()
 		return nil, err
 	}
 	// save also rebinds read-only stores before source files are retired.
@@ -183,4 +191,21 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 		}
 	}
 	return warning, nil
+}
+
+// Callers without a journal only need to undo publications in this process.
+func rollback(target string, files []cacheFile, published []string) (err error) {
+	for _, name := range published {
+		for _, file := range files {
+			if !file.reused && filepath.Dir(file.name) == name {
+				if removeErr := removeIfPresent(filepath.Join(target, file.name)); removeErr != nil {
+					err = errors.Join(err, removeErr)
+				}
+			}
+		}
+		if removeErr := removeIfPresent(filepath.Join(target, name)); removeErr != nil {
+			err = errors.Join(err, removeErr)
+		}
+	}
+	return err
 }

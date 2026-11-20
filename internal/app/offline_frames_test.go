@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -45,10 +46,9 @@ func TestOfflineFrames(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err = png.Encode(file, tt.Image()); err != nil {
+			if err := errors.Join(png.Encode(file, tt.Image()), file.Close()); err != nil {
 				t.Fatal(err)
 			}
-			file.Close()
 		}
 	}
 }
@@ -83,9 +83,8 @@ func TestOfflineUnavailableFrames(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = png.Encode(file, tt.Image()); err != nil {
+		if err := errors.Join(png.Encode(file, tt.Image()), file.Close()); err != nil {
 			t.Fatal(err)
 		}
-		file.Close()
 	}
 }

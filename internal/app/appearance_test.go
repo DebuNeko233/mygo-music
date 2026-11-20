@@ -209,7 +209,7 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 	a.settings.BackdropHomeOpacity = 1
 	a.settings.BackdropPlayingOpacity = 0
 	// Read, as the app reads them: off the main thread, kept here.
-	a.pics = map[string]*backdropPicture{path: decodePicture(path)}
+	a.pics = map[string]*backdropEntry{path: {pic: decodePicture(path)}}
 	tt := ui.NewTester(a.view, 900, 600)
 	tt.Frame()
 	const w, h = 900, 600
@@ -303,7 +303,7 @@ func TestPlayingBackdropCoversTheStage(t *testing.T) {
 	a.settings.BackdropPlaying = []string{path}
 	a.settings.BackdropHomeOpacity = 0
 	a.settings.BackdropPlayingOpacity = 1
-	a.pics = map[string]*backdropPicture{path: decodePicture(path)}
+	a.pics = map[string]*backdropEntry{path: {pic: decodePicture(path)}}
 	const w, h = 400, 300
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Box(c).Fill().Background(ui.Hex("#0b0b0d"))
@@ -384,46 +384,38 @@ func writePicture(t *testing.T, path string, w, h int, fill color.RGBA) {
 	}
 }
 
-// The pictures no page stands on anymore go, and past the limit those the
-// page drawn now does not show, so that choosing other pictures does not
-// keep every one ever chosen decoded; one still being read stays, as its
-// pixels land where the page looks for them.
-func TestBackdropPicturesKeepOnlyThoseChosen(t *testing.T) {
+// Both pages used to evict each other's pictures when drawn in the same frame.
+func TestBackdropFramesKeepBothPagesDecoded(t *testing.T) {
 	a := newTestApp()
-	a.settings = defaultSettings()
-	pic := func() *backdropPicture { return &backdropPicture{w: 2, h: 2} }
-	a.pics = map[string]*backdropPicture{}
-	a.settings.BackdropHome = []string{"chosen.png"}
-	a.settings.BackdropPlaying = []string{"reading.png"}
-	a.pics["chosen.png"] = pic()
-	a.pics["reading.png"] = nil // on its way
-	for i := 0; i < backdropLimit+4; i++ {
-		a.pics[fmt.Sprintf("gone%d.png", i)] = pic()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "playing.png")
+	writePicture(t, path, 8, 8, color.RGBA{R: 255, A: 255})
+	playing := decodePicture(path)
+	if playing == nil {
+		t.Fatal("could not decode the playing backdrop")
 	}
-	a.pictures(a.settings.BackdropHome)
-	if len(a.pics) != 2 || a.pics["chosen.png"] == nil || a.pics["reading.png"] != nil {
-		t.Fatalf("kept %d pictures, want the two chosen", len(a.pics))
+	a.settings.BackdropPlaying = []string{path}
+	entry := &backdropEntry{pic: playing}
+	a.pics = map[string]*backdropEntry{path: entry}
+	for i := range 8 {
+		path := filepath.Join(dir, fmt.Sprintf("home%d.png", i))
+		a.settings.BackdropHome = append(a.settings.BackdropHome, path)
+		a.pics[path] = &backdropEntry{pic: playing}
 	}
-	// Chosen by the dozen, the page drawn now keeps every picture it stands
-	// on, and the other page's go past the limit: they are read again when
-	// they show.
-	a.pics = map[string]*backdropPicture{}
-	var home []string
-	for i := 0; i < backdropLimit+4; i++ {
-		path := fmt.Sprintf("pick%d.png", i)
-		home = append(home, path)
-		a.pics[path] = pic()
-	}
-	a.pics["playing.png"] = pic()
-	a.settings.BackdropHome, a.settings.BackdropPlaying = home, []string{"playing.png"}
-	a.pictures(home)
-	for _, path := range home {
-		if a.pics[path] == nil {
-			t.Fatalf("dropped %q, which the page drawn now stands on", path)
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.pictures(a.settings.BackdropHome)
+		a.backdrop(c, nil, ui.RGB(120, 120, 130))
+	}, 300, 240)
+	for range 3 {
+		tt.Frame()
+		if a.pics[path] != entry {
+			t.Fatal("building the home backdrop evicted the playing backdrop")
 		}
 	}
-	if a.pics["playing.png"] != nil {
-		t.Error("kept the other page's pictures over the limit")
+	a.settings.BackdropHome = nil
+	a.forgetPictures()
+	if len(a.pics) != 1 || a.pics[path] != entry {
+		t.Fatal("removing home backgrounds did not release their cached pictures")
 	}
 }
 
