@@ -394,11 +394,11 @@ func TestStageFrames(t *testing.T) {
 		if s.id != "" {
 			name = "stage-" + s.id + ".png"
 		}
-		stageFrames(t, s.id, filepath.Join(dir, name))
+		stageFrames(s.id, filepath.Join(dir, name))
 	}
 }
 
-func stageFrames(t *testing.T, style, path string) {
+func stageFrames(style, path string) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.StageStyle = style

@@ -11,6 +11,7 @@ import (
 
 // coverApp is Now Playing showing the second of three songs.
 func coverApp(t *testing.T) (*app, *ui.Tester, ui.Rect) {
+	t.Helper()
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
@@ -28,23 +29,6 @@ func coverApp(t *testing.T) (*app, *ui.Tester, ui.Rect) {
 		t.Fatal("no cover")
 	}
 	return a, tt, r
-}
-
-// drag drags from the middle of r by dx, over a few frames, and lets go
-// after hold, still.
-func drag(tt *ui.Tester, r ui.Rect, dx float32, hold time.Duration) {
-	x, y := r.X+r.W/2, r.Y+r.H/2
-	tt.Press(x, y)
-	for i := 1; i <= 6; i++ {
-		tt.Advance(16 * time.Millisecond)
-		tt.Move(x+dx*float32(i)/6, y)
-	}
-	if hold > 0 {
-		tt.Advance(hold)
-	}
-	tt.Release(x+dx, y)
-	tt.Advance(time.Second)
-	tt.Frame()
 }
 
 // Flung far to the left, the cover flies off for the next song; to the

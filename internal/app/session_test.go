@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/audio"
-
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -26,8 +24,7 @@ func TestSessionRestsWhilePaused(t *testing.T) {
 	defer a.sessionSave.wait()
 	a.pl.Changed = a.keepSession
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
-	out := audio.NewPlayer(&silence{})
-	out.SetVolume(0)
+	out := newSilentAudio()
 	out.Play()
 	a.pl.Attach(out)
 	defer out.Close()
