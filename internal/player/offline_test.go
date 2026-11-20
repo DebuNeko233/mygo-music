@@ -51,7 +51,7 @@ func TestOfflineCompleteSongUsesCache(t *testing.T) {
 	_, stream, err := p.open(netease.Track{ID: 1}, "exhigh", nil, func(int64, string) (*netease.Stream, error) {
 		t.Error("asked for cached audio URL")
 		return nil, netease.ErrOffline
-	}, cache)
+	}, cache, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestOfflineUsesBestCacheWhenExactQualityIsMissing(t *testing.T) {
 			st, stream, err := p.open(netease.Track{ID: 1}, tc.level, nil, func(int64, string) (*netease.Stream, error) {
 				t.Fatal("asked for an audio URL while offline")
 				return nil, netease.ErrOffline
-			}, cache)
+			}, cache, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

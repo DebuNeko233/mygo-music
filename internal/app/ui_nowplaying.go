@@ -501,9 +501,9 @@ func (a *app) nowPlayingTime(c *ui.Context) {
 		}
 	}
 	loading := pl.Loading()
-	if loading {
+	if pl.Buffering() {
 		status = "正在缓冲…"
-	} else if pl.Err() != "" && !pl.PlaybackRetryable() {
+	} else if !loading && pl.Err() != "" && !pl.PlaybackRetryable() {
 		status = pl.Err()
 	}
 	if !preview && !loading && pl.Playing() && (duration <= 0 || position < duration) {
