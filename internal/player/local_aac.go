@@ -15,6 +15,7 @@ var (
 	registerLocalAAC  sync.Once
 	localAACFactoryMu sync.RWMutex
 	localAACFactory   = newLocalAACCodec
+	newADTSDecoder    = faad2.NewDecoder // tests observe failed-open cleanup
 )
 
 // MyGo's small AAC-LC decoder remains the normal path. FAAD2 handles its
@@ -161,7 +162,7 @@ type adtsFAADStream struct {
 	failure decoderFailure
 }
 
-func openFAADADTS(dl *download) (*adtsFAADStream, error) {
+func openFAADADTS(dl *download) (_ *adtsFAADStream, err error) {
 	dl.mu.Lock()
 	file := dl.file
 	dl.mu.Unlock()
@@ -196,6 +197,12 @@ func openFAADADTS(dl *download) (*adtsFAADStream, error) {
 	if err := s.resetDecoder(0); err != nil {
 		return nil, err
 	}
+	// Until opening succeeds, the caller cannot close this decoder for us.
+	defer func() {
+		if err != nil {
+			s.dec.Close(context.Background())
+		}
+	}()
 	// ADTS has no explicit SBR flag. Decode the first packet to discover
 	// FAAD2's upsampled output rate before exposing the stream's length.
 	packet, err := s.packet(0)
@@ -223,8 +230,6 @@ func openFAADADTS(dl *download) (*adtsFAADStream, error) {
 	s.pend = adtsPCM(s.pend[:0], pcm, int(s.dec.Channels()))
 	packetFrames := len(s.pend) / 2
 	if packetFrames <= 0 || s.rate <= 0 {
-		s.dec.Close(context.Background())
-		s.dec = nil
 		return nil, errors.New("aac: invalid HE-AAC output")
 	}
 	s.rate = packetFrames * s.rate / aac.FrameLength
@@ -252,7 +257,7 @@ func (s *adtsFAADStream) resetDecoder(at int) error {
 	if s.dec != nil {
 		s.dec.Close(context.Background())
 	}
-	dec, err := faad2.NewDecoder(context.Background())
+	dec, err := newADTSDecoder(context.Background())
 	if err != nil {
 		return err
 	}
