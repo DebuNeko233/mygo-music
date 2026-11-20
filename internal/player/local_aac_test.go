@@ -1,13 +1,90 @@
 package player
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	faad2 "github.com/llehouerou/go-faad2"
 )
+
+// Failed ADTS opens release the initialized decoder while a successful stream keeps it until Close.
+func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
+	for _, name := range []string{"packet read failure", "decode failure", "success"} {
+		t.Run(name, func(t *testing.T) {
+			data := testAudio(t, "seek-he.aac")
+			if name == "decode failure" {
+				for at := 0; at+7 <= len(data); {
+					length, _, ok := adtsPacket(data[at:])
+					if !ok || at+length > len(data) {
+						break
+					}
+					for i := at + 7; i < at+length; i++ {
+						data[i] = 0xff
+					}
+					at += length
+				}
+			}
+			path := filepath.Join(t.TempDir(), "open-he.aac")
+			if err := os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			file, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dl := opened(file, int64(len(data)))
+			dl.local = true
+			defer dl.Close()
+			factory := newADTSDecoder
+			var decoder *faad2.Decoder
+			newADTSDecoder = func(ctx context.Context) (*faad2.Decoder, error) {
+				var err error
+				decoder, err = factory(ctx)
+				if name == "packet read failure" {
+					if truncateErr := os.Truncate(path, 0); truncateErr != nil {
+						t.Fatal(truncateErr)
+					}
+				}
+				return decoder, err
+			}
+			t.Cleanup(func() {
+				newADTSDecoder = factory
+				if decoder != nil {
+					decoder.Close(context.Background())
+				}
+			})
+			s, err := openFAADADTS(dl)
+			if decoder == nil {
+				t.Fatal("no decoder was initialized")
+			}
+			if name == "success" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := decoder.Decode(t.Context(), testADTSPacket(t, 0)); err != nil {
+					t.Fatalf("successful open released its decoder: %v", err)
+				}
+				if err := s.Close(); err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || s != nil {
+				t.Fatalf("open = %v, %v, want failure", s, err)
+			} else if name == "packet read failure" && !errors.Is(err, io.EOF) {
+				t.Fatalf("packet read returned %v, want EOF after truncation", err)
+			} else if name == "decode failure" && !errors.Is(err, faad2.ErrDecodeFailed) {
+				t.Fatalf("decode returned %v, want a decoding error", err)
+			}
+			if _, err := decoder.Decode(t.Context(), testADTSPacket(t, 0)); !errors.Is(err, faad2.ErrDecoderClosed) {
+				t.Fatalf("decoder after close or failed open: %v", err)
+			}
+		})
+	}
+}
 
 // PCM conversion appends stereo samples to the caller's existing output,
 // duplicates mono input, and ignores an incomplete final multichannel frame.
