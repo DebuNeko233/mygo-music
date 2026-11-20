@@ -326,7 +326,10 @@ func TestOfflineExpiredAccountRequiresLogin(t *testing.T) {
 	ask, clear := accountAsk, clearLoginSession
 	t.Cleanup(func() { accountAsk, clearLoginSession = ask, clear })
 	cleared := false
-	clearLoginSession = func() { cleared = true }
+	clearLoginSession = func() error {
+		cleared = true
+		return nil
+	}
 	accountAsk = func() (*netease.Profile, error) { return nil, netease.ErrNotLoggedIn }
 	a.mine = []netease.Playlist{{ID: 9}}
 	a.playlists[9] = &netease.Playlist{ID: 9}

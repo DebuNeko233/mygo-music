@@ -238,9 +238,16 @@ func post(path string, form url.Values, out any) error {
 // that has to reach the account a session was kept by after it was cleared
 // here.
 func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error {
+	return postAsClient(httpClient, path, form, cookies, out)
+}
+
+func postAsClient(client *http.Client, path string, form url.Values, cookies []*http.Cookie, out any) error {
 	// The web API drops what it does not know the caller meant: following an
 	// artist and signing out came back with no effect at all without it.
-	token := csrf()
+	token := ""
+	if client.Jar != nil {
+		token = csrfIn(client.Jar.Cookies(siteURL))
+	}
 	if cookies != nil {
 		token = csrfIn(cookies)
 	}
@@ -257,7 +264,7 @@ func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error
 		}
 		req.Header.Set("Cookie", strings.Join(parts, "; "))
 	}
-	return do(req, out)
+	return doWithClient(client, req, out)
 }
 
 func do(req *http.Request, out any) error {
