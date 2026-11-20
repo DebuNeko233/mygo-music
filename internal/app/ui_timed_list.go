@@ -9,7 +9,7 @@ import (
 )
 
 // Short blocks still use their natural layout so they can center as a unit.
-const timedListThreshold = 64
+const timedListThreshold = 32
 const timedLineGap = 6
 const timedLineInsetX = 12
 const timedLineInsetY = 10

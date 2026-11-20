@@ -274,7 +274,7 @@ func (fx lyricEdgeFade) PaintEffect(p *ui.Painter, box ui.Rect, bitmap *ui.Bitma
 		"Hover": hover, "Credits": credits,
 		"ContentSize": [2]float32{float32(w), float32(h)}, "TextRight": textRight,
 	}
-	pass.Draw(p, func(cp *ui.Painter) {
+	pass.DrawCached(p, func(cp *ui.Painter) {
 		kernel[0].Draw(cp, ui.Rect{W: float32(w), H: float32(h)}, shader.Options{
 			Uniforms: uniforms, Images: [4]*ui.Bitmap{bitmap},
 		})

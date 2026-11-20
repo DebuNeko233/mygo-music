@@ -642,6 +642,9 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 		key = "lyric-info"
 	}
 	scroll := ui.Scroll(c.Key(key)).Grow(1).TrackScroll(&a.lyricScroll).Margin(0, -extend, 0, 0).Label("歌词")
+	if a.settings.LyricEdgeFade {
+		scroll.Cache()
+	}
 	viewport := scroll.LayoutBounds()
 	if !hasSinging && viewport.H > 0 {
 		right = min(right, max(0, viewport.W-lyricInfoMinWidth-bar.TrackWidth))
