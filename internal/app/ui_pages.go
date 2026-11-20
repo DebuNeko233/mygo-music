@@ -71,13 +71,7 @@ func (a *app) homePage(c *ui.Context) {
 		}
 
 		a.section(c, "官方榜单")
-		official := a.charts[:min(4, len(a.charts))]
-		cols := min(4, max(2, a.columns(c, 260)))
-		ui.Grid(c).Columns(cols).Gap(20).Children(func() {
-			for i := range official {
-				a.chartCard(c.Key(official[i].ID), &official[i])
-			}
-		})
+		a.officialChartGrid(c)
 
 		a.section(c, "推荐歌单")
 		ui.Grid(c).Columns(a.columns(c, 168)).GapX(20).GapY(28).Children(func() {
@@ -85,6 +79,17 @@ func (a *app) homePage(c *ui.Context) {
 				a.playlistCard(c.Key(a.featured[i].ID), &a.featured[i])
 			}
 		})
+	})
+}
+
+// officialChartGrid shows the leading charts on the home and charts pages.
+func (a *app) officialChartGrid(c *ui.Context) {
+	official := a.charts[:min(4, len(a.charts))]
+	cols := min(4, max(2, a.columns(c, 260)))
+	ui.Grid(c).Columns(cols).Gap(20).Children(func() {
+		for i := range official {
+			a.chartCard(c.Key(official[i].ID), &official[i])
+		}
 	})
 }
 
@@ -110,13 +115,7 @@ func (a *app) chartsPage(c *ui.Context) {
 			a.playlistCardsSkeleton(c, s, a.columns(c, 150)*2, 150, true)
 			return
 		}
-		official := a.charts[:min(4, len(a.charts))]
-		cols := min(4, max(2, a.columns(c, 260)))
-		ui.Grid(c).Columns(cols).Gap(20).Children(func() {
-			for i := range official {
-				a.chartCard(c.Key(official[i].ID), &official[i])
-			}
-		})
+		a.officialChartGrid(c)
 		if len(a.charts) > 4 {
 			a.section(c, "全部榜单")
 			rest := a.charts[4:]
