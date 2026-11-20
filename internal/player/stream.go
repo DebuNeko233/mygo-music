@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bufio"
 	"cmp"
 	"encoding/binary"
 	"errors"
@@ -81,6 +82,13 @@ func (r *downloadReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
+// MP3 headers and side information arrive in small reads. Buffer them so
+// each does not lock the download and read its file again. A partial buffer
+// is usable as soon as bytes arrive; it need not fill before playback starts.
+func mp3DownloadReader(d *download, at int64) *bufio.Reader {
+	return bufio.NewReaderSize(&downloadReader{d: d, pos: at}, audioReadBuffer)
+}
+
 // A stream decodes a download for package audio, and measures the
 // spectrum of what it decodes, for the visualizers: an MP3's or a FLAC's.
 type stream interface {
@@ -148,7 +156,7 @@ type mp3Stream struct {
 
 func openMP3StreamSpectrum(dl *download, durationMs int64, measure bool) (*mp3Stream, error) {
 	s := &mp3Stream{dl: dl, drop: dl.Close}
-	var reader io.Reader = &downloadReader{d: dl}
+	var reader io.Reader
 	if dl.local {
 		dl.mu.Lock()
 		file := dl.file
@@ -156,7 +164,9 @@ func openMP3StreamSpectrum(dl *download, durationMs int64, measure bool) (*mp3St
 		if file == nil {
 			return nil, io.ErrClosedPipe
 		}
-		reader = io.NewSectionReader(file, 0, dl.size)
+		reader = io.NewSectionReader(&bufferedReaderAt{source: file}, 0, dl.size)
+	} else {
+		reader = mp3DownloadReader(dl, 0)
 	}
 	dec, err := gomp3.NewDecoder(reader)
 	if err != nil {
@@ -266,7 +276,7 @@ func (s *mp3Stream) SetPosition(frame int64) error {
 	// frames, including the start of the song on repeat, can be read in place.
 	s.dl.seekTo(off)
 	off = findFrame(s.dl, off)
-	dec, err := gomp3.NewDecoder(&downloadReader{d: s.dl, pos: off})
+	dec, err := gomp3.NewDecoder(mp3DownloadReader(s.dl, off))
 	if err != nil {
 		s.failure.record(err)
 		return err
