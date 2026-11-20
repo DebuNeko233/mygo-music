@@ -146,10 +146,6 @@ type mp3Stream struct {
 	failure decoderFailure
 }
 
-func openMP3Stream(dl *download, durationMs int64) (*mp3Stream, error) {
-	return openMP3StreamSpectrum(dl, durationMs, true)
-}
-
 func openMP3StreamSpectrum(dl *download, durationMs int64, measure bool) (*mp3Stream, error) {
 	s := &mp3Stream{dl: dl, drop: dl.Close}
 	var reader io.Reader = &downloadReader{d: dl}

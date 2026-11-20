@@ -91,7 +91,7 @@ func TestAnimatedWebPCover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bmp, img, err := decodeArt(b)
+	bmp, img, _, err := decodeArtSized(b, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestArtCacheSizesCoversByTheirPixels(t *testing.T) {
 	old := loadArt
 	defer func() { loadArt = old }()
 	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
-		bmp, img, err := decodeArt(b)
+		bmp, img, _, err := decodeArtSized(b, 0)
 		return bmp, img, len(b), err
 	}
 	posted := make(chan func(), 1)

@@ -208,7 +208,7 @@ func TestMoveLayoutToVolumeRoot(t *testing.T) {
 	song(t, source.Songs)
 	snapshot(t, source.Browse)
 	snapshot(t, source.Artwork)
-	warning, err := MoveLayout(source, target, true, false, func() error { return nil })
+	warning, err := MoveLayoutWithOptions(source, target, true, false, func() error { return nil }, Options{})
 	if err != nil || warning != nil {
 		t.Fatal("migration to volume root failed", warning, err)
 	}
@@ -218,7 +218,7 @@ func TestMoveLayoutToVolumeRoot(t *testing.T) {
 	}
 	checkSnapshot(t, layout(target).Browse, "cached")
 	// Retire only the test's managed files; do not recursively remove a mount.
-	warning, err = MoveLayout(layout(target), source.Root, true, true, func() error { return nil })
+	warning, err = MoveLayoutWithOptions(layout(target), source.Root, true, true, func() error { return nil }, Options{})
 	if err != nil || warning != nil {
 		t.Fatal("return migration failed", warning, err)
 	}

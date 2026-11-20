@@ -25,7 +25,7 @@ func TestShufflePreservesPickedIndexBounds(t *testing.T) {
 			}
 		}
 	}
-	p.PlayShuffled(nil)
+	p.PlayShuffledFrom(nil, PlaySource{})
 	if len(p.Queue()) != 3 || p.Current().ID != 3 {
 		t.Fatal("empty shuffle replaced the queue")
 	}
@@ -41,7 +41,7 @@ func TestEmptyShufflePreservesPlayback(t *testing.T) {
 		tracks := []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}}
 		p.PlayQueue(tracks, 1)
 		order := slices.Clone(p.order)
-		p.PlayShuffled(nil)
+		p.PlayShuffledFrom(nil, PlaySource{})
 		if p.shuffle != shuffle || p.Current().ID != 2 || !slices.Equal(p.order, order) || len(p.Queue()) != len(tracks) {
 			t.Fatalf("empty shuffle changed playback: mode=%v order=%v", p.shuffle, p.order)
 		}

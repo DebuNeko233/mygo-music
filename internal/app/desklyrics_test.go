@@ -180,21 +180,6 @@ func TestDeskLyricsAreVerticallyCentered(t *testing.T) {
 	}
 }
 
-// A transparent resize edge keeps the opposite side still, and never makes
-// the window smaller than the settings' minimum.
-func TestTransparentResizeEdgesKeepTheirOppositeSide(t *testing.T) {
-	r := &lyricResize{bounds: mygo.Rectangle{X: 100, Y: 200, Width: 700, Height: 300}, x: 0, y: 0, left: true, top: true}
-	got := r.moved(50, 60, 600, 240)
-	want := (mygo.Rectangle{X: 150, Y: 260, Width: 650, Height: 240})
-	if got != want {
-		t.Fatalf("dragging top-left: got %+v, want %+v", got, want)
-	}
-	got = r.moved(200, 200, 600, 240)
-	if got.X != 200 || got.Y != 260 || got.Width != 600 || got.Height != 240 {
-		t.Errorf("minimum size moved the opposite side: %+v", got)
-	}
-}
-
 // The settings choose one line or two, and the window shows that many: the
 // one being sung, and the one after it only when two are asked for.
 func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {

@@ -183,13 +183,9 @@ func parseYRC(yrc string) []Line {
 
 // Build returns lyrics from the selected source. Supplemental JSON credits can inform
 // classification but are only included as rows by BuildDisplay.
+// Without word-timed lyrics, it pairs timed lines with their translations.
 func Build(lrc, translation, yrc string) []Line {
 	return buildDisplay(lrc, translation, yrc, yrcCredits(yrc), false).Lines
-}
-
-// mergeLyrics pairs timed lines with their translations, without words' own times.
-func mergeLyrics(lrc, translation string) []Line {
-	return Build(lrc, translation, "")
 }
 
 // SpreadWords splits text into words, each Chinese, Japanese or Korean

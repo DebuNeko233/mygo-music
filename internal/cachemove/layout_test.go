@@ -40,12 +40,12 @@ func TestMoveLayout(t *testing.T) {
 	snapshot(t, source.Artwork)
 	write(t, filepath.Join(source.Root, "personal.txt"), []byte("keep"))
 	write(t, filepath.Join(source.Browse, ".part-incomplete"), []byte("partial"))
-	warning, err := MoveLayout(source, target, true, false, func() error {
+	warning, err := MoveLayoutWithOptions(source, target, true, false, func() error {
 		exists(t, filepath.Join(source.Songs, "123-exhigh.mp3"), true)
 		checkSnapshot(t, layout(target).Browse, "cached")
 		checkSnapshot(t, layout(target).Artwork, "cached")
 		return nil
-	})
+	}, Options{})
 	if err != nil || warning != nil {
 		t.Fatal(warning, err)
 	}
@@ -66,7 +66,7 @@ func TestMoveLayoutSaveFailure(t *testing.T) {
 	snapshot(t, source.Browse)
 	snapshot(t, source.Artwork)
 	injected := errors.New("save failed")
-	_, err := MoveLayout(source, target, true, false, func() error { return injected })
+	_, err := MoveLayoutWithOptions(source, target, true, false, func() error { return injected }, Options{})
 	if !errors.Is(err, injected) {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestMoveLayoutAdoptsExistingSharedCaches(t *testing.T) {
 	snapshot(t, target.Browse)
 	write(t, filepath.Join(target.Songs, "personal.txt"), []byte("keep"))
 	saved := false
-	warning, err := MoveLayout(source, target.Root, false, true, func() error { saved = true; return nil })
+	warning, err := MoveLayoutWithOptions(source, target.Root, false, true, func() error { saved = true; return nil }, Options{})
 	if err != nil || warning != nil || !saved {
 		t.Fatal("could not adopt previous default cache", warning, err)
 	}
@@ -115,14 +115,14 @@ func TestMoveLayoutLegacyRestart(t *testing.T) {
 		}
 	}
 	injected := errors.New("save failed")
-	_, err := MoveLayout(source, target, true, true, func() error { return injected })
+	_, err := MoveLayoutWithOptions(source, target, true, true, func() error { return injected }, Options{})
 	if !errors.Is(err, injected) {
 		t.Fatal(err)
 	}
 	exists(t, filepath.Join(target, "123-exhigh.mp3"), true)
 	exists(t, filepath.Join(target, "songs", "123-exhigh.mp3"), true)
 	checkSnapshot(t, source.Browse, "cached")
-	warning, err := MoveLayout(source, target, true, true, func() error { return nil })
+	warning, err := MoveLayoutWithOptions(source, target, true, true, func() error { return nil }, Options{})
 	if err != nil || warning != nil {
 		t.Fatal(warning, err)
 	}
@@ -141,7 +141,7 @@ func TestMoveLayoutLegacyConflict(t *testing.T) {
 	source.Songs = source.Root
 	song(t, source.Songs)
 	write(t, filepath.Join(source.Root, "songs", "personal.txt"), []byte("keep"))
-	_, err := MoveLayout(source, source.Root, true, true, func() error { t.Fatal("saved conflicting conversion"); return nil })
+	_, err := MoveLayoutWithOptions(source, source.Root, true, true, func() error { t.Fatal("saved conflicting conversion"); return nil }, Options{})
 	if err == nil {
 		t.Fatal("overwrote conflicting folder")
 	}
@@ -192,7 +192,7 @@ func TestMoveAlternateSongFile(t *testing.T) {
 	}
 	meta, _ := json.Marshal(map[string]any{"size": 5, "type": "mp3", "level": "exhigh", "file": name})
 	write(t, filepath.Join(layout(source).Songs, "123-exhigh.json"), meta)
-	warning, err := MoveLayout(layout(source), target, true, false, func() error { return nil })
+	warning, err := MoveLayoutWithOptions(layout(source), target, true, false, func() error { return nil }, Options{})
 	if warning != nil || err != nil {
 		t.Fatal(warning, err)
 	}

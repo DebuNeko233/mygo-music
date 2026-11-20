@@ -106,7 +106,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 			}}
 			warning, err = cachemove.MoveLayoutWithOptions(source, target, migrate, shared, func() error {
 				// Merge on the main thread so settings changed during the
-				// copy are preserved. MoveLayout rolls back if saving fails.
+				// copy are preserved. The move rolls back if saving fails.
 				saved := make(chan error, 1)
 				a.post(func() {
 					if err := ctx.Err(); err != nil {
@@ -127,7 +127,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 					return err
 				}
 				// Rebind while readers can still access the originals. Only
-				// after this callback returns may MoveLayout retire them.
+				// after this callback returns may the move retire them.
 				resumeBrowse(filepath.Join(target, "browse-v1"))
 				resumeImages(filepath.Join(target, cachemove.ArtworkDir))
 				return nil

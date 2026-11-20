@@ -208,7 +208,6 @@ func TestSuggestionOpensPage(t *testing.T) {
 		t.Fatalf("suggestions for %q", q)
 	}
 	// As they land, which post drops without a window.
-	a.suggestions.loading = false
 	a.suggestions.items = suggestionList(netease.Suggestions{
 		Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 8, Name: "迷跡波"}, Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}},
 		Order:  []string{"albums"},

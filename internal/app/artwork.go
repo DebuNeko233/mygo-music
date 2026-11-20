@@ -391,13 +391,6 @@ var loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
 	return decodeArtSized(b, netease.CoverRequestSize(url))
 }
 
-// decodeArt decodes a cover twice: as a bitmap, which keeps the data to
-// decode its pixels again after it drops them, and as an image.
-func decodeArt(b []byte) (*ui.Bitmap, image.Image, error) {
-	bmp, img, _, err := decodeArtSized(b, 0)
-	return bmp, img, err
-}
-
 func decodeArtSized(b []byte, limit int) (*ui.Bitmap, image.Image, int, error) {
 	b = stillCover(b)
 	img, _, err := image.Decode(bytes.NewReader(b))

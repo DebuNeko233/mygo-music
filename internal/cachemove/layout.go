@@ -36,16 +36,12 @@ type cacheFile struct {
 
 var entryName = regexp.MustCompile(`^[a-f0-9]{64}-[a-f0-9]{64}\.entry$`)
 
-// MoveLayout publishes a new root. shared publishes only managed children,
+// MoveLayoutWithOptions publishes a new root. shared publishes only managed children,
 // for the system cache root or an in-place legacy conversion.
 // The caller freezes writers first. A failed copy/save retains every old file;
 // save rebinds snapshot readers before originals retire, including across disks.
-func MoveLayout(source Layout, target string, migrate, shared bool, save func() error) (error, error) {
-	return MoveLayoutWithOptions(source, target, migrate, shared, save, Options{})
-}
-
-// MoveLayoutWithOptions adds cancellation, progress and crash recovery to the
-// same transaction. Read-only stores may remain open until save commits.
+// Options control cancellation, progress and crash recovery for the transaction.
+// Read-only stores may remain open until save commits.
 func MoveLayoutWithOptions(source Layout, target string, migrate, shared bool, save func() error, options Options) (error, error) {
 	if err := Recover(options.Journal, source); err != nil {
 		return nil, err

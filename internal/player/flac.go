@@ -40,10 +40,6 @@ type flacStream struct {
 	lookR    *bufio.Reader  // the scan's frame, header first
 }
 
-func openFLACStream(dl *download) (*flacStream, error) {
-	return openFLACStreamSpectrum(dl, true)
-}
-
 func openFLACStreamSpectrum(dl *download, measure bool) (*flacStream, error) {
 	start, err := flacDataStart(dl)
 	if err != nil {

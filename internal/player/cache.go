@@ -194,19 +194,6 @@ func (c *Cache) download(id int64, level string, st *netease.Stream) *download {
 	return d
 }
 
-// Keeps reports whether the cache would keep a song of size bytes: one of
-// more than a quarter of its limit would push out too many, and none of a
-// cache turned off.
-func (c *Cache) Keeps(size int64) bool {
-	if c == nil {
-		return false
-	}
-	c.mu.Lock()
-	limit := c.limit
-	c.mu.Unlock()
-	return limit > 0 && size <= limit/4
-}
-
 // part makes a file for a song of the stream st to come into, or returns
 // nil if the cache would not keep it. Each has a name of its own: the same
 // song played again while it still comes in has another. The caller holds mu.
