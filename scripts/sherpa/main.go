@@ -134,7 +134,11 @@ func run(identity, out string, platforms []string) error {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err
 	}
-	vad, err := fetch(vadURL, vadSHA256)
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+	vad, err := fetch(cache, vadURL, vadSHA256)
 	if err != nil {
 		return err
 	}
@@ -150,7 +154,7 @@ func run(identity, out string, platforms []string) error {
 	for _, p := range platforms {
 		a := archives[p]
 		url := fmt.Sprintf("https://github.com/k2-fsa/sherpa-onnx/releases/download/v%s/sherpa-onnx-v%s-%s.tar.bz2", version, version, a.name)
-		file, err := fetch(url, a.sha256)
+		file, err := fetch(cache, url, a.sha256)
 		if err != nil {
 			return err
 		}
@@ -237,11 +241,7 @@ func writeManifest(file string, platforms []string, libs map[string][]packed, va
 
 // fetch returns the path of url's file in the user's cache, downloading it
 // there first, unless it is there already: what has sha256 as its digest.
-func fetch(url, sum string) (_ string, err error) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
+func fetch(cache, url, sum string) (_ string, err error) {
 	file := filepath.Join(cache, "mygo-cloudmusic", "sherpa-onnx", sum, path.Base(url))
 	if digest(file) == sum {
 		return file, nil
