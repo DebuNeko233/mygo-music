@@ -191,7 +191,7 @@ func (a *app) failedLoads(manual bool) bool {
 	}
 	switch a.route.page {
 	case pageRecent:
-		if d := &a.recent; !d.loading && d.err != "" && retry(d.failure) {
+		if tab := &a.recent.tabs[a.recentTab]; !tab.loading && tab.failure != nil && retry(tab.failure) {
 			return true
 		}
 	case pagePlaylist:
@@ -256,8 +256,8 @@ func (a *app) retryLoads(manual bool) {
 	}
 	switch a.route.page {
 	case pageRecent:
-		if d := &a.recent; d.err != "" && retry(d.failure) {
-			a.loadRecent()
+		if tab := &a.recent.tabs[a.recentTab]; tab.failure != nil && retry(tab.failure) {
+			a.loadRecentTab(a.recentTab)
 		}
 	case pagePlaylist:
 		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
@@ -433,6 +433,8 @@ func (a *app) recoveryBusy() bool {
 		return true
 	}
 	switch a.route.page {
+	case pageRecent:
+		return a.recent.readingSnapshot || a.recent.tabs[a.recentTab].loading
 	case pagePlaylist:
 		r := a.listRefresh.playlists[a.route.id]
 		return r != nil && r.busy

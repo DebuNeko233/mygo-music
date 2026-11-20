@@ -136,7 +136,10 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	a.settings = defaultSettings()
 	a.profile = &netease.Profile{UserID: 1}
 	a.route, a.recentTab = route{page: pageRecent}, recentPodcastsTab
-	a.recent.shown, a.recent.loading = true, true
+	for i := range a.recent.tabs {
+		a.recent.tabs[i].at = a.listsNow()
+	}
+	a.recent.tabs[recentPodcastsTab].shown = true
 	desc := strings.Repeat("播客介绍", 12)
 	a.recent.podcasts = []netease.Played[netease.Podcast]{{Item: netease.Podcast{ID: 2, Name: "播客名称", Description: desc}}}
 	view := ui.NewTester(a.view, 1180, 780)
