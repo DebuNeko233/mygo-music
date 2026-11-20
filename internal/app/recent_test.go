@@ -60,10 +60,10 @@ func recentTestApp(t *testing.T) (*app, chan func(), *ui.Tester) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	// The page asks for the records as it builds.
 	tt.Frame()
-	for i := 0; i < 20 && !a.recent.shown; i++ {
+	for a.recent.loading() {
 		refreshPost(t, posts)
 	}
-	if !a.recent.shown {
+	if !a.recent.tabs[recentSongsTab].shown {
 		t.Fatal("the recent plays never loaded")
 	}
 	tt.Frame()
@@ -78,6 +78,8 @@ func TestRecentRequestsRunConcurrently(t *testing.T) {
 	posts := testPosts(a)
 	started := make(chan string, 5)
 	release := make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	defer unblock()
 	block := func(kind string) { started <- kind; <-release }
 	recentPlays = func(int) ([]netease.Play, error) {
 		block("songs")
@@ -101,18 +103,43 @@ func TestRecentRequestsRunConcurrently(t *testing.T) {
 	}
 	a.loadRecent()
 	for i := 0; i < 5; i++ {
-		select {
-		case <-started:
-		case <-time.After(2 * time.Second):
-			close(release)
-			refreshPost(t, posts)
-			t.Fatalf("only %d of five requests started", i)
+		wait(t, started, "recent requests to start")
+	}
+	unblock()
+	for range recentTabCount {
+		refreshPost(t, posts)
+	}
+	for i, tab := range a.recent.tabs {
+		if tab.loading || !tab.shown {
+			t.Fatalf("recent tab %d did not finish: %+v", i, tab)
 		}
 	}
-	close(release)
-	refreshPost(t, posts)
-	if a.recent.loading || !a.recent.shown {
-		t.Fatalf("recent plays did not finish: %+v", a.recent)
+}
+
+// Songs can appear while an unopened recent-play tab is still waiting on NetEase.
+func TestRecentShowsSongsBeforeOtherTabsFinish(t *testing.T) {
+	fakeRecent(t)
+	a := newTestApp()
+	a.profile = &netease.Profile{UserID: 1}
+	a.route = route{page: pageRecent}
+	posts := testPosts(a)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	recentPlaylists = func(int) ([]netease.Played[netease.Playlist], error) {
+		close(started)
+		<-release
+		return nil, nil
+	}
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	wait(t, started, "the playlist request")
+	for len(a.recent.tracks) == 0 {
+		refreshPost(t, posts)
+	}
+	tt.Frame()
+	if _, ok := tt.Find("玫瑰色的你"); !ok {
+		t.Fatal("the songs tab still hides its results while the playlists request is pending")
 	}
 }
 
@@ -124,7 +151,12 @@ func TestRecentKeepsOtherKindsWhenSongsFail(t *testing.T) {
 	a.profile = &netease.Profile{UserID: 1}
 	posts := testPosts(a)
 	a.loadRecent()
-	refreshPost(t, posts)
+	for a.recent.loading() {
+		refreshPost(t, posts)
+	}
+	if tab := a.recent.tabs[recentSongsTab]; tab.shown || tab.failure != netease.ErrOffline {
+		t.Fatalf("songs failure did not reach its tab: %+v", tab)
+	}
 	if len(a.recent.playlists) != 1 || len(a.recent.albums) != 1 || len(a.recent.voices) != 1 {
 		t.Fatalf("songs failure discarded other records: %+v", a.recent)
 	}
@@ -169,7 +201,7 @@ func TestRecentPageAsksAgainWhenOld(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatalf("asked for the songs %d times, want once", calls.Load())
 	}
-	a.recent.at = time.Now().Add(-time.Hour)
+	a.recent.tabs[recentSongsTab].at = time.Now().Add(-time.Hour)
 	tt.Frame()
 	for i := 0; i < 20 && calls.Load() == 1; i++ {
 		refreshPost(t, posts)
@@ -219,16 +251,18 @@ func TestRecentLoadsSnapshotOffTheUIThread(t *testing.T) {
 		return nil, netease.ErrOffline
 	}
 	a.loadRecent()
-	if a.recent.shown {
+	if a.recent.tabs[recentSongsTab].shown {
 		t.Fatal("loadRecent read the disk snapshot before returning")
 	}
 	refreshPost(t, posts)
-	if !a.recent.shown || !a.recent.loading || len(a.recent.tracks) != 1 || a.recent.tracks[0].ID != 42 {
+	if !a.recent.tabs[recentSongsTab].shown || !a.recent.tabs[recentSongsTab].loading || len(a.recent.tracks) != 1 || a.recent.tracks[0].ID != 42 {
 		t.Fatalf("cached list did not appear before the refresh: %+v", a.recent)
 	}
 	unblock()
-	refreshPost(t, posts)
-	if a.recent.loading || len(a.recent.tracks) != 1 {
+	for a.recent.loading() {
+		refreshPost(t, posts)
+	}
+	if len(a.recent.tracks) != 1 || a.recent.tracks[0].ID != 42 {
 		t.Fatal("offline refresh discarded the cached list")
 	}
 }
