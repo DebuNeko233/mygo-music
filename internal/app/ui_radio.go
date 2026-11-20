@@ -59,6 +59,7 @@ func (a *app) likedPlaylist() int64 {
 // personalFM is the personal FM's next songs, a variable so a test can give
 // them without the network.
 var personalFM = netease.PersonalFM
+var fmTrash = netease.FMTrash
 
 // radioFeed returns what gives the radio name more tracks: it loads them
 // on a goroutine, and gives them to got on the main thread, none if it
@@ -147,8 +148,18 @@ func (a *app) trashFM() {
 		return
 	}
 	id := tr.ID
+	uid, gen := a.listenerID(), a.homeGen
+	send := fmTrash
 	a.pl.Next()
-	go netease.FMTrash(id)
+	go func() {
+		if err := send(id); err != nil {
+			a.post(func() {
+				if a.listenerID() == uid && a.homeGen == gen {
+					a.toast = "不喜欢操作未保存，请稍后再试"
+				}
+			})
+		}
+	}()
 }
 
 // startHeartMode plays songs like one the listener likes: the one playing,
