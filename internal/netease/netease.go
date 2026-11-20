@@ -261,9 +261,13 @@ func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error
 }
 
 func do(req *http.Request, out any) error {
+	return doWithClient(httpClient, req, out)
+}
+
+func doWithClient(client *http.Client, req *http.Request, out any) error {
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Referer", apiBase+"/")
-	res, err := DoRequest(httpClient, req)
+	res, err := DoRequest(client, req)
 	if err != nil {
 		return err
 	}

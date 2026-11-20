@@ -13,15 +13,16 @@ func TestQRLoginLive(t *testing.T) {
 	}
 	// A device of the test's own, out of the keychain.
 	deviceOnce.Do(func() { deviceID = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123" })
-	key, err := QRKey()
+	login := NewQRLogin()
+	key, err := login.Key()
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, msg, _, _, err := QRCheck(key)
-	if err != nil || code != QRWaiting {
-		t.Fatalf("check: %d %q %v", code, msg, err)
+	status, err := login.Check(key)
+	if err != nil || status.Code != QRWaiting {
+		t.Fatalf("check: %d %q %v", status.Code, status.Message, err)
 	}
-	t.Logf("key %s: %d %s", key, code, msg)
+	t.Logf("key %s: %d %s", key, status.Code, status.Message)
 }
 
 func TestSongURLEapiLive(t *testing.T) {

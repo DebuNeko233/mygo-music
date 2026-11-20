@@ -17,13 +17,17 @@ import (
 type loginState struct {
 	open     bool
 	gen      int // counts logins, to stop the polls of closed ones
-	key      string
 	code     *qr.Code
 	status   int // a QR state, or 0 while the code loads
 	scanner  string
 	avatar   string
 	err      string
 	finished bool
+}
+
+type qrLoginAttempt interface {
+	Check(string) (netease.QRStatus, error)
+	Commit()
 }
 
 // accountAsk asks NetEase whose session this is: tests set it.
@@ -179,82 +183,81 @@ func (a *app) openLogin() {
 	a.login = loginState{open: true, gen: a.login.gen + 1}
 	gen := a.login.gen
 	go func() {
-		key, err := netease.QRKey()
+		attempt := netease.NewQRLogin()
+		key, err := attempt.Key()
 		var code *qr.Code
 		if err == nil {
 			code, err = qr.Encode(netease.LoginURL(key), qr.M)
 		}
 		a.post(func() {
-			if gen != a.login.gen {
+			if gen != a.login.gen || !a.login.open {
 				return
 			}
 			if err != nil {
 				a.login.err = "无法获取二维码，请检查网络"
 				return
 			}
-			a.login.key, a.login.code, a.login.status = key, code, netease.QRWaiting
-			a.pollLogin(gen, key)
+			a.login.code, a.login.status = code, netease.QRWaiting
+			a.pollLogin(gen, key, attempt)
 		})
 	}()
 }
 
 // pollLogin asks every two seconds whether the code was scanned, until the
 // login ends or the dialog closes.
-func (a *app) pollLogin(gen int, key string) {
+func (a *app) pollLogin(gen int, key string, attempt qrLoginAttempt) {
 	go func() {
 		for {
 			time.Sleep(2 * time.Second)
-			code, msg, name, avatar, err := netease.QRCheck(key)
-			var prof *netease.Profile
-			if code == netease.QRConfirmed {
-				// Detach the old account's queue before setting up the new one.
-				// Its reporter already owns a copy of the old login's cookies.
-				closed := make(chan struct{})
-				a.post(func() { a.stopPlayReports(); close(closed) })
-				<-closed
-				saveLoginSession()
-				prof, _ = netease.Account()
-			}
-			done := make(chan bool, 1)
-			a.post(func() {
-				l := &a.login
-				if gen != l.gen || !l.open {
-					done <- true
-					return
-				}
-				switch {
-				case err != nil:
-					// Try again: the network may come back.
-				case code == netease.QRConfirmed:
-					l.status, l.finished = code, true
-					a.discardAccount()
-					a.signedIn(prof)
-					if prof == nil {
-						a.recovery.accountPending = true
-						a.confirmAccount()
-					}
-					if prof != nil {
-						a.pickUp(prof.UserID)
-					}
-					a.closeLoginSoon(gen)
-				case code == netease.QRExpired || code == netease.QRWaiting || code == netease.QRScanned:
-					l.status = code
-					if name != "" {
-						l.scanner, l.avatar = name, avatar
-					}
-				default:
-					l.err = msg
-					if l.err == "" {
-						l.err = "登录失败，请稍后再试"
-					}
-				}
-				done <- l.status == netease.QRExpired || l.finished || l.err != ""
-			})
-			if <-done {
+			if a.checkLogin(gen, key, attempt) {
 				return
 			}
 		}
 	}()
+}
+
+// checkLogin reports whether polling should stop after applying this reply.
+func (a *app) checkLogin(gen int, key string, attempt qrLoginAttempt) bool {
+	status, err := attempt.Check(key)
+	done := make(chan bool, 1)
+	a.post(func() {
+		l := &a.login
+		if gen != l.gen || !l.open || a.quitting {
+			done <- true
+			return
+		}
+		switch {
+		case err != nil:
+			// Try again: the network may come back.
+		case status.Code == netease.QRConfirmed:
+			// The old reporter already owns a copy of the old login's cookies.
+			a.stopPlayReports()
+			attempt.Commit()
+			l.status, l.finished = status.Code, true
+			a.discardAccount()
+			a.signedIn(status.Profile)
+			go saveLoginSession()
+			if status.Profile == nil {
+				a.recovery.accountPending = true
+				a.confirmAccount()
+			} else {
+				a.pickUp(status.Profile.UserID)
+			}
+			a.closeLoginSoon(gen)
+		case status.Code == netease.QRExpired || status.Code == netease.QRWaiting || status.Code == netease.QRScanned:
+			l.status = status.Code
+			if status.Nickname != "" {
+				l.scanner, l.avatar = status.Nickname, status.AvatarURL
+			}
+		default:
+			l.err = status.Message
+			if l.err == "" {
+				l.err = "登录失败，请稍后再试"
+			}
+		}
+		done <- l.status == netease.QRExpired || l.finished || l.err != ""
+	})
+	return <-done
 }
 
 // closeLoginSoon closes the dialog a moment after it showed the welcome.

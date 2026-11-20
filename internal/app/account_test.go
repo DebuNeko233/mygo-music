@@ -14,6 +14,58 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+type confirmedQR struct {
+	committed bool
+}
+
+func (q *confirmedQR) Check(string) (netease.QRStatus, error) {
+	return netease.QRStatus{Code: netease.QRConfirmed}, nil
+}
+
+func (q *confirmedQR) Commit() { q.committed = true }
+
+// A confirmation queued before the dialog closes or is replaced cannot change the active account.
+func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
+	for _, reopen := range []bool{false, true} {
+		name := "closed"
+		if reopen {
+			name = "reopened"
+		}
+		t.Run(name, func(t *testing.T) {
+			a := newTestApp()
+			posts := testPosts(a)
+			a.login = loginState{open: true, gen: 1}
+			previous := &netease.Profile{UserID: 42}
+			a.profile = previous
+			queue := make(chan func(playReporter), 1)
+			a.reportQueue = queue
+			tt := ui.NewTester(a.loginDialog, 800, 600)
+			tt.Frame()
+			tt.Advance(300 * time.Millisecond)
+
+			attempt := &confirmedQR{}
+			stopped := make(chan bool, 1)
+			go func() { stopped <- a.checkLogin(1, "test-key", attempt) }()
+			apply := wait(t, posts, "the queued confirmation")
+			tt.Key(0, ui.KeyEscape)
+			tt.Frame()
+			if a.login.open {
+				t.Error("Escape did not close the dialog")
+			}
+			if reopen {
+				a.login = loginState{open: true, gen: 2}
+			}
+			apply()
+			if !wait(t, stopped, "the stale poll to stop") {
+				t.Error("the stale attempt would keep polling")
+			}
+			if attempt.committed || a.profile != previous || a.reportQueue != queue || a.login.finished {
+				t.Fatal("a stale confirmation changed the account, its report queue, or the current dialog")
+			}
+		})
+	}
+}
+
 // Clicking the account row drops its menu, which takes the focus so the
 // arrows walk its items, and Escape or a second click puts it away.
 func TestAccountMenu(t *testing.T) {
