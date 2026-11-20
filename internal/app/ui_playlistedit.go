@@ -302,12 +302,24 @@ func (a *app) addTo(pid int64, tr *netease.Track) {
 	}()
 }
 
-// playlistWithoutSong makes a new track list and ID list for a removal.
+// playlistRemoval shares the original song order across overlapping removals.
+// Hidden IDs include pending removals and successes until the last reply.
+type playlistRemoval struct {
+	original *netease.Playlist
+	hidden   map[int64]bool
+	pending  int
+}
+
+func playlistWithoutSong(pl *netease.Playlist, id int64) *netease.Playlist {
+	return playlistWithoutSongs(pl, func(song int64) bool { return song == id })
+}
+
+// playlistWithoutSongs makes a new track list and ID list for a removal.
 // The playback queue may still share the old tracks.
-func playlistWithoutSong(pl *netease.Playlist, song int64) *netease.Playlist {
+func playlistWithoutSongs(pl *netease.Playlist, hidden func(int64) bool) *netease.Playlist {
 	next := *pl
-	next.Tracks = slices.DeleteFunc(slices.Clone(pl.Tracks), func(tr netease.Track) bool { return tr.ID == song })
-	next.TrackIDs = slices.DeleteFunc(slices.Clone(pl.TrackIDs), func(id netease.TrackID) bool { return id.ID == song })
+	next.Tracks = slices.DeleteFunc(slices.Clone(pl.Tracks), func(tr netease.Track) bool { return hidden(tr.ID) })
+	next.TrackIDs = slices.DeleteFunc(slices.Clone(pl.TrackIDs), func(id netease.TrackID) bool { return hidden(id.ID) })
 	removed := max(len(pl.Tracks)-len(next.Tracks), len(pl.TrackIDs)-len(next.TrackIDs))
 	if removed == 0 {
 		return pl
@@ -321,28 +333,44 @@ func playlistWithoutSong(pl *netease.Playlist, song int64) *netease.Playlist {
 func (a *app) removeFrom(pid int64, tr *netease.Track) {
 	id := tr.ID
 	before := a.playlists[pid]
-	var reduced *netease.Playlist
+	req := a.playlistRequest(pid)
+	edit := req.removal
+	if edit == nil {
+		edit = &playlistRemoval{original: before, hidden: map[int64]bool{}}
+		req.removal = edit
+	}
+	if edit.hidden[id] {
+		return
+	}
+	edit.hidden[id] = true
+	edit.pending++
 	if before != nil {
-		reduced = playlistWithoutSong(before, id)
-		a.playlists[pid] = reduced
+		a.playlists[pid] = playlistWithoutSong(before, id)
 	}
 	gen := a.homeGen
 	finishEdit := a.beginLibraryEdit()
+	remove := removeFromPlaylist
 	go func() {
-		err := removeFromPlaylist(pid, id)
+		err := remove(pid, id)
 		a.post(func() {
 			finishEdit()
 			if a.homeGen != gen {
 				return
 			}
 			defer a.persistLibrary(pid)
+			if a.listRefresh.playlists[pid] != req {
+				return // The playlist itself was deleted.
+			}
+			edit.pending--
+			if edit.pending == 0 {
+				req.removal = nil
+			}
 			if err != nil {
-				if current := a.playlists[pid]; current != nil && reduced != before {
-					if current == reduced {
-						current.Tracks, current.TrackIDs, current.TrackCount = before.Tracks, before.TrackIDs, before.TrackCount
-					} else {
-						a.revalidatePlaylist(pid)
-					}
+				delete(edit.hidden, id)
+				if current, original := a.playlists[pid], edit.original; current != nil && original != nil {
+					restored := *current
+					restored.Tracks, restored.TrackIDs, restored.TrackCount = original.Tracks, original.TrackIDs, original.TrackCount
+					a.playlists[pid] = playlistWithoutSongs(&restored, func(song int64) bool { return edit.hidden[song] })
 				}
 				a.toast = "移除失败，请稍后再试"
 				return

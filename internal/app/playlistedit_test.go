@@ -1,9 +1,11 @@
 package app
 
 import (
+	"errors"
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -133,6 +135,53 @@ func TestRemoveSongFromPlaylist(t *testing.T) {
 	}
 	if q := a.pl.Queue(); len(q) != 2 || q[1].ID != 2 {
 		t.Errorf("removing the song changed the queue playing: %v", q)
+	}
+}
+
+// A failed removal restores its song in order without restoring another removal that already succeeded.
+func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
+	a := editTestApp()
+	posts := testPosts(a)
+	pid := a.route.id
+	original := a.playlists[pid]
+	original.Tracks = append(original.Tracks, netease.Track{ID: 3})
+	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}, {ID: 3}}
+	original.TrackCount = 3
+	a.pl.Cue(original.Tracks)
+
+	oldRemove, oldDetail, oldMine := removeFromPlaylist, playlistDetail, userPlaylists
+	t.Cleanup(func() { removeFromPlaylist, playlistDetail, userPlaylists = oldRemove, oldDetail, oldMine })
+	results := map[int64]chan error{1: make(chan error, 1), 2: make(chan error, 1)}
+	for _, result := range results {
+		defer close(result)
+	}
+	offline := errors.New("playlist unavailable")
+	removeFromPlaylist = func(_ int64, songs ...int64) error { return <-results[songs[0]] }
+	playlistDetail = func(int64) (*netease.Playlist, error) { return nil, offline }
+	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return nil, nil, offline }
+
+	a.removeFrom(pid, &original.Tracks[0])
+	a.removeFrom(pid, &original.Tracks[1])
+	if pl := a.playlists[pid]; len(pl.Tracks) != 1 || pl.Tracks[0].ID != 3 {
+		t.Fatal("both rows should be hidden while their requests are pending")
+	}
+	results[2] <- nil
+	refreshPost(t, posts) // successful removal
+	refreshPost(t, posts) // sidebar refresh
+	results[1] <- offline
+	refreshPost(t, posts) // failed removal
+
+	// The failed removal must be reflected before a server refresh can land.
+	pl := a.playlists[pid]
+	want := []netease.TrackID{{ID: 1}, {ID: 3}}
+	if !slices.Equal(pl.TrackIDs, want) || pl.TrackCount != 2 ||
+		len(pl.Tracks) != 2 || pl.Tracks[0].ID != 1 || pl.Tracks[1].ID != 3 {
+		t.Errorf("rollback produced tracks %v, IDs %v, count %d", pl.Tracks, pl.TrackIDs, pl.TrackCount)
+	}
+	a.retryLibraryRefresh()
+	refreshPost(t, posts)
+	if a.playlists[pid] != pl || len(a.pl.Queue()) != 3 {
+		t.Fatal("a failed refresh changed the playlist or its playback queue")
 	}
 }
 
