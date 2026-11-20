@@ -1087,16 +1087,25 @@ func (p *Player) load(at int) {
 // loadSkipping loads the track at order[at], to play or not, from from,
 // skipping those that cannot play: skipped of them so far.
 func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
-	p.loadTrack(at, skipped, play, from, nil)
+	p.loadTrack(at, skipped, play, from, nil, false)
 }
 
-func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local *LocalAudio) {
+func (p *Player) restorePaused(at int, from time.Duration) {
+	p.loadTrack(at, 0, false, from, nil, true)
+}
+
+func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local *LocalAudio, cacheOnly bool) {
 	// A retry replaces the audio, not the listening session. Otherwise loading
 	// and pause-resume discard time already heard.
 	p.pause()
 	t := p.queue[p.order[at]]
 	level := p.level()
-	ahead := p.takeAhead(t.ID, level)
+	var ahead *ahead
+	if cacheOnly {
+		p.dropAhead()
+	} else {
+		ahead = p.takeAhead(t.ID, level)
+	}
 	p.stop()
 	p.gen++
 	gen := p.gen
@@ -1147,6 +1156,18 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 			info, s = local.info, local.stream
 		} else if t.IsLocal() {
 			info, s, err = openLocal(localPath)
+		} else if cacheOnly {
+			// A paused session can warm a cached song. It has no reason
+			// to request a URL or audio until the listener presses Play.
+			var dl *download
+			if netease.Offline() {
+				dl, info, _ = cache.lookupOffline(t.ID, level)
+			} else {
+				dl, info, _ = cache.lookup(t.ID, level)
+			}
+			if dl != nil {
+				s, _ = openDownload(dl, t.Duration)
+			}
 		} else {
 			info, s, err = p.open(t, level, ahead, ask, cache)
 		}
@@ -1160,6 +1181,14 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 			p.loading = false
 			if err != nil {
 				p.failed(p.at, skipped, t, from, err)
+				return
+			}
+			if s == nil {
+				if p.playing {
+					p.loadSkipping(p.at, skipped, true, p.pending)
+				} else {
+					p.sync()
+				}
 				return
 			}
 			p.stream, p.info = s, info
@@ -1514,13 +1543,21 @@ func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker, ca
 	if err != nil {
 		return nil, nil, err
 	}
-	s, err := openStream(dl, t.Duration)
+	s, err := openDownload(dl, t.Duration)
 	if err != nil {
-		dl.discard()
-		dl.Close()
 		return nil, nil, err
 	}
 	return info, s, nil
+}
+
+func openDownload(dl *download, duration int64) (stream, error) {
+	s, err := openStream(dl, duration)
+	if err != nil {
+		dl.discard()
+		dl.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 // fetch returns the download of track t at level, and what it streams: the
@@ -1674,5 +1711,5 @@ func (p *Player) Restore(s Session) {
 	p.step = 0
 	p.shuffle, p.repeat = s.Shuffle, s.Repeat%3
 	p.tries = 0
-	p.loadSkipping(s.At, 0, false, time.Duration(s.Position)*time.Millisecond)
+	p.restorePaused(s.At, time.Duration(s.Position)*time.Millisecond)
 }

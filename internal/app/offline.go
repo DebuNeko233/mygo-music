@@ -341,9 +341,21 @@ func (a *app) measureOfflineCache() {
 	}()
 }
 
-// persistLibrary is deferred until an edit's success or rollback has landed.
-// Copies leave the UI thread; only the changed playlist needs serializing.
+type librarySnapshots uint8
+
+const (
+	snapshotLists librarySnapshots = 1 << iota
+	snapshotAlbums
+	snapshotLikes
+)
+
 func (a *app) persistLibrary(ids ...int64) {
+	a.persistLibraryChanges(snapshotLists|snapshotAlbums|snapshotLikes, ids...)
+}
+
+// Accumulate changes across overlapping edits and persist only after the
+// final success or rollback has landed.
+func (a *app) persistLibraryChanges(changed librarySnapshots, ids ...int64) {
 	// An edit can temporarily pin cached playlists, even without a disk store.
 	defer a.trimPlaylistCache()
 	if a.browseCache == nil || a.profile == nil {
@@ -355,6 +367,7 @@ func (a *app) persistLibrary(ids ...int64) {
 	for _, id := range ids {
 		a.dirtySnapshots[id] = true
 	}
+	a.dirtyLibrary |= changed
 	if a.listRefresh.edits != 0 {
 		return
 	}
@@ -364,19 +377,20 @@ func (a *app) persistLibrary(ids ...int64) {
 			go func() { write(cacheBytes(value)) }()
 		}
 	}
-	if a.mine != nil || a.saved != nil {
+	if a.dirtyLibrary&snapshotLists != 0 && (a.mine != nil || a.saved != nil) {
 		keep("mine", keptLists{copyPlaylists(a.mine), copyPlaylists(a.saved)})
 	}
-	if a.subsShown {
+	if a.dirtyLibrary&snapshotAlbums != 0 && a.subsShown {
 		keep("albums", slices.Clone(a.subAlbums))
 	}
-	if a.liked != nil {
+	if a.dirtyLibrary&snapshotLikes != 0 && a.liked != nil {
 		likes := make([]int64, 0, len(a.liked))
 		for id, liked := range a.liked {
 			if liked {
 				likes = append(likes, id)
 			}
 		}
+		slices.Sort(likes)
 		keep("likes", likes)
 	}
 	for id := range a.dirtySnapshots {
@@ -387,6 +401,7 @@ func (a *app) persistLibrary(ids ...int64) {
 		}
 	}
 	clear(a.dirtySnapshots)
+	a.dirtyLibrary = 0
 }
 
 // An in-flight recovery preserves its backoff, but needs no extra timer.

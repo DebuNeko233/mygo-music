@@ -469,9 +469,18 @@ func TestCache(t *testing.T) {
 	c := NewCache(dir, 400)
 	store := func(id int64, st *netease.Stream, n int) {
 		f := c.part(st)
-		f.Write(make([]byte, n))
-		f.Close()
-		c.keep(id, st.Level, st, f.Name(), int64(n))
+		if f == nil {
+			t.Fatal("could not create fixture")
+		}
+		if _, err := f.Write(make([]byte, n)); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := c.keep(id, st.Level, st, f.Name(), int64(n)); !ok {
+			t.Fatal("fixture did not reach the cache")
+		}
 	}
 	store(1, &netease.Stream{Level: "lossless", Type: "flac", Gain: -3}, 100)
 	dl, st, ok := c.lookup(1, "exhigh")
@@ -483,7 +492,9 @@ func TestCache(t *testing.T) {
 		t.Error("found a lossless song for Hi-Res")
 	}
 	old := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(dir, "1-lossless.flac"), old, old)
+	if err := os.Chtimes(filepath.Join(dir, "1-lossless.flac"), old, old); err != nil {
+		t.Fatal(err)
+	}
 	store(2, &netease.Stream{Level: "exhigh", Type: "mp3"}, 100)
 	store(3, &netease.Stream{Level: "exhigh", Type: "mp3"}, 100)
 	store(4, &netease.Stream{Level: "exhigh", Type: "mp3"}, 100)
@@ -512,8 +523,15 @@ func TestCacheServedBelowAsked(t *testing.T) {
 	c := NewCache(t.TempDir(), 400)
 	st := &netease.Stream{Level: "exhigh", Type: "mp3", Size: 100}
 	f := c.part(st)
-	f.Write(make([]byte, 100))
-	f.Close()
+	if f == nil {
+		t.Fatal("could not create fixture")
+	}
+	if _, err := f.Write(make([]byte, 100)); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := c.keep(1, "lossless", st, f.Name(), 100); !ok {
 		t.Fatal("not kept")
 	}

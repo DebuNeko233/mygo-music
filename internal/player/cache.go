@@ -24,7 +24,10 @@ type Cache struct {
 	dir string
 
 	mu    sync.Mutex
-	limit int64 // in bytes; 0 keeps nothing
+	limit int64                  // in bytes; 0 keeps nothing
+	spare int64                  // conservative headroom measured by the last eviction scan
+	used  map[string]time.Time   // in-process access times when the filesystem rejects Chtimes
+	bad   map[string]os.FileInfo // corrupt audio that could not yet be retired
 	// blocked is set while the folder is being moved: nothing is looked up,
 	// fetched into it or dropped, and what is in goes when it does.
 	blocked bool
@@ -51,12 +54,10 @@ func (c *Cache) stopped() bool {
 // SetLimit changes how much the cache may take, and drops what is over.
 func (c *Cache) SetLimit(limit int64) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.limit = limit
-	blocked := c.blocked
-	c.mu.Unlock()
-	if !blocked {
-		c.prune("")
-	}
+	c.spare = 0
+	c.pruneLocked("", 0)
 }
 
 func cacheKey(id int64, level string) string { return fmt.Sprintf("%d-%s", id, level) }
@@ -157,13 +158,20 @@ func (c *Cache) openKept(id int64, level, asked string) (*download, *netease.Str
 	if err != nil {
 		return nil, nil
 	}
-	if info, err := f.Stat(); err != nil || info.Size() != st.Size {
+	if info, err := f.Stat(); err != nil || info.Size() != st.Size || os.SameFile(c.bad[path], info) {
 		f.Close()
 		return nil, nil
 	}
 	// Played now: the last to go.
 	now := time.Now()
-	os.Chtimes(path, now, now)
+	if err := os.Chtimes(path, now, now); err != nil {
+		if c.used == nil {
+			c.used = make(map[string]time.Time)
+		}
+		c.used[path] = now
+	} else {
+		delete(c.used, path)
+	}
 	d := opened(f, st.Size)
 	c.trackLocked(d)
 	return d, &st
@@ -257,7 +265,7 @@ func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n 
 		log.Printf("song cache: stage metadata: %v", err)
 		return part, false
 	}
-	defer os.Remove(tmp.Name())
+	defer removeCacheFile(tmp.Name())
 	_, err = tmp.Write(meta)
 	if err = errors.Join(err, tmp.Close()); err != nil {
 		log.Printf("song cache: write metadata: %v", err)
@@ -274,13 +282,15 @@ func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n 
 		}
 		return part, false
 	}
+	delete(c.used, path)
+	delete(c.bad, path)
 	var old keptSong
 	if json.Unmarshal(previous, &old) == nil && keepable(kept.Level, old.Type) {
 		if name := old.audioName(key); name != "" && name != filepath.Base(path) {
-			os.Remove(filepath.Join(c.dir, name))
+			c.remove(filepath.Join(c.dir, name))
 		}
 	}
-	c.pruneLocked(path)
+	c.pruneLocked(path, n)
 	return path, true
 }
 
@@ -295,7 +305,8 @@ func (c *Cache) Size() int64 {
 		return 0
 	}
 	var n int64
-	for _, f := range c.songs() {
+	songs, _ := c.songs()
+	for _, f := range songs {
 		n += f.size
 	}
 	return n
@@ -311,7 +322,10 @@ func (c *Cache) Clear() {
 	if c.blocked {
 		return
 	}
-	for _, f := range c.songs() {
+	c.spare = 0
+	c.dropParts()
+	songs, _ := c.songs()
+	for _, f := range songs {
 		c.remove(f.path)
 	}
 }
@@ -320,29 +334,43 @@ type cachedSong struct {
 	path string
 	size int64
 	used time.Time
+	bad  bool
 }
 
-func (c *Cache) songs() []cachedSong {
-	entries, _ := os.ReadDir(c.dir)
+func (c *Cache) songs() ([]cachedSong, error) {
+	entries, err := os.ReadDir(c.dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	var out []cachedSong
 	for _, e := range entries {
 		ext := filepath.Ext(e.Name())
 		if !e.Type().IsRegular() || (ext != ".mp3" && ext != ".flac") {
 			continue
 		}
-		info, err := e.Info()
-		if err != nil {
+		info, statErr := e.Info()
+		if statErr != nil {
+			if !errors.Is(statErr, os.ErrNotExist) {
+				err = errors.Join(err, statErr)
+			}
 			continue
 		}
-		out = append(out, cachedSong{filepath.Join(c.dir, e.Name()), info.Size(), info.ModTime()})
+		path := filepath.Join(c.dir, e.Name())
+		used := info.ModTime()
+		if recent := c.used[path]; recent.After(used) {
+			used = recent
+		}
+		out = append(out, cachedSong{path, info.Size(), used, os.SameFile(c.bad[path], info)})
 	}
-	return out
+	return out, err
 }
 
 func (c *Cache) remove(path string) bool {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if !removeCacheFile(path) {
 		return false
 	}
+	delete(c.used, path)
+	delete(c.bad, path)
 	removeSongMetadata(path)
 	return true
 }
@@ -363,8 +391,16 @@ func removeSongMetadata(path string) {
 	b, err := os.ReadFile(meta)
 	var kept keptSong
 	if err == nil && json.Unmarshal(b, &kept) == nil && kept.audioName(key) == base {
-		os.Remove(meta)
+		removeCacheFile(meta)
 	}
+}
+
+func removeCacheFile(path string) bool {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("song cache: remove: %v", err)
+		return false
+	}
+	return true
 }
 
 // prune drops the songs played longest ago until the rest fit the limit,
@@ -372,20 +408,37 @@ func removeSongMetadata(path string) {
 func (c *Cache) prune(keep string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.pruneLocked(keep)
+	c.spare = 0
+	c.pruneLocked(keep, 0)
 }
 
-func (c *Cache) pruneLocked(keep string) {
+func (c *Cache) pruneLocked(keep string, added int64) {
 	if c.blocked {
 		return
 	}
-	c.dropParts()
-	songs := c.songs()
-	slices.SortFunc(songs, func(a, b cachedSong) int { return a.used.Compare(b.used) })
-	var total int64
-	for _, f := range songs {
-		total += f.size
+	if c.spare > 0 && added <= c.spare {
+		c.spare -= added
+		return
 	}
+	c.dropParts()
+	songs, scanErr := c.songs()
+	var total int64
+	songs = slices.DeleteFunc(songs, func(f cachedSong) bool {
+		if f.bad && f.path != keep && c.remove(f.path) {
+			return true
+		}
+		total += f.size
+		return false
+	})
+	defer func() {
+		if scanErr == nil {
+			c.spare = max(0, c.limit-total)
+		}
+	}()
+	if total <= c.limit {
+		return
+	}
+	slices.SortFunc(songs, func(a, b cachedSong) int { return a.used.Compare(b.used) })
 	for _, f := range songs {
 		if total <= c.limit {
 			return
@@ -402,7 +455,7 @@ func (c *Cache) dropParts() {
 	parts, _ := filepath.Glob(filepath.Join(c.dir, "*.part"))
 	for _, path := range parts {
 		if info, err := os.Stat(path); err == nil && time.Since(info.ModTime()) > time.Hour {
-			os.Remove(path)
+			removeCacheFile(path)
 		}
 	}
 }

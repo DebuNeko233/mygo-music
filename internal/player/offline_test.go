@@ -35,9 +35,15 @@ func TestOfflineCompleteSongUsesCache(t *testing.T) {
 	if file == nil {
 		t.Fatal("cannot create fixture")
 	}
-	file.Write(b)
-	file.Close()
-	cache.keep(1, "exhigh", st, file.Name(), int64(len(b)))
+	if _, err := file.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cache.keep(1, "exhigh", st, file.Name(), int64(len(b))); !ok {
+		t.Fatal("fixture did not reach the cache")
+	}
 	netease.SetOffline(true)
 	t.Cleanup(func() { netease.SetOffline(false) })
 	p := New(func(func()) {})

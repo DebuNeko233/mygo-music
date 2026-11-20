@@ -60,7 +60,9 @@ func TestIndexTruncatedTailRecovery(t *testing.T) {
 	if _, err = f.WriteString(`{"record":`); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	s = indexed(dir)
 	if b, _ := s.Read("requests", "old"); string(b) != `{"v":1}` {
 		t.Fatal("lost complete prefix")

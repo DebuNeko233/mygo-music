@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -51,13 +52,20 @@ func TestCorruptionAndInterruptedWrite(t *testing.T) {
 	s := New(dir, 1<<20)
 	s.Put("a", "list", []byte("songs"), 0)
 	path := filepath.Join(dir, name("a", "list"))
-	b, _ := os.ReadFile(path)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	b[len(b)-1] ^= 1
-	os.WriteFile(path, b, 0600)
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
 	if got, _ := s.Read("a", "list"); got != nil {
 		t.Fatal("accepted corrupt bytes")
 	}
-	os.WriteFile(filepath.Join(dir, ".part-interrupted"), []byte("half"), 0600)
+	if err := os.WriteFile(filepath.Join(dir, ".part-interrupted"), []byte("half"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	s.Put("a", "list", []byte("repaired"), 0)
 	if _, err := os.Stat(filepath.Join(dir, ".part-interrupted")); !os.IsNotExist(err) {
 		t.Fatal("left interrupted file")
@@ -74,11 +82,8 @@ func TestCapacityEvictsOlderSnapshots(t *testing.T) {
 	s.Put("a", "old", bytes.Repeat([]byte{1}, 100), 0)
 	s.Put("a", "keep", bytes.Repeat([]byte{2}, 100), 0)
 	// Explicit filesystem times avoid depending on clock resolution or sleeps.
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		if e.Name() == name("a", "old") {
-			os.Chtimes(filepath.Join(dir, e.Name()), time.Unix(1, 0), time.Unix(1, 0))
-		}
+	if err := os.Chtimes(filepath.Join(dir, name("a", "old")), time.Unix(1, 0), time.Unix(1, 0)); err != nil {
+		t.Fatal(err)
 	}
 	s.Read("a", "keep")
 	s.Put("a", "new", bytes.Repeat([]byte{3}, 100), 0)
@@ -223,5 +228,40 @@ func TestReplacementsKeepValidCapacity(t *testing.T) {
 	}
 	if b, _ := s.Read("a", "same"); len(b) != 200 || b[0] != 29 {
 		t.Fatal("replacement was lost")
+	}
+}
+
+// A corrupt file that survives a failed unlink remains a miss and is retried.
+func TestCorruptSnapshotRemovalRetries(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires Unix directory permissions")
+	}
+	dir := t.TempDir()
+	s := New(dir, 1<<20)
+	defer s.Close()
+	file := filepath.Join(dir, name("a", "bad"))
+	if err := os.WriteFile(file, []byte("short corrupt entry"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o700); err != nil {
+			t.Error(err)
+		}
+	})
+	if got, _ := s.Read("a", "bad"); got != nil {
+		t.Fatal("returned a corrupt snapshot")
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatalf("fixture did not keep the file after failed removal: %v", err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s.Read("a", "bad")
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatalf("corrupt snapshot remained after permissions recovered: %v", err)
 	}
 }

@@ -24,7 +24,11 @@ func TestMoveStagesInsideExistingTarget(t *testing.T) {
 		if err := os.Chmod(parent, 0o500); err != nil {
 			t.Fatal(err)
 		}
-		defer os.Chmod(parent, 0o700)
+		t.Cleanup(func() {
+			if err := os.Chmod(parent, 0o700); err != nil {
+				t.Error(err)
+			}
+		})
 	}
 	journal := filepath.Join(root, "data", "move.json")
 	observed := false
@@ -178,6 +182,9 @@ func diskSnapshotForCrash(t *testing.T, dir string) {
 	s := diskcache.New(dir, 1<<20)
 	defer s.Close()
 	s.Put("7", "large", make([]byte, 256<<10), 0)
+	if b, _ := s.Read("7", "large"); len(b) != 256<<10 {
+		t.Fatal("could not prepare browse cache")
+	}
 }
 
 // An actual volume root must retain its filesystem identity while managed children migrate across devices.
@@ -321,4 +328,40 @@ func TestMoveRecoversAfterPublication(t *testing.T) {
 			checkSnapshot(t, target.Artwork, "cached")
 		})
 	}
+}
+
+// A failed journal update is reported and can be retried after the settings commit.
+func TestMoveReportsJournalCleanupFailure(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires Unix directory permissions")
+	}
+	root := t.TempDir()
+	source, target := layout(filepath.Join(root, "old")), layout(filepath.Join(root, "new"))
+	journalDir := filepath.Join(root, "data")
+	journal := filepath.Join(journalDir, "move.json")
+	song(t, source.Songs)
+	t.Cleanup(func() {
+		if err := os.Chmod(journalDir, 0o700); err != nil {
+			t.Error(err)
+		}
+	})
+	warning, err := MoveLayoutWithOptions(source, target.Root, true, false, func() error {
+		if err := os.Chmod(journalDir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		return nil
+	}, Options{Journal: journal})
+	if err != nil || !errors.Is(warning, os.ErrPermission) {
+		t.Fatalf("expected a committed move with a cleanup warning, got %v, %v", warning, err)
+	}
+	exists(t, journal, true)
+	exists(t, filepath.Join(target.Songs, "123-exhigh.mp3"), true)
+	if err := os.Chmod(journalDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := Recover(journal, target); err != nil {
+		t.Fatal(err)
+	}
+	exists(t, journal, false)
+	exists(t, filepath.Join(target.Songs, "123-exhigh.mp3"), true)
 }

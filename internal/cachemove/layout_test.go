@@ -185,17 +185,17 @@ func TestMoveLayoutPartialPublication(t *testing.T) {
 func TestMoveAlternateSongFile(t *testing.T) {
 	root := t.TempDir()
 	source, target := filepath.Join(root, "old"), filepath.Join(root, "new")
-	song(t, source)
+	song(t, layout(source).Songs)
 	name := "123-exhigh-1700000000.mp3"
-	if err := os.Rename(filepath.Join(source, "123-exhigh.mp3"), filepath.Join(source, name)); err != nil {
+	if err := os.Rename(filepath.Join(layout(source).Songs, "123-exhigh.mp3"), filepath.Join(layout(source).Songs, name)); err != nil {
 		t.Fatal(err)
 	}
 	meta, _ := json.Marshal(map[string]any{"size": 5, "type": "mp3", "level": "exhigh", "file": name})
-	write(t, filepath.Join(source, "123-exhigh.json"), meta)
-	warning, err := Move(source, target, true, func() error { return nil })
+	write(t, filepath.Join(layout(source).Songs, "123-exhigh.json"), meta)
+	warning, err := MoveLayout(layout(source), target, true, false, func() error { return nil })
 	if warning != nil || err != nil {
 		t.Fatal(warning, err)
 	}
-	exists(t, filepath.Join(target, name), true)
-	exists(t, filepath.Join(source, name), false)
+	exists(t, filepath.Join(layout(target).Songs, name), true)
+	exists(t, filepath.Join(layout(source).Songs, name), false)
 }

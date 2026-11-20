@@ -76,6 +76,10 @@ func (p *Player) SuspendCache() func() {
 			p.sync()
 			return
 		}
-		p.loadSkipping(p.at, 0, p.playing, p.pending)
+		if p.playing {
+			p.loadSkipping(p.at, 0, true, p.pending)
+		} else {
+			p.restorePaused(p.at, p.pending)
+		}
 	}
 }

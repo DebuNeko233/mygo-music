@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -406,8 +408,8 @@ func (d *download) toMemory() error {
 		d.pages = nil
 		return err
 	}
-	d.file.Close()
-	os.Remove(d.part)
+	d.closeFile()
+	removeCacheFile(d.part)
 	d.file, d.part, d.keep = nil, "", nil
 	return nil
 }
@@ -422,17 +424,19 @@ func (d *download) spill() error {
 		_, err := f.WriteAt(b, off)
 		return err
 	}); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return fmt.Errorf("copy to temporary audio buffer: %w", err)
+		closeErr := f.Close()
+		removeCacheFile(f.Name())
+		return fmt.Errorf("copy to temporary audio buffer: %w", errors.Join(err, closeErr))
 	}
 	if d.file != nil {
-		d.file.Close()
-		os.Remove(d.part)
+		d.closeFile()
+		removeCacheFile(d.part)
 	}
 	d.file, d.part, d.pages, d.keep, d.temp = f, f.Name(), nil, nil, true
 	// Where supported, unlink now so a process exit also reclaims the file.
-	os.Remove(d.part)
+	if runtime.GOOS != "windows" {
+		removeCacheFile(d.part)
+	}
 	return nil
 }
 
@@ -442,7 +446,10 @@ func (d *download) hand() error {
 	if d.file == nil || d.part == "" || d.keep == nil || (d.size > 0 && d.n != d.size) {
 		return nil
 	}
-	d.file.Close()
+	if err := d.file.Close(); err != nil {
+		d.file, d.spans, d.n = nil, nil, 0
+		return fmt.Errorf("close downloaded audio before caching: %w", err)
+	}
 	path, ok := d.keep(d.part, d.n)
 	if ok {
 		d.part = ""
@@ -477,6 +484,10 @@ func (d *download) discard() {
 		return // Another download has already replaced this file.
 	}
 	removeSongMetadata(path)
+	if d.cache.bad == nil {
+		d.cache.bad = make(map[string]os.FileInfo)
+	}
+	d.cache.bad[path] = opened
 	d.drop = path
 }
 
@@ -542,27 +553,7 @@ func (d *download) release() {
 	if d.users--; d.users > 0 {
 		return
 	}
-	// Check before closing: the file may have been replaced by a new
-	// download at the same path, in which case we must not delete it.
-	var shouldDrop bool
-	if d.drop != "" && d.file != nil {
-		if opened, err := d.file.Stat(); err == nil {
-			if current, statErr := os.Stat(d.drop); statErr == nil && os.SameFile(opened, current) {
-				shouldDrop = true
-			}
-		}
-	}
-	if d.file != nil {
-		d.file.Close()
-	}
-	if d.part != "" {
-		os.Remove(d.part)
-	}
-	if shouldDrop {
-		os.Remove(d.drop)
-	}
-	d.drop = ""
-	d.file, d.pages, d.spans, d.n, d.part = nil, nil, nil, 0, ""
+	d.cleanupLocked()
 	if d.onRelease != nil {
 		d.onRelease()
 	}
@@ -582,25 +573,40 @@ func (d *download) halt() {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	var shouldDrop bool
-	if d.drop != "" && d.file != nil {
-		if opened, err := d.file.Stat(); err == nil {
-			if current, statErr := os.Stat(d.drop); statErr == nil && os.SameFile(opened, current) {
-				shouldDrop = true
-			}
-		}
-	}
+	d.cleanupLocked()
+}
+
+func (d *download) closeFile() {
 	if d.file != nil {
-		d.file.Close()
+		if err := d.file.Close(); err != nil {
+			log.Printf("audio: close: %v", err)
+		}
+		d.file = nil
+	}
+}
+
+// cleanupLocked retires scratch files and closes the backing file once,
+// including when halt runs before the last reader releases its reference.
+func (d *download) cleanupLocked() {
+	if d.drop != "" && d.file != nil {
+		// Serialize with publication so the path cannot be replaced between
+		// checking the identity and unlinking it after closing the handle.
+		d.cache.mu.Lock()
+		opened, err := d.file.Stat()
+		current, statErr := os.Stat(d.drop)
+		d.closeFile()
+		if err == nil && statErr == nil && os.SameFile(opened, current) {
+			d.cache.remove(d.drop)
+		}
+		d.cache.mu.Unlock()
+	} else {
+		d.closeFile()
 	}
 	if d.part != "" {
-		os.Remove(d.part)
+		removeCacheFile(d.part)
 	}
-	if shouldDrop {
-		os.Remove(d.drop)
-	}
-	d.drop = ""
-	d.file, d.pages, d.spans, d.n, d.part = nil, nil, nil, 0, ""
+	d.drop, d.part = "", ""
+	d.pages, d.spans, d.n = nil, nil, 0
 }
 
 // Progress returns the share of the song downloaded so far.

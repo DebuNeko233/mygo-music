@@ -178,6 +178,15 @@ func recoverStage(record stageRecord, active Layout) error {
 	}
 	marker := filepath.Join(record.Stage, stageMarker)
 	info, err = os.Lstat(marker)
+	if errors.Is(err, os.ErrNotExist) {
+		// The marker is removed last. An empty stage can remain if its
+		// final unlink was interrupted or temporarily rejected.
+		entries, readErr := os.ReadDir(record.Stage)
+		if readErr == nil && len(entries) == 0 {
+			return removeIfPresent(record.Stage)
+		}
+		return errors.Join(err, readErr)
+	}
 	if err != nil {
 		return err
 	}
@@ -201,10 +210,22 @@ func recoverStage(record stageRecord, active Layout) error {
 			}
 		}
 	}
-	if err = os.RemoveAll(record.Stage); err != nil {
+	entries, err := os.ReadDir(record.Stage)
+	if err != nil {
 		return err
 	}
-	return nil
+	// Keep the ownership marker intact until all other cleanup succeeds.
+	for _, entry := range entries {
+		if entry.Name() != stageMarker {
+			if err := os.RemoveAll(filepath.Join(record.Stage, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	if err := removeIfPresent(marker); err != nil {
+		return err
+	}
+	return removeIfPresent(record.Stage)
 }
 
 // The manifest travels with a staged child in the same rename as its data.
@@ -296,16 +317,10 @@ func (r stageRecord) recoverPublication(name, active string) error {
 
 // Do not discard recovery information if cleanup failed or another stage owns
 // the record; a later launch can safely retry the remaining cleanup.
-func forgetJournal(journal, stage string) {
-	if journal == "" {
-		return
-	}
-	if _, err := os.Lstat(stage); !errors.Is(err, os.ErrNotExist) {
-		return
-	}
+func forgetJournal(journal, stage string) error {
 	records, err := readJournal(journal)
 	if err != nil {
-		return
+		return err
 	}
 	remaining := records[:0]
 	for _, record := range records {
@@ -313,5 +328,13 @@ func forgetJournal(journal, stage string) {
 			remaining = append(remaining, record)
 		}
 	}
-	saveJournal(journal, remaining)
+	return saveJournal(journal, remaining)
+}
+
+func removeIfPresent(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }

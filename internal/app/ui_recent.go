@@ -75,18 +75,25 @@ func (a *app) loadRecent() {
 	uid, gen := a.profile.UserID, a.homeGen
 	d.loading = true
 	req := a.cacheRequest("recent")
-	// The copy on disk shows first, so that a page open without a network
-	// still says what was played last.
-	if !d.shown {
-		var kept keptRecent
-		if at := req.read(&kept); !at.IsZero() {
-			d.setSongs(kept.Songs)
-			d.playlists, d.albums = kept.Playlists, kept.Albums
-			d.podcasts, d.voices = kept.Podcasts, kept.Voices
-			d.at, d.shown = kept.At, true
-		}
-	}
+	readSnapshot := !d.shown && req.store != nil
+	current := func() bool { return a.profile != nil && a.profile.UserID == uid && a.homeGen == gen }
+	plays, lists, albumsPlayed := recentPlays, recentPlaylists, recentAlbums
+	podcastsPlayed, voicesPlayed := recentPodcasts, recentVoices
 	go func() {
+		if readSnapshot {
+			var kept keptRecent
+			if at := req.read(&kept); !at.IsZero() {
+				a.post(func() {
+					if !current() || !d.loading || req.store.Epoch() != req.epoch {
+						return
+					}
+					d.setSongs(kept.Songs)
+					d.playlists, d.albums = kept.Playlists, kept.Albums
+					d.podcasts, d.voices = kept.Podcasts, kept.Voices
+					d.at, d.shown = kept.At, true
+				})
+			}
+		}
 		var wg sync.WaitGroup
 		var songs []netease.Play
 		var playlists []netease.Played[netease.Playlist]
@@ -95,14 +102,14 @@ func (a *app) loadRecent() {
 		var voices []netease.Played[netease.Voice]
 		var songsErr, playlistsErr, albumsErr, podcastsErr, voicesErr error
 		wg.Add(5)
-		go func() { defer wg.Done(); songs, songsErr = recentPlays(recentLimit) }()
-		go func() { defer wg.Done(); playlists, playlistsErr = recentPlaylists(recentLimit) }()
-		go func() { defer wg.Done(); albums, albumsErr = recentAlbums(recentLimit) }()
-		go func() { defer wg.Done(); podcasts, podcastsErr = recentPodcasts(recentLimit) }()
-		go func() { defer wg.Done(); voices, voicesErr = recentVoices(recentLimit) }()
+		go func() { defer wg.Done(); songs, songsErr = plays(recentLimit) }()
+		go func() { defer wg.Done(); playlists, playlistsErr = lists(recentLimit) }()
+		go func() { defer wg.Done(); albums, albumsErr = albumsPlayed(recentLimit) }()
+		go func() { defer wg.Done(); podcasts, podcastsErr = podcastsPlayed(recentLimit) }()
+		go func() { defer wg.Done(); voices, voicesErr = voicesPlayed(recentLimit) }()
 		wg.Wait()
 		a.post(func() {
-			if a.profile == nil || a.profile.UserID != uid || a.homeGen != gen {
+			if !current() {
 				return
 			}
 			d.loading = false

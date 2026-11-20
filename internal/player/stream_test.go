@@ -414,16 +414,25 @@ func TestCacheKeepsOnlyKnownLevels(t *testing.T) {
 		}
 	}
 	var outside []string
-	filepath.WalkDir(root, func(path string, e os.DirEntry, err error) error {
-		if err == nil && !e.IsDir() && filepath.Dir(path) != dir {
+	if err := filepath.WalkDir(root, func(path string, e os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !e.IsDir() && filepath.Dir(path) != dir {
 			outside = append(outside, path)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if len(outside) != 0 {
 		t.Errorf("wrote %v outside the cache", outside)
 	}
-	if songs := c.songs(); len(songs) != 0 {
+	songs, err := c.songs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(songs) != 0 {
 		t.Errorf("kept %v", songs)
 	}
 }

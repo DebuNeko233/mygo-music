@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,5 +132,94 @@ func TestUncachedDownloadSpillsAndPreservesBackwardReads(t *testing.T) {
 				t.Fatalf("temporary audio survived close: %v", err)
 			}
 		})
+	}
+}
+
+// Restoring a paused session waits for Play before asking for uncached audio.
+func TestPausedRestoreDefersUncachedAudio(t *testing.T) {
+	body := song(t)
+	requests := make(chan struct{}, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- struct{}{}
+		w.Write(body)
+	}))
+	defer server.Close()
+	old := songURL
+	var urls atomic.Int32
+	songURL = func(int64, string) (*netease.Stream, error) {
+		urls.Add(1)
+		return &netease.Stream{URL: server.URL, Level: "exhigh", Type: "mp3", Size: int64(len(body))}, nil
+	}
+	defer func() { songURL = old }()
+	posts := make(chan func(), 32)
+	p := New(func(fn func()) { posts <- fn })
+	p.Cache = NewCache(t.TempDir(), 1<<30)
+	defer p.stop()
+	position := 250 * time.Millisecond
+	p.Restore(Session{
+		Queue: []netease.Track{{ID: 1, Duration: 10000}},
+		Order: []int{0}, Position: position.Milliseconds(),
+	})
+	for p.Loading() {
+		next(t, posts)
+	}
+	if urls.Load() != 0 || len(requests) != 0 || p.Playing() || p.Position() != position {
+		t.Fatal("restoring paused started streaming or lost the saved position")
+	}
+	p.TogglePlay()
+	waitCachePlayer(t, p, posts)
+	if urls.Load() != 1 || len(requests) != 1 || !p.Playing() || p.Position() < position {
+		t.Fatalf("Play did not stream from the saved position: URLs=%d audio=%d position=%v", urls.Load(), len(requests), p.Position())
+	}
+}
+
+// A failed close leaves a temporary download unpublished.
+func TestDownloadCloseFailurePreventsPublication(t *testing.T) {
+	part, err := os.CreateTemp(t.TempDir(), "*.part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := part.Close(); err != nil {
+		t.Fatal(err)
+	}
+	d := newDownload("unused", 4, part, func(path string, n int64) (string, bool) {
+		t.Fatal("published audio after close failed")
+		return path, true
+	})
+	d.n = 4
+	if err := d.hand(); err == nil {
+		t.Fatal("ignored the audio close failure")
+	}
+	d.cleanupLocked()
+	if _, err := os.Stat(part.Name()); !os.IsNotExist(err) {
+		t.Fatalf("failed download was left behind: %v", err)
+	}
+}
+
+// Invalidating a corrupt alternate copy also invalidates its shared sidecar.
+func TestDiscardCorruptAlternateAudio(t *testing.T) {
+	c := NewCache(t.TempDir(), 1<<20)
+	name := "1-exhigh-123.mp3"
+	audio := filepath.Join(c.dir, name)
+	if err := os.WriteFile(audio, []byte("invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	meta := []byte(`{"level":"exhigh","type":"mp3","size":7,"file":"1-exhigh-123.mp3"}`)
+	sidecar := filepath.Join(c.dir, "1-exhigh.json")
+	if err := os.WriteFile(sidecar, meta, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d, _, err := c.lookupOffline(1, "exhigh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	d.discard()
+	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+		t.Fatalf("corrupt audio remained published: %v", err)
+	}
+	if copy, _, err := c.lookupOffline(1, "exhigh"); err == nil {
+		copy.Close()
+		t.Fatal("offline playback reopened the corrupt audio")
 	}
 }

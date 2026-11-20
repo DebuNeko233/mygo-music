@@ -125,25 +125,3 @@ func Validate(source, target string) error {
 	}
 	return nil
 }
-
-// The older song-only Move API publishes flat files, so it still needs an
-// empty root. The app uses Validate and the three-child layout instead.
-func validateFlatTarget(source, target, stage string) error {
-	_, target, err := Paths(source, target)
-	if err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(target)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if filepath.Join(target, entry.Name()) != stage {
-			return fmt.Errorf("请选择空目录，目标目录中已有文件")
-		}
-	}
-	return nil
-}

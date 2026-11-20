@@ -75,9 +75,9 @@ func pumpFor(t *testing.T, ch chan func(), what string, wait time.Duration, done
 	}
 }
 
-// newLoadPlayer returns a player of tracks, its songs in a cache, with the
+// newLoadPlayer returns a player with the given cache and the
 // sound off: it plays for real, as the load does.
-func newLoadPlayer(t *testing.T, cache *Cache, tracks ...netease.Track) (chan func(), *Player) {
+func newLoadPlayer(t *testing.T, cache *Cache) (chan func(), *Player) {
 	t.Helper()
 	ch := make(chan func(), 64)
 	p := New(func(fn func()) { ch <- fn })
@@ -272,7 +272,7 @@ func TestLoadRetries(t *testing.T) {
 	}
 	defer func() { songURL = old }()
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
 
 	pump(t, ch, "the track to load", func() bool { return p.out != nil })
@@ -382,7 +382,7 @@ func TestTemporaryFailuresDoNotExhaustLaterSongs(t *testing.T) {
 	}
 	defer func() { songURL = old }()
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5 * 60 * 1000}, {ID: 2, Duration: 5 * 60 * 1000}}, 0)
 	pumpFor(t, ch, "the first song after a temporary refusal", 15*time.Second, func() bool { return p.out != nil })
 	if p.err != "" || p.Current().ID != 1 {
@@ -404,7 +404,7 @@ func TestLoadFailureDoesNotSkip(t *testing.T) {
 	}
 	defer func() { songURL = old }()
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
 
 	pumpFor(t, ch, "the load to give up", 15*time.Second, func() bool { return !p.loading && p.err != "" })
@@ -508,7 +508,7 @@ func TestCutOffRetries(t *testing.T) {
 	defer func() { songURL = old }()
 
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.Cue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
 	p.stream = cutStream(t, c, 1, cut.URL, len(b))
 
@@ -540,7 +540,7 @@ func TestCutOffStops(t *testing.T) {
 	defer func() { songURL = old }()
 
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.Cue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
 	// Broken off, asked for again, and broken off again: once for every try
 	// it gets, and then it is left where it stopped.
@@ -571,7 +571,7 @@ func TestSongEndPlaysNext(t *testing.T) {
 	srv, _ := songServer(t, b)
 	serveURL(t, srv, len(b))
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.Cue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
 	s, err := openStream(downloaded(b), 5000)
 	if err != nil {
@@ -663,7 +663,7 @@ func TestLoadSurvivesABriefOutage(t *testing.T) {
 	}
 	defer func() { songURL = old }()
 	c := NewCache(t.TempDir(), 1<<30)
-	ch, p := newLoadPlayer(t, c, netease.Track{ID: 1, Duration: 5000}, netease.Track{ID: 2, Duration: 5000})
+	ch, p := newLoadPlayer(t, c)
 	p.PlayQueue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}}, 0)
 
 	pump(t, ch, "the track to load", func() bool { return p.out != nil })

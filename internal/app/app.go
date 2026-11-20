@@ -48,6 +48,7 @@ type app struct {
 	network                                networkState
 	homeFailures                           map[string]error
 	dirtySnapshots                         map[int64]bool
+	dirtyLibrary                           librarySnapshots
 	playlistWrites                         sync.Map // cacheRequest to the latest accepted write's done channel
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState

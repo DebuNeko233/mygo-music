@@ -59,10 +59,10 @@ func (a *app) toggleLike(tr *netease.Track) {
 				}
 				a.toast = "操作失败，请稍后再试"
 			} else if changed := a.updateLikedPlaylist(id, like); changed != 0 {
-				a.persistLibrary(changed)
+				a.persistLibraryChanges(snapshotLikes, changed)
 				return
 			}
-			a.persistLibrary()
+			a.persistLibraryChanges(snapshotLikes)
 		})
 	}()
 }

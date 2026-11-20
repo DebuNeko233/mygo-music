@@ -38,7 +38,9 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 	// or any unrelated file created meanwhile, is never removed.
 	defer func() {
 		if err != nil && created {
-			os.Remove(target)
+			if removeErr := removeIfPresent(target); removeErr != nil {
+				err = errors.Join(err, removeErr)
+			}
 		}
 	}()
 	stage, err := os.MkdirTemp(target, stagePrefix)
@@ -51,9 +53,12 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 	defer func() {
 		if !journaled {
 			if err != nil {
-				rollback(target, files, published)
+				if cleanupErr := errors.Join(rollback(target, files, published), os.RemoveAll(stage)); cleanupErr != nil {
+					err = errors.Join(err, cleanupErr)
+				}
+			} else {
+				warning = errors.Join(warning, os.RemoveAll(stage))
 			}
-			os.RemoveAll(stage)
 			return
 		}
 		var active Layout
@@ -64,11 +69,17 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 		if cleanupErr == nil {
 			if err != nil {
 				for _, name := range published {
-					os.Remove(filepath.Join(target, name))
+					if removeErr := removeIfPresent(filepath.Join(target, name)); removeErr != nil {
+						err = errors.Join(err, removeErr)
+					}
 				}
 			}
-			forgetJournal(options.Journal, record.Stage)
-		} else if err != nil {
+			cleanupErr = forgetJournal(options.Journal, record.Stage)
+		}
+		if cleanupErr == nil {
+			return
+		}
+		if err != nil {
 			err = errors.Join(err, cleanupErr)
 		} else {
 			warning = errors.Join(warning, cleanupErr)
@@ -136,20 +147,6 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 	if err = validate(stage); err != nil {
 		return nil, err
 	}
-	// Flat song-only moves and whole layouts use the same child publication,
-	// so a target mount point is never removed or renamed.
-	if len(publications) == 1 && publications[0] == "" {
-		publications = nil
-		entries, readErr := os.ReadDir(stage)
-		if readErr != nil {
-			return nil, readErr
-		}
-		for _, entry := range entries {
-			if entry.Name() != stageMarker {
-				publications = append(publications, entry.Name())
-			}
-		}
-	}
 	for _, name := range publications {
 		if err = ctx.Err(); err != nil {
 			return nil, err
@@ -197,13 +194,18 @@ func transferWithOptions(target string, files []cacheFile, publications []string
 }
 
 // Callers without a journal only need to undo publications in this process.
-func rollback(target string, files []cacheFile, published []string) {
+func rollback(target string, files []cacheFile, published []string) (err error) {
 	for _, name := range published {
 		for _, file := range files {
 			if !file.reused && filepath.Dir(file.name) == name {
-				os.Remove(filepath.Join(target, file.name))
+				if removeErr := removeIfPresent(filepath.Join(target, file.name)); removeErr != nil {
+					err = errors.Join(err, removeErr)
+				}
 			}
 		}
-		os.Remove(filepath.Join(target, name))
+		if removeErr := removeIfPresent(filepath.Join(target, name)); removeErr != nil {
+			err = errors.Join(err, removeErr)
+		}
 	}
+	return err
 }
