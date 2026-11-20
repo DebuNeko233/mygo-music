@@ -97,16 +97,7 @@ func (c *faadCodec) Decode(dst []float32, packet []byte) ([]float32, error) {
 	if err != nil {
 		return dst, err
 	}
-	channels := max(int(c.dec.Channels()), 1)
-	for i := 0; i+channels <= len(pcm); i += channels {
-		left := pcm[i]
-		right := left
-		if channels > 1 {
-			right = pcm[i+1]
-		}
-		dst = append(dst, float32(left)/(1<<15), float32(right)/(1<<15))
-	}
-	return dst, nil
+	return adtsPCM(dst, pcm, int(c.dec.Channels())), nil
 }
 
 // AudioSpecificConfig carries HE-AAC's SBR extension as syncExtensionType
@@ -229,7 +220,7 @@ func openFAADADTS(dl *download) (*adtsFAADStream, error) {
 		}
 	}
 	s.rate = int(s.dec.SampleRate())
-	s.pend = adtsPCM(pcm, int(s.dec.Channels()))
+	s.pend = adtsPCM(s.pend[:0], pcm, int(s.dec.Channels()))
 	packetFrames := len(s.pend) / 2
 	if packetFrames <= 0 || s.rate <= 0 {
 		s.dec.Close(context.Background())
@@ -269,7 +260,7 @@ func (s *adtsFAADStream) resetDecoder(at int) error {
 		dec.Close(context.Background())
 		return err
 	}
-	s.dec, s.next, s.pend = dec, at, nil
+	s.dec, s.next, s.pend = dec, at, s.pend[:0]
 	return nil
 }
 
@@ -287,9 +278,9 @@ func (s *adtsFAADStream) packet(i int) ([]byte, error) {
 	return b, err
 }
 
-func adtsPCM(pcm []int16, channels int) []float32 {
+func adtsPCM(dst []float32, pcm []int16, channels int) []float32 {
 	channels = max(channels, 1)
-	out := make([]float32, 0, len(pcm)/channels*2)
+	out := dst
 	for i := 0; i+channels <= len(pcm); i += channels {
 		left := pcm[i]
 		right := left
@@ -320,7 +311,7 @@ func (s *adtsFAADStream) Read(dst []float32) (int, error) {
 			s.failure.record(err)
 			return 0, err
 		}
-		s.pend = adtsPCM(pcm, int(s.dec.Channels()))
+		s.pend = adtsPCM(s.pend[:0], pcm, int(s.dec.Channels()))
 		drop := min(s.skip, int64(len(s.pend)/2))
 		s.skip -= drop
 		s.pend = s.pend[drop*2:]
