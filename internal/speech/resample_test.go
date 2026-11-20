@@ -2,6 +2,7 @@ package speech
 
 import (
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -64,5 +65,57 @@ func TestResampleChunks(t *testing.T) {
 		if math.Abs(float64(parts[i]-whole[i])) > 1e-6 {
 			t.Fatalf("sample %d: %v in chunks, %v at once", i, parts[i], whole[i])
 		}
+	}
+}
+
+// The cached prototype produces exactly the original taps at every phase.
+func TestResamplePrototypeMatchesReference(t *testing.T) {
+	for _, rate := range []int{8000, 16000, 22050, 32000, 44100, 48000} {
+		in := tone(440, rate, 0.1)
+		mono := make([]float32, 0, len(in)/2)
+		for i := 0; i < len(in); i += 2 {
+			mono = append(mono, (in[i]+in[i+1])/2)
+		}
+		r := newResampler(rate, 2)
+		r.buf = mono
+		want := referenceResample(r)
+		got := newResampler(rate, 2).push(nil, in)
+		if !slices.Equal(got, want) {
+			for i := range want {
+				if got[i] != want[i] {
+					t.Fatalf("%d Hz: sample %d: got %v, want %v", rate, i, got[i], want[i])
+				}
+			}
+		}
+	}
+}
+
+// referenceResample evaluates the original windowed sinc at every output.
+func referenceResample(r *resampler) []float32 {
+	var out []float32
+	for {
+		center := int64(math.Floor(r.t))
+		if center+int64(r.half) >= r.base+int64(len(r.buf)) {
+			return out
+		}
+		var acc, norm float64
+		for j := center - int64(r.half) + 1; j <= center+int64(r.half); j++ {
+			w := r.tap(r.t - float64(j))
+			norm += w
+			if k := j - r.base; k >= 0 {
+				acc += w * float64(r.buf[k])
+			}
+		}
+		out = append(out, float32(acc/norm))
+		r.t += r.step
+	}
+}
+
+// Measure the resampling work for one second of stereo input.
+func BenchmarkResample(b *testing.B) {
+	in := tone(440, 48000, 1)
+	b.ReportAllocs()
+	for b.Loop() {
+		newResampler(48000, 2).push(nil, in)
 	}
 }
