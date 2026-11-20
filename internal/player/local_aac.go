@@ -81,16 +81,26 @@ func (c *faadCodec) reset() error {
 	if c.dec != nil {
 		c.dec.Close(context.Background())
 	}
-	dec, err := faad2.NewDecoder(context.Background())
+	dec, err := openFAADDecoder(c.config, faad2.NewDecoder)
 	if err != nil {
-		return err
-	}
-	if err := dec.Init(context.Background(), c.config); err != nil {
-		dec.Close(context.Background())
 		return err
 	}
 	c.dec = dec
 	return nil
+}
+
+// openFAADDecoder owns a new decoder until its configuration is initialized.
+func openFAADDecoder(config []byte, create func(context.Context) (*faad2.Decoder, error)) (*faad2.Decoder, error) {
+	ctx := context.Background()
+	dec, err := create(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := dec.Init(ctx, config); err != nil {
+		dec.Close(ctx)
+		return nil, err
+	}
+	return dec, nil
 }
 
 func (c *faadCodec) Decode(dst []float32, packet []byte) ([]float32, error) {
@@ -257,12 +267,8 @@ func (s *adtsFAADStream) resetDecoder(at int) error {
 	if s.dec != nil {
 		s.dec.Close(context.Background())
 	}
-	dec, err := newADTSDecoder(context.Background())
+	dec, err := openFAADDecoder(s.config, newADTSDecoder)
 	if err != nil {
-		return err
-	}
-	if err := dec.Init(context.Background(), s.config); err != nil {
-		dec.Close(context.Background())
 		return err
 	}
 	s.dec, s.next, s.pend = dec, at, s.pend[:0]

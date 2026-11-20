@@ -12,6 +12,33 @@ import (
 	faad2 "github.com/llehouerou/go-faad2"
 )
 
+// An invalid ADTS decoder configuration releases the decoder before reset returns its error.
+func TestADTSDecoderInitFailureClosesDecoder(t *testing.T) {
+	factory := newADTSDecoder
+	var decoder *faad2.Decoder
+	newADTSDecoder = func(ctx context.Context) (*faad2.Decoder, error) {
+		var err error
+		decoder, err = factory(ctx)
+		return decoder, err
+	}
+	t.Cleanup(func() {
+		newADTSDecoder = factory
+		if decoder != nil {
+			decoder.Close(context.Background())
+		}
+	})
+	s := &adtsFAADStream{}
+	if err := s.resetDecoder(0); err == nil {
+		t.Fatal("empty decoder configuration was accepted")
+	}
+	if decoder == nil {
+		t.Fatal("no decoder was created")
+	}
+	if _, err := decoder.Decode(t.Context(), testADTSPacket(t, 0)); !errors.Is(err, faad2.ErrDecoderClosed) {
+		t.Fatalf("decoder after initialization failure: %v", err)
+	}
+}
+
 // Failed ADTS opens release the initialized decoder while a successful stream keeps it until Close.
 func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
 	for _, name := range []string{"packet read failure", "decode failure", "success"} {
