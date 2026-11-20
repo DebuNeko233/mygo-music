@@ -339,6 +339,30 @@ func TestRenamePlaylist(t *testing.T) {
 	}
 }
 
+// A failed rename from an earlier account epoch must not restore its old
+// name over a different account's playlist with the same ID.
+func TestRenameFailureFromPreviousAccount(t *testing.T) {
+	a := editTestApp()
+	posts := testPosts(a)
+	reply := make(chan error, 1)
+	oldRename := renamePlaylist
+	t.Cleanup(func() { renamePlaylist = oldRename })
+	renamePlaylist = func(int64, string) error { return <-reply }
+
+	a.naming = nameDialog{open: true, rename: 10, name: "A new"}
+	a.submitName()
+	a.profile = &netease.Profile{UserID: 2}
+	a.homeGen++
+	a.resetLibraryFreshness()
+	a.mine[1].Name = "B name"
+	a.playlists[10].Name = "B name"
+	reply <- errors.New("rename failed")
+	refreshPost(t, posts)
+	if a.mine[1].Name != "B name" || a.playlists[10].Name != "B name" {
+		t.Fatalf("previous account's failed rename restored %q and %q", a.mine[1].Name, a.playlists[10].Name)
+	}
+}
+
 // The liked songs can't be renamed: they offer no menu.
 func TestNoRenamingLikedSongs(t *testing.T) {
 	a := editTestApp()
