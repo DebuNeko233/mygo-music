@@ -6,6 +6,8 @@
 // as it did before.
 package mixvol
 
+import "sync"
+
 // A State is what the system's mixer holds for the app.
 type State struct {
 	// Volume is the app's volume there, an amplitude from 0 to 1.
@@ -18,7 +20,11 @@ type State struct {
 
 // A Mixer is the app's own volume in the system's mixer.
 type Mixer struct {
-	link link
+	link      link
+	queue     chan float64
+	quit      chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // Open links the app to the system's mixer, calling changed on a goroutine of
@@ -27,25 +33,73 @@ type Mixer struct {
 // the app plays, since the system keeps a volume for a stream, not for a
 // program.
 func Open(changed func(State)) *Mixer {
-	return &Mixer{link: openLink(changed)}
+	return newMixer(openLink(changed))
 }
 
-// SetVolume sets the app's volume in the mixer, an amplitude from 0 to 1,
-// waiting until the mixer has it, so that the app may then stop applying the
-// volume itself without what plays jumping.
+// newMixer serializes writes off the caller's thread and coalesces stale ones.
+func newMixer(link link) *Mixer {
+	m := &Mixer{link: link}
+	if link != nil {
+		m.queue, m.quit, m.done = make(chan float64, 1), make(chan struct{}), make(chan struct{})
+		go m.writeVolumes()
+	}
+	return m
+}
+
+// SetVolume queues the app's volume in the system mixer without waiting for a
+// device command. While a write is stuck, only the latest volume is retained.
 func (m *Mixer) SetVolume(v float64) {
 	if m == nil || m.link == nil {
 		return
 	}
-	m.link.setVolume(min(max(v, 0), 1))
+	v = min(max(v, 0), 1)
+	select {
+	case m.queue <- v:
+		return
+	case <-m.done:
+		return
+	default:
+	}
+	select {
+	case <-m.queue:
+	case <-m.done:
+		return
+	default:
+	}
+	select {
+	case m.queue <- v:
+	case <-m.done:
+	}
 }
 
-// Close stops following the mixer.
+// writeVolumes owns all link writes. Taking the newest queued value first
+// avoids an obsolete intermediate volume after a slow device recovers.
+func (m *Mixer) writeVolumes() {
+	defer close(m.done)
+	for {
+		select {
+		case v := <-m.queue:
+			select {
+			case v = <-m.queue:
+			default:
+			}
+			m.link.setVolume(v)
+		case <-m.quit:
+			return
+		}
+	}
+}
+
+// Close stops following the mixer and rejects any later writes.
 func (m *Mixer) Close() {
 	if m == nil || m.link == nil {
 		return
 	}
-	m.link.close()
+	m.closeOnce.Do(func() {
+		close(m.quit)
+		<-m.done
+		m.link.close()
+	})
 }
 
 // A link follows the system's volume for the app, per system.
