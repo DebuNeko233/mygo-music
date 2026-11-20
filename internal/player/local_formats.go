@@ -10,7 +10,6 @@ import (
 
 	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/audio/aac"
-	"github.com/egoist/mygo/audio/mp4"
 	"github.com/jfreymuth/oggvorbis"
 )
 
@@ -283,28 +282,14 @@ func (s *oggStream) cut() error                     { return cmpOr(s.dl.Err(), s
 
 // decoderStream adds ownership and spectrum metering to a local decoder.
 type decoderStream struct {
-	dl      *download
-	dec     audio.Decoder
-	pos     int64
-	spec    *spectrum
-	once    sync.Once
-	failure decoderFailure
-}
-
-func openMP4Stream(dl *download) (*decoderStream, error) {
-	dl.mu.Lock()
-	file := dl.file
-	dl.mu.Unlock()
-	if file == nil {
-		return nil, io.ErrClosedPipe
-	}
-	r := io.NewSectionReader(file, 0, dl.size)
-	registerLocalAACCodec()
-	dec, err := mp4.NewDecoder(r)
-	if err != nil {
-		return nil, err
-	}
-	return newDecoderStream(dl, dec), nil
+	dl       *download
+	dec      audio.Decoder
+	closer   io.Closer
+	closeErr error
+	pos      int64
+	spec     *spectrum
+	once     sync.Once
+	failure  decoderFailure
 }
 
 func openAACStream(dl *download) (stream, error) {
@@ -331,10 +316,6 @@ func openAACStream(dl *download) (stream, error) {
 	return newDecoderStream(dl, dec), nil
 }
 
-func newDecoderStream(dl *download, dec audio.Decoder) *decoderStream {
-	return &decoderStream{dl: dl, dec: dec, spec: newSpectrum(dec.SampleRate())}
-}
-
 func (s *decoderStream) SampleRate() int { return s.dec.SampleRate() }
 func (s *decoderStream) Channels() int   { return 2 }
 func (s *decoderStream) Len() int64      { return s.dec.Len() }
@@ -355,8 +336,13 @@ func (s *decoderStream) SetPosition(frame int64) error {
 	return nil
 }
 func (s *decoderStream) Close() error {
-	s.once.Do(func() { s.dl.Close() })
-	return nil
+	s.once.Do(func() {
+		if s.closer != nil {
+			s.closeErr = s.closer.Close()
+		}
+		s.dl.Close()
+	})
+	return s.closeErr
 }
 func (s *decoderStream) source() (*download, *spectrum) { return s.dl, s.spec }
 func (s *decoderStream) cut() error                     { return cmpOr(s.dl.Err(), s.failure.load()) }
