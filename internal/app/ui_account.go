@@ -40,7 +40,12 @@ var loginIdentity = netease.SessionIdentity
 // saveLogin keeps a successful login usable in this process, but does not
 // report its credentials as saved when the keychain refuses them.
 func (a *app) saveLogin(gen int, onSaved func()) {
-	if err := saveLoginSession(); err != nil {
+	a.saveLoginWith(saveLoginSession, gen, onSaved)
+}
+
+// saveLoginWith takes save before its goroutine starts, away from global test setup.
+func (a *app) saveLoginWith(save func() error, gen int, onSaved func()) {
+	if err := save(); err != nil {
 		a.post(func() {
 			if gen != a.login.gen {
 				return
@@ -128,7 +133,7 @@ func (a *app) confirmAccount() {
 			} else {
 				a.profile = prof
 			}
-			go a.saveLogin(a.login.gen, nil)
+			go a.saveLoginWith(saveLoginSession, a.login.gen, nil)
 			a.bindOfflineLyrics()
 			if identity != "" {
 				a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
@@ -254,7 +259,7 @@ func (a *app) checkLogin(gen int, key string, attempt qrLoginAttempt) bool {
 			l.status = status.Code
 			a.discardAccount()
 			a.signedIn(status.Profile)
-			go a.saveLogin(gen, func() {
+			go a.saveLoginWith(saveLoginSession, gen, func() {
 				if gen == a.login.gen && a.login.open {
 					a.login.finished = true
 					a.closeLoginSoon(gen)
