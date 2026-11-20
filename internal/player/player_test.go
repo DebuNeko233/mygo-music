@@ -45,6 +45,35 @@ func TestPlaybackEventsDistinguishPauseSeekAndRepeat(t *testing.T) {
 	}
 }
 
+// Replacing a normal or shuffled queue used to report the old song's end with
+// the new queue's source because the source changed before the session closed.
+func TestQueueReplacementReportsOldSource(t *testing.T) {
+	for _, shuffled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "normal", true: "shuffled"}[shuffled], func(t *testing.T) {
+			ch, p := posted()
+			defer p.out.Close()
+			oldSource := PlaySource{Source: "list", ID: 42}
+			newSource := PlaySource{Source: "album", ID: 84}
+			p.source = oldSource
+			var events []PlaybackEvent
+			p.Playback = func(event PlaybackEvent) { events = append(events, event) }
+			p.begin()
+			tracks := []netease.Track{{ID: 2}, {ID: 3}}
+			if shuffled {
+				p.PlayShuffledFrom(tracks, newSource)
+			} else {
+				p.PlayQueueFrom(tracks, 0, newSource)
+			}
+			if len(events) != 2 || events[1].End != MovedOn || events[1].Track.ID != 1 || events[1].Source != oldSource {
+				t.Fatalf("old session ended with %+v", events)
+			}
+			for len(ch) > 0 {
+				next(t, ch)
+			}
+		})
+	}
+}
+
 // Resuming audio that Restore loaded paused starts the session it deliberately
 // deferred; otherwise its entire play was absent from NetEase's reports.
 func TestRestoredAudioBeginsItsSessionWhenPlayed(t *testing.T) {

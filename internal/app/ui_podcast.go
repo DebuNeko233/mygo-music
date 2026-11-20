@@ -342,6 +342,7 @@ type podcastTab struct {
 	hotAt   int // how far into NetEase's list the next page starts
 	loading bool
 	err     string
+	failure error
 }
 
 func (a *app) loadPodcastTab() {
@@ -349,7 +350,7 @@ func (a *app) loadPodcastTab() {
 	if t.hotPage.loaded || t.loading {
 		return
 	}
-	t.loading, t.err = true, ""
+	t.loading, t.err, t.failure = true, "", nil
 	signedIn := a.profile != nil
 	go func() {
 		var subs []netease.Podcast
@@ -361,14 +362,14 @@ func (a *app) loadPodcastTab() {
 		a.post(func() {
 			t.loading = false
 			if err1 != nil && err2 != nil {
-				t.err = "无法连接网易云音乐，请检查网络"
+				t.err, t.failure = "无法连接网易云音乐，请检查网络", err2
 				return
 			}
 			t.subs, t.picks = subs, picks
 			t.addHot(hot)
 			t.hotPage = paged{loaded: true, more: more && len(hot) > 0}
 			if err2 != nil {
-				t.hotPage.err = "热门播客加载失败"
+				t.hotPage.err, t.hotPage.failure = "热门播客加载失败", err2
 			}
 		})
 	}()
@@ -380,14 +381,14 @@ func (a *app) loadHotPodcasts() {
 	if t.hotPage.loading {
 		return
 	}
-	t.hotPage.loading, t.hotPage.err = true, ""
+	t.hotPage.loading, t.hotPage.err, t.hotPage.failure = true, "", nil
 	offset := t.hotAt
 	go func() {
 		hot, more, err := hotPodcasts(programsPage, offset)
 		a.post(func() {
 			t.hotPage.loading = false
 			if err != nil {
-				t.hotPage.err = "热门播客加载失败"
+				t.hotPage.err, t.hotPage.failure = "热门播客加载失败", err
 				return
 			}
 			t.addHot(hot)
