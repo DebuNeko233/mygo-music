@@ -27,6 +27,7 @@ type listRequest struct {
 	retry   bool
 	failed  bool
 	failure error
+	removal *playlistRemoval
 }
 type libraryRefreshState struct {
 	edits       int
