@@ -359,7 +359,6 @@ func Run() error {
 	offSecond := mygo.App.OnSecondInstance(func([]string, string) { a.showMain() })
 	defer offSecond()
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.cancelMusicLink() })
-	moveOldData()
 	repairFileAssociations()
 	a.useUpdater()
 	mygo.App.WhenReady(func() {
