@@ -104,87 +104,45 @@ func TestCacheDirectoryOfflineRollback(t *testing.T) {
 	}
 }
 
-// Old song-only settings automatically consolidate separate cache folders,
-// preserve login data and persist a layout that opens the same files on restart.
-func TestCacheDirectoryLegacyConversion(t *testing.T) {
-	for _, custom := range []bool{false, true} {
-		t.Run(map[bool]string{false: "default", true: "custom"}[custom], func(t *testing.T) {
-			a, source, _ := cacheTestApp(t)
-			posts := testPosts(a)
-			system := t.TempDir()
-			previous, _ := mygo.App.Path(mygo.PathCache)
-			mygo.App.SetPath(mygo.PathCache, system)
-			t.Cleanup(func() { mygo.App.SetPath(mygo.PathCache, previous) })
-			a.settings.CacheLayout = 0
-			if !custom {
-				a.settings.CacheDir = ""
-				source = system
-			}
-			a.settings.path, _ = settingsPath()
-			if err := a.settings.save(); err != nil {
-				t.Fatal(err)
-			}
-			a.settings = loadSettings()
-			paths, err := cachePaths(a.settings)
-			if err != nil || a.settings.CacheLayout != 0 {
-				t.Fatal("legacy setting was not detected", err)
-			}
-			legacySongs := filepath.Join(system, "songs")
-			if custom {
-				legacySongs = source
-			}
-			writeCachedSongIn(t, legacySongs)
-			a.pl.Cache = newSongCache(a.settings)
-			seedOfflineCaches(t, a)
-			identity := diskcache.New(filepath.Join(t.TempDir(), "identity"), 1<<20)
-			defer identity.Close()
-			identity.Put("bound", "profile", []byte("login"), 0)
-			a.identityCache = identity
-			savedPath := a.settings.path
-			a.settings.path = source
-			a.upgradeCacheDirectory()
-			finishCacheChange(t, a, posts)
-			if a.cacheError == "" || a.settings.CacheLayout != 0 || a.pl.Cache.Size() != 5 {
-				t.Fatal("failed upgrade did not preserve legacy paths")
-			}
-			a.settings.path = savedPath
-			a.upgradeCacheDirectory()
-			finishCacheChange(t, a, posts)
-			if a.cacheError != "" || a.settings.CacheLayout != 1 || a.pl.Cache.Size() != 5 {
-				t.Fatal("conversion lost audio", a.cacheError)
-			}
-			if b, _ := a.browseCache.Read("7", "lyrics/1"); string(b) != "lyrics" {
-				t.Fatal("conversion lost lyrics")
-			}
-			if b, _ := a.imageCache.Read("content", "cover"); string(b) != "image" {
-				t.Fatal("conversion lost images")
-			}
-			if b, _ := identity.Read("bound", "profile"); string(b) != "login" {
-				t.Fatal("conversion affected login")
-			}
-			restarted := loadSettings()
-			next, err := cachePaths(restarted)
-			if err != nil || restarted.CacheLayout != 1 || next.Songs != filepath.Join(source, "songs") || next.Browse != filepath.Join(source, "browse-v1") || newSongCache(restarted).Size() != 5 {
-				t.Fatal("restart did not retain converted layout", err)
-			}
-			if custom {
-				if _, err := os.Stat(filepath.Join(paths.Songs, "123-exhigh.mp3")); !os.IsNotExist(err) {
-					t.Fatal("legacy flat audio remains", err)
-				}
-			}
-			a.upgradeCacheDirectory()
-			if a.cacheMoving {
-				t.Fatal("converted layout was migrated again")
-			}
-		})
-	}
-}
-
-// Partially decoded invalid settings must not trigger migration from a rejected cache path.
-func TestCacheDirectoryInvalidSettingsDoNotMigrate(t *testing.T) {
+// Startup leaves old flat cache files in place instead of importing them.
+func TestStartupLeavesFlatCacheFilesInPlace(t *testing.T) {
 	a, source, _ := cacheTestApp(t)
 	posts := testPosts(a)
 	writeCachedSongIn(t, source)
+	path, err := settingsPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(map[string]any{"cacheDir": source, "cacheLayout": 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.settings = loadSettings()
+	a.pl.Cache = newSongCache(a.settings)
+	a.recoverCacheDirectory()
+	for a.cacheMoving {
+		refreshPost(t, posts)
+	}
+	if a.cacheError != "" || a.pl.Cache.Size() != 0 {
+		t.Fatalf("startup imported an old cache: size=%d, error=%q", a.pl.Cache.Size(), a.cacheError)
+	}
+	for _, name := range []string{"123-exhigh.mp3", "123-exhigh.json"} {
+		if _, err := os.Stat(filepath.Join(source, name)); err != nil {
+			t.Fatalf("startup changed the old cache file %s: %v", name, err)
+		}
+		if _, err := os.Stat(filepath.Join(source, "songs", name)); !os.IsNotExist(err) {
+			t.Fatalf("startup imported %s into the current layout: %v", name, err)
+		}
+	}
+}
+
+// Partially decoded invalid settings must discard the rejected cache path.
+func TestCacheDirectoryInvalidSettingsDiscardPartialPath(t *testing.T) {
+	isolateUserData(t)
+	source := t.TempDir()
 	path, err := settingsPath()
 	if err != nil {
 		t.Fatal(err)
@@ -196,18 +154,8 @@ func TestCacheDirectoryInvalidSettingsDoNotMigrate(t *testing.T) {
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	a.settings = loadSettings()
-	a.pl.Cache = newSongCache(a.settings)
-	a.upgradeCacheDirectory()
-	started := a.cacheMoving
-	if started {
-		finishCacheChange(t, a, posts)
-	}
-	if started {
-		t.Fatal("invalid settings triggered a cache migration")
-	}
-	if _, err := os.Stat(filepath.Join(source, "123-exhigh.mp3")); err != nil {
-		t.Fatal("invalid settings moved the original song", err)
+	if s := loadSettings(); s.CacheDir != "" {
+		t.Fatalf("invalid settings retained a partially decoded cache path: %q", s.CacheDir)
 	}
 }
 

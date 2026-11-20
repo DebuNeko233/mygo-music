@@ -34,7 +34,6 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 	if err != nil {
 		return err
 	}
-	upgrade := same && a.settings.CacheLayout == 0
 	system, err := cacheDirectory("")
 	if err != nil {
 		return err
@@ -46,9 +45,9 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 	if isDefault {
 		directory = ""
 	}
-	if same && !upgrade {
-		// Older settings may name the system root explicitly. Restoring
-		// defaults changes that preference without moving the same files.
+	if same {
+		// Selecting the system root restores the default preference
+		// without moving files already stored there.
 		if isDefault && a.settings.CacheDir != "" {
 			next := a.settings
 			next.CacheDir = ""
@@ -59,7 +58,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 		}
 		return nil
 	}
-	shared := upgrade || isDefault
+	shared := isDefault
 	if !shared {
 		if err := cachemove.Validate(source.Root, target); err != nil {
 			return err
@@ -115,7 +114,6 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 					}
 					next := a.settings
 					next.CacheDir = directory
-					next.CacheLayout = 1
 					err := next.save()
 					if err == nil {
 						a.settings = next
@@ -212,7 +210,7 @@ func (a *app) confirmCacheDirectory(directory string) {
 		a.cacheError = err.Error()
 		return
 	}
-	if same && a.settings.CacheLayout != 0 {
+	if same {
 		if err := a.changeCacheDirectory(directory, false); err != nil {
 			a.cacheError = err.Error()
 		}
@@ -231,7 +229,7 @@ func (a *app) submitCacheDirectory(migrate bool) {
 	d.open = false
 }
 
-// cacheDirectoryDescription shows the root and any conversion/move failure.
+// cacheDirectoryDescription shows the root and any directory change failure.
 func (a *app) cacheDirectoryDescription() string {
 	dir, err := cacheDirectory(a.settings.CacheDir)
 	if err != nil {
@@ -279,7 +277,6 @@ func (a *app) recoverCacheDirectory() {
 				a.redraw()
 				return
 			}
-			a.upgradeCacheDirectory()
 		})
 	}()
 }
@@ -313,16 +310,4 @@ func (a *app) cacheMoveLabel() string {
 		return fmt.Sprintf("正在迁移缓存 %d%%", a.cacheCopied*100/a.cacheTotal)
 	}
 	return "正在准备缓存迁移…"
-}
-
-// upgradeCacheDirectory runs once for settings written before caches shared a
-// root. The layout version is committed with the files, so failure/restart
-// still opens every old location and conversion can be retried next launch.
-func (a *app) upgradeCacheDirectory() {
-	if a.settings.CacheLayout != 0 {
-		return
-	}
-	if err := a.changeCacheDirectory(a.settings.CacheDir, true); err != nil {
-		a.cacheError = "转换缓存目录失败，仍使用原路径：" + err.Error()
-	}
 }
