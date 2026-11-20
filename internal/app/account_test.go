@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"image"
 	"image/draw"
 	"image/png"
@@ -63,6 +64,41 @@ func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
 				t.Fatal("a stale confirmation changed the account, its report queue, or the current dialog")
 			}
 		})
+	}
+}
+
+// A keychain failure does not announce a durable login or close its dialog.
+func TestLoginSaveFailureStaysVisible(t *testing.T) {
+	save := saveLoginSession
+	t.Cleanup(func() { saveLoginSession = save })
+	saveLoginSession = func() error { return errors.New("keychain unavailable") }
+	a := newTestApp()
+	posts := testPosts(a)
+	a.login = loginState{open: true, gen: 1, finished: true}
+	go a.saveLogin(1, func() {
+		a.login.open = false
+	})
+	wait(t, posts, "the failed session save")()
+	if a.login.finished || !a.login.open || a.login.err == "" {
+		t.Fatalf("failed session save reported success: %+v", a.login)
+	}
+}
+
+// Saving the credentials is what allows the successful login dialog to close.
+func TestLoginSaveSuccessClosesDialog(t *testing.T) {
+	save := saveLoginSession
+	t.Cleanup(func() { saveLoginSession = save })
+	saveLoginSession = func() error { return nil }
+	a := newTestApp()
+	posts := testPosts(a)
+	a.login = loginState{open: true, gen: 1}
+	go a.saveLogin(1, func() {
+		a.login.finished = true
+		a.login.open = false
+	})
+	wait(t, posts, "the successful session save")()
+	if !a.login.finished || a.login.open || a.login.err != "" {
+		t.Fatalf("saved session did not finish the login: %+v", a.login)
 	}
 }
 

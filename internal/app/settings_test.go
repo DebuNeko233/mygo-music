@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +28,20 @@ func TestSaveKeepsImmersiveLyricsDisabled(t *testing.T) {
 	}
 	if reloaded.LyricEdgeFade {
 		t.Fatal("immersive lyrics were re-enabled after saving them as disabled")
+	}
+}
+
+// A failed final settings write leaves an error in the application log.
+func TestFinalSettingsSaveReportsFailure(t *testing.T) {
+	var output bytes.Buffer
+	writer := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(writer) })
+	a := newTestApp()
+	a.settings.path = t.TempDir()
+	a.saveFinalSettings()
+	if !strings.Contains(output.String(), "settings: final save:") {
+		t.Fatalf("final save failure was not reported: %q", output.String())
 	}
 }
 
