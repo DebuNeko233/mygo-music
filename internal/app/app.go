@@ -415,6 +415,9 @@ func Run() error {
 			}
 		}
 		a.postMu.Unlock()
+		if setupNativeRowBars != nil {
+			setupNativeRowBars(a)
+		}
 		// The view the window laid out as it was made asked for pictures
 		// before there was a window to read them back into.
 		a.flushKept()

@@ -302,6 +302,11 @@ func (st *barState) group(from, to int) float32 {
 }
 
 func drawBars(p *ui.Painter, r ui.Rect, st *barState, n int, color ui.Color, minH float32) {
+	eachBarRect(r, st, n, minH, func(rect ui.Rect) { p.Fill(rect, color, rect.W/2) })
+}
+
+// eachBarRect shares the exact response, spacing and capsule geometry between renderers.
+func eachBarRect(r ui.Rect, st *barState, n int, minH float32, emit func(ui.Rect)) {
 	gap := r.W / float32(n) * 0.38
 	w := (r.W - gap*float32(n-1)) / float32(n)
 	per := player.Bands / n
@@ -311,7 +316,7 @@ func drawBars(p *ui.Painter, r ui.Rect, st *barState, n int, color ui.Color, min
 		v = v * v * 1.15
 		h := max(minH, min(r.H, r.H*v))
 		x := r.X + float32(i)*(w+gap)
-		p.Fill(ui.Rect{X: x, Y: r.Y + (r.H-h)/2, W: w, H: h}, color, w/2)
+		emit(ui.Rect{X: x, Y: r.Y + (r.H-h)/2, W: w, H: h})
 	}
 }
 

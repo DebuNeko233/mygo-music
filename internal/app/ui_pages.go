@@ -404,7 +404,8 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		case hovered:
 			bg = p.hover
 		}
-		row.Background(row.AnimateColor("bg", bg, ui.Animation{Duration: 100 * time.Millisecond}))
+		rowBG := row.AnimateColor("bg", bg, ui.Animation{Duration: 100 * time.Millisecond})
+		row.Background(rowBG)
 		if !playable {
 			row.Opacity(0.42)
 		}
@@ -412,7 +413,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			ui.Box(c).Width(26).Center().Children(func() {
 				switch {
 				case playing && !missing:
-					a.nowPlayingBars(c)
+					a.nowPlayingBars(c, rowBG.Over(p.bg))
 				case hovered && playable && !missing:
 					ui.Icon(c, iconPlay).Size(13, 13).TextColor(p.text)
 				default:
@@ -486,8 +487,15 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 	return playingVisible
 }
 
+// macOS draws row meters in a native view; other platforms use the painter.
+var setupNativeRowBars func(*app)
+var nativeRowBars func(*app, *ui.Context, ui.Color) bool
+
 // nowPlayingBars dance in the row of the track playing.
-func (a *app) nowPlayingBars(c *ui.Context) {
+func (a *app) nowPlayingBars(c *ui.Context, background ...ui.Color) {
+	if nativeRowBars != nil && len(background) == 1 && nativeRowBars(a, c, background[0]) {
+		return
+	}
 	color := a.pal.accent
 	ui.Box(c).Size(16, 14).Draw(func(p *ui.Painter, r ui.Rect) {
 		lv, live := a.pl.Levels()
