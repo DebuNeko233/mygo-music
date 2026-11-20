@@ -11,13 +11,24 @@ import (
 	faad2 "github.com/llehouerou/go-faad2"
 )
 
-var registerLocalAAC sync.Once
+var (
+	registerLocalAAC  sync.Once
+	localAACFactoryMu sync.RWMutex
+	localAACFactory   = newLocalAACCodec
+)
 
 // MyGo's small AAC-LC decoder remains the normal path. FAAD2 handles its
 // explicitly rejected HE-AAC variants; the shared MP4 parser still owns the
 // sample table, priming and seeks.
 func registerLocalAACCodec() {
-	registerLocalAAC.Do(func() { mp4.RegisterCodec("mp4a", newLocalAACCodec) })
+	registerLocalAAC.Do(func() {
+		mp4.RegisterCodec("mp4a", func(config []byte) (mp4.Codec, error) {
+			localAACFactoryMu.RLock()
+			factory := localAACFactory
+			localAACFactoryMu.RUnlock()
+			return factory(config)
+		})
+	})
 }
 
 func newLocalAACCodec(config []byte) (mp4.Codec, error) {
@@ -57,6 +68,14 @@ func (c *faadCodec) SampleRate() int   { return c.rate }
 func (c *faadCodec) Preroll() int      { return 1 }
 func (c *faadCodec) PacketFrames() int { return c.packets }
 func (c *faadCodec) Reset()            { _ = c.reset() }
+func (c *faadCodec) Close() error {
+	if c.dec == nil {
+		return nil
+	}
+	err := c.dec.Close(context.Background())
+	c.dec = nil
+	return err
+}
 func (c *faadCodec) reset() error {
 	if c.dec != nil {
 		c.dec.Close(context.Background())
