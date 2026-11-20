@@ -19,6 +19,16 @@ const ncblModulusHex = "fd90bd466ff9bc8a3fec2fbcf263b90d5c564879fa5d7aab89b31c1d
 
 var ncblRandom io.Reader = rand.Reader
 
+var ncblEncoder = mustNCBLEncoder()
+
+func mustNCBLEncoder() *zstd.Encoder {
+	encoder, err := zstd.NewWriter(nil)
+	if err != nil {
+		panic(err)
+	}
+	return encoder
+}
+
 func ncblEncrypt(meta, body []byte) ([]byte, error) {
 	keyA := make([]byte, 32)
 	uuid := make([]byte, 16)
@@ -97,12 +107,9 @@ func ncblEncode(meta, body, keyA, uuid []byte, baseSeq uint16) ([]byte, error) {
 }
 
 func ncblZstd(body []byte) ([]byte, error) {
-	encoder, err := zstd.NewWriter(nil)
-	if err != nil {
-		return nil, err
-	}
-	defer encoder.Close()
-	return encoder.EncodeAll(body, nil), nil
+	// EncodeAll is safe for concurrent use and resets its encoder for each
+	// independent frame. Retain the pooled tables across playback reports.
+	return ncblEncoder.EncodeAll(body, nil), nil
 }
 
 // ncblChaCha is RFC 8439 ChaCha20 with the desktop logger's initial counter.
