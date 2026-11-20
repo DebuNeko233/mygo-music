@@ -223,6 +223,38 @@ func TestSuggestionOpensPage(t *testing.T) {
 	}
 }
 
+// A slow suggestion response must not replace the results of a newer query.
+func TestSuggestionIgnoresSupersededResponse(t *testing.T) {
+	a := newTestApp()
+	posts := testPosts(a)
+	oldSearch := searchSuggest
+	defer func() { searchSuggest = oldSearch }()
+	asked := make(chan string, 2)
+	answers := map[string]chan netease.Suggestions{"old": make(chan netease.Suggestions, 1), "new": make(chan netease.Suggestions, 1)}
+	searchSuggest = func(q string) (netease.Suggestions, error) {
+		asked <- q
+		return <-answers[q], nil
+	}
+	a.suggest("old")
+	if got := wait(t, asked, "old suggestions"); got != "old" {
+		t.Fatalf("asked for %q", got)
+	}
+	a.suggest("new")
+	if got := wait(t, asked, "new suggestions"); got != "new" {
+		t.Fatalf("asked for %q", got)
+	}
+	answers["new"] <- netease.Suggestions{Songs: []netease.Track{{ID: 2, Name: "new result"}}}
+	refreshPost(t, posts)
+	if len(a.suggestions.items) != 1 || a.suggestions.items[0].name != "new result" {
+		t.Fatalf("new suggestions = %+v", a.suggestions.items)
+	}
+	answers["old"] <- netease.Suggestions{Songs: []netease.Track{{ID: 1, Name: "old result"}}}
+	refreshPost(t, posts)
+	if len(a.suggestions.items) != 1 || a.suggestions.items[0].name != "new result" {
+		t.Fatalf("old response replaced new suggestions: %+v", a.suggestions.items)
+	}
+}
+
 // An artist's 专辑 and 动态 load their first page as they are chosen, the
 // events from the artist's own account; an album opens its page.
 func TestArtistAlbumsAndEvents(t *testing.T) {
