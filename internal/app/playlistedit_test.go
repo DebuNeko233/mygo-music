@@ -419,6 +419,51 @@ func TestDeletePlaylist(t *testing.T) {
 	}
 }
 
+// A deletion reply from an earlier account neither restores the old playlist
+// nor clears the current account's same-ID cache (UID 1 -> UID 2).
+func TestDeletePlaylistReplyAccountIsolation(t *testing.T) {
+	for _, result := range []struct {
+		name string
+		err  error
+	}{
+		{name: "failure", err: errors.New("offline")},
+		{name: "success"},
+	} {
+		t.Run(result.name, func(t *testing.T) {
+			a := editTestApp()
+			posts := testPosts(a)
+			oldDelete := deletePlaylist
+			t.Cleanup(func() { deletePlaylist = oldDelete })
+			started := make(chan struct{})
+			response := make(chan error, 1)
+			deletePlaylist = func(id int64) error {
+				close(started)
+				return <-response
+			}
+
+			uid := a.profile.UserID
+			gen := a.homeGen
+			a.confirmDelete(a.editable(10))
+			a.deleteChosen()
+			<-started
+			a.profile = &netease.Profile{UserID: 2}
+			a.homeGen++
+			newPlaylist := &netease.Playlist{ID: 10, Name: "新账号歌单"}
+			a.mine = []netease.Playlist{*newPlaylist}
+			a.playlists[10] = newPlaylist
+			response <- result.err
+			refreshPost(t, posts)
+
+			if uid != 1 || a.homeGen != gen+1 || a.profile.UserID != 2 || len(a.mine) != 1 || a.mine[0].ID != 10 || a.mine[0].Name != newPlaylist.Name {
+				t.Fatalf("old delete changed current account: gen %d, UID %d, playlists %+v", a.homeGen, a.profile.UserID, a.mine)
+			}
+			if a.playlists[10] != newPlaylist {
+				t.Fatal("old delete cleared the current account's same-ID cache")
+			}
+		})
+	}
+}
+
 // Cancelling the confirmation deletes nothing.
 func TestCancelDeletingPlaylist(t *testing.T) {
 	deletePlaylist = func(int64) error { t.Error("deleted the playlist"); return nil }
