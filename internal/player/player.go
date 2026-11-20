@@ -279,8 +279,7 @@ func (p *Player) PlayQueue(tracks []netease.Track, start int) {
 
 // PlayQueueFrom plays a queue and carries where it came from into play logs.
 func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySource) {
-	p.source = source
-	p.playQueue(tracks, max(start, 0))
+	p.playQueue(tracks, max(start, 0), source)
 }
 
 // QueuePosition finds a song anywhere in play order, preferring the current
@@ -407,15 +406,16 @@ func (p *Player) PlayShuffledFrom(tracks []netease.Track, source PlaySource) {
 	if len(tracks) == 0 {
 		return
 	}
-	p.source = source
 	p.shuffle = true
-	p.playQueue(tracks, -1)
+	p.playQueue(tracks, -1, source)
 }
 
-func (p *Player) playQueue(tracks []netease.Track, start int) {
+func (p *Player) playQueue(tracks []netease.Track, start int, source PlaySource) {
 	if len(tracks) == 0 {
 		return
 	}
+	p.finish(MovedOn)
+	p.source = source
 	p.endRadio()
 	p.step = 0
 	p.queueRevision++

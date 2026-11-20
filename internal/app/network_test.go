@@ -63,6 +63,32 @@ func TestNetworkReconnectionRecoversCurrentPage(t *testing.T) {
 	}
 }
 
+// A failed podcast list used to stay failed through explicit refresh and
+// reconnection because neither recovery path considered the visible tab.
+func TestPodcastTabRecoversWithConnection(t *testing.T) {
+	for _, manual := range []bool{false, true} {
+		t.Run(map[bool]string{false: "reconnect", true: "manual"}[manual], func(t *testing.T) {
+			a, posts := offlineFixture(t)
+			a.route = route{page: pagePodcasts}
+			a.podcastTab.hotPage.err, a.podcastTab.hotPage.failure = "热门播客加载失败", netease.ErrOffline
+			calls := 0
+			hotPodcasts = func(_, _ int) ([]netease.Podcast, bool, error) {
+				calls++
+				return []netease.Podcast{{ID: 5}}, false, nil
+			}
+			if manual {
+				a.retryLoads(true)
+			} else {
+				a.recoverLoads()
+			}
+			refreshPost(t, posts)
+			if calls != 1 || a.podcastTab.hotPage.err != "" || len(a.podcastTab.hot) != 1 {
+				t.Fatalf("podcast list did not recover: calls %d, tab %+v", calls, a.podcastTab.hotPage)
+			}
+		})
+	}
+}
+
 // Clicking the icon rechecks system state; it sends no account request while
 // still offline, and starts one when that explicit check observes a connection.
 func TestNetworkRefreshIcon(t *testing.T) {

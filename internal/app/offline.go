@@ -222,6 +222,11 @@ func (a *app) failedLoads(manual bool) bool {
 		if d := a.searches.get(a.route); d != nil && !d.page.loading && d.page.err != "" && retry(d.page.failure) {
 			return true
 		}
+	case pagePodcasts:
+		d := a.podcastTab
+		if !d.loading && (d.err != "" && retry(d.failure) || !d.hotPage.loading && d.hotPage.err != "" && retry(d.hotPage.failure)) {
+			return true
+		}
 	}
 	return a.art.hasFailed(manual) || a.pl.MetadataPending()
 }
@@ -274,6 +279,14 @@ func (a *app) retryLoads(manual bool) {
 	case pageSearch:
 		if d := a.searches.get(a.route); d != nil && !d.page.loading && d.page.err != "" && retry(d.page.failure) {
 			a.moreResults(a.route, d)
+		}
+	case pagePodcasts:
+		d := a.podcastTab
+		if !d.loading && d.err != "" && retry(d.failure) {
+			d.hotPage.loaded = false
+			a.loadPodcastTab()
+		} else if !d.hotPage.loading && d.hotPage.err != "" && retry(d.hotPage.failure) {
+			a.loadHotPodcasts()
 		}
 	}
 	a.art.retryFailed(manual)
@@ -425,6 +438,9 @@ func (a *app) recoveryBusy() bool {
 	case pageSearch:
 		d := a.searches.get(a.route)
 		return d != nil && d.page.loading
+	case pagePodcasts:
+		d := a.podcastTab
+		return d.loading || d.hotPage.loading
 	}
 	return false
 }
