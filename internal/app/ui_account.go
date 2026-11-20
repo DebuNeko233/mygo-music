@@ -37,6 +37,24 @@ var saveLoginSession = netease.SaveSession
 var clearLoginSession = netease.ClearSession
 var loginIdentity = netease.SessionIdentity
 
+// saveLogin keeps a successful login usable in this process, but does not
+// report its credentials as saved when the keychain refuses them.
+func (a *app) saveLogin(gen int, onSaved func()) {
+	if err := saveLoginSession(); err != nil {
+		a.post(func() {
+			if gen != a.login.gen {
+				return
+			}
+			a.login.finished = false
+			a.login.err = "登录凭据保存失败，本次登录仅在应用运行期间有效"
+		})
+		return
+	}
+	if onSaved != nil {
+		a.post(onSaved)
+	}
+}
+
 // boot signs in with the session in the keychain, if any, then loads the
 // home page for whoever is listening.
 func (a *app) boot() {
@@ -110,7 +128,7 @@ func (a *app) confirmAccount() {
 			} else {
 				a.profile = prof
 			}
-			go saveLoginSession()
+			go a.saveLogin(a.login.gen, nil)
 			a.bindOfflineLyrics()
 			if identity != "" {
 				a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
@@ -233,17 +251,21 @@ func (a *app) checkLogin(gen int, key string, attempt qrLoginAttempt) bool {
 			// The old reporter already owns a copy of the old login's cookies.
 			a.stopPlayReports()
 			attempt.Commit()
-			l.status, l.finished = status.Code, true
+			l.status = status.Code
 			a.discardAccount()
 			a.signedIn(status.Profile)
-			go saveLoginSession()
+			go a.saveLogin(gen, func() {
+				if gen == a.login.gen && a.login.open {
+					a.login.finished = true
+					a.closeLoginSoon(gen)
+				}
+			})
 			if status.Profile == nil {
 				a.recovery.accountPending = true
 				a.confirmAccount()
 			} else {
 				a.pickUp(status.Profile.UserID)
 			}
-			a.closeLoginSoon(gen)
 		case status.Code == netease.QRExpired || status.Code == netease.QRWaiting || status.Code == netease.QRScanned:
 			l.status = status.Code
 			if status.Nickname != "" {

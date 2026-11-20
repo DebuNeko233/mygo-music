@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log"
 	"runtime"
 	"sync"
 	"time"
@@ -317,6 +318,14 @@ func (a *app) showMain() {
 	}
 }
 
+// saveFinalSettings reports a write failure before the process exits, when a
+// later view can no longer carry a toast.
+func (a *app) saveFinalSettings() {
+	if err := a.settings.save(); err != nil {
+		log.Printf("settings: final save: %v", err)
+	}
+}
+
 // Run runs the app until it quits.
 func Run() error {
 	if !mygo.App.RequestSingleInstanceLock() {
@@ -475,7 +484,7 @@ func Run() error {
 		// A write still owed from a key repeat would otherwise land
 		// after this one, with the settings as they were before it.
 		settingsWrites.wait()
-		a.settings.save()
+		a.saveFinalSettings()
 		a.saveSession()
 		a.sessionSave.wait()
 		if write := a.transcriptWrite(); write != nil {
