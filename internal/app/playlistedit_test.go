@@ -346,7 +346,9 @@ func TestNoRenamingLikedSongs(t *testing.T) {
 	a.homeLoading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
-	tt.RightClick("小明喜欢的音乐")
+	if err := tt.RightClick("小明喜欢的音乐"); err != nil {
+		t.Fatal(err)
+	}
 	if err := tt.ChooseMenuItem("重命名…"); err == nil {
 		t.Error("offered to rename the liked songs")
 	}

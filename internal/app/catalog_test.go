@@ -330,7 +330,9 @@ func TestFollowArtist(t *testing.T) {
 	if !a.artists.get(12).profile.Followed || !wait(t, asked, "the follow") {
 		t.Fatal("not followed")
 	}
-	tt.Click("已关注")
+	if err := tt.Click("已关注"); err != nil {
+		t.Fatal(err)
+	}
 	if len(asked) > 0 || !a.artists.get(12).profile.Followed {
 		t.Error("unfollowed before the follow landed")
 	}

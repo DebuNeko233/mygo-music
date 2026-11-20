@@ -103,10 +103,20 @@ func TestArtistSongsByLatest(t *testing.T) {
 	}
 
 	// Back and forth, the songs loaded stay.
-	tt.Click("热门")
+	if err := tt.Click("热门"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
-	tt.Click("最新")
+	if a.artistTab != artistHot {
+		t.Fatal("the popular songs were not chosen")
+	}
+	if err := tt.Click("最新"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
+	if a.artistTab != artistLatest {
+		t.Fatal("the newest songs were not chosen again")
+	}
 	if len(asked) > 0 {
 		t.Error("the newest songs were asked for again")
 	}
