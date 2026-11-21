@@ -1,12 +1,12 @@
-# Every push and pull request packages the app for macOS, Windows and Linux, with
-# its installers, the way a release does: a change that breaks the build or
-# the packaging fails here instead of on a tag, and the installers of a run
-# can be downloaded from its artifacts. test.yml compiles the Go packages
-# and runs the tests; release.yml signs the updates and uploads the packages.
+# Pull requests, main and branch pushes in forks package the macOS, Windows and
+# Linux installers. This catches packaging failures before release and makes
+# the installers available as artifacts. test.yml runs the Go checks, and
+# release.yml signs and uploads the updates.
 name: Build
 
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -43,6 +44,7 @@ jobs:
           retention-days: 7
 
   macos:
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
