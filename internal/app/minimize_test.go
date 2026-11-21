@@ -30,11 +30,23 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			a.comments = commentState{track: 1, loaded: true, total: 1, latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
 			a.nowPlaying, a.npPane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
+			if pane.id == paneLyrics {
+				a.pl.Hold(lines[150].At)
+			}
 			// The minimized layout and restored hit targets are measured in DIPs.
 			tt.SetScale(0.25)
 			tt.Frame()
 			tt.Advance(time.Second)
 			tt.Frame()
+			if pane.id == paneLyrics {
+				if a.lyricScroll.Y == 0 {
+					t.Fatalf("lyrics did not follow before minimize: at=%d viewport=%vx%v", a.lyricAt, a.lyricViewportW, a.lyricViewportH)
+				}
+				row, ok := tt.AccessByRole(ui.RoleButton, lines[150].Text)
+				if !ok || row.Offscreen {
+					t.Fatalf("active lyric was not followed before minimize: offset=%v row=%+v", a.lyricScroll.Y, row)
+				}
+			}
 			tt.SetWindowHidden(true)
 			tt.SetSize(0, 0)
 			tt.SetWindowHidden(false)
@@ -42,6 +54,13 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			tt.Advance(time.Second)
 			if _, ok := tt.Access("关闭"); !ok {
 				t.Fatal("Now Playing did not return after restoring the window")
+			}
+			if pane.id == paneLyrics {
+				tt.Advance(time.Second)
+				row, ok := tt.AccessByRole(ui.RoleButton, lines[150].Text)
+				if !ok || row.Offscreen || a.lyricScroll.Y == 0 {
+					t.Fatalf("restoring the window lost the active lyric: offset=%v row=%+v", a.lyricScroll.Y, row)
+				}
 			}
 		})
 	}
