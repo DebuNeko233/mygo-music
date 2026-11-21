@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"os"
 	"sync"
 
 	"github.com/egoist/mygo/audio"
@@ -18,7 +17,7 @@ import (
 // headers do, so CD rips with either header can be played without conversion.
 type wavStream struct {
 	dl        *download
-	file      *os.File
+	file      io.ReaderAt
 	data      int64
 	frames    int64
 	channels  int
@@ -40,7 +39,8 @@ func openWAVStream(dl *download) (*wavStream, error) {
 	if file == nil {
 		return nil, io.ErrClosedPipe
 	}
-	r := io.NewSectionReader(file, 0, dl.size)
+	source := &bufferedReaderAt{source: file}
+	r := io.NewSectionReader(source, 0, dl.size)
 	var riff [12]byte
 	if _, err := io.ReadFull(r, riff[:]); err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func openWAVStream(dl *download) (*wavStream, error) {
 	if string(riff[0:4]) != "RIFF" || string(riff[8:12]) != "WAVE" {
 		return nil, errors.New("wav: not a RIFF/WAVE file")
 	}
-	s := &wavStream{dl: dl, file: file}
+	s := &wavStream{dl: dl, file: source}
 	// Ignore unusual ancillary chunks rather than assuming data follows fmt.
 	for {
 		var header [8]byte
@@ -223,7 +223,7 @@ func openOggStream(dl *download) (*oggStream, error) {
 	if file == nil {
 		return nil, io.ErrClosedPipe
 	}
-	dec, err := oggvorbis.NewReader(io.NewSectionReader(file, 0, dl.size))
+	dec, err := oggvorbis.NewReader(io.NewSectionReader(&bufferedReaderAt{source: file}, 0, dl.size))
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func openAACStream(dl *download) (stream, error) {
 	if file == nil {
 		return nil, io.ErrClosedPipe
 	}
-	dec, err := aac.NewADTSDecoder(io.NewSectionReader(file, 0, dl.size))
+	dec, err := aac.NewADTSDecoder(io.NewSectionReader(&bufferedReaderAt{source: file}, 0, dl.size))
 	if err != nil {
 		return openFAADADTS(dl)
 	}

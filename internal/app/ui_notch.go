@@ -456,7 +456,7 @@ func (n *notch) expanded(c *ui.Context, tr *netease.Track, open, left float32) {
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 				ui.Text(c, tr.Name).FontSize(15).FontWeight(700).SingleLine()
-				if pl.Loading() {
+				if pl.Buffering() {
 					ui.Text(c, "正在缓冲…").FontSize(12.5).TextColor(white.Alpha(0.55)).SingleLine()
 				} else {
 					a.artistLinks(c, tr, white.Alpha(0.55), white).FontSize(12.5).SingleLine()
@@ -533,7 +533,7 @@ func (a *app) syncWindows() {
 	if tr := pl.Current(); tr != nil {
 		id = tr.Key()
 	}
-	sig := playerSig{id, pl.Playing(), pl.Loading(), pl.Shuffle(), pl.Repeat(), a.volume, a.nowPlaying, pl.Err()}
+	sig := playerSig{id, pl.Playing(), pl.Loading(), pl.Buffering(), pl.Shuffle(), pl.Repeat(), a.volume, a.nowPlaying, pl.Err()}
 	if sig != a.sig {
 		a.sig = sig
 		a.redraw()
@@ -547,6 +547,7 @@ type playerSig struct {
 	track      int64
 	playing    bool
 	loading    bool
+	buffering  bool
 	shuffle    bool
 	repeat     player.RepeatMode
 	volume     float64

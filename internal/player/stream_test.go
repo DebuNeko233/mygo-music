@@ -63,35 +63,52 @@ func TestMP3SeekIsClean(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := decodeAll(t, b)
-	dl := downloaded(b)
-	s, err := openMP3StreamSpectrum(dl, int64(len(ref)/2)*1000/44100, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	buf := make([]float32, 4096)
-	for i := 1; i < 40; i++ {
-		frame := s.frames * int64(i) / 41
-		if err := s.SetPosition(frame); err != nil {
-			t.Fatal(err)
-		}
-		n, _ := s.Read(buf)
-		// Where the decoder started, counted in MP3 frames from the first,
-		// and what it played from there on.
-		var at int64
-		if from := frame - preroll; from > 0 {
-			off := s.start + int64(float64(dl.size-s.start)*float64(from)/float64(s.frames))
-			off = findFrame(dl, off)
-			k := int64(0)
-			for p := s.start; p < off; p += int64(frameSize(dl.peek(p, 4))) {
-				k++
+	for _, cacheFile := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cacheFile=%t", cacheFile), func(t *testing.T) {
+			dl := downloaded(b)
+			if cacheFile {
+				dl = mp3FileDownload(t, b)
 			}
-			at = (k*1152 + preroll) * 2
-		} else {
-			at = frame * 2
-		}
-		if d := maxDiff(buf[:n], ref[at:]); d > 1e-4 {
-			t.Errorf("seek to frame %d: off by up to %.3f", frame, d)
-		}
+			s, err := openMP3StreamSpectrum(dl, int64(len(ref)/2)*1000/44100, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			buf := make([]float32, 4096)
+			positions := make([]int, 0, 44)
+			for i := 1; i < 40; i++ {
+				positions = append(positions, i)
+			}
+			// A seek must discard any unread bytes prefetched at the old position.
+			positions = append(positions, 1, 39, 0, 19, 0)
+			for _, i := range positions {
+				frame := s.frames * int64(i) / 41
+				if err := s.SetPosition(frame); err != nil {
+					t.Fatal(err)
+				}
+				n, err := s.Read(buf)
+				if n == 0 || err != nil {
+					t.Fatalf("read after seek: %d samples, %v", n, err)
+				}
+				// Where the decoder started, counted in MP3 frames from the first,
+				// and what it played from there on.
+				var at int64
+				if from := frame - preroll; from > 0 {
+					off := s.start + int64(float64(dl.size-s.start)*float64(from)/float64(s.frames))
+					off = findFrame(dl, off)
+					k := int64(0)
+					for p := s.start; p < off; p += int64(frameSize(dl.peek(p, 4))) {
+						k++
+					}
+					at = (k*1152 + preroll) * 2
+				} else {
+					at = frame * 2
+				}
+				if d := maxDiff(buf[:n], ref[at:]); d > 1e-4 {
+					t.Errorf("seek to frame %d: off by up to %.3f", frame, d)
+				}
+			}
+		})
 	}
 }
 

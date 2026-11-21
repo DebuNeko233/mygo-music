@@ -138,17 +138,15 @@ func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h fl
 		// Not Now Playing's cover, which the pointer tilts and flings: here
 		// the wall is what the pointer moves.
 		size := h - 48
-		cov := ui.Box(c.Key(coverKey{tr.Key(), 0})).Size(size, size).Radius(16).Shadow(0, 24, 50, -12, ui.RGBA(0, 0, 0, 0.55))
+		cov := ui.Box(c.Key("wall-cover")).Label("选歌封面").Size(size, size).Radius(16).Shadow(0, 24, 50, -12, ui.RGBA(0, 0, 0, 0.55))
 		scale := float32(1)
 		if !pl.Playing() {
 			scale = 0.92
 		}
 		cov.AnimatePose(ui.Pose{Scale: scale}, ui.Animation{Spring: ui.SpringOptions{Duration: 600 * time.Millisecond, Bounce: 0.25}})
-		in := artIn(cov, bitmap(art))
-		if in < 1 {
-			cov.Background(white.Alpha(0.08))
-		}
-		cov.Children(func() { artImage(c, bitmap(art), 16, in) })
+		cov.Children(func() {
+			a.wallCover.draw(c, art, a.hasTrackCover(tr), size, 16, white.Alpha(0.08), white.Alpha(0.35))
+		})
 		ui.Column(c).Width(440).Shrink(1).MinWidth(0).Gap(4).Children(func() {
 			if r := pl.Radio(); r != "" {
 				a.radioChip(c, r)

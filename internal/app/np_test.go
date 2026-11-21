@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -56,30 +55,39 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 // A settled Now Playing page rebuilt its times only with its lyrics or seek
 // bar, which could leave both clocks unchanged for several seconds.
 func TestNowPlayingClockTicksEverySecond(t *testing.T) {
-	for _, pane := range []int{paneLyrics, paneComments, paneQueue, paneStage} {
-		a := newTestApp()
-		a.settings = defaultSettings()
-		a.pl.Cue([]netease.Track{{ID: 1, Name: "宝船", Duration: 200000}})
-		a.pl.SetLyrics(nil)
-		out := audio.NewPlayer(&silence{})
-		out.SetVolume(0)
-		out.Play()
-		a.pl.Attach(out)
-		defer out.Close()
-		a.nowPlaying, a.npPane = true, pane
-		builds := 0
-		tt := ui.NewTester(func(c *ui.Context) {
-			builds++
-			a.view(c)
-		}, 1200, 800)
-		tt.Advance(npSettle)
-		before := builds
-		// The silent source stays at zero, so tickTimes schedules its
-		// next build one second plus the 10 ms boundary allowance later.
-		tt.Advance(time.Second + 10*time.Millisecond)
-		if got := builds - before; got == 0 {
-			t.Errorf("pane %d did not rebuild its times for a second", pane)
-		}
+	for _, tc := range []struct {
+		name string
+		pane int
+	}{
+		{"lyrics", paneLyrics},
+		{"comments", paneComments},
+		{"queue", paneQueue},
+		{"stage", paneStage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := newTestApp()
+			a.settings = defaultSettings()
+			a.pl.Cue([]netease.Track{{ID: 1, Name: "宝船", Duration: 200000}})
+			a.pl.SetLyrics(nil)
+			out := newSilentAudio()
+			out.Play()
+			a.pl.Attach(out)
+			defer out.Close()
+			a.nowPlaying, a.npPane = true, tc.pane
+			builds := 0
+			tt := ui.NewTester(func(c *ui.Context) {
+				builds++
+				a.view(c)
+			}, 1200, 800)
+			tt.Advance(npSettle)
+			before := builds
+			// The silent source stays at zero, so tickTimes schedules its
+			// next build one second plus the 10 ms boundary allowance later.
+			tt.Advance(time.Second + 10*time.Millisecond)
+			if got := builds - before; got == 0 {
+				t.Errorf("pane %d did not rebuild its times for a second", tc.pane)
+			}
+		})
 	}
 }
 

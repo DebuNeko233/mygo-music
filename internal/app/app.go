@@ -206,7 +206,8 @@ type app struct {
 	// bars, which show their scroll edges then.
 	underTop, underBottom bool
 	barScrub              scrubState
-	barCover              barCoverState
+	barCover              coverFadeState
+	stageCover, wallCover coverFadeState
 	npScrub               scrubState
 	backdropCache         backdropCache // the backdrop of Now Playing, as last painted
 	npSpectrum            lyricSpectrum // the filled frequency spectrum behind the lyrics
@@ -364,6 +365,11 @@ func Run() error {
 		a.settings.applyAppearance()
 		a.npPane = a.lyricsPaneChosen()
 		a.preloadPictures()
+		if runtime.GOOS == "darwin" {
+			// Start Metal's shader and pipeline compilation before the first
+			// spectrum draw, without making the window wait for it.
+			go lyricSpectrumShader()
+		}
 		// Before the window: on Windows it lays out its content as it is
 		// made, and the view asks the player what plays.
 		a.art = newArtCache(a.post)
@@ -415,6 +421,9 @@ func Run() error {
 			}
 		}
 		a.postMu.Unlock()
+		if setupNativeRowBars != nil {
+			setupNativeRowBars(a)
+		}
 		// The view the window laid out as it was made asked for pictures
 		// before there was a window to read them back into.
 		a.flushKept()

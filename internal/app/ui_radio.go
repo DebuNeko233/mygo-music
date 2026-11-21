@@ -318,7 +318,7 @@ func (a *app) fmCard(c *ui.Context) {
 				}
 				ui.Text(c, tr.Name).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
 				switch {
-				case pl.Loading():
+				case pl.Buffering():
 					ui.Text(c, "正在缓冲…").FontSize(14).TextColor(white.Alpha(0.7)).SingleLine()
 				case pl.Err() != "":
 					ui.Text(c, pl.Err()).FontSize(14).TextColor(white).SingleLine()

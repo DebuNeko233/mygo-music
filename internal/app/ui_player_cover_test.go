@@ -45,7 +45,7 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 	}
 	a.pl.Cue(q)
 	tt := ui.NewTester(a.playerBar, 1000, 96)
-	tt.Advance(2 * barCoverFade)
+	tt.Advance(2 * coverFadeDuration)
 	if a.barCover.current != arts[0] {
 		t.Fatal("bar did not show its initial cover")
 	}
@@ -70,15 +70,15 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 	}
 
 	a.pl.Jump(3)
-	tt.Advance(barCoverFade / 2)
+	tt.Advance(coverFadeDuration / 2)
 	if a.barCover.current != arts[2] || a.barCover.previous != arts[0] {
 		t.Fatal("a new selection interrupted the visible blend")
 	}
-	tt.Advance(barCoverFade)
+	tt.Advance(coverFadeDuration)
 	if a.barCover.current != arts[3] || a.barCover.previous != arts[2] {
 		t.Fatal("the fade did not pick up the latest selection")
 	}
-	tt.Advance(barCoverFade)
+	tt.Advance(coverFadeDuration)
 	if a.barCover.previous != nil || !a.barCover.changedAt.IsZero() {
 		t.Fatal("finished fade kept its predecessor")
 	}
@@ -109,7 +109,7 @@ func TestPlayerBarCoverBlendKeepsBothPicturesVisible(t *testing.T) {
 	}
 	a.pl.Cue(q)
 	tt := ui.NewTester(a.playerBar, 1000, 96)
-	tt.Advance(barCoverFade)
+	tt.Advance(coverFadeDuration)
 	r, ok := tt.Find("打开正在播放")
 	if !ok {
 		t.Fatal("playback info button is missing")
@@ -124,11 +124,11 @@ func TestPlayerBarCoverBlendKeepsBothPicturesVisible(t *testing.T) {
 	}
 	a.pl.Next()
 	tt.Frame()
-	tt.Advance(barCoverFade / 2)
+	tt.Advance(coverFadeDuration / 2)
 	if got := center(); got.R < 15 || got.B < 15 || got.G > 15 {
 		t.Fatalf("both images should cover the center during the blend: %v", got)
 	}
-	tt.Advance(barCoverFade)
+	tt.Advance(coverFadeDuration)
 	if got := center(); got.B < 240 || got.R > 15 {
 		t.Fatalf("new image did not cover the center: %v", got)
 	}
@@ -156,7 +156,7 @@ func TestPlayerBarCoverFallsBackAfterFailure(t *testing.T) {
 	}
 	a.pl.Cue(q)
 	tt := ui.NewTester(a.playerBar, 1000, 96)
-	tt.Advance(2 * barCoverFade)
+	tt.Advance(2 * coverFadeDuration)
 	a.pl.Next()
 	tt.Frame()
 	if a.barCover.current != oldArt {
@@ -167,7 +167,7 @@ func TestPlayerBarCoverFallsBackAfterFailure(t *testing.T) {
 	if a.barCover.previous != oldArt || a.barCover.current != nil {
 		t.Fatal("the bar did not transition from the old cover to the placeholder")
 	}
-	tt.Advance(2 * barCoverFade)
+	tt.Advance(2 * coverFadeDuration)
 	if a.barCover.current != nil || a.barCover.previous != nil {
 		t.Fatal("the bar held the previous track's cover after the failure")
 	}

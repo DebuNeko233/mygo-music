@@ -406,7 +406,7 @@ func (a *app) playerBar(c *ui.Context) {
 	tr := pl.Current()
 	a.tickTimes(c)
 	if tr == nil {
-		a.barCover = barCoverState{}
+		a.barCover = coverFadeState{}
 	}
 	if a.picked.id != 0 && (tr == nil || tr.ID != a.picked.id || pl.Playing()) {
 		// Played, or gone: it says what it is again.
@@ -453,7 +453,7 @@ func (a *app) playerBar(c *ui.Context) {
 					switch {
 					case a.picked.id != 0 && a.picked.id == tr.ID:
 						sub = a.picked.heard
-					case pl.Loading():
+					case pl.Buffering():
 						sub = "正在缓冲…"
 					case pl.Err() != "" && !pl.PlaybackRetryable():
 						sub, color = pl.Err(), p.accent

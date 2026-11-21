@@ -16,7 +16,7 @@ import (
 
 // wallApp is an app showing the wall of a queue of n songs, the at-th
 // playing.
-func wallApp(t *testing.T, n, at int) (*app, *ui.Tester) {
+func wallApp(n, at int) (*app, *ui.Tester) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	var tracks []netease.Track
@@ -50,7 +50,7 @@ func find(t *testing.T, tt *ui.Tester, s string) ui.Rect {
 // A click on a cover plays its song; a drag that starts on one moves the
 // wall and plays nothing.
 func TestWallPlaysTheCoverClicked(t *testing.T) {
-	a, tt := wallApp(t, 300, 0)
+	a, tt := wallApp(300, 0)
 	r := find(t, tt, "歌003")
 	drag(tt, r, -300, 200*time.Millisecond)
 	if got := a.pl.Current().Name; got != "歌000" {
@@ -72,7 +72,7 @@ func TestWallPlaysTheCoverClicked(t *testing.T) {
 // it shows, not where it would rest: near its edge, which is far from
 // where its row rests.
 func TestWallPlaysTheCoverSwaying(t *testing.T) {
-	a, tt := wallApp(t, 300, 0)
+	a, tt := wallApp(300, 0)
 	a.pl.Hold(0) // playing
 	// A whole turn of the sway is sampled, whatever the clock starts it on:
 	// the rows are only ever on their way from one side to the other.
@@ -101,7 +101,7 @@ func TestWallPlaysTheCoverSwaying(t *testing.T) {
 // Thrown, the wall glides on past where the pointer let it go, and stops
 // at its edge rather than leaving it.
 func TestWallGlidesAndStops(t *testing.T) {
-	a, tt := wallApp(t, 300, 0)
+	a, tt := wallApp(300, 0)
 	ws := &a.wallState
 	from := ws.shown.X
 	r := find(t, tt, "歌003")
@@ -122,7 +122,7 @@ func TestWallGlidesAndStops(t *testing.T) {
 
 // Two fingers on the trackpad move the wall with them, at once.
 func TestWallFollowsTheTrackpad(t *testing.T) {
-	_, tt := wallApp(t, 300, 0)
+	_, tt := wallApp(300, 0)
 	r := find(t, tt, "歌003")
 	tt.Scroll(r.X+r.W/2, r.Y+r.H/2, 180, 60)
 	tt.Frame()
@@ -135,7 +135,7 @@ func TestWallFollowsTheTrackpad(t *testing.T) {
 // The wall opens on the song playing, however far into the queue, and
 // goes to the next one played when it is out of view.
 func TestWallShowsTheSongPlaying(t *testing.T) {
-	a, tt := wallApp(t, 300, 250)
+	a, tt := wallApp(300, 250)
 	in := func(s string) bool {
 		r, ok := tt.Find(s)
 		return ok && r.X >= 0 && r.X+r.W <= 1200 && r.Y >= 0 && r.Y+r.H <= 800
@@ -159,7 +159,7 @@ func TestWallFrames(t *testing.T) {
 		t.Skip()
 	}
 	for _, n := range []int{300, 7} {
-		a, tt := wallApp(t, n, min(n-1, 40))
+		a, tt := wallApp(n, min(n-1, 40))
 		colors := []ui.Color{ui.RGB(220, 120, 160), ui.RGB(90, 140, 220), ui.RGB(240, 200, 110), ui.RGB(120, 200, 170), ui.RGB(170, 120, 230)}
 		for i := range a.pl.Queue() {
 			url := fmt.Sprintf("art%d", i)

@@ -4,24 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
 )
-
-// silence is a song of silence, to play without a stream.
-type silence struct{ pos int64 }
-
-func (s *silence) SampleRate() int           { return 48000 }
-func (s *silence) Channels() int             { return 2 }
-func (s *silence) Len() int64                { return 48000 * 200 }
-func (s *silence) SetPosition(f int64) error { s.pos = f; return nil }
-func (s *silence) Read(buf []float32) (int, error) {
-	clear(buf)
-	s.pos += int64(len(buf) / 2)
-	return len(buf), nil
-}
 
 // Space pauses right after a click opened Now Playing: the button clicked
 // has the focus then, and would take Space as another click.
@@ -31,8 +17,7 @@ func TestSpaceAfterOpeningNowPlaying(t *testing.T) {
 	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
 	a.pl.Cue([]netease.Track{tr})
 	a.pl.SetLyrics(nil)
-	out := audio.NewPlayer(&silence{})
-	out.SetVolume(0)
+	out := newSilentAudio()
 	out.Play()
 	a.pl.Attach(out)
 	defer out.Close()
