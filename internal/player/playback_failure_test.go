@@ -227,7 +227,7 @@ func TestCorruptCachedSongIsDownloadedAgain(t *testing.T) {
 	var asked atomic.Int64
 	p := New(func(func()) {})
 	p.Cache = c
-	fresh, _, err := p.fetch(netease.Track{ID: 1}, "lossless", nil, func(int64, string) (*netease.Stream, error) { asked.Add(1); return st, nil }, c)
+	fresh, _, err := p.fetch(netease.Track{ID: 1}, "lossless", nil, func(int64, string) (*netease.Stream, error) { asked.Add(1); return st, nil }, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

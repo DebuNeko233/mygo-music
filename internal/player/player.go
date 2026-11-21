@@ -136,6 +136,7 @@ type Player struct {
 	fade       fader
 	gain       float64 // the current track's normalizing gain
 	loading    bool
+	buffering  bool // a cache miss needs remote audio
 	playing    bool // what the listener wants: false while paused
 	err        string
 	gen        int // counts loads, to drop the results of stale ones
@@ -171,13 +172,14 @@ type Player struct {
 // ahead prepares a track while the one before it plays. It claims the lookup
 // before asking for the URL so playback can reuse the request.
 type ahead struct {
-	id    int64
-	level string
-	state atomic.Uint32
-	ready chan struct{} // closed when dl, info and err can be read
-	dl    *download
-	info  *netease.Stream
-	err   error
+	id     int64
+	level  string
+	state  atomic.Uint32
+	ready  chan struct{} // closed when dl, info and err can be read
+	remote chan struct{} // closed after a cache miss, before requesting its URL
+	dl     *download
+	info   *netease.Stream
+	err    error
 }
 
 const (
@@ -621,6 +623,12 @@ func (p *Player) Playing() bool { return p.playing }
 
 // Loading reports whether the current track is still loading.
 func (p *Player) Loading() bool { return p.loading || p.awaiting }
+
+// Buffering excludes looking up and opening complete cached audio. Loading
+// remains true during that work, so controls still wait until audio is ready.
+func (p *Player) Buffering() bool {
+	return p.awaiting || p.loading && (p.buffering || p.cacheChanging)
+}
 
 // Ready reports whether the current track has loaded, to play.
 func (p *Player) Ready() bool { return p.out != nil }
@@ -1106,6 +1114,7 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 	p.at = at
 	p.track = &t
 	p.loading, p.playing, p.err = true, play, ""
+	p.buffering = false
 	p.offlineAudioError, p.offlineLyricsError = false, false
 	p.retrying = false
 	p.lyricsErr = ""
@@ -1159,7 +1168,14 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 				s, _ = openDownload(dl, t.Duration)
 			}
 		} else {
-			info, s, err = p.open(t, level, ahead, ask, cache)
+			info, s, err = p.open(t, level, ahead, ask, cache, func() {
+				p.post(func() {
+					if p.gen == gen && p.loading && !p.buffering {
+						p.buffering = true
+						p.sync()
+					}
+				})
+			})
 		}
 		p.post(func() {
 			if gen != p.gen {
@@ -1316,6 +1332,7 @@ func (p *Player) retry(skipped int, from time.Duration, err error) {
 	p.tries++
 	p.retrying = true
 	p.loading = true
+	p.buffering = true
 	gen, tries := p.gen, p.tries
 	time.AfterFunc(loadGap(tries, err), func() {
 		p.post(func() {
@@ -1402,7 +1419,7 @@ func (p *Player) prefetch(at int) {
 }
 
 func (p *Player) startPrefetch(id int64, level string, now stream, ask asker, try int) {
-	a := &ahead{id: id, level: level, ready: make(chan struct{})}
+	a := &ahead{id: id, level: level, ready: make(chan struct{}), remote: make(chan struct{})}
 	p.ahead = a
 	go p.prefetching(p.gen, a, now, ask, p.Cache, try)
 }
@@ -1435,6 +1452,9 @@ func (a *ahead) prepare(now stream, ask asker, cache *Cache) error {
 	a.dl, a.info, _ = cache.lookup(a.id, a.level)
 	if a.dl != nil || a.state.Load() == aheadCanceled {
 		return nil
+	}
+	if a.remote != nil {
+		close(a.remote)
 	}
 	info, err := ask(a.id, a.level)
 	if err != nil {
@@ -1528,8 +1548,8 @@ func (p *Player) level() string {
 // kept in the cache cache, or else streamed into it, and kept once it has all
 // come in. ask is where its URL comes from, and cache is the folder it is
 // kept in: both taken on the main thread.
-func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker, cache *Cache) (*netease.Stream, stream, error) {
-	dl, info, err := p.fetch(t, level, ahead, ask, cache)
+func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker, cache *Cache, buffering func()) (*netease.Stream, stream, error) {
+	dl, info, err := p.fetch(t, level, ahead, ask, cache, buffering)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1552,9 +1572,20 @@ func openDownload(dl *download, duration int64) (stream, error) {
 
 // fetch returns the download of track t at level, and what it streams: the
 // one fetched ahead, the one the cache cache keeps, or one started now.
-func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker, cache *Cache) (*download, *netease.Stream, error) {
+func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker, cache *Cache, buffering func()) (*download, *netease.Stream, error) {
+	notify := func() {
+		if buffering != nil {
+			buffering()
+			buffering = nil
+		}
+	}
 	if ahead != nil && !netease.Offline() {
-		<-ahead.ready
+		select {
+		case <-ahead.ready:
+		case <-ahead.remote:
+			notify()
+			<-ahead.ready
+		}
 	}
 	if netease.Offline() {
 		if ahead != nil {
@@ -1569,6 +1600,7 @@ func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker, c
 			}
 			ahead.dl.Close()
 		} else if ahead.info != nil {
+			notify()
 			return cache.download(t.ID, level, ahead.info), ahead.info, nil
 		} else if ahead.err != nil {
 			if errors.Is(ahead.err, netease.ErrOffline) {
@@ -1581,6 +1613,7 @@ func (p *Player) fetch(t netease.Track, level string, ahead *ahead, ask asker, c
 	if ok {
 		return dl, info, nil
 	}
+	notify()
 	info, err := ask(t.ID, level)
 	if errors.Is(err, netease.ErrOffline) {
 		return cache.lookupOffline(t.ID, level)
