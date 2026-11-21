@@ -1,12 +1,12 @@
-# Every push and pull request packages the app for macOS, Windows and Linux, with
-# its installers, the way a release does: a change that breaks the build or
-# the packaging fails here instead of on a tag, and the installers of a run
-# can be downloaded from its artifacts. test.yml compiles the Go packages
-# and runs the tests; release.yml signs the updates and uploads the packages.
+# Pull requests, main and branch pushes in forks package the macOS, Windows and
+# Linux installers. This catches packaging failures before release and makes
+# the installers available as artifacts. test.yml runs the Go checks, and
+# release.yml signs and uploads the updates.
 name: Build
 
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -20,7 +20,16 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, runner: macos-latest, goos: darwin }
+          - { name: Windows, runner: ubuntu-latest, goos: windows }
+          - { name: Linux, runner: ubuntu-latest, goos: linux }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -28,34 +37,39 @@ jobs:
           go-version-file: go.mod
       # The Windows installers are made with NSIS.
       - name: Install NSIS, for the Windows installers
+        if: matrix.goos == 'windows'
         run: sudo apt-get update && sudo apt-get install -y nsis
       # mygo build warns and signs no update archives without the updater
       # key, which is a release secret: these are the installers of a
       # release, unsigned, and -upload would need a draft release.
       - name: Build the packages
+        shell: bash
+        env:
+          TARGET_OS: ${{ matrix.goos }}
         run: |
-          go tool mygo build \
-            -platform windows/amd64,windows/arm64,linux/amd64,linux/arm64
-      - uses: actions/upload-artifact@v4
+          args=()
+          if [[ "$TARGET_OS" == darwin ]]; then
+            # Ad hoc signing needs no Apple certificate.
+            args=(-sign - -skip-notarize)
+          fi
+          for arch in amd64 arm64; do
+            out="build/$arch"
+            go tool mygo build -platform "$TARGET_OS/$arch" -o "$out" "${args[@]}"
+            if [[ -f "$out/SHA256SUMS" ]]; then
+              mv "$out/SHA256SUMS" "$out/$TARGET_OS-$arch/"
+            fi
+          done
+      - name: Upload amd64 packages
+        uses: actions/upload-artifact@v7
         with:
-          name: packages
-          path: build/
+          name: packages-${{ matrix.goos }}-amd64
+          path: build/amd64/${{ matrix.goos }}-amd64/
+          if-no-files-found: error
           retention-days: 7
-
-  macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - name: Upload arm64 packages
+        uses: actions/upload-artifact@v7
         with:
-          go-version-file: go.mod
-      # Ad hoc signing needs no Apple certificate; the DMGs are not notarized.
-      - name: Build the packages
-        run: |
-          go tool mygo build \
-            -platform darwin/arm64,darwin/amd64 -sign - -skip-notarize
-      - uses: actions/upload-artifact@v4
-        with:
-          name: packages-macos
-          path: build/
+          name: packages-${{ matrix.goos }}-arm64
+          path: build/arm64/${{ matrix.goos }}-arm64/
+          if-no-files-found: error
           retention-days: 7

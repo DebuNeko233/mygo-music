@@ -1,0 +1,83 @@
+name: Full UI Race
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '19 19 * * *'
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Full commit SHA to test (leave blank to test the selected branch)'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ inputs.source_sha || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  race:
+    name: Race detector (${{ matrix.shard }})
+    if: ${{ github.event_name != 'schedule' || github.repository == 'zhangnjsd/mygo-music' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    env:
+      CGO_ENABLED: 1
+      SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+    steps:
+      - name: Validate the commit SHA
+        shell: bash
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[[:xdigit:]]{40}$ ]]; then
+            echo 'Provide a full 40-character commit SHA.' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Record the tested commit
+        run: git rev-parse HEAD
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: ${{ !inputs.source_sha }}
+      - name: Test under the race detector
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          TOTAL_JOBS: ${{ strategy.job-total }}
+        run: |
+          # Keep the longest software-rendered tests on separate runners.
+          # Every other test, including newly added ones, still has one shard.
+          names=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app)
+          pattern=$(printf '%s\n' "$names" | awk -v shard="$SHARD" -v app_shards="$TOTAL_JOBS" '
+            BEGIN {
+              if (app_shards < 1 || shard < 1 || shard > app_shards) exit 1
+              heavy["TestNowPlayingFrameBudget"] = 1
+              heavy["TestLyricEdgeFadeScrolling"] = 2
+              heavy["TestNowPlayingLyricScrollbarAlignmentAndDrag"] = 3
+              heavy["TestLyricManualResizeKeepsReadingPosition"] = 4
+              heavy["TestImmersiveLyricGlideContinuesAfterResize"] = 5
+              heavy["TestLyricIntroEasesIntoFirstLine"] = 6
+            }
+            /^(Test|Example|Fuzz)[[:alnum:]_]+$/ {
+              if (seen[$0]++) exit 1
+              assigned = ($0 in heavy) ? (heavy[$0] - 1) % app_shards + 1 : count++ % app_shards + 1
+              if (assigned < 1 || assigned > app_shards) exit 1
+              if (assigned == shard) {
+                printf "%s%s", sep, $0
+                sep = "|"
+              }
+            }
+          ')
+          [[ -n "$pattern" ]]
+          # A single software-rendered animation may take several minutes
+          # under the detector. This is a per-shard budget, not a job timeout.
+          go test -v -count=1 -race -timeout 60m -run "^($pattern)$" ./internal/app

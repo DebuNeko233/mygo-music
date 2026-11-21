@@ -1,11 +1,10 @@
-# Every push and pull request builds the packages, vets them and runs the
-# tests, once plain and once under the race detector: the release workflow
-# builds the apps on a tag, and nothing else looked at a change before it was
-# released.
+# Check pull requests, main and branch pushes in forks. The slower full app
+# race suite runs separately in race.yml.
 name: Test
 
 on:
   push:
+    branches: ['**']
   pull_request:
 
 # A newer commit on the same branch or PR replaces the pending work.
@@ -17,8 +16,9 @@ permissions:
   contents: read
 
 jobs:
-  plain:
-    name: Build, vet and test
+  compile:
+    name: Build Go packages
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,24 +27,66 @@ jobs:
           go-version-file: go.mod
       - name: Build
         run: go build ./...
-      - name: Vet
-        run: |
-          go vet ./...
-          go tool mygo vet .
-      # The tests that call NetEase skip unless LIVE is set, and the ones
-      # that save frames into NM_FRAMES unless it is: neither is. A test that
-      # fails is not tried again: a flaky one is fixed or dropped, as
-      # AGENTS.md asks.
-      - name: Test
-        run: go test -count=1 ./internal/...
 
-  race:
-    name: Race detector (${{ matrix.shard }})
+  vet:
+    name: Go and MyGo vet
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        # MyGo runs go vet ./... before its own UI checks.
+        run: go tool mygo vet .
+
+  unit-packages:
+    name: Unit tests (other packages)
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Test non-app packages
+        shell: bash
+        run: |
+          packages=$(go list ./internal/... | grep -v '/internal/app$')
+          mapfile -t package_list <<< "$packages"
+          go test -count=1 "${package_list[@]}"
+
+  unit-app:
+    name: Unit tests (app ${{ matrix.shard }})
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, packages]
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The tests that call NetEase skip unless LIVE is set, and the ones
+      # that save frames into NM_FRAMES unless it is: neither is. A test that
+      # fails is not tried again: a flaky one is fixed or dropped, as
+      # AGENTS.md asks.
+      - name: Test app shard
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          pattern=$(go test -list '^(Test|Example|Fuzz)' ./internal/app |
+            python3 .github/scripts/shard_app_tests.py "$SHARD")
+          go test -count=1 -run "$pattern" ./internal/app
+
+  race-quick:
+    name: Race detector (quick)
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 1
     steps:
@@ -52,54 +94,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: Test under the race detector
+      - name: Test non-app packages under the race detector
         shell: bash
-        env:
-          SHARD: ${{ matrix.shard }}
-          TOTAL_JOBS: ${{ strategy.job-total }}
         run: |
-          if [[ "$SHARD" == packages ]]; then
-            packages=$(go list ./internal/... | grep -v '/internal/app$')
-            mapfile -t package_list <<< "$packages"
-            go test -v -count=1 -race -timeout 30m "${package_list[@]}"
-            exit
-          fi
-
-          # Keep the longest software-rendered tests on separate runners.
-          # Every other test, including newly added ones, still has one shard.
-          names=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app)
-          pattern=$(printf '%s\n' "$names" | awk -v shard="$SHARD" -v app_shards="$((TOTAL_JOBS - 1))" '
-            BEGIN {
-              if (app_shards < 1 || shard < 1 || shard > app_shards) exit 1
-              heavy["TestNowPlayingFrameBudget"] = 1
-              heavy["TestLyricEdgeFadeScrolling"] = 2
-              heavy["TestNowPlayingLyricScrollbarAlignmentAndDrag"] = 3
-              heavy["TestLyricManualResizeKeepsReadingPosition"] = 4
-              heavy["TestImmersiveLyricGlideContinuesAfterResize"] = 5
-              heavy["TestLyricIntroEasesIntoFirstLine"] = 6
-            }
-            /^(Test|Example|Fuzz)[[:alnum:]_]+$/ {
-              if (seen[$0]++) exit 1
-              assigned = ($0 in heavy) ? (heavy[$0] - 1) % app_shards + 1 : count++ % app_shards + 1
-              if (assigned < 1 || assigned > app_shards) exit 1
-              if (assigned == shard) {
-                printf "%s%s", sep, $0
-                sep = "|"
-              }
-            }
-          ')
-          [[ -n "$pattern" ]]
-          # A single software-rendered animation may take several minutes
-          # under the detector. This is a per-shard budget, not a job timeout.
-          go test -v -count=1 -race -timeout 60m -run "^($pattern)$" ./internal/app
-
-  test:
-    runs-on: ubuntu-latest
-    needs: [plain, race]
-    if: ${{ always() }}
-    steps:
-      - name: Check test results
-        env:
-          PLAIN: ${{ needs.plain.result }}
-          RACE: ${{ needs.race.result }}
-        run: test "$PLAIN" = success && test "$RACE" = success
+          packages=$(go list ./internal/... | grep -v '/internal/app$')
+          mapfile -t package_list <<< "$packages"
+          go test -count=1 -race -timeout 30m "${package_list[@]}"
+      # These tests exercise storage workers or background callbacks without
+      # rendering the animation suite.
+      - name: Test app concurrency under the race detector
+        run: >-
+          go test -v -count=1 -race
+          -run '^(TestSettingsSaver.*|TestSessionKeepsLatestSave|TestEarlyPostsAreNotLost|TestPostDispatchBelongsToApp|TestEpisodeLikeClickBeatsAnswer|TestArtReleaseUsesTheDispatcher)$'
+          ./internal/app
