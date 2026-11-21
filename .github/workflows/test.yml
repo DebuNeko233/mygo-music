@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  plain:
-    name: Build, vet and test
+  compile:
+    name: Build Go packages
     if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
     runs-on: ubuntu-latest
     steps:
@@ -27,9 +27,29 @@ jobs:
           go-version-file: go.mod
       - name: Build
         run: go build ./...
+
+  vet:
+    name: Go and MyGo vet
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       - name: Vet
         # MyGo runs go vet ./... before its own UI checks.
         run: go tool mygo vet .
+
+  plain:
+    name: Unit tests
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
       # The tests that call NetEase skip unless LIVE is set, and the ones
       # that save frames into NM_FRAMES unless it is: neither is. A test that
       # fails is not tried again: a flaky one is fixed or dropped, as
@@ -64,11 +84,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: [plain, race-quick]
+    needs: [compile, vet, plain, race-quick]
     if: ${{ always() && (github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork) }}
     steps:
       - name: Check test results
         env:
+          COMPILE: ${{ needs.compile.result }}
+          VET: ${{ needs.vet.result }}
           PLAIN: ${{ needs.plain.result }}
           RACE: ${{ needs.race-quick.result }}
-        run: test "$PLAIN" = success && test "$RACE" = success
+        run: test "$COMPILE" = success && test "$VET" = success && test "$PLAIN" = success && test "$RACE" = success
