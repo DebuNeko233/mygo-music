@@ -54,30 +54,8 @@ jobs:
           SHARD: ${{ matrix.shard }}
           TOTAL_JOBS: ${{ strategy.job-total }}
         run: |
-          # Keep the longest software-rendered tests on separate runners.
-          # Every other test, including newly added ones, still has one shard.
-          names=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app)
-          pattern=$(printf '%s\n' "$names" | awk -v shard="$SHARD" -v app_shards="$TOTAL_JOBS" '
-            BEGIN {
-              if (app_shards < 1 || shard < 1 || shard > app_shards) exit 1
-              heavy["TestNowPlayingFrameBudget"] = 1
-              heavy["TestLyricEdgeFadeScrolling"] = 2
-              heavy["TestNowPlayingLyricScrollbarAlignmentAndDrag"] = 3
-              heavy["TestLyricManualResizeKeepsReadingPosition"] = 4
-              heavy["TestImmersiveLyricGlideContinuesAfterResize"] = 5
-              heavy["TestLyricIntroEasesIntoFirstLine"] = 6
-            }
-            /^(Test|Example|Fuzz)[[:alnum:]_]+$/ {
-              if (seen[$0]++) exit 1
-              assigned = ($0 in heavy) ? (heavy[$0] - 1) % app_shards + 1 : count++ % app_shards + 1
-              if (assigned < 1 || assigned > app_shards) exit 1
-              if (assigned == shard) {
-                printf "%s%s", sep, $0
-                sep = "|"
-              }
-            }
-          ')
-          [[ -n "$pattern" ]]
+          pattern=$(go test -race -list '^(Test|Example|Fuzz)' ./internal/app |
+            python3 .github/scripts/shard_app_tests.py --race --shards "$TOTAL_JOBS" "$SHARD")
           # A single software-rendered animation may take several minutes
           # under the detector. This is a per-shard budget, not a job timeout.
-          go test -v -count=1 -race -timeout 60m -run "^($pattern)$" ./internal/app
+          go test -v -count=1 -race -timeout 60m -run "$pattern" ./internal/app

@@ -73,6 +73,8 @@ func TestWallPlaysTheCoverClicked(t *testing.T) {
 // where its row rests.
 func TestWallPlaysTheCoverSwaying(t *testing.T) {
 	a, tt := wallApp(300, 0)
+	// Keep logical hit testing at the same window size with a smaller raster.
+	tt.SetScale(0.25)
 	a.pl.Hold(0) // playing
 	// A whole turn of the sway is sampled, whatever the clock starts it on:
 	// the rows are only ever on their way from one side to the other.
@@ -102,6 +104,8 @@ func TestWallPlaysTheCoverSwaying(t *testing.T) {
 // at its edge rather than leaving it.
 func TestWallGlidesAndStops(t *testing.T) {
 	a, tt := wallApp(300, 0)
+	// The glide and its bounds are measured in DIPs.
+	tt.SetScale(0.25)
 	ws := &a.wallState
 	from := ws.shown.X
 	r := find(t, tt, "歌003")
