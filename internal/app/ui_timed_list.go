@@ -116,6 +116,9 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	box := st.viewport(scroll.LayoutBounds())
 	if box.W <= 0 || box.H <= 0 {
 		scroll.Children(func() { ui.Box(c).Height(1) })
+		a.lyricViewportW, a.lyricViewportH = 0, 0
+		a.lyricGlide = lyricGlide{}
+		a.timedList.manual = false
 		c.AnimationFrame()
 		return
 	}
