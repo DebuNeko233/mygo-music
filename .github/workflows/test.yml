@@ -4,7 +4,7 @@ name: Test
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 # A newer commit on the same branch or PR replaces the pending work.
