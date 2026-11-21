@@ -41,10 +41,30 @@ jobs:
         # MyGo runs go vet ./... before its own UI checks.
         run: go tool mygo vet .
 
-  plain:
-    name: Unit tests
+  unit-packages:
+    name: Unit tests (other packages)
     if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Test non-app packages
+        shell: bash
+        run: |
+          packages=$(go list ./internal/... | grep -v '/internal/app$')
+          mapfile -t package_list <<< "$packages"
+          go test -count=1 "${package_list[@]}"
+
+  unit-app:
+    name: Unit tests (app ${{ matrix.shard }})
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' || github.event.repository.fork }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -54,8 +74,14 @@ jobs:
       # that save frames into NM_FRAMES unless it is: neither is. A test that
       # fails is not tried again: a flaky one is fixed or dropped, as
       # AGENTS.md asks.
-      - name: Test
-        run: go test -count=1 ./internal/...
+      - name: Test app shard
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          pattern=$(go test -list '^(Test|Example|Fuzz)' ./internal/app |
+            python3 .github/scripts/shard_app_tests.py "$SHARD")
+          go test -count=1 -run "$pattern" ./internal/app
 
   race-quick:
     name: Race detector (quick)
