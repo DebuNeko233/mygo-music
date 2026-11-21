@@ -60,14 +60,14 @@ jobs:
             fi
           done
       - name: Upload amd64 packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.goos }}-amd64
           path: build/amd64/${{ matrix.goos }}-amd64/
           if-no-files-found: error
           retention-days: 7
       - name: Upload arm64 packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: packages-${{ matrix.goos }}-arm64
           path: build/arm64/${{ matrix.goos }}-arm64/
