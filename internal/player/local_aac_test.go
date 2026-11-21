@@ -1,6 +1,7 @@
 package player
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -44,6 +45,11 @@ func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
 	for _, name := range []string{"packet read failure", "decode failure", "success"} {
 		t.Run(name, func(t *testing.T) {
 			data := testAudio(t, "seek-he.aac")
+			if name == "packet read failure" {
+				// Leave the first packet outside the final read-ahead window,
+				// so truncation still exercises a file read after indexing.
+				data = bytes.Repeat(data, audioReadBuffer/len(data)+1)
+			}
 			if name == "decode failure" {
 				for at := 0; at+7 <= len(data); {
 					length, _, ok := adtsPacket(data[at:])
@@ -100,7 +106,7 @@ func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
 					t.Fatal(err)
 				}
 			} else if err == nil || s != nil {
-				t.Fatalf("open = %v, %v, want failure", s, err)
+				t.Fatalf("open returned stream=%t, error=%v, want failure", s != nil, err)
 			} else if name == "packet read failure" && !errors.Is(err, io.EOF) {
 				t.Fatalf("packet read returned %v, want EOF after truncation", err)
 			} else if name == "decode failure" && !errors.Is(err, faad2.ErrDecodeFailed) {

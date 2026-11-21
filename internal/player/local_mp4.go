@@ -53,7 +53,7 @@ func openMP4Stream(dl *download) (*decoderStream, error) {
 		return owned, nil
 	}
 	localAACFactoryMu.Unlock()
-	dec, err := mp4.NewDecoder(io.NewSectionReader(file, 0, dl.size))
+	dec, err := mp4.NewDecoder(io.NewSectionReader(&bufferedReaderAt{source: file}, 0, dl.size))
 	localAACFactoryMu.Lock()
 	localAACFactory = newLocalAACCodec
 	localAACFactoryMu.Unlock()

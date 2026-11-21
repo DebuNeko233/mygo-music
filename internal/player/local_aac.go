@@ -179,10 +179,10 @@ func openFAADADTS(dl *download) (_ *adtsFAADStream, err error) {
 	if file == nil {
 		return nil, io.ErrClosedPipe
 	}
-	s := &adtsFAADStream{dl: dl, file: file}
+	s := &adtsFAADStream{dl: dl, file: &bufferedReaderAt{source: file}}
 	var h [7]byte
 	for off := id3Size(dl); off+7 <= dl.size; {
-		if _, err := file.ReadAt(h[:], off); err != nil {
+		if _, err := s.file.ReadAt(h[:], off); err != nil {
 			return nil, err
 		}
 		length, config, ok := adtsPacket(h[:])

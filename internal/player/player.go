@@ -959,7 +959,6 @@ func (p *Player) DetailedLevels() ([DetailBands]float32, bool) {
 		return [DetailBands]float32{}, false
 	}
 	spec, frame := p.spectrumAtPosition()
-	spec.enableDetail()
 	m, ok := spec.at(frame)
 	return m.detail, ok
 }
