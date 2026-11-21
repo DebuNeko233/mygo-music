@@ -29,6 +29,8 @@ github.com/jfreymuth/vorbis v1.0.2 h1:m1xH6+ZI4thH927pgKD8JOH4eaGRm18rEE9/0WKjvN
 github.com/jfreymuth/vorbis v1.0.2/go.mod h1:DoftRo4AznKnShRl1GxiTFCseHr4zR9BN3TWXyuzrqQ=
 github.com/klauspost/compress v1.20.4 h1:dD0v/bvxtjCBqQu6sx1TNWkalEY5lNTIe+HY9w8TeNI=
 github.com/klauspost/compress v1.20.4/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
+github.com/klauspost/compress v1.20.5 h1:rJj5VjH4xQxbnLphg6eqUcDxRFCw1jpMdDY9qXlrwSs=
+github.com/klauspost/compress v1.20.5/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
 github.com/llehouerou/go-faad2 v0.3.1 h1:tl9Bl5aXzB4s/NEBR9jbk5VxBmaTqVmSJ2L9sLCT+qE=
 github.com/llehouerou/go-faad2 v0.3.1/go.mod h1:Q3GuJjnorKbt43ea1lqg2cc2tlX/k5C5VWyTuAkzwws=
 github.com/mewkiz/flac v1.0.14 h1:hyRGAM8NCKznoPmIi9zz2jyO+nfmxY2ErqBnHZ+gxh4=

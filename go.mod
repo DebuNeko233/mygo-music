@@ -10,7 +10,7 @@ require (
 	github.com/egoist/mygo v0.10.0
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/jfreymuth/oggvorbis v1.0.5
-	github.com/klauspost/compress v1.20.4
+	github.com/klauspost/compress v1.20.5
 	github.com/llehouerou/go-faad2 v0.3.1
 	github.com/mewkiz/flac v1.0.14
 	golang.org/x/crypto v0.59.0
