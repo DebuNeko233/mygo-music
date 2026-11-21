@@ -547,11 +547,9 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 		a.scrubber(c.Key("stage-scrub"), &a.npScrub, white.Alpha(0.18), white.Alpha(0.9), 14, accent.Mix(white, 0.35))
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
 			ui.Row(c).Grow(1).Basis(0).MinWidth(0).Gap(12).AlignItems(ui.Center).Children(func() {
-				if bmp := bitmap(art); bmp != nil {
-					cov := ui.Box(c.Key(tr.Key())).Size(44, 44)
-					in := artIn(cov, bmp)
-					cov.Children(func() { artImage(c, bmp, 8, in) })
-				}
+				ui.Box(c.Key("stage-cover")).Size(44, 44).Label("律动封面").Children(func() {
+					a.stageCover.draw(c, art, a.hasTrackCover(tr), 44, 8, white.Alpha(0.08), white.Alpha(0.35))
+				})
 				ui.Column(c).Shrink(1).MinWidth(0).Gap(2).Children(func() {
 					ui.Text(c, tr.Name).FontSize(14).FontWeight(700).SingleLine()
 					a.artistLinks(c, tr, white.Alpha(0.55), white).FontSize(12).SingleLine()
