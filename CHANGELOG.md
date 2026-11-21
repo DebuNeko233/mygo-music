@@ -1,5 +1,55 @@
 # 更新日志
 
+## 0.2.15
+
+### What's Changed
+* fix: 预加载未命中缓存时延后下载音频 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/96
+* ui: 移除侧栏重复的「正在播放」卡片 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/98
+* feat: support local WAV, Ogg and AAC audio by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/100
+* fix: 修复本地歌曲在待播清单中的右键菜单与重复入队 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/101
+* perf: 保留歌单列表并自动同步歌曲变更 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/102
+* fix: 修复缓存可靠性问题 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/107
+* fix: 独立回滚并发歌单移除 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/111
+* fix: 保留切换播客时的字幕进度 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/112
+* fix: 丢弃过期的扫码登录确认 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/113
+* fix: handle incomplete HE-AAC tail packets by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/105
+* fix: destroy HE-AAC codecs when closing M4A streams by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/115
+* perf: reuse playback report Zstd encoder by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/117
+* perf: 缓存转写重采样的滤波系数 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/119
+* fix: 避免音量写入和曲库更新阻塞 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/129
+* fix: 修复搜索建议竞态与最近播放加载 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/130
+* fix: 处理配置保存与发布状态错误 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/131
+* fix: 修复播客恢复与队列来源上报 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/132
+* perf: 复用 ADTS PCM 输出缓冲 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/137
+* perf: 避免未使用的频谱分析与初始化 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/136
+* test: 检查界面输入动作和切换结果 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/144
+* fix: 反馈退出登录凭据清除失败 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/145
+* test: 检查旧目录迁移样本准备结果 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/146
+* fix: 提示 FM 偏好提交失败 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/147
+* fix: 将歌手动态纳入通用恢复 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/148
+* fix: 释放 ADTS 打开失败时的解码器 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/149
+* refactor: 复用官方榜单网格 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/153
+* refactor: 复用 FAAD2 解码器初始化 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/154
+* refactor: 共用逐字歌词裁剪计算 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/155
+* refactor: 移除旧名称目录迁移 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/157
+* 修复搜索建议、最近播放和登录提示回归 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/158
+* 修复旧账号重命名失败污染新账号 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/159
+* 修复桌面歌词副屏位置被钳回主屏 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/160
+* fix: 保留 Sherpa 子集打包的其他平台清单 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/161
+* Fix WAV extensible 24-bit PCM amplitude by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/162
+* fix: isolate playlist deletion callbacks by account by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/164
+* refactor: 清理闲置入口和旧测试包装 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/165
+* refactor: 移除旧缓存布局和设置兼容 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/167
+* test: 整理共用夹具与音频测试装配 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/169
+* perf: 合并连续设置变更的磁盘写入 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/172
+* fix: 切到已缓存歌曲时不再闪现缓冲提示 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/173
+* perf: 优化音频读取、歌单动画与歌词渲染 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/174
+* ui: 统一律动和选歌封面的切歌动画 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/175
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.14...v0.2.15
+
+
 ## 0.2.14
 
 ### What's Changed
