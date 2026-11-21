@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 )
@@ -238,6 +239,9 @@ func (s settings) save() error {
 	if s.path == "" {
 		return nil
 	}
+	// A transactional change (such as moving the cache) must land after
+	// earlier slider updates, even while those are still being batched.
+	settingsWrites.wait()
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
@@ -249,7 +253,8 @@ func (s settings) save() error {
 // the lyric size or the volume takes them again on every repeat, and the
 // window draws between the repeats: none of those may wait on a write and a
 // sync. What reaches the disk is the settings as they stand when the write
-// runs, so a burst of changes costs one write.
+// runs. A short batching interval combines separate slider/key events even
+// when each write would finish before the next event arrives.
 func (s settings) saveSoon() {
 	if s.path == "" {
 		return
@@ -269,12 +274,17 @@ type settingsWrite struct {
 }
 
 // settingsWrites writes them, on a goroutine of its own.
-var settingsWrites settingsSaver
+var settingsWrites = settingsSaver{write: writeUserData}
+
+const settingsWriteDelay = 250 * time.Millisecond
 
 type settingsSaver struct {
-	mu      sync.Mutex
-	pending *settingsWrite
-	done    chan struct{}
+	mu       sync.Mutex
+	pending  *settingsWrite
+	done     chan struct{}
+	flush    chan struct{}
+	flushing bool
+	write    func(string, []byte) error
 }
 
 func (w *settingsSaver) submit(job settingsWrite) {
@@ -283,33 +293,49 @@ func (w *settingsSaver) submit(job settingsWrite) {
 	w.pending = &job
 	if w.done == nil {
 		w.done = make(chan struct{})
-		go w.run()
+		w.flush, w.flushing = make(chan struct{}), false
+		go w.run(w.flush)
 	}
 }
 
-func (w *settingsSaver) run() {
+func (w *settingsSaver) run(flush <-chan struct{}) {
+	timer := time.NewTimer(settingsWriteDelay)
+	defer timer.Stop()
 	for {
+		select {
+		case <-timer.C:
+		case <-flush:
+		}
 		w.mu.Lock()
 		job := w.pending
 		w.pending = nil
-		if job == nil {
+		w.mu.Unlock()
+		if err := w.write(job.path, job.data); err != nil {
+			log.Printf("settings: %v", err)
+		}
+		w.mu.Lock()
+		if w.pending == nil {
 			close(w.done)
 			w.done = nil
 			w.mu.Unlock()
 			return
 		}
 		w.mu.Unlock()
-		if err := writeUserData(job.path, job.data); err != nil {
-			log.Printf("settings: %v", err)
-		}
+		// Save periodically during a long drag; waiting for the last input
+		// event could postpone persistence indefinitely.
+		timer.Reset(settingsWriteDelay)
 	}
 }
 
-// wait only on shutdown (or in tests): a write still owed must not land after
-// the settings that are saved on the way out.
+// wait flushes without the batching delay before shutdown or a transactional
+// save. Older queued settings must not land after the newer synchronous save.
 func (w *settingsSaver) wait() {
 	w.mu.Lock()
 	done := w.done
+	if done != nil && !w.flushing {
+		w.flushing = true
+		close(w.flush)
+	}
 	w.mu.Unlock()
 	if done != nil {
 		<-done

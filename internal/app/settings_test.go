@@ -10,6 +10,31 @@ import (
 	"testing"
 )
 
+// A transactional settings save must not be overwritten by an older queued slider change.
+func TestSettingsSaveSupersedesPendingChanges(t *testing.T) {
+	settingsWrites.wait()
+	s := defaultSettings()
+	s.path = filepath.Join(t.TempDir(), "settings.json")
+	s.CacheDir = "old"
+	s.saveSoon()
+	s.CacheDir = "new"
+	if err := s.save(); err != nil {
+		t.Fatal(err)
+	}
+	settingsWrites.wait()
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved settings
+	if err := json.Unmarshal(b, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.CacheDir != "new" {
+		t.Fatalf("saved cache directory %q, want the committed new directory", saved.CacheDir)
+	}
+}
+
 // Turning immersive lyrics off must survive a reload with the feature enabled by default.
 func TestSaveKeepsImmersiveLyricsDisabled(t *testing.T) {
 	s := defaultSettings()
