@@ -176,6 +176,9 @@ func (a *app) needsRecovery() bool { return a.failedLoads(false) }
 // retry only temporary ones. The presentation string never controls scheduling.
 func (a *app) failedLoads(manual bool) bool {
 	retry := func(err error) bool { return manual || netease.RetryableError(err) }
+	if err := a.trackArtworkFailure(); err != nil && retry(err) {
+		return true
+	}
 	if a.recovery.accountPending && !a.recovery.accountBusy && (a.recovery.accountFailure == nil || retry(a.recovery.accountFailure)) {
 		return true
 	}
@@ -261,7 +264,7 @@ func (a *app) retryLoads(manual bool) {
 	switch a.route.page {
 	case pageCloud:
 		if a.cloud.failure != nil && retry(a.cloud.failure) {
-			a.loadCloud(false)
+			a.loadCloud(cloudNextPage)
 		}
 	case pageRecent:
 		if tab := &a.recent.tabs[a.recentTab]; tab.failure != nil && retry(tab.failure) {
@@ -304,6 +307,7 @@ func (a *app) retryLoads(manual bool) {
 			a.loadHotPodcasts()
 		}
 	}
+	a.retryTrackArtwork(manual)
 	a.art.retryFailed(manual)
 	if manual {
 		a.pl.RetryMetadata()
@@ -437,7 +441,7 @@ func (a *app) recoveryBusy() bool {
 	if a.recovery.accountBusy || a.homeLoading || a.listRefresh.mine.busy || a.listRefresh.likes.busy || a.pl.MetadataLoading() {
 		return true
 	}
-	if a.art.hasLoading() {
+	if a.trackArt.searching || a.trackArt.publication.loading && a.trackArt.publication.track == a.pl.Current() || a.art.hasLoading() {
 		return true
 	}
 	switch a.route.page {

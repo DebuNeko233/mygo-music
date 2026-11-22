@@ -137,7 +137,7 @@ func (a *app) chooseTrackSuggestion(key, q string) bool {
 		if i := trackIndex(tracks, sg.song); i >= 0 && a.suggestionPlayable(&tracks[i]) {
 			a.rememberSearch(q)
 			a.dismissSuggestions()
-			a.pl.PlayQueueFrom(tracks, i, a.playSource())
+			a.playTrackQueue(tracks, i)
 			a.revealTrack(i)
 		}
 		return true

@@ -132,6 +132,7 @@ type app struct {
 	trackList      ui.ListState
 	trackRowsCache trackRowsCache
 	local          localMusic
+	trackArt       trackArtworkState
 	// Where the page and the sidebar are scrolled, kept while Now Playing
 	// covers them, unbuilt.
 	pageScroll ui.ScrollState
@@ -385,7 +386,7 @@ func Run() error {
 		a.pl.Changed = func() {
 			a.keepSession()
 			a.syncCaptions()
-			a.syncLocalArtwork()
+			a.syncTrackArtwork()
 		}
 		a.pl.Playback = a.playback
 		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.flushPlayReports() })
@@ -485,7 +486,7 @@ func Run() error {
 			return
 		}
 		a.quitting = true
-		a.stopCloudLoad()
+		a.cancelCloudLoad()
 		a.settings.Volume = a.volume
 		if a.lyrics != nil {
 			// Where the lyrics were left, before the window goes.

@@ -29,44 +29,19 @@ func openLocal(path string) (*netease.Stream, stream, error) {
 	}
 	dl := opened(f, info.Size())
 	dl.local = true
-	var s stream
-	switch {
-	case dl.waitFor(12) >= 12 && string(dl.peek(0, 4)) == "RIFF" && string(dl.peek(8, 4)) == "WAVE":
-		s, err = openWAVStream(dl)
-	case dl.waitFor(4) >= 4 && string(dl.peek(0, 4)) == "OggS":
-		s, err = openOggStream(dl)
-	case dl.waitFor(12) >= 12 && string(dl.peek(4, 4)) == "ftyp":
-		s, err = openMP4Stream(dl)
-	case isADTS(dl.peek(id3Size(dl), 2)):
-		s, err = openAACStream(dl)
-	default:
-		s, err = openStream(dl, 0)
-	}
+	s, err := openStream(dl, 0)
 	if err != nil {
 		dl.Close()
 		return nil, nil, err
 	}
-	st := &netease.Stream{Type: "mp3", Size: info.Size()}
-	switch s.(type) {
-	case *flacStream:
-		st.Type, st.Level = "flac", "lossless"
-	case *wavStream:
-		st.Type, st.Level = "wav", "lossless"
-	case *oggStream:
-		st.Type = "ogg"
-	case *adtsFAADStream:
-		st.Type = "aac"
-	case *decoderStream:
-		st.Type = "m4a"
-		if isADTS(dl.peek(id3Size(dl), 2)) {
-			st.Type = "aac"
-		}
+	st := &netease.Stream{Type: dl.format, Size: info.Size()}
+	if st.Type == "" {
+		st.Type = "mp3"
+	}
+	if st.Type == "flac" || st.Type == "wav" {
+		st.Level = "lossless"
 	}
 	return st, s, nil
-}
-
-func isADTS(header []byte) bool {
-	return len(header) == 2 && header[0] == 0xff && header[1]&0xf6 == 0xf0
 }
 
 // LocalDuration reads the decoded frame count of a supported local audio file.

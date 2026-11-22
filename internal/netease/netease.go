@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"netease-music-mygo/internal/audioformat"
 	"slices"
 	"strconv"
 	"strings"
@@ -670,8 +671,9 @@ func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
 		return nil, ErrUnavailable
 	}
 	s := d.Stream
-	s.Type = strings.ToLower(s.Type)
-	if s.Type != "" && s.Type != "mp3" && s.Type != "flac" {
+	if kind := audioformat.Normalize(s.Type); kind != "" {
+		s.Type = kind
+	} else if strings.TrimSpace(s.Type) != "" {
 		return nil, fmt.Errorf("unsupported format %s", s.Type)
 	}
 	if d.Peak != nil {

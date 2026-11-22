@@ -138,7 +138,7 @@ func (a *app) openLocalLyricMatch() {
 	if track == nil || !track.IsLocal() || !loaded || display.HasSinging() || a.pl.MetadataLoading() {
 		return
 	}
-	d := &localLyricDialog{open: true, track: track, query: localTrackQuery(track)}
+	d := &localLyricDialog{open: true, track: track, query: trackQuery(track)}
 	a.local.lyricDialog = d
 	a.findLocalLyricMatches(d)
 }

@@ -477,7 +477,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			if missing {
 				a.chooseLocalFile(tr.LocalID)
 			} else if playable {
-				a.pl.PlayQueueFrom(tracks, i, a.playSource())
+				a.playTrackQueue(tracks, i)
 			}
 		}
 	}).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0)

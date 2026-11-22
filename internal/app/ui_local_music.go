@@ -110,7 +110,7 @@ func (a *app) localPage(c *ui.Context) {
 			visible = a.trackRows(c, tracks, true, header, func(c *ui.Context) {
 				ui.Column(c).Center().Padding(48, 0, 48, 0).Gap(12).Children(func() {
 					ui.Icon(c, iconNote).Size(34, 34).TextColor(p.faint)
-					ui.Text(c, "拖入包含 MP3 或 FLAC 的文件夹").FontSize(14).TextColor(p.muted)
+					ui.Text(c, "拖入音乐文件或文件夹").FontSize(14).TextColor(p.muted)
 				})
 			})
 			return

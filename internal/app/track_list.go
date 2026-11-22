@@ -42,3 +42,13 @@ func trackIndex(tracks []netease.Track, key int64) int {
 	}
 	return -1
 }
+
+// Keep a queue started from an incomplete cloud listing attached to that load.
+// Other sources still use the player's normal snapshot queue.
+func (a *app) playTrackQueue(tracks []netease.Track, at int) {
+	a.cloud.queue = 0
+	a.pl.PlayQueueFrom(tracks, at, a.playSource())
+	if a.route.page == pageCloud && a.cloud.more && a.cloud.pending == nil {
+		a.cloud.queue = a.pl.QueueRevision()
+	}
+}

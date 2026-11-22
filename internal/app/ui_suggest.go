@@ -196,16 +196,7 @@ func (a *app) searchField(c *ui.Context) {
 				for _, sg := range a.trackSuggestions(q) {
 					showSuggestion(sg.suggestion, true, sg.playable)
 				}
-				if a.route.page == pageCloud && !a.nowPlaying && a.profile != nil && (!a.cloud.loaded || a.cloud.more || a.cloud.failure != nil) {
-					label := "在整个网盘中查找"
-					if a.cloud.loading && a.cloud.all {
-						label = "正在查找整个网盘…"
-					}
-					option("cloud-all", label).Disabled(a.cloud.loading && a.cloud.all).Children(func() {
-						ui.Icon(c, iconCloud).Size(13, 13).TextColor(p.muted)
-						ui.Text(c, label).FontSize(13).SingleLine()
-					})
-				}
+
 				if s.query == q {
 					for _, sg := range s.items {
 						showSuggestion(sg, false, true)
@@ -214,14 +205,8 @@ func (a *app) searchField(c *ui.Context) {
 			})
 		})
 		if key, ok := cb.Chosen(); ok {
-			if key == "cloud-all" && a.route.page == pageCloud {
-				a.loadEntireCloud()
-				cb.SetOpen(true)
-				a.searchBox.Focus(c)
-			} else {
-				cb.SetOpen(false)
-				a.choose(key, q)
-			}
+			cb.SetOpen(false)
+			a.choose(key, q)
 		} else if in.Submitted() && q != "" {
 			cb.SetOpen(false)
 			a.search(q)

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"netease-music-mygo/internal/audioformat"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -34,6 +35,7 @@ type download struct {
 	done   bool
 	err    error
 
+	format   string // detected container, protected by mu
 	url      string
 	cancel   context.CancelFunc // the entire download
 	request  context.CancelFunc // the current HTTP request
@@ -200,6 +202,20 @@ func (d *download) fetchRange(ctx context.Context, cancel context.CancelFunc, fr
 		end, total = stop, size
 	default:
 		return -1, errors.New(res.Status)
+	}
+
+	// Container decoders can seek to tail metadata as soon as the response
+	// declares its length, rather than waiting for the complete body.
+	if res.StatusCode == http.StatusOK && res.ContentLength >= 0 {
+		total = res.ContentLength
+	}
+	if total >= 0 {
+		d.mu.Lock()
+		if d.length < 0 {
+			d.length = total
+			d.cond.Broadcast()
+		}
+		d.mu.Unlock()
 	}
 
 	buf := make([]byte, 64<<10)
@@ -436,6 +452,13 @@ func (d *download) hand() error {
 	if d.file == nil || d.part == "" || d.keep == nil || (d.size > 0 && d.n != d.size) {
 		return nil
 	}
+	if d.format == "" {
+		var header [12]byte
+		n, _ := d.readAt(header[:10], 0)
+		off := audioformat.ID3Size(header[:n])
+		n, _ = d.readAt(header[:], off)
+		d.format = audioformat.Detect(header[:n])
+	}
 	if err := d.file.Close(); err != nil {
 		d.file, d.spans, d.n = nil, nil, 0
 		return fmt.Errorf("close downloaded audio before caching: %w", err)
@@ -486,6 +509,10 @@ func (d *download) discard() {
 func (d *download) seekTo(off int64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	return d.seekToLocked(off)
+}
+
+func (d *download) seekToLocked(off int64) bool {
 	if off < 0 || d.done || d.users > 2 {
 		return false
 	}

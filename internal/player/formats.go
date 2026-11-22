@@ -8,11 +8,10 @@ import (
 	"sync"
 
 	"github.com/egoist/mygo/audio"
-	"github.com/egoist/mygo/audio/aac"
 	"github.com/jfreymuth/oggvorbis"
 )
 
-// wavStream reads integer and floating-point PCM from a local RIFF/WAVE file.
+// wavStream reads integer and floating-point PCM from a RIFF/WAVE source.
 // Extensible WAV headers use the subtype GUID's format code, as ordinary PCM
 // headers do, so CD rips with either header can be played without conversion.
 type wavStream struct {
@@ -28,29 +27,37 @@ type wavStream struct {
 	pos       int64
 	buf       []byte
 	spec      *spectrum
+	drop      func()
 	once      sync.Once
 	failure   decoderFailure
 }
 
-func openWAVStream(dl *download) (*wavStream, error) {
-	dl.mu.Lock()
-	file := dl.file
-	dl.mu.Unlock()
-	if file == nil {
-		return nil, io.ErrClosedPipe
-	}
-	source := &bufferedReaderAt{source: file}
-	r := io.NewSectionReader(source, 0, dl.size)
+func openWAVStreamSpectrum(dl *download, measure bool) (*wavStream, error) {
+	file := dl.decoderSource()
 	var riff [12]byte
-	if _, err := io.ReadFull(r, riff[:]); err != nil {
+	if _, err := file.ReadAt(riff[:], 0); err != nil {
 		return nil, err
 	}
 	if string(riff[0:4]) != "RIFF" || string(riff[8:12]) != "WAVE" {
 		return nil, errors.New("wav: not a RIFF/WAVE file")
 	}
+	size := int64(binary.LittleEndian.Uint32(riff[4:8])) + 8
+	dl.mu.Lock()
+	if dl.length >= 0 {
+		size = min(size, dl.length)
+	}
+	dl.mu.Unlock()
+	if size < 12 {
+		return nil, io.ErrUnexpectedEOF
+	}
+	source := io.NewSectionReader(file, 0, size)
+	r := source
+	if _, err := r.Seek(12, io.SeekStart); err != nil {
+		return nil, err
+	}
 	s := &wavStream{dl: dl, file: source}
 	// Ignore unusual ancillary chunks rather than assuming data follows fmt.
-	for {
+	for s.data == 0 {
 		var header [8]byte
 		if _, err := io.ReadFull(r, header[:]); err != nil {
 			if err == io.EOF {
@@ -60,7 +67,7 @@ func openWAVStream(dl *download) (*wavStream, error) {
 		}
 		size := int64(binary.LittleEndian.Uint32(header[4:]))
 		at, err := r.Seek(0, io.SeekCurrent)
-		if err != nil || size < 0 || size > dl.size-at {
+		if err != nil || size < 0 || size > source.Size()-at {
 			return nil, io.ErrUnexpectedEOF
 		}
 		switch string(header[:4]) {
@@ -104,7 +111,9 @@ func openWAVStream(dl *download) (*wavStream, error) {
 	if s.data == 0 || s.frames == 0 || !s.supported() {
 		return nil, errors.New("wav: missing or unsupported PCM data")
 	}
-	s.spec = newSpectrum(s.rate)
+	if measure {
+		s.spec = newSpectrum(s.rate)
+	}
 	return s, nil
 }
 
@@ -188,7 +197,13 @@ func (s *wavStream) SetPosition(frame int64) error {
 	return nil
 }
 func (s *wavStream) Close() error {
-	s.once.Do(func() { s.dl.Close() })
+	s.once.Do(func() {
+		if s.drop != nil {
+			s.drop()
+		} else {
+			s.dl.Close()
+		}
+	})
 	return nil
 }
 func (s *wavStream) source() (*download, *spectrum) { return s.dl, s.spec }
@@ -212,25 +227,28 @@ type oggStream struct {
 	pos     int64
 	buf     []float32
 	spec    *spectrum
+	drop    func()
 	once    sync.Once
 	failure decoderFailure
 }
 
-func openOggStream(dl *download) (*oggStream, error) {
-	dl.mu.Lock()
-	file := dl.file
-	dl.mu.Unlock()
-	if file == nil {
-		return nil, io.ErrClosedPipe
+func openOggStreamSpectrum(dl *download, measure bool) (*oggStream, error) {
+	source, err := dl.decoderReader()
+	if err != nil {
+		return nil, err
 	}
-	dec, err := oggvorbis.NewReader(io.NewSectionReader(&bufferedReaderAt{source: file}, 0, dl.size))
+	dec, err := oggvorbis.NewReader(source)
 	if err != nil {
 		return nil, err
 	}
 	if dec.Channels() < 1 || dec.SampleRate() < 1 || dec.Length() <= 0 {
 		return nil, errors.New("ogg: missing or empty Vorbis stream")
 	}
-	return &oggStream{dl: dl, dec: dec, frames: dec.Length(), spec: newSpectrum(dec.SampleRate())}, nil
+	s := &oggStream{dl: dl, dec: dec, frames: dec.Length()}
+	if measure {
+		s.spec = newSpectrum(dec.SampleRate())
+	}
+	return s, nil
 }
 
 func (s *oggStream) SampleRate() int { return s.dec.SampleRate() }
@@ -283,13 +301,19 @@ func (s *oggStream) SetPosition(frame int64) error {
 	return nil
 }
 func (s *oggStream) Close() error {
-	s.once.Do(func() { s.dl.Close() })
+	s.once.Do(func() {
+		if s.drop != nil {
+			s.drop()
+		} else {
+			s.dl.Close()
+		}
+	})
 	return nil
 }
 func (s *oggStream) source() (*download, *spectrum) { return s.dl, s.spec }
 func (s *oggStream) cut() error                     { return cmpOr(s.dl.Err(), s.failure.load()) }
 
-// decoderStream adds ownership and spectrum metering to a local decoder.
+// decoderStream adds ownership and spectrum metering to a container decoder.
 type decoderStream struct {
 	dl       *download
 	dec      audio.Decoder
@@ -297,32 +321,9 @@ type decoderStream struct {
 	closeErr error
 	pos      int64
 	spec     *spectrum
+	drop     func()
 	once     sync.Once
 	failure  decoderFailure
-}
-
-func openAACStream(dl *download) (stream, error) {
-	dl.mu.Lock()
-	file := dl.file
-	dl.mu.Unlock()
-	if file == nil {
-		return nil, io.ErrClosedPipe
-	}
-	dec, err := aac.NewADTSDecoder(io.NewSectionReader(&bufferedReaderAt{source: file}, 0, dl.size))
-	if err != nil {
-		return openFAADADTS(dl)
-	}
-	// The small ADTS decoder cannot reject unsupported SBR at construction.
-	// Probe its first real packet before choosing the fast LC-only path.
-	var probe [2]float32
-	n, readErr := dec.Read(probe[:])
-	if readErr != nil || n == 0 {
-		return openFAADADTS(dl)
-	}
-	if err := dec.SetPosition(0); err != nil {
-		return nil, err
-	}
-	return newDecoderStream(dl, dec), nil
 }
 
 func (s *decoderStream) SampleRate() int { return s.dec.SampleRate() }
@@ -349,7 +350,11 @@ func (s *decoderStream) Close() error {
 		if s.closer != nil {
 			s.closeErr = s.closer.Close()
 		}
-		s.dl.Close()
+		if s.drop != nil {
+			s.drop()
+		} else {
+			s.dl.Close()
+		}
 	})
 	return s.closeErr
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"netease-music-mygo/internal/audioformat"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -48,13 +49,13 @@ type localMusic struct {
 	temporaryID     int64
 	temporaryLyrics keptLyrics
 	lyricCache      localLyricCache
-	artwork         localArtworkState
+	embeddedArtwork embeddedArtworkCache
 	lyricDialog     *localLyricDialog
 	pendingFile     string
 	openRequest     uint64
 }
 
-var localExtensions = []string{"mp3", "flac", "wav", "ogg", "m4a", "aac", "3gp", "3g2"}
+var localExtensions = audioformat.Extensions()
 
 func (a *app) initLocalMusic() {
 	if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {

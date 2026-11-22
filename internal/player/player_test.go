@@ -1,6 +1,7 @@
 package player
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -618,3 +619,32 @@ func TestSystemVolumeLeavesTheVolumeOut(t *testing.T) {
 		t.Errorf("gain %v, want the volume the slider shows again", g)
 	}
 }
+
+// An incremental decoder can start before its exact length is known; resuming
+// must preserve the playhead rather than treating Duration()==0 as the end.
+func TestResumeUnknownDecoderLengthPreservesPosition(t *testing.T) {
+	for _, duration := range []int64{600000, 0} {
+		t.Run(fmt.Sprintf("track-duration=%d", duration), func(t *testing.T) {
+			p := New(func(func()) {})
+			p.Cue([]netease.Track{{ID: 1, Duration: duration}})
+			out := audio.NewPlayer(unknownLengthSilence{})
+			out.Pause()
+			defer out.Close()
+			out.SetVolume(0)
+			out.Seek(30 * time.Second)
+			p.Attach(out)
+			p.playing = false
+			if out.Duration() != 0 {
+				t.Fatal("fixture has known duration")
+			}
+			p.TogglePlay()
+			if !p.Playing() || p.Position() < 29*time.Second {
+				t.Fatalf("resume rewound incremental stream: %v", p.Position())
+			}
+		})
+	}
+}
+
+type unknownLengthSilence struct{ silence }
+
+func (unknownLengthSilence) Len() int64 { return -1 }

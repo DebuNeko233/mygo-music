@@ -36,7 +36,8 @@ func (a *app) networkChanged(status mygo.NetworkStatus) {
 	if offline {
 		a.pl.NetworkOffline()
 	} else {
-		a.syncLocalArtwork()
+		a.retryTrackArtwork(false)
+		a.syncTrackArtwork()
 	}
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()
