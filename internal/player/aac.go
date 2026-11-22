@@ -283,6 +283,17 @@ func (s *adtsStream) scanPacket() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// TagLib and other taggers append an ID3v1 tag to ADTS. It is metadata,
+	// not a corrupt AAC packet. Accept it only when it is exactly the tail.
+	if string(h[:3]) == "TAG" {
+		var tail [129]byte
+		n, e := s.file.ReadAt(tail[:], s.indexAt)
+		if n == 128 && errors.Is(e, io.EOF) {
+			s.eof = true
+			s.updateLength()
+			return false, nil
+		}
+	}
 	length, config, ok := adtsPacket(h[:])
 	if !ok {
 		return false, io.ErrUnexpectedEOF

@@ -13,6 +13,7 @@ require (
 	github.com/klauspost/compress v1.20.5
 	github.com/llehouerou/go-faad2 v0.3.1
 	github.com/mewkiz/flac v1.0.14
+	go.senan.xyz/taglib v0.15.0
 	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
 	golang.org/x/sys v0.50.0

@@ -161,6 +161,7 @@ func (a *app) discardAccount() {
 
 // signedIn shows what is personal to prof, or to nobody.
 func (a *app) signedIn(prof *netease.Profile) {
+	a.cancelDownloads()
 	a.stopPlayReports()
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()

@@ -36,6 +36,9 @@ func (a *app) songItems(tr *netease.Track, pid int64) func(m *ui.Menu) {
 			a.queueItems(m, *tr, true, true)
 			m.Separator()
 		}
+		if m.Item("下载").Chosen() {
+			a.enqueueDownloads([]netease.Track{*tr})
+		}
 		if m.Item("复制歌名").Chosen() {
 			copyText(tr.Name)
 		}

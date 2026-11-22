@@ -224,6 +224,7 @@ type app struct {
 	quitting              bool
 
 	// Settings navigation stays in memory; only user preferences are persisted.
+	downloads         downloadState
 	settingsPage      string
 	settingsQuery     string
 	settingsSearchBox ui.Handle
@@ -485,8 +486,13 @@ func Run() error {
 			e.PreventDefault()
 			return
 		}
+		if a.deferDownloadQuit() {
+			e.PreventDefault()
+			return
+		}
 		a.quitting = true
 		a.cancelCloudLoad()
+		a.cancelDownloads()
 		a.settings.Volume = a.volume
 		if a.lyrics != nil {
 			// Where the lyrics were left, before the window goes.

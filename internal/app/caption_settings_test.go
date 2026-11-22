@@ -75,7 +75,7 @@ func TestCaptionSettingsModelLifecycle(t *testing.T) {
 				}
 			}
 			removeModel = func(string) error { return nil }
-			if err := tt.Click("下载"); err != nil {
+			if err := tt.Click("下载字幕模型"); err != nil {
 				t.Fatal(err)
 			}
 			tt.Frame()

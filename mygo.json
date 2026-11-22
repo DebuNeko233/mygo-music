@@ -20,6 +20,7 @@
     "github": "zhangnjsd/mygo-music"
   },
   "macos": {
+    "entitlements": "macos.entitlements.plist",
     "icon": "icon/AppIcon.icon",
     "minimumSystemVersion": "13.0",
     "infoPlist": {

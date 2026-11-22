@@ -37,15 +37,19 @@ type Album struct {
 }
 
 type Track struct {
-	ID        int64    `json:"id"`
-	LocalID   int64    `json:"localId,omitempty"` // local library identity in a playback queue
-	Temporary bool     `json:"-"`                 // an open-file queue entry played once
-	Name      string   `json:"name"`
-	Artists   []Artist `json:"ar"`
-	Album     Album    `json:"al"`
-	Duration  int64    `json:"dt"` // milliseconds
-	Fee       int      `json:"fee"`
-	Alias     []string `json:"alia"`
+	ID          int64    `json:"id"`
+	LocalID     int64    `json:"localId,omitempty"` // local library identity in a playback queue
+	Temporary   bool     `json:"-"`                 // an open-file queue entry played once
+	Name        string   `json:"name"`
+	Artists     []Artist `json:"ar"`
+	Album       Album    `json:"al"`
+	Duration    int64    `json:"dt"` // milliseconds
+	TrackNumber int      `json:"no,omitempty"`
+	ISRC        string   `json:"isrc,omitempty"`
+	DiscNumber  string   `json:"cd,omitempty"`
+	PublishTime int64    `json:"publishTime,omitempty"`
+	Fee         int      `json:"fee"`
+	Alias       []string `json:"alia"`
 	// Reason says why a daily recommendation was picked; Alg identifies its
 	// recommendation algorithm when NetEase provides one.
 	Reason string `json:"reason"`
@@ -250,6 +254,10 @@ func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error
 }
 
 func postAsClient(client *http.Client, path string, form url.Values, cookies []*http.Cookie, out any) error {
+	return postAsClientContext(context.Background(), client, path, form, cookies, out)
+}
+
+func postAsClientContext(ctx context.Context, client *http.Client, path string, form url.Values, cookies []*http.Cookie, out any) error {
 	// The web API drops what it does not know the caller meant: following an
 	// artist and signing out came back with no effect at all without it.
 	token := ""
@@ -260,7 +268,7 @@ func postAsClient(client *http.Client, path string, form url.Values, cookies []*
 		token = csrfIn(cookies)
 	}
 	form.Set("csrf_token", token)
-	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
@@ -456,6 +464,11 @@ func SongDetails(ids []int64) ([]Track, error) {
 	return songDetails(context.Background(), ids)
 }
 
+// SongDetailsContext is the cancellable form used by metadata exports.
+func SongDetailsContext(ctx context.Context, ids []int64) ([]Track, error) {
+	return songDetails(ctx, ids)
+}
+
 func songDetails(ctx context.Context, ids []int64) ([]Track, error) {
 	// A playlist of ten thousand songs needs twenty-five batches of four
 	// hundred: asked one after another, it takes half a minute to show.
@@ -607,6 +620,14 @@ func Lossless(level string) bool { return level == "lossless" || level == "hires
 // carries the session, so VIP songs play for subscribers; its web counterpart
 // is a fallback when that gateway refuses or loses the request.
 func SongURL(id int64, level string) (*Stream, error) {
+	return SongURLContext(context.Background(), id, level)
+}
+
+// SongURLContext is SongURL with cancellation for a download or a retired view.
+func SongURLContext(ctx context.Context, id int64, level string) (*Stream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	const path = "/api/song/enhance/player/url/v1"
 	encode := "mp3"
 	if Lossless(level) {
@@ -614,7 +635,7 @@ func SongURL(id int64, level string) (*Stream, error) {
 	}
 	ids := fmt.Sprintf("[%d]", id)
 	var res songURLAnswer
-	desktopErr := eapiPost(path, map[string]any{"ids": ids, "level": level, "encodeType": encode}, &res)
+	desktopErr := eapiPostContext(ctx, path, map[string]any{"ids": ids, "level": level, "encodeType": encode}, &res)
 	if desktopErr == nil {
 		if st, err := res.stream(path, level); err == nil {
 			return st, nil
@@ -625,7 +646,7 @@ func SongURL(id int64, level string) (*Stream, error) {
 		}
 	}
 	var fallback songURLAnswer
-	if err := post(path, url.Values{"ids": {ids}, "level": {level}, "encodeType": {encode}}, &fallback); err == nil {
+	if err := postAsClientContext(ctx, httpClient, path, url.Values{"ids": {ids}, "level": {level}, "encodeType": {encode}}, nil, &fallback); err == nil {
 		if st, err := fallback.stream(path, level); err == nil {
 			return st, nil
 		} else if errors.Is(err, ErrUnavailable) {
@@ -637,38 +658,43 @@ func SongURL(id int64, level string) (*Stream, error) {
 	return nil, desktopErr
 }
 
+type songURLData struct {
+	Stream
+	Code          int             `json:"code"`
+	URL           string          `json:"url"`
+	Peak          *float64        `json:"peak"`
+	FreeTrialInfo json.RawMessage `json:"freeTrialInfo"`
+}
+
 type songURLAnswer struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Msg     string `json:"msg"`
-	Data    []struct {
-		Stream
-		Code          int             `json:"code"`
-		URL           string          `json:"url"`
-		Peak          *float64        `json:"peak"`
-		FreeTrialInfo json.RawMessage `json:"freeTrialInfo"`
-	} `json:"data"`
+	Code    int           `json:"code"`
+	Message string        `json:"message"`
+	Msg     string        `json:"msg"`
+	Data    []songURLData `json:"data"`
 }
 
 func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
-	// An expired session or a risk check is not a song restriction: taking
-	// it for one would skip a queue of otherwise playable tracks.
+	// Account/risk refusals are distinct from a song's availability.
 	if res.Code != 200 {
 		return nil, apiError{Code: res.Code, Message: res.Message, Msg: res.Msg}.codeError(path)
 	}
 	if len(res.Data) == 0 {
 		return nil, errors.New("netease: no playback URL returned")
 	}
-	d := res.Data[0]
-	if d.Code == http.StatusNotFound {
+	if res.Data[0].Code == http.StatusNotFound {
 		return nil, ErrUnavailable
 	}
-	if d.URL == "" {
-		return nil, errors.New("netease: no playback URL returned")
-	}
-	// A preview of a VIP song is no song.
+	return res.Data[0].stream(level)
+}
+
+// The two endpoints have different response envelopes but share the same
+// audio fields. Only playback supplies a fallback quality for cache naming.
+func (d songURLData) stream(fallbackLevel string) (*Stream, error) {
 	if len(d.FreeTrialInfo) > 0 && string(d.FreeTrialInfo) != "null" {
 		return nil, ErrUnavailable
+	}
+	if strings.TrimSpace(d.URL) == "" {
+		return nil, errors.New("netease: no audio URL returned")
 	}
 	s := d.Stream
 	if kind := audioformat.Normalize(s.Type); kind != "" {
@@ -679,10 +705,8 @@ func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
 	if d.Peak != nil {
 		s.Peak = *d.Peak
 	}
-	// The level names the song's file in the cache: one not of Levels is
-	// taken for the one asked for.
 	if !slices.Contains(Levels, s.Level) {
-		s.Level = level
+		s.Level = fallbackLevel
 	}
 	s.URL = strings.Replace(d.URL, "http://", "https://", 1)
 	return &s, nil
@@ -696,6 +720,11 @@ func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
 // first one instead, it serves nothing for some songs — 25 of the 300 in
 // two charts — which the player takes for an instrumental.
 func Lyrics(id int64) (lrc, translation, yrc string, err error) {
+	return LyricsContext(context.Background(), id)
+}
+
+// LyricsContext keeps download cancellation attached to both lyric requests.
+func LyricsContext(ctx context.Context, id int64) (lrc, translation, yrc string, err error) {
 	var res struct {
 		Lrc struct {
 			Lyric string `json:"lyric"`
@@ -705,7 +734,7 @@ func Lyrics(id int64) (lrc, translation, yrc string, err error) {
 		} `json:"tlyric"`
 	}
 	q := url.Values{"id": {strconv.FormatInt(id, 10)}, "lv": {"-1"}, "kv": {"-1"}, "tv": {"-1"}}
-	if err = get("/api/song/lyric", q, &res); err != nil {
+	if err = getContext(ctx, "/api/song/lyric", q, &res); err != nil {
 		return "", "", "", err
 	}
 	var words struct {
@@ -714,7 +743,7 @@ func Lyrics(id int64) (lrc, translation, yrc string, err error) {
 		} `json:"yrc"`
 	}
 	data := map[string]any{"id": strconv.FormatInt(id, 10), "cp": false, "tv": 0, "lv": 0, "rv": 0, "kv": 0, "yv": 0, "ytv": 0, "yrv": 0}
-	if eapiPost("/api/song/lyric/v1", data, &words) == nil {
+	if eapiPostContext(ctx, "/api/song/lyric/v1", data, &words) == nil {
 		yrc = words.Yrc.Lyric
 	}
 	return res.Lrc.Lyric, res.Tlyric.Lyric, yrc, nil
@@ -745,7 +774,12 @@ func Sized(pic string, n int) string {
 
 // Fetch returns what is at url, as a cover the image CDN serves.
 func Fetch(url string) ([]byte, error) {
-	req, err := http.NewRequest("GET", url, nil)
+	return FetchContext(context.Background(), url)
+}
+
+// FetchContext reuses the artwork store while allowing its consumer to cancel.
+func FetchContext(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}

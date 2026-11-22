@@ -1,7 +1,10 @@
 // Package audioformat names the audio formats shared by playback, import and cache maintenance.
 package audioformat
 
-import "strings"
+import (
+	"io"
+	"strings"
+)
 
 // Normalize returns a safe canonical container name, or empty for an unknown format.
 // M4A and the 3GPP variants share the MP4 audio container reader.
@@ -58,4 +61,15 @@ func Detect(header []byte) string {
 		return "mp3"
 	}
 	return ""
+}
+
+// Probe recognizes a seekable source using the same signatures as playback,
+// skipping its leading ID3 tag. Unrecognized signatures return empty.
+func Probe(source io.ReaderAt) string {
+	var header [12]byte
+	n, _ := source.ReadAt(header[:], 0)
+	if off := ID3Size(header[:n]); off > 0 {
+		n, _ = source.ReadAt(header[:], off)
+	}
+	return Detect(header[:n])
 }

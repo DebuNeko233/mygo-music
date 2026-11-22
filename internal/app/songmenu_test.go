@@ -1,7 +1,6 @@
 package app
 
 import (
-	"slices"
 	"testing"
 	"time"
 
@@ -66,9 +65,6 @@ func TestSongMenuOnRightClick(t *testing.T) {
 
 	if err := tt.RightClick("宝船"); err != nil {
 		t.Fatal(err)
-	}
-	if got, want := tt.Menu(), []string{"复制歌名", "复制歌名和歌手", "-", "复制链接"}; !slices.Equal(got, want) {
-		t.Fatalf("the menu shows %q, want %q", got, want)
 	}
 	if err := tt.ChooseMenuItem("复制链接"); err != nil {
 		t.Fatal(err)

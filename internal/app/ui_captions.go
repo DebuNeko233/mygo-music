@@ -167,7 +167,7 @@ func (a *app) captionSettings(row func(label, desc string, control func()), c *u
 				a.deleteModel()
 			}
 		default:
-			if ui.Button(c.Key("model"), "下载").Clicked() {
+			if ui.Button(c.Key("model"), "下载").Label("下载字幕模型").Clicked() {
 				a.startModelDownload()
 			}
 		}
