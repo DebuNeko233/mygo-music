@@ -228,7 +228,7 @@ func (a *app) downloadJobs(c *ui.Context, p palette) {
 			ui.Text(c, a.downloads.err).FontSize(12).TextColor(p.muted).Wrap()
 		}
 		if len(a.downloads.jobs) == 0 {
-			ui.Text(c, "日常播放有本地缓存，通常无需额外下载。需要在其他设备或播放器中使用时，再下载歌曲即可。").FontSize(12.5).TextColor(p.muted).Wrap()
+			ui.Text(c, "日常播放有本地缓存，离线也可用，通常无需额外下载。需要在其他设备或播放器中使用时，再下载歌曲即可。").FontSize(12.5).TextColor(p.muted).Wrap()
 			return
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
