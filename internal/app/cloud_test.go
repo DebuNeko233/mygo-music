@@ -103,7 +103,7 @@ func TestCloudPaginationFilterAndQueue(t *testing.T) {
 // Retrying a failed refresh must start at zero even after the previous list reached its end.
 func TestCloudRefreshRetryKeepsOldList(t *testing.T) {
 	a, posts := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(1, "旧歌曲")}, offset: 100}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(1, "旧歌曲")}, offset: 100}, loaded: true}
 	calls := 0
 	cloudSongs = func(_ context.Context, _, offset int) (*netease.CloudPage, error) {
 		calls++
@@ -140,7 +140,7 @@ func TestCloudRejectsPreviousAccount(t *testing.T) {
 	wait(t, started, "blocked cloud request")
 	a.homeGen++
 	a.profile = &netease.Profile{UserID: 2}
-	a.cloud = cloudData{}
+	a.cloud = cloudViewModel{}
 	close(release)
 	refreshPost(t, posts)
 	if a.cloud.loaded || len(a.cloud.tracks) != 0 || a.cloud.loading {
@@ -153,7 +153,7 @@ func TestCloudKeepsPlayingQueue(t *testing.T) {
 	a, posts := cloudFixture(t)
 	tracks := make([]netease.Track, 1, 10)
 	tracks[0] = cloudTrack(1, "第一首")
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: tracks, more: true, offset: 1}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: tracks, more: true, offset: 1}, loaded: true}
 	playerPosts := make(chan func(), 16)
 	a.pl = player.New(func(fn func()) { playerPosts <- fn })
 	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
@@ -190,7 +190,7 @@ func TestCloudFrames(t *testing.T) {
 		t.Skip()
 	}
 	a, _ := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 203, offset: 3, tracks: []netease.Track{cloudTrack(1, "春日影（Live）"), cloudTrack(2, "迷星叫"), cloudTrack(3, "未匹配的上传歌曲")}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 203, offset: 3, tracks: []netease.Track{cloudTrack(1, "春日影（Live）"), cloudTrack(2, "迷星叫"), cloudTrack(3, "未匹配的上传歌曲")}}, loaded: true}
 	a.cloud.tracks[2].Artists = nil
 
 	for _, variant := range []struct {
@@ -234,7 +234,7 @@ func TestCloudFrames(t *testing.T) {
 // Clicking a cloud row plays that uploaded song and keeps the displayed list as its queue.
 func TestCloudRowStartsSelectedUpload(t *testing.T) {
 	a, _ := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(101, "上传的第一首"), cloudTrack(102, "上传的第二首")}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(101, "上传的第一首"), cloudTrack(102, "上传的第二首")}}, loaded: true}
 	posts := make(chan func(), 16)
 	a.pl = player.New(func(fn func()) { posts <- fn })
 	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
@@ -260,7 +260,7 @@ func TestCloudRowStartsSelectedUpload(t *testing.T) {
 // Loading the whole cloud library continues after a failed page without losing the query or changing playback.
 func TestCloudLoadAllRetriesAndFindsLaterSongs(t *testing.T) {
 	a, posts := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, offset: 1, count: 3, tracks: []netease.Track{cloudTrack(1, "第一页")}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, offset: 1, count: 3, tracks: []netease.Track{cloudTrack(1, "第一页")}}, loaded: true}
 	a.trackSuggestions("最后一页")
 	a.pl.Cue([]netease.Track{cloudTrack(99, "当前播放")})
 	type reply struct {
@@ -352,7 +352,7 @@ func TestCloudCancellationRejectsLatePage(t *testing.T) {
 // A non-advancing server page stops a full scan instead of looping or claiming that the library is complete.
 func TestCloudScanRejectsNonAdvancingPage(t *testing.T) {
 	a, posts := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, offset: 100, tracks: []netease.Track{cloudTrack(1, "原有歌曲")}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, offset: 100, tracks: []netease.Track{cloudTrack(1, "原有歌曲")}}, loaded: true}
 	var calls atomic.Int32
 	cloudSongs = func(context.Context, int, int) (*netease.CloudPage, error) {
 		calls.Add(1)
@@ -369,7 +369,7 @@ func TestCloudScanRejectsNonAdvancingPage(t *testing.T) {
 func TestCloudQueueActionsUsePlayerOrder(t *testing.T) {
 	a, _ := cloudFixture(t)
 	second, third := cloudTrack(2, "第二首"), cloudTrack(3, "第三首")
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: []netease.Track{second, third}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{second, third}}, loaded: true}
 	a.pl.Cue([]netease.Track{cloudTrack(99, "当前歌曲"), third, second})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -403,7 +403,7 @@ func TestCloudQueueActionsUsePlayerOrder(t *testing.T) {
 // Refreshing a fully loaded library reloads all pages so a whole-library search does not shrink to the first page.
 func TestCloudRefreshPreservesFullSearchScope(t *testing.T) {
 	a, posts := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{offset: 1, count: 1, tracks: []netease.Track{cloudTrack(1, "旧版本")}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{offset: 1, count: 1, tracks: []netease.Track{cloudTrack(1, "旧版本")}}, loaded: true}
 	a.trackSuggestions("新版本")
 	calls := make(chan int, 4)
 	cloudSongs = func(_ context.Context, _, offset int) (*netease.CloudPage, error) {
@@ -436,7 +436,7 @@ func TestCloudSidebarSearchPlaysAndLocates(t *testing.T) {
 				tracks[i] = cloudTrack(int64(i+1), fmt.Sprintf("上传歌曲 %03d", i+1))
 			}
 			tracks[69].Alias = []string{"珍藏现场"}
-			a.cloud = cloudData{cloudListing: cloudListing{count: 80, tracks: tracks}, loaded: true}
+			a.cloud = cloudViewModel{cloudListing: cloudListing{count: 80, tracks: tracks}, loaded: true}
 			posts := make(chan func(), 16)
 			a.pl = player.New(func(fn func()) { posts <- fn })
 			a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
@@ -467,7 +467,7 @@ func TestCloudSidebarSearchPlaysAndLocates(t *testing.T) {
 // Searching beyond loaded pages uses the same search popup and updates its matches as pages arrive.
 func TestCloudSidebarSearchLoadsEntireLibrary(t *testing.T) {
 	a, posts := cloudFixture(t)
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 2, offset: 1, tracks: []netease.Track{cloudTrack(1, "第一页")}}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 2, offset: 1, tracks: []netease.Track{cloudTrack(1, "第一页")}}, loaded: true}
 	calls := make(chan int, 1)
 	cloudSongs = func(_ context.Context, _, offset int) (*netease.CloudPage, error) {
 		calls <- offset
@@ -502,7 +502,7 @@ func TestCloudSuggestionRevalidatesSource(t *testing.T) {
 	for _, change := range []string{"reorder", "removed", "account", "page"} {
 		t.Run(change, func(t *testing.T) {
 			a, _ := cloudFixture(t)
-			a.cloud = cloudData{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(1, "匹配"), cloudTrack(2, "其他")}}, loaded: true}
+			a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(1, "匹配"), cloudTrack(2, "其他")}}, loaded: true}
 			a.pl.Cue([]netease.Track{cloudTrack(99, "当前")})
 			suggestions := a.trackSuggestions("匹配")
 			key := suggestions[0].key
@@ -546,7 +546,7 @@ func TestCloudRefreshesWhenReopenedAfterFreshnessInterval(t *testing.T) {
 	a, posts := cloudFixture(t)
 	now := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
 	a.listRefresh.now = func() time.Time { return now }
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(1, "旧歌曲")}, count: 1, offset: 1}, loaded: true, at: now}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{cloudTrack(1, "旧歌曲")}, count: 1, offset: 1}, loaded: true, at: now}
 	calls := make(chan int, 2)
 	cloudSongs = func(_ context.Context, _, offset int) (*netease.CloudPage, error) {
 		calls <- offset
@@ -576,7 +576,7 @@ func TestMissingArtworkFrames(t *testing.T) {
 	a, _ := cloudFixture(t)
 	tr := cloudTrack(1, "没有专辑封面的歌曲")
 	tr.Album.PicURL = "https://p1.music.126.net/x/109951171180358170.jpg"
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: []netease.Track{tr}, count: 1}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{tr}, count: 1}, loaded: true}
 	a.pl.Cue([]netease.Track{tr})
 	a.pl.SetLyrics(nil)
 	for _, tc := range []struct {
@@ -608,7 +608,7 @@ func TestCloudAutomaticallyLoadsPagesAndRetries(t *testing.T) {
 	for i := range tracks {
 		tracks[i] = cloudTrack(int64(i+1), fmt.Sprintf("网盘歌曲 %03d", i+1))
 	}
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 202, offset: 100, tracks: tracks}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 202, offset: 100, tracks: tracks}, loaded: true}
 	a.pl.Cue([]netease.Track{cloudTrack(999, "正在播放")})
 	type reply struct {
 		page *netease.CloudPage
@@ -683,7 +683,7 @@ func TestCloudLocateKeepsPlayback(t *testing.T) {
 			for i := range tracks {
 				tracks[i] = cloudTrack(int64(i+1), fmt.Sprintf("定位网盘歌曲 %03d", i+1))
 			}
-			a.cloud = cloudData{cloudListing: cloudListing{count: 200, offset: 200, tracks: tracks}, loaded: true}
+			a.cloud = cloudViewModel{cloudListing: cloudListing{count: 200, offset: 200, tracks: tracks}, loaded: true}
 			a.pl.SuspendCache()
 			a.pl.Cue([]netease.Track{tracks[149], cloudTrack(999, "另一首")})
 			if playing {
@@ -730,7 +730,7 @@ func TestCloudLocateRevealsBeforeLoadingCompletes(t *testing.T) {
 		}
 		return tracks
 	}
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 400, offset: 100, tracks: page(1)}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 400, offset: 100, tracks: page(1)}, loaded: true}
 	a.pl.SuspendCache()
 	a.pl.Cue([]netease.Track{cloudTrack(250, "分页定位歌曲 250"), cloudTrack(999, "另一首")})
 	a.pl.Hold(37 * time.Second)
@@ -782,7 +782,7 @@ func TestCloudLocateDiscardsPreviousSongTarget(t *testing.T) {
 	for i := range tracks {
 		tracks[i] = cloudTrack(int64(i+1), fmt.Sprintf("前页 %d", i+1))
 	}
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 300, offset: 100, tracks: tracks}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 300, offset: 100, tracks: tracks}, loaded: true}
 	a.pl.SuspendCache()
 	a.pl.Cue([]netease.Track{cloudTrack(250, "旧定位目标")})
 	calls := make(chan int, 4)
@@ -816,7 +816,7 @@ func TestCloudLocateDoesNotScrollAnotherPage(t *testing.T) {
 	for i := range tracks {
 		tracks[i] = cloudTrack(int64(i+1), fmt.Sprintf("前页 %d", i+1))
 	}
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 300, offset: 100, tracks: tracks}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 300, offset: 100, tracks: tracks}, loaded: true}
 	a.pl.SuspendCache()
 	a.pl.Cue([]netease.Track{cloudTrack(250, "当前歌曲")})
 	started, release := make(chan struct{}), make(chan struct{})
@@ -855,7 +855,7 @@ func TestCloudLocateStaysCancelledAfterReturning(t *testing.T) {
 	for i := range tracks {
 		tracks[i] = cloudTrack(int64(i+1), fmt.Sprintf("前页 %d", i+1))
 	}
-	a.cloud = cloudData{cloudListing: cloudListing{more: true, count: 300, offset: 100, tracks: tracks}, loaded: true}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{more: true, count: 300, offset: 100, tracks: tracks}, loaded: true}
 	a.pl.SuspendCache()
 	a.pl.Cue([]netease.Track{cloudTrack(250, "当前歌曲")})
 	started, release := make(chan struct{}), make(chan struct{})

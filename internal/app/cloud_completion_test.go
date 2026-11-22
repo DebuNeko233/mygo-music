@@ -23,7 +23,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 				first[i] = cloudTrack(int64(i+1), fmt.Sprintf("First %03d", i+1))
 				later[i] = cloudTrack(int64(i+101), fmt.Sprintf("Later %03d", i+101))
 			}
-			a.cloud = cloudData{cloudListing: cloudListing{tracks: first, count: 200, offset: 100, more: true}, loaded: true}
+			a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: first, count: 200, offset: 100, more: true}, loaded: true}
 			type reply struct {
 				page *netease.CloudPage
 				err  error
@@ -120,7 +120,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	oldTime := time.Unix(1000, 0)
 	now := oldTime.Add(24 * time.Hour)
 	a.listRefresh.now = func() time.Time { return now }
-	a.cloud = cloudData{cloudListing: cloudListing{tracks: original, count: 3, offset: 3}, loaded: true, at: oldTime}
+	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: original, count: 3, offset: 3}, loaded: true, at: oldTime}
 	a.pl.Cue(slices.Clone(original))
 	calls := make(chan int, 4)
 	attempt := 0

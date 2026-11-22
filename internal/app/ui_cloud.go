@@ -1,179 +1,13 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/netease"
 )
-
-const cloudPageSize = 100
-
-var cloudSongs = netease.CloudSongsContext
-
-type cloudLoadMode uint8
-
-const (
-	cloudNextPage cloudLoadMode = iota
-	cloudRefresh
-)
-
-// cloudListing is a metadata snapshot, also used to stage a refresh.
-type cloudListing struct {
-	tracks        []netease.Track
-	count, offset int
-	more          bool
-	seen          map[int64]struct{}
-}
-
-// Cloud listings stay in memory and are discarded on account changes.
-type cloudData struct {
-	cloudListing
-	loaded, loading bool
-	failure         error
-	mode            cloudLoadMode
-	pending         *cloudListing // keep the published listing until refresh completes
-	queue           uint64        // queue revision owned by the initial, incomplete listing
-	cancel          context.CancelFunc
-	request         uint64
-	at              time.Time
-	locate          int64
-}
-
-// Account changes and shutdown cancel the active request and reject a posted reply.
-func (a *app) cancelCloudLoad() {
-	d := &a.cloud
-	if d.cancel != nil {
-		d.cancel()
-		d.cancel = nil
-	}
-	d.request++
-	d.locate = 0
-	d.loading = false
-	d.pending, d.queue = nil, 0
-}
-
-func (a *app) refreshCloud() {
-	d := &a.cloud
-	if d.loading || a.profile == nil {
-		return
-	}
-	a.loadCloud(cloudRefresh)
-}
-
-// A failed page retries at the same offset. Refresh replaces the listing
-// only on success, so a temporary network failure never empties the view.
-func (a *app) loadCloud(mode cloudLoadMode) {
-	d := &a.cloud
-	if mode == cloudNextPage && d.failure != nil {
-		mode = d.mode
-	}
-	if a.quitting || a.profile == nil || d.loading {
-		return
-	}
-	listing := &d.cloudListing
-	if d.pending != nil {
-		listing = d.pending
-	}
-	if mode != cloudRefresh && d.failure == nil && d.loaded && !listing.more {
-		return
-	}
-	offset := listing.offset
-	if mode == cloudRefresh {
-		offset = 0
-		d.queue = 0
-		if d.loaded {
-			d.pending = &cloudListing{}
-		}
-	}
-	d.loading, d.failure, d.mode = true, nil, mode
-	ctx, cancel := context.WithCancel(context.Background())
-	d.cancel = cancel
-	d.request++
-	request := d.request
-	uid, gen, fetch := a.listenerID(), a.homeGen, cloudSongs
-	go func() {
-		defer cancel()
-		page, err := fetch(ctx, cloudPageSize, offset)
-		if err == nil && page == nil {
-			err = errors.New("netease: empty cloud response")
-		}
-		if err == nil && page.HasMore && page.NextOffset <= offset {
-			err = errors.New("netease: cloud page did not advance")
-		}
-		a.post(func() {
-			if a.homeGen != gen || a.listenerID() != uid || d.request != request {
-				return
-			}
-			a.finishCloudPage(page, err, offset)
-		})
-	}()
-}
-
-// Request lifetime/account checks happen before publishing a page here.
-func (a *app) finishCloudPage(page *netease.CloudPage, err error, offset int) {
-	d := &a.cloud
-	d.loading, d.failure, d.cancel = false, err, nil
-	if err != nil {
-		a.resolveCloudLocate()
-		return // retry this offset; the published snapshot stays available
-	}
-	listing := &d.cloudListing
-	if d.pending != nil {
-		listing = d.pending
-	}
-	before := len(listing.tracks)
-	listing.mergePage(page.Tracks, offset == 0)
-	listing.count, listing.offset, listing.more = page.Count, page.NextOffset, page.HasMore && page.NextOffset > offset
-	if d.pending == nil {
-		d.loaded = true
-		if d.queue != 0 {
-			if a.pl.AppendQueue(listing.tracks[before:], d.queue) {
-				d.queue = a.pl.QueueRevision()
-			} else {
-				d.queue = 0 // the listener replaced or edited the queue
-			}
-		}
-	} else if !listing.more {
-		d.cloudListing, d.pending = *listing, nil
-	}
-	if !listing.more {
-		d.at = a.listsNow()
-		d.queue = 0
-	}
-	a.resolveCloudLocate()
-	if listing.more {
-		a.loadCloud(cloudNextPage)
-	}
-}
-
-// The player copies its queue at PlayQueueFrom. Append only new entries here;
-// refresh starts a separate slice, leaving earlier published tracks untouched.
-func (d *cloudListing) mergePage(tracks []netease.Track, refresh bool) {
-	if refresh {
-		d.tracks = nil
-		d.seen = nil
-	}
-	if d.seen == nil {
-		d.seen = make(map[int64]struct{}, len(d.tracks)+len(tracks))
-		for _, tr := range d.tracks {
-			d.seen[tr.ID] = struct{}{}
-		}
-	}
-	for _, tr := range tracks {
-		if tr.ID <= 0 {
-			continue
-		}
-		if _, exists := d.seen[tr.ID]; exists {
-			continue
-		}
-		d.tracks = append(d.tracks, tr)
-		d.seen[tr.ID] = struct{}{}
-	}
-}
 
 func (a *app) resolveCloudLocate() {
 	d := &a.cloud
@@ -256,7 +90,7 @@ func (a *app) cloudPage(c *ui.Context) {
 	}
 }
 
-func (d *cloudData) summary() string {
+func (d *cloudViewModel) summary() string {
 	if !d.loaded {
 		return ""
 	}

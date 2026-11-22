@@ -526,7 +526,7 @@ func BenchmarkCloudMergePages(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				var d cloudData
+				var d cloudViewModel
 				for start := 0; start < count; start += cloudPageSize {
 					d.mergePage(tracks[start:min(start+cloudPageSize, count)], start == 0)
 				}

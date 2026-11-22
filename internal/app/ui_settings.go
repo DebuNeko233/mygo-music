@@ -514,44 +514,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 	})
 
 	add("download", "下载", iconDownload, func(row settingsRow, block settingsBlock) {
-		row("默认下载音质", "以网易云实际提供的下载音质为准", func() {
-			if qualitySelect(c.Key("download-quality"), &s.DownloadQuality, "默认下载音质") {
-				s.saveSoon()
-			}
-		})
-		directory := a.downloadDirectory()
-		if directory == "" {
-			directory = "首次下载时选择"
-		}
-		row("下载目录", directory, func() {
-			ui.Button(c.Key("download-directory"), "选择目录…").OnClick(func() { a.chooseDownloadDirectory() })
-		})
-		row("文件名格式", "对新加入下载队列的歌曲生效", func() {
-			labels := make([]string, len(downloadNameFormats))
-			chosen := downloadNameFormats[0].label
-			for i, f := range downloadNameFormats {
-				labels[i] = f.label
-				if s.DownloadNameFormat == f.value {
-					chosen = f.label
-				}
-			}
-			if ui.Select(c.Key("download-name-format"), &chosen, labels).Label("下载文件名格式").Width(150).Changed() {
-				for _, f := range downloadNameFormats {
-					if chosen == f.label {
-						s.DownloadNameFormat = f.value
-						break
-					}
-				}
-				s.saveSoon()
-			}
-		})
-
-		row("另存歌词文件", "内嵌歌词之外，再保存同名 .lrc 文件", func() {
-			if ui.Switch(c.Key("download-sidecar"), &s.DownloadSidecar).Label("另存歌词文件").Changed() {
-				s.saveSoon()
-			}
-		})
-		block("下载任务", func() { a.downloadJobs(c, p) })
+		a.downloadSettings(c, p, row, block)
 	})
 
 	add("keys", "快捷键", iconKeyboard, func(row settingsRow, block settingsBlock) {

@@ -100,10 +100,10 @@ jobs:
           packages=$(go list ./internal/... | grep -v '/internal/app$')
           mapfile -t package_list <<< "$packages"
           go test -count=1 -race -timeout 30m "${package_list[@]}"
-      # These tests exercise storage workers or background callbacks without
+      # These tests exercise storage workers, view models and callbacks without
       # rendering the animation suite.
       - name: Test app concurrency under the race detector
         run: >-
           go test -v -count=1 -race
-          -run '^(TestSettingsSaver.*|TestSessionKeepsLatestSave|TestEarlyPostsAreNotLost|TestPostDispatchBelongsToApp|TestEpisodeLikeClickBeatsAnswer|TestArtReleaseUsesTheDispatcher|TestDownloadProgressAndPendingCancellation|TestDownloadsCancelOnAccountChange|TestDownloadQuitWaitsForCleanup|TestDownloadRetrySharesDedupAndClearsResult)$'
+          -run '^(TestSettingsSaver.*|TestSessionKeepsLatestSave|TestEarlyPostsAreNotLost|TestPostDispatchBelongsToApp|TestEpisodeLikeClickBeatsAnswer|TestArtReleaseUsesTheDispatcher|TestDownloadProgressAndPendingCancellation|TestDownloadsCancelOnAccountChange|TestDownloadQuitWaitsForCleanup|TestDownloadRetrySharesDedupAndClearsResult|TestCloudViewModel.*|TestDownloadViewModel.*)$'
           ./internal/app

@@ -96,7 +96,7 @@ type app struct {
 	subsShown bool // whether subAlbums has loaded once
 	savingAlb map[int64]bool
 
-	cloud cloudData
+	cloud cloudViewModel
 
 	// What the listener played lately, on any of their devices, and what
 	// the page lists: see ui_recent.go.
@@ -224,7 +224,8 @@ type app struct {
 	quitting              bool
 
 	// Settings navigation stays in memory; only user preferences are persisted.
-	downloads         downloadState
+	downloads         downloadViewModel
+	downloadList      ui.ListState
 	settingsPage      string
 	settingsQuery     string
 	settingsSearchBox ui.Handle
