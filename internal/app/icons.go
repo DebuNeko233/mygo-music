@@ -14,6 +14,7 @@ func fillIcon(paths string) *ui.SVG {
 }
 
 var (
+	iconCloud = strokeIcon(`<path d="M7 18h11a4 4 0 0 0 .6-8A6.5 6.5 0 0 0 6.2 8.3 4.9 4.9 0 0 0 7 18Z"/>`)
 	iconPlay  = fillIcon(`<path d="M7 4.6v14.8c0 .8.9 1.3 1.6.9l12-7.4c.6-.4.6-1.3 0-1.7l-12-7.4C7.9 3.3 7 3.8 7 4.6z"/>`)
 	iconPause = fillIcon(`<rect x="5.5" y="4" width="4.5" height="16" rx="1.4"/><rect x="14" y="4" width="4.5" height="16" rx="1.4"/>`)
 	iconNext  = fillIcon(`<path d="M3 5.6v12.8c0 .8.9 1.3 1.6.8l9.4-6.4c.6-.4.6-1.2 0-1.6L4.6 4.8C3.9 4.3 3 4.8 3 5.6z"/><path d="M12 5.6v12.8c0 .8.9 1.3 1.6.8l9.4-6.4c.6-.4.6-1.2 0-1.6l-9.4-6.4c-.7-.5-1.6 0-1.6.8z" transform="translate(-1.5 0)"/>`)

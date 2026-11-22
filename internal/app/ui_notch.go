@@ -403,10 +403,10 @@ func (n *notch) compact(c *ui.Context, tr *netease.Track, shown float32) {
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Height(n.h0).PaddingX(7).AlignItems(ui.Center).Opacity(shown).Children(func() {
 		cov := ui.Box(c).Size(s, s).Radius(s * 0.28)
 		in := artIn(cov, bitmap(art))
-		if in < 1 {
-			cov.Background(white.Alpha(0.12))
-		}
-		cov.Children(func() { artImage(c, bitmap(art), s*0.28, in) })
+		cov.Children(func() {
+			coverPlaceholder(c, s, s*0.28, 1-in, white.Alpha(0.12), white.Alpha(0.35))
+			artImage(c, bitmap(art), s*0.28, in)
+		})
 		ui.Spacer(c)
 		n.levels(c, tr, 16, s*0.7, 4)
 	})
@@ -445,10 +445,10 @@ func (n *notch) expanded(c *ui.Context, tr *netease.Track, open, left float32) {
 			}
 			cov.AnimatePose(lift, ui.Snappy)
 			in := artIn(cov, bitmap(art))
-			if in < 1 {
-				cov.Background(white.Alpha(0.12))
-			}
-			cov.Children(func() { artImage(c, bitmap(art), 12, in) })
+			cov.Children(func() {
+				coverPlaceholder(c, 60, 12, 1-in, white.Alpha(0.12), white.Alpha(0.35))
+				artImage(c, bitmap(art), 12, in)
+			})
 			if cov.Clicked() {
 				a.nowPlaying = true
 				a.showMain()

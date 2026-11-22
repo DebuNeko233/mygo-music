@@ -92,12 +92,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	// The player bar, with its timer, stops building once this page settles.
 	a.tickTimes(c)
 	w, h := c.Size()
-	var art *artwork
-	if tr.IsLocal() {
-		art = a.trackArtwork(tr, nowPlayingCoverPixels, true)
-	} else {
-		art = a.playbackArtwork(tr.Album.PicURL, nowPlayingCoverRequest)
-	}
+	art := a.playbackTrackArtwork(tr, nowPlayingCoverRequest)
 	if cs := &a.npCoverState; a.npPane == paneStage || a.npPane == paneWall {
 		cs.previous = nil
 		cs.switching = false

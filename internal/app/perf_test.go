@@ -232,14 +232,14 @@ func TestPlayerBarCoverFrameBudget(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 		a.art.add(netease.Sized(url, barCoverPixels), &artwork{bmp: ui.NewBitmap(img)})
 	}
-	url := before
+	track := &netease.Track{Album: netease.Album{PicURL: before}}
 	builds := 0
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
-		a.playerBarArtwork(c, url)
+		a.playerBarArtwork(c, track)
 	}, 64, 64)
 	tt.Advance(time.Second)
-	url = after
+	track.Album.PicURL = after
 	tt.Frame()
 	if !tt.FramePending() {
 		t.Fatal("a new cover did not schedule animation frames")

@@ -24,7 +24,7 @@ var nowPlayingCoverRequest = playbackCover{pixels: nowPlayingCoverPixels, backdr
 
 func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artwork {
 	if !tr.IsLocal() {
-		return a.art.get(netease.Sized(tr.Album.PicURL, px), backdrop)
+		return a.art.get(netease.Sized(a.trackArtworkURL(tr), px), backdrop)
 	}
 	song := a.playbackLocalSong(tr)
 	if !song.Cover {
@@ -39,7 +39,7 @@ func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artwork {
 
 func (a *app) trackCover(c *ui.Context, tr *netease.Track, px int, size, radius float32) ui.Element {
 	if !tr.IsLocal() {
-		return a.cover(c, tr.Album.PicURL, px, size, radius)
+		return a.cover(c, a.trackArtworkURL(tr), px, size, radius)
 	}
 	if url := a.localArtworkURL(tr, a.playbackLocalSong(tr)); url != "" {
 		return a.cover(c, url, px, size, radius)
@@ -52,7 +52,15 @@ func (a *app) hasTrackCover(tr *netease.Track) bool {
 		song := a.playbackLocalSong(tr)
 		return song.Cover || a.localArtworkURL(tr, song) != ""
 	}
-	return tr.Album.PicURL != ""
+	return a.trackArtworkURL(tr) != ""
+}
+
+// playbackTrackArtwork is the common request path for the bar and Now Playing.
+func (a *app) playbackTrackArtwork(tr *netease.Track, cover playbackCover) *artwork {
+	if tr.IsLocal() {
+		return a.trackArtwork(tr, cover.pixels, cover.backdrop)
+	}
+	return a.playbackArtwork(a.trackArtworkURL(tr), cover)
 }
 
 // playbackArtwork requests the visible cover first, then warms the exact
@@ -69,10 +77,14 @@ func (a *app) playbackArtwork(url string, cover playbackCover) *artwork {
 	}
 	seen := current
 	for _, tr := range [...]*netease.Track{next, prev} {
-		if tr == nil || tr.Album.PicURL == "" {
+		if tr == nil {
 			continue
 		}
-		key := netease.Sized(tr.Album.PicURL, cover.pixels)
+		url := a.trackArtworkURL(tr)
+		if url == "" {
+			continue
+		}
+		key := netease.Sized(url, cover.pixels)
 		if key != current && key != seen {
 			a.art.prefetch(key, cover.backdrop)
 			seen = key

@@ -42,6 +42,7 @@ type localMusic struct {
 	busy            bool
 	picking         bool
 	check           uint64
+	revision        uint64 // searchable catalog or availability changed
 	window          *mygo.Window
 	temporary       localSong
 	temporaryID     int64
@@ -78,13 +79,29 @@ func (a *app) initLocalMusic() {
 		}
 		return a.local.song(id).Path
 	}
-	a.pl.LocalMissing = func(id int64) { a.local.missing[id] = true }
+	a.pl.LocalMissing = a.local.markMissing
 	a.pl.LocalLyrics = a.localLyricsLoader
+}
+
+// Availability changes invalidate cached suggestions without touching the file-check generation.
+func (m *localMusic) setMissing(missing map[int64]bool) {
+	m.missing = missing
+	m.revision++
+}
+func (m *localMusic) markMissing(id int64) {
+	if m.missing[id] {
+		return
+	}
+	if m.missing == nil {
+		m.missing = make(map[int64]bool)
+	}
+	m.missing[id] = true
+	m.revision++
 }
 
 func (m *localMusic) replace(catalog localCatalog) {
 	m.byID = make(map[int64]int, len(catalog.Songs))
-	m.missing = make(map[int64]bool)
+	m.setMissing(make(map[int64]bool))
 	m.catalog = catalog
 	m.tracks = make([]netease.Track, len(catalog.Songs))
 	for i, song := range catalog.Songs {
@@ -118,7 +135,7 @@ func (a *app) checkLocalFiles() {
 		missing := missingLocalFiles(songs, nil)
 		a.post(func() {
 			if a.local.check == check {
-				a.local.missing = missing
+				a.local.setMissing(missing)
 			}
 		})
 	}()
@@ -225,7 +242,7 @@ func (a *app) changeLocal(work func(*localCatalog, map[string]struct{}) (bool, s
 				}
 				a.local.replace(catalog)
 			}
-			a.local.missing = missing
+			a.local.setMissing(missing)
 			a.pl.UpdateLocalTracks(updated)
 			a.redrawLocalFolders()
 		})

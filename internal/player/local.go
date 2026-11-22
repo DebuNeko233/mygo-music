@@ -144,9 +144,9 @@ func (p *Player) ReloadLocalLyrics() {
 	}
 }
 
-// ShowLocalArtwork publishes the cover if the track still plays.
-func (p *Player) ShowLocalArtwork(track *netease.Track, cover []byte) {
-	if p.track == track && track.IsLocal() {
+// ShowArtwork publishes resolved artwork only if the same track still plays.
+func (p *Player) ShowArtwork(track *netease.Track, cover []byte) {
+	if p.track == track {
 		p.announce(track, cover)
 	}
 }

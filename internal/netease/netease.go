@@ -56,6 +56,8 @@ type Track struct {
 	ProgramID   int64  `json:"programId,omitempty"`
 	PodcastID   int64  `json:"podcastId,omitempty"`
 	Description string `json:"description,omitempty"`
+	// Cloud marks an entry from the signed-in listener's music cloud.
+	Cloud bool `json:"cloud,omitempty"`
 }
 
 func (t *Track) IsLocal() bool { return t.LocalID > 0 }
@@ -102,6 +104,11 @@ func (t *Track) ArtistNames() string {
 // privilege says, or else as its fee does for anyone, VIP songs (1) and
 // paid albums (4) giving only a preview.
 func (t *Track) Playable() bool {
+	if t.Cloud {
+		// Catalogue privileges do not describe an uploaded file. Its stream
+		// endpoint still checks ownership and availability.
+		return t.ID > 0
+	}
 	if t.ProgramID > 0 {
 		// An episode's audio has no privilege: whether it streams, as a
 		// paid one bought, is up to its stream.
@@ -711,8 +718,22 @@ func Lyrics(id int64) (lrc, translation, yrc string, err error) {
 	return res.Lrc.Lyric, res.Tlyric.Lyric, yrc, nil
 }
 
+// CoverURL treats NetEase's generic music-note image as missing artwork.
+// Keep uploaded/custom images even when they have no catalogue album ID.
+func CoverURL(pic string) string {
+	pic = strings.TrimSpace(pic)
+	if !strings.Contains(pic, "/109951171180358170.jpg") {
+		return pic
+	}
+	if u, err := url.Parse(pic); err == nil && strings.HasSuffix(strings.ToLower(u.Hostname()), ".music.126.net") && strings.HasSuffix(u.Path, "/109951171180358170.jpg") {
+		return ""
+	}
+	return pic
+}
+
 // Sized asks the image CDN for a picture of n×n pixels.
 func Sized(pic string, n int) string {
+	pic = CoverURL(pic)
 	if pic == "" {
 		return ""
 	}

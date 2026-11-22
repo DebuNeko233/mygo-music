@@ -1,6 +1,7 @@
 package app
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -18,10 +19,31 @@ var fetchLocalArtwork = netease.Fetch
 type localArtworkKey struct {
 	id, stamp, size int64
 	temporary       bool
+	remote          bool
+	listener        int64
+	tags            string
 }
 
 func (s localSong) artworkKey(temporary bool) localArtworkKey {
-	return localArtworkKey{s.Track.LocalID, s.Stamp, s.Size, temporary}
+	return localArtworkKey{id: s.Track.LocalID, stamp: s.Stamp, size: s.Size, temporary: temporary}
+}
+
+func (a *app) remoteArtworkKey(t *netease.Track) localArtworkKey {
+	return localArtworkKey{id: t.ID, remote: true, listener: a.listenerID(), tags: fmt.Sprintf("%s\x00%s\x00%s\x00%d", t.Name, t.ArtistNames(), t.Album.Name, t.Duration)}
+}
+
+// trackArtworkURL is shared by lists, the bar, Now Playing and the mini player.
+func (a *app) trackArtworkURL(t *netease.Track) string {
+	if t.IsLocal() {
+		return a.localArtworkURL(t, a.playbackLocalSong(t))
+	}
+	if url := netease.CoverURL(t.Album.PicURL); url != "" {
+		return url
+	}
+	if len(a.local.artwork.known) == 0 {
+		return ""
+	}
+	return a.local.artwork.known[a.remoteArtworkKey(t)].url
 }
 
 type localArtworkResult struct {
@@ -43,7 +65,7 @@ func (a *app) announceLocalArtwork(t *netease.Track, load func() []byte) {
 	a.local.artwork.announced = t
 	go func() {
 		if b := load(); len(b) > 0 {
-			a.post(func() { a.pl.ShowLocalArtwork(t, b) })
+			a.post(func() { a.pl.ShowArtwork(t, b) })
 		}
 	}()
 }
@@ -52,18 +74,29 @@ func (a *app) localArtworkURL(t *netease.Track, song localSong) string {
 	if song.Cover {
 		return ""
 	}
-	return a.local.artwork.known[song.artworkKey(t.Temporary)].url
+	return netease.CoverURL(a.local.artwork.known[song.artworkKey(t.Temporary)].url)
 }
 
 // Search only for what plays. Quick skips don't queue a search for every song.
 func (a *app) syncLocalArtwork() {
 	t := a.pl.Current()
-	if a.quitting || t == nil || !t.IsLocal() {
+	if a.quitting || t == nil {
 		return
 	}
-	song := a.playbackLocalSong(t)
-	if song.Path == "" {
-		return
+	var song localSong
+	var key localArtworkKey
+	if t.IsLocal() {
+		song = a.playbackLocalSong(t)
+		if song.Path == "" {
+			return
+		}
+		key = song.artworkKey(t.Temporary)
+	} else {
+		if netease.CoverURL(t.Album.PicURL) != "" {
+			return
+		}
+		song = localSong{Track: *t}
+		key = a.remoteArtworkKey(t)
 	}
 	state := &a.local.artwork
 	if song.Cover {
@@ -71,7 +104,6 @@ func (a *app) syncLocalArtwork() {
 		a.announceLocalArtwork(t, func() []byte { return state.embedded.get(key, localmedia.Cover) })
 		return
 	}
-	key := song.artworkKey(t.Temporary)
 	offline := a.network.offline
 	if known, ok := state.known[key]; ok && (known.url != "" || offline || !known.offlineOnly) {
 		if known.url != "" {
@@ -93,11 +125,16 @@ func (a *app) syncLocalArtwork() {
 	var cache cacheRequest
 	if !t.Temporary {
 		cache = cacheRequest{a.browseCache, "local-artwork", fmt.Sprintf("%d/%d/%d", key.id, key.stamp, key.size), a.browseCache.Epoch()}
+		if key.remote {
+			cache.scope = fmt.Sprintf("track-artwork/%d", key.listener)
+			cache.key = fmt.Sprintf("%d/%x", key.id, sha256.Sum256([]byte(key.tags)))
+		}
 	}
 	search := searchLocalArtwork
 	go func() {
 		result := localArtworkResult{offlineOnly: offline}
 		cache.read(&result.url)
+		result.url = netease.CoverURL(result.url)
 		if result.url == "" && !offline {
 			result.url = findLocalArtwork(song, search)
 			if result.url != "" {
@@ -122,7 +159,7 @@ func (a *app) syncLocalArtwork() {
 func findLocalArtwork(song localSong, search func(string, int) ([]netease.Track, error)) string {
 	track := song.Track
 	if track.Album.Name == "" && len(track.Artists) == 0 &&
-		track.Name == strings.TrimSuffix(filepath.Base(song.Path), filepath.Ext(song.Path)) {
+		(track.Cloud || track.Name == strings.TrimSuffix(filepath.Base(song.Path), filepath.Ext(song.Path))) {
 		if artist, title, ok := strings.Cut(track.Name, " - "); ok {
 			track.Name = title
 			track.Artists = []netease.Artist{{Name: artist}}
@@ -171,7 +208,7 @@ func chooseLocalArtwork(local *netease.Track, candidates []netease.Track) string
 	best, other := int64(tolerance+1000), int64(tolerance+1000)
 	url := ""
 	for _, t := range candidates {
-		if t.Album.PicURL == "" || t.Duration <= 0 || artworkTag(t.Name) != title ||
+		if netease.CoverURL(t.Album.PicURL) == "" || t.Duration <= 0 || artworkTag(t.Name) != title ||
 			artist != "" && artworkTag(t.ArtistNames()) != artist || album != "" && artworkTag(t.Album.Name) != album {
 			continue
 		}

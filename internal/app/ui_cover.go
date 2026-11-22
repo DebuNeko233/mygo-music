@@ -333,10 +333,8 @@ func (a *app) npCoverCard(c *ui.Context, tr *netease.Track, art *artwork, size f
 		}
 		box.AnimatePose(ui.Pose{Scale: scale}, coverBreath)
 		in := artIn(box, bitmap(art))
-		if in < 1 {
-			box.Background(white.Alpha(0.08))
-		}
 		box.Children(func() {
+			coverPlaceholder(c, size, 16, 1-in, white.Alpha(0.08), white.Alpha(0.35))
 			artImage(c, bitmap(art), 16, in)
 			if shine > 0.01 {
 				ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {

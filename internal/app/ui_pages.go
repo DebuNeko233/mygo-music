@@ -254,10 +254,10 @@ func (a *app) playlistPage(c *ui.Context) {
 		a.trackSkeleton(c, s, true, func(c *ui.Context) { a.playlistHeaderSkeleton(c, s) })
 		return
 	}
-	at := a.playlistCurrentIndex(pl.Tracks)
+	at := a.currentTrackIndex(pl.Tracks)
 	a.syncPlaylistViewport(c, pl, at)
 	visible := a.trackRows(c, pl.Tracks, true, func(c *ui.Context) { a.playlistHeader(c, pl) })
-	a.playlistLocateButton(c, at, visible)
+	a.trackLocateButton(c, at, visible)
 }
 
 func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
@@ -361,8 +361,8 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 	a.underTop, a.underBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
 	list := ui.List(c.Key(a.route), &a.trackList, rows)
-	if pid != 0 {
-		list.ItemKey(a.playlistRowKeys(tracks))
+	if pid != 0 || a.route.page == pageCloud || a.route.page == pageLocal {
+		list.ItemKey(a.trackRowKeys(tracks))
 	}
 	list.Rows(func(item ui.ListRow) {
 		i := item.Index
@@ -481,7 +481,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			}
 		}
 	}).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0)
-	if a.route.page == pagePlaylist {
+	if a.route.page == pagePlaylist || a.route.page == pageCloud || a.route.page == pageLocal {
 		list.TrackScroll(&a.pageScroll)
 	}
 	return playingVisible

@@ -16,11 +16,11 @@ const suggestDelay = 220 * time.Millisecond
 
 // suggestState is what a search may be after, as its query is typed.
 type suggestState struct {
-	query    string // what they are for
-	items    []suggestion
-	playlist playlistSuggestState
-	timer    *time.Timer // waiting for typing to pause
-	gen      uint64      // which request the query is waiting for
+	query  string // what they are for
+	items  []suggestion
+	tracks trackSuggestState
+	timer  *time.Timer // waiting for typing to pause
+	gen    uint64      // which request the query is waiting for
 }
 
 // suggestion is a page a query may be after: a song's search, or an
@@ -193,8 +193,18 @@ func (a *app) searchField(c *ui.Context) {
 					ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
 					ui.Text(c, "搜索“"+q+"”").FontSize(13).FontWeight(500).SingleLine().Shrink(1).MinWidth(0)
 				})
-				for _, sg := range a.playlistSuggestions(q) {
+				for _, sg := range a.trackSuggestions(q) {
 					showSuggestion(sg.suggestion, true, sg.playable)
+				}
+				if a.route.page == pageCloud && !a.nowPlaying && a.profile != nil && (!a.cloud.loaded || a.cloud.more || a.cloud.failure != nil) {
+					label := "在整个网盘中查找"
+					if a.cloud.loading && a.cloud.all {
+						label = "正在查找整个网盘…"
+					}
+					option("cloud-all", label).Disabled(a.cloud.loading && a.cloud.all).Children(func() {
+						ui.Icon(c, iconCloud).Size(13, 13).TextColor(p.muted)
+						ui.Text(c, label).FontSize(13).SingleLine()
+					})
 				}
 				if s.query == q {
 					for _, sg := range s.items {
@@ -204,8 +214,14 @@ func (a *app) searchField(c *ui.Context) {
 			})
 		})
 		if key, ok := cb.Chosen(); ok {
-			cb.SetOpen(false)
-			a.choose(key, q)
+			if key == "cloud-all" && a.route.page == pageCloud {
+				a.loadEntireCloud()
+				cb.SetOpen(true)
+				a.searchBox.Focus(c)
+			} else {
+				cb.SetOpen(false)
+				a.choose(key, q)
+			}
 		} else if in.Submitted() && q != "" {
 			cb.SetOpen(false)
 			a.search(q)
@@ -220,7 +236,7 @@ func (a *app) searchField(c *ui.Context) {
 
 // choose goes where the option chosen in the search field's popup goes.
 func (a *app) choose(key, q string) {
-	if a.choosePlaylistSuggestion(key, q) {
+	if a.chooseTrackSuggestion(key, q) {
 		return
 	}
 	if h, ok := strings.CutPrefix(key, "history:"); ok {

@@ -8,33 +8,33 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-type playlistRowKey struct {
+type trackRowKey struct {
 	song       int64
 	occurrence int
 }
 
-// Playlist updates publish a new track slice when rows change. Cache their
+// List updates publish a new track slice when rows change. Cache their
 // keys for the rendered list so scrolling and repainting do not scan it.
-type playlistRows struct {
+type trackRowsCache struct {
 	first *netease.Track
-	keys  []playlistRowKey
+	keys  []trackRowKey
 }
 
-func (a *app) playlistRowKeys(tracks []netease.Track) func(int) any {
+func (a *app) trackRowKeys(tracks []netease.Track) func(int) any {
 	var first *netease.Track
 	if len(tracks) != 0 {
 		first = &tracks[0]
 	}
-	rows := &a.playlistRows
+	rows := &a.trackRowsCache
 	if rows.first != first || len(rows.keys) != len(tracks) {
-		keys := make([]playlistRowKey, len(tracks))
+		keys := make([]trackRowKey, len(tracks))
 		occurrences := make(map[int64]int, len(tracks))
 		for i := range tracks {
 			id := tracks[i].Key()
-			keys[i] = playlistRowKey{id, occurrences[id]}
+			keys[i] = trackRowKey{id, occurrences[id]}
 			occurrences[id]++
 		}
-		a.keepPlaylistPlace(rows.keys, keys)
+		a.keepTrackPlace(rows.keys, keys)
 		rows.first, rows.keys = first, keys
 	}
 	keys := rows.keys
@@ -49,7 +49,7 @@ func (a *app) playlistRowKeys(tracks []netease.Track) func(int) any {
 // MyGo's keyed list follows the top row with its exact inset when the row
 // survives and moves within its search range. For a larger move, or if the
 // top row was deleted, explicitly place it or the next surviving visible row.
-func (a *app) keepPlaylistPlace(old, next []playlistRowKey) {
+func (a *app) keepTrackPlace(old, next []trackRowKey) {
 	top, bottom := a.trackList.Visible()
 	if top <= 0 || top > len(old) || top > bottom {
 		return

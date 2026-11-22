@@ -164,16 +164,15 @@ func (a *app) cover(c *ui.Context, url string, px int, size, radius float32) ui.
 
 func (a *app) coverImage(c *ui.Context, size, radius float32, load func(ui.Element) *artwork) ui.Element {
 	p := a.pal
+	bg, fg := p.hover, p.faint
+	if a.nowPlaying {
+		bg, fg = white.Alpha(0.08), white.Alpha(0.35)
+	}
 	box := ui.Box(c).Size(size, size).Radius(radius).Center()
 	bmp := bitmap(load(box))
 	in := artIn(box, bmp)
-	if in < 1 {
-		box.Background(p.hover)
-	}
 	box.Children(func() {
-		if in < 1 {
-			ui.Icon(c, iconNote).Size(size*0.3, size*0.3).TextColor(p.faint).Opacity(1 - in)
-		}
+		coverPlaceholder(c, size, radius, 1-in, bg, fg)
 		artImage(c, bmp, radius, in)
 	})
 	return box
