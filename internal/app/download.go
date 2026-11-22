@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -56,6 +58,16 @@ var openDownloadDirectory = mygo.Dialog.Open
 var revealDownload = mygo.Shell.ShowItemInFolder
 var quitAfterDownload = mygo.App.Quit
 
+func (a *app) downloadDirectory() string {
+	if a.settings.DownloadDirectory != "" {
+		return a.settings.DownloadDirectory
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, "Music", "Mygo Music")
+	}
+	return ""
+}
+
 func (a *app) chooseDownloadDirectory() bool {
 	paths, err := openDownloadDirectory(mygo.OpenDialogOptions{
 		Parent: a.downloadParent(), Title: "选择下载目录", Directory: true, CreateDirectories: true,
@@ -81,8 +93,12 @@ func (a *app) enqueueDownloads(tracks []netease.Track) {
 	if len(tracks) == 0 {
 		return
 	}
-	if a.settings.DownloadDirectory == "" && !a.chooseDownloadDirectory() {
-		return
+	directory := a.downloadDirectory()
+	if directory == "" {
+		if !a.chooseDownloadDirectory() {
+			return
+		}
+		directory = a.settings.DownloadDirectory
 	}
 	level := a.settings.DownloadQuality
 	if !slices.Contains(netease.Levels, level) {
@@ -96,7 +112,7 @@ func (a *app) enqueueDownloads(tracks []netease.Track) {
 		}
 	}
 
-	options := download.Options{Directory: a.settings.DownloadDirectory, Quality: level, NameFormat: nameFormat, Sidecar: a.settings.DownloadSidecar}
+	options := download.Options{Directory: directory, Quality: level, NameFormat: nameFormat, Sidecar: a.settings.DownloadSidecar}
 
 	seen := make(map[downloadKey]bool, len(a.downloads.jobs)+len(tracks))
 	for _, j := range a.downloads.jobs {

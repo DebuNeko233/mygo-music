@@ -127,6 +127,51 @@ func TestSaveNeverOverwrites(t *testing.T) {
 	}
 }
 
+// First-time downloads create the missing Music and app directories in the
+// worker, then publish audio and lyrics together in that destination.
+func TestSaveCreatesDestinationDirectory(t *testing.T) {
+	audio, err := os.ReadFile("../player/testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ := downloadFixture(t, audio)
+	dir := filepath.Join(t.TempDir(), "Music", "Mygo Music")
+	result, err := Save(context.Background(), tr, Options{Directory: dir, Sidecar: true})
+	if err != nil || filepath.Dir(result.Path) != dir {
+		t.Fatal("download did not create its destination", result, err)
+	}
+	lrc := strings.TrimSuffix(result.Path, ".flac") + ".lrc"
+	if _, err := os.Stat(lrc); err != nil {
+		t.Fatal("sidecar did not reach the new directory", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 2 {
+		t.Fatal("download left incomplete output or staging data", entries, err)
+	}
+}
+
+// A file blocking directory creation is preserved, and the download reports
+// failure instead of falling back to another folder or publishing an output.
+func TestSaveDirectoryCreationFailure(t *testing.T) {
+	audio, err := os.ReadFile("../player/testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ := downloadFixture(t, audio)
+	blocked := filepath.Join(t.TempDir(), "Music")
+	if err := os.WriteFile(blocked, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Save(context.Background(), tr, Options{Directory: filepath.Join(blocked, "Mygo Music")})
+	if err == nil || result.Path != "" {
+		t.Fatal("directory failure reported success", result, err)
+	}
+	got, err := os.ReadFile(blocked)
+	if err != nil || string(got) != "keep" {
+		t.Fatal("directory creation replaced a file", err)
+	}
+}
+
 // Failures at permission, transfer, metadata, artwork and cancellation leave
 // no apparently completed audio or private staging data in the destination.
 func TestSaveFailuresAreNotPublished(t *testing.T) {

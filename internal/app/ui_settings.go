@@ -519,7 +519,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				s.saveSoon()
 			}
 		})
-		directory := s.DownloadDirectory
+		directory := a.downloadDirectory()
 		if directory == "" {
 			directory = "首次下载时选择"
 		}

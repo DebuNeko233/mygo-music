@@ -59,6 +59,9 @@ func Save(ctx context.Context, tr netease.Track, opts Options) (result Result, e
 		return result, fmt.Errorf("获取下载地址：%w", err)
 	}
 	result.Quality = st.Level
+	if err := os.MkdirAll(opts.Directory, 0o755); err != nil {
+		return result, fmt.Errorf("创建下载目录：%w", err)
+	}
 	stage, err := os.MkdirTemp(opts.Directory, ".mygo-download-")
 	if err != nil {
 		return result, fmt.Errorf("创建下载文件：%w", err)

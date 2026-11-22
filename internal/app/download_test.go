@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -285,7 +286,7 @@ func TestDownloadQuitWaitsForCleanup(t *testing.T) {
 }
 
 // Both catalogue and private-upload menus enqueue the selected identity and
-// leave playback alone; canceling the first directory picker creates no job.
+// leave playback alone.
 func TestSongMenusDownloadWithoutPlaying(t *testing.T) {
 	for _, cloud := range []bool{false, true} {
 		t.Run(map[bool]string{false: "catalogue", true: "cloud"}[cloud], func(t *testing.T) {
@@ -311,14 +312,64 @@ func TestSongMenusDownloadWithoutPlaying(t *testing.T) {
 			}
 		})
 	}
-	a, _ := downloadTestApp(t)
-	a.settings.DownloadDirectory = ""
-	old := openDownloadDirectory
-	defer func() { openDownloadDirectory = old }()
-	openDownloadDirectory = func(mygo.OpenDialogOptions) ([]string, error) { return nil, nil }
-	a.enqueueDownloads([]netease.Track{{ID: 1}})
-	if len(a.downloads.jobs) != 0 {
-		t.Fatal("canceled directory picker enqueued a job")
+}
+
+// Downloads without a saved directory use the listener's Music folder without
+// opening a picker; a saved custom directory still controls the output request.
+func TestDownloadsUseDefaultOrChosenDirectory(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, custom := range []bool{false, true} {
+		t.Run(map[bool]string{false: "default", true: "custom"}[custom], func(t *testing.T) {
+			a, posts := downloadTestApp(t)
+			a.settings.DownloadDirectory = ""
+			want := filepath.Join(home, "Music", "Mygo Music")
+			if custom {
+				want = t.TempDir()
+				a.settings.DownloadDirectory = want
+			}
+			old := openDownloadDirectory
+			t.Cleanup(func() { openDownloadDirectory = old })
+			openDownloadDirectory = func(mygo.OpenDialogOptions) ([]string, error) {
+				t.Error("download opened an unnecessary directory picker")
+				return nil, nil
+			}
+			called := make(chan string, 1)
+			saveDownload = func(ctx context.Context, tr netease.Track, opts download.Options) (download.Result, error) {
+				called <- opts.Directory
+				return download.Result{Path: filepath.Join(opts.Directory, "song.flac")}, nil
+			}
+			a.enqueueDownloads([]netease.Track{{ID: 71}})
+			if got := wait(t, called, "download directory"); got != want {
+				t.Fatalf("download directory = %q, want %q", got, want)
+			}
+			refreshPost(t, posts)
+		})
+	}
+}
+
+// Canceling or failing the settings picker preserves the existing download
+// directory and never creates a transfer as a side effect.
+func TestDownloadDirectoryPickerKeepsChoice(t *testing.T) {
+	for _, failure := range []error{nil, errors.New("picker unavailable")} {
+		t.Run(fmt.Sprint(failure), func(t *testing.T) {
+			a, _ := downloadTestApp(t)
+			before := a.settings.DownloadDirectory
+			old := openDownloadDirectory
+			t.Cleanup(func() { openDownloadDirectory = old })
+			openDownloadDirectory = func(mygo.OpenDialogOptions) ([]string, error) { return nil, failure }
+			tt := ui.NewTester(a.settingsView, 780, 640)
+			tt.Frame()
+			if err := tt.Click("选择目录…"); err != nil {
+				t.Fatal(err)
+			}
+			tt.Frame()
+			if a.settings.DownloadDirectory != before || len(a.downloads.jobs) != 0 || (a.downloads.err != "") != (failure != nil) {
+				t.Fatal("picker changed the saved directory or enqueued work")
+			}
+		})
 	}
 }
 
@@ -427,7 +478,6 @@ func TestDownloadSettingsFrames(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.settingsPage = "download"
-			a.settings.DownloadDirectory = "/Users/neko/Music/MyGo 下载"
 			a.downloads.jobs = []*downloadJob{{track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, status: "正在下载", received: 28, total: 100}, {track: netease.Track{Name: "没有封面的音乐"}, status: "下载完成", finished: true, result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {track: netease.Track{Name: "下载失败的歌曲"}, status: "下载失败", finished: true, err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
 			tt := ui.NewTester(a.settingsView, size.w, size.h)
 			tt.SetDark(dark)
