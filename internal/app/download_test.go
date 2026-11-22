@@ -6,6 +6,8 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -317,6 +319,95 @@ func TestSongMenusDownloadWithoutPlaying(t *testing.T) {
 	a.enqueueDownloads([]netease.Track{{ID: 1}})
 	if len(a.downloads.jobs) != 0 {
 		t.Fatal("canceled directory picker enqueued a job")
+	}
+}
+
+// Playlist and album batch actions preserve the source list, skip unsupported
+// entries and duplicates, and download both source identities without playback.
+func TestDownloadBatchMenus(t *testing.T) {
+	for _, page := range []string{"playlist", "album"} {
+		t.Run(page, func(t *testing.T) {
+			a, posts := downloadTestApp(t)
+			tracks := []netease.Track{{ID: 71}, {ID: 71}, {ID: 71, Cloud: true}, {ID: 2, LocalID: 2}, {ID: 3, ProgramID: 3}, {}, {ID: -1}, {ID: 72}}
+			before := slices.Clone(tracks)
+			called := make(chan netease.Track, len(tracks))
+			saveDownload = func(ctx context.Context, tr netease.Track, opts download.Options) (download.Result, error) {
+				called <- tr
+				return download.Result{Path: "/tmp/downloaded.flac"}, nil
+			}
+			tt := ui.NewTester(func(c *ui.Context) {
+				if page == "playlist" {
+					a.playlistHeader(c, &netease.Playlist{ID: 5, Tracks: tracks})
+				} else {
+					a.albumHeader(c, &netease.AlbumProfile{Album: netease.Album{ID: 5}, Songs: tracks})
+				}
+			}, 900, 400)
+			tt.Frame()
+			if err := tt.Click("更多"); err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.ChooseMenuItem("下载全部"); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []netease.Track{{ID: 71}, {ID: 71, Cloud: true}, {ID: 72}} {
+				got := wait(t, called, "batch download")
+				if got.ID != want.ID || got.Cloud != want.Cloud {
+					t.Fatalf("downloaded %+v, want %+v", got, want)
+				}
+				refreshPost(t, posts)
+			}
+			tt.Frame()
+			if len(a.downloads.jobs) != 3 || a.downloads.active != nil || a.pl.Current() != nil || !reflect.DeepEqual(tracks, before) {
+				t.Fatal("batch changed its source, playback or queue membership")
+			}
+		})
+	}
+}
+
+// Worker progress changes UI state only after dispatch, and late callbacks
+// cannot revive canceled jobs or start a canceled pending transfer.
+func TestDownloadProgressAndPendingCancellation(t *testing.T) {
+	a, posts := downloadTestApp(t)
+	started := make(chan func(string, int64, int64), 2)
+	release := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	saveDownload = func(ctx context.Context, tr netease.Track, opts download.Options) (download.Result, error) {
+		started <- opts.Progress
+		<-release
+		return download.Result{}, ctx.Err()
+	}
+	a.enqueueDownloads([]netease.Track{{ID: 1}, {ID: 2}})
+	progress := wait(t, started, "active transfer")
+	active, pending := a.downloads.jobs[0], a.downloads.jobs[1]
+	progress("test-stage", 20, 100)
+	if active.received != 0 {
+		t.Fatal("worker mutated UI state before dispatch")
+	}
+	refreshPost(t, posts)
+	if active.received != 20 || active.total != 100 || active.status != "test-stage" {
+		t.Fatal("dispatched progress was lost")
+	}
+	a.cancelDownload(pending)
+	a.cancelDownload(active)
+	status := active.status
+	progress("late-stage", 90, 100)
+	refreshPost(t, posts)
+	if active.status != status || active.received != 20 || !pending.finished || !pending.cancelled {
+		t.Fatal("late progress revived canceled work")
+	}
+	close(release)
+	refreshPost(t, posts)
+	status = active.status
+	progress("after-completion", 100, 100)
+	refreshPost(t, posts)
+	if active.status != status || active.received != 20 || !active.finished || !active.cancelled || a.downloads.active != nil || len(started) != 0 {
+		t.Fatal("completion restarted canceled work or accepted stale progress")
 	}
 }
 

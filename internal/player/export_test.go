@@ -61,6 +61,65 @@ func TestCopyAudioCacheAndNetwork(t *testing.T) {
 	}
 }
 
+// A valid cache for a different size or container, a partial cache, or an
+// unknown requested size must fetch the requested bytes instead of reusing it.
+func TestCopyAudioRejectsMismatchedCache(t *testing.T) {
+	audio := testAudio(t, "seek.mp3")
+	for _, mismatch := range []string{"size", "container", "partial", "unknown size"} {
+		t.Run(mismatch, func(t *testing.T) {
+			var calls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				http.ServeContent(w, r, "audio", time.Time{}, bytes.NewReader(audio))
+			}))
+			defer srv.Close()
+			st := netease.Stream{URL: srv.URL, Type: "mp3", Level: "exhigh", Size: int64(len(audio))}
+			cached := st
+			data := audio
+			switch mismatch {
+			case "size":
+				data = audio[:len(audio)/2]
+				cached.Size = int64(len(data))
+			case "container":
+				cached.Type = "flac"
+			case "partial":
+				data = audio[:len(audio)/2]
+			case "unknown size":
+				st.Size = 0
+			}
+			dir := t.TempDir()
+			cachePath := filepath.Join(dir, "12-exhigh."+cached.Type)
+			meta, err := json.Marshal(cached)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(cachePath, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "12-exhigh.json"), meta, 0600); err != nil {
+				t.Fatal(err)
+			}
+			f, err := os.CreateTemp(t.TempDir(), "export")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			c := NewCache(dir, 16<<20)
+			if err := c.CopyAudio(context.Background(), 12, &st, f, nil); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(f.Name())
+			if err != nil || !bytes.Equal(got, audio) || calls.Load() != 1 {
+				t.Fatalf("used mismatched cache: requests=%d bytes=%d err=%v", calls.Load(), len(got), err)
+			}
+			kept, err := os.ReadFile(cachePath)
+			if err != nil || !bytes.Equal(kept, data) {
+				t.Fatal("export changed cache data", err)
+			}
+		})
+	}
+}
+
 // Canceling a stalled export interrupts the existing downloader promptly and
 // returns the cancellation rather than reporting a partially copied success.
 func TestCopyAudioCancellation(t *testing.T) {

@@ -130,7 +130,7 @@ func TestSaveNeverOverwrites(t *testing.T) {
 // Failures at permission, transfer, metadata, artwork and cancellation leave
 // no apparently completed audio or private staging data in the destination.
 func TestSaveFailuresAreNotPublished(t *testing.T) {
-	for _, failure := range []string{"permission", "truncated", "html", "album", "lyrics", "cover", "invalid cover", "cancel"} {
+	for _, failure := range []string{"permission", "truncated", "html", "missing details", "wrong track", "extra tracks", "album", "missing album", "wrong album", "lyrics", "cover", "empty cover", "invalid cover", "cancel"} {
 		t.Run(failure, func(t *testing.T) {
 			audio, _ := os.ReadFile("../player/testdata/seek.mp3")
 			if failure == "html" {
@@ -154,10 +154,28 @@ func TestSaveFailuresAreNotPublished(t *testing.T) {
 				}
 			case "album":
 				albumDetail = func(context.Context, int64) (*netease.AlbumProfile, error) { return nil, sentinel }
+			case "missing details":
+				trackDetails = func(context.Context, []int64) ([]netease.Track, error) { return nil, nil }
+			case "wrong track":
+				trackDetails = func(context.Context, []int64) ([]netease.Track, error) {
+					other := tr
+					other.ID++
+					return []netease.Track{other}, nil
+				}
+			case "extra tracks":
+				trackDetails = func(context.Context, []int64) ([]netease.Track, error) { return []netease.Track{tr, tr}, nil }
+			case "missing album":
+				albumDetail = func(context.Context, int64) (*netease.AlbumProfile, error) { return nil, nil }
+			case "wrong album":
+				albumDetail = func(context.Context, int64) (*netease.AlbumProfile, error) {
+					return &netease.AlbumProfile{Album: netease.Album{ID: tr.Album.ID + 1}}, nil
+				}
 			case "lyrics":
 				lyricText = func(context.Context, int64) (string, string, string, error) { return "", "", "", sentinel }
 			case "cover":
 				coverImage = func(context.Context, string) ([]byte, error) { return nil, sentinel }
+			case "empty cover":
+				coverImage = func(context.Context, string) ([]byte, error) { return nil, nil }
 			case "invalid cover":
 				coverImage = func(context.Context, string) ([]byte, error) { return []byte("not an image"), nil }
 			case "cancel":
@@ -213,6 +231,186 @@ func TestSaveCloudPreservesPrivateTags(t *testing.T) {
 	tags, _ := taglib.ReadTags(res.Path)
 	if tags[taglib.Title][0] != "私有标题" || tags[taglib.Artist][0] != "私有歌手" || tags[taglib.Lyrics][0] != "[00:02.000]Private" {
 		t.Fatal(tags)
+	}
+	gotCover, err := taglib.ReadImage(res.Path)
+	if err != nil || !bytes.Equal(gotCover, picture.Bytes()) {
+		t.Fatal("private artwork lost", err)
+	}
+	lrc, err := os.ReadFile(strings.TrimSuffix(res.Path, filepath.Ext(res.Path)) + ".lrc")
+	if err != nil || strings.TrimSpace(string(lrc)) != "[00:02.000]Private" {
+		t.Fatal("sidecar lost private lyrics", err)
+	}
+}
+
+// Canceling while the server is still sending audio closes that request and
+// removes staging data without reaching metadata lookup or publishing files.
+func TestSaveCancellationDuringTransfer(t *testing.T) {
+	tr, _ := downloadFixture(t, nil)
+	started, stopped := make(chan struct{}), make(chan struct{})
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("partial audio"))
+		w.(http.Flusher).Flush()
+		close(started)
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+		close(stopped)
+	}))
+	t.Cleanup(srv.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	streamURL = func(context.Context, netease.Track, string) (*netease.Stream, error) {
+		return &netease.Stream{URL: srv.URL, Size: -1}, nil
+	}
+	trackDetails = func(context.Context, []int64) ([]netease.Track, error) {
+		t.Error("looked up metadata for a canceled transfer")
+		return nil, context.Canceled
+	}
+	dir := t.TempDir()
+	type outcome struct {
+		result Result
+		err    error
+	}
+	done := make(chan outcome, 1)
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		result, err := Save(ctx, tr, Options{Directory: dir, Sidecar: true})
+		done <- outcome{result, err}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		close(release)
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("export worker did not clean up")
+		}
+	})
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("transfer did not start")
+	}
+	cancel()
+	select {
+	case got := <-done:
+		if !errors.Is(got.err, context.Canceled) || got.result.Path != "" {
+			t.Fatal("cancellation reported success", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("canceled transfer did not finish")
+	}
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("canceled HTTP request remained open")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("canceled download left files", entries, err)
+	}
+}
+
+// Concurrent exports with the same name each publish a complete audio/LRC
+// pair; neither replaces the other's files or strands a staging directory.
+func TestSaveConcurrentNames(t *testing.T) {
+	audio, err := os.ReadFile("../player/testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ := downloadFixture(t, audio)
+	dir := t.TempDir()
+	ready, release := make(chan struct{}, 2), make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	trackDetails = func(context.Context, []int64) ([]netease.Track, error) {
+		ready <- struct{}{}
+		<-release
+		return []netease.Track{tr}, nil
+	}
+	opts := Options{Directory: dir, Sidecar: true}
+	type outcome struct {
+		result Result
+		err    error
+	}
+	done := make(chan outcome, 2)
+	for range 2 {
+		go func() {
+			result, err := Save(context.Background(), tr, opts)
+			done <- outcome{result, err}
+		}()
+	}
+	for range 2 {
+		select {
+		case <-ready:
+		case <-time.After(5 * time.Second):
+			t.Fatal("exports did not reach tagging")
+		}
+	}
+	close(release)
+	paths := make(map[string]bool)
+	for range 2 {
+		select {
+		case got := <-done:
+			if got.err != nil || got.result.Path == "" || paths[got.result.Path] {
+				t.Fatal("exports collided", got)
+			}
+			paths[got.result.Path] = true
+			tags, err := taglib.ReadTags(got.result.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lrc, err := os.ReadFile(strings.TrimSuffix(got.result.Path, ".flac") + ".lrc")
+			if err != nil || strings.TrimSpace(string(lrc)) != strings.Join(tags[taglib.Lyrics], "\n") {
+				t.Fatal("audio and sidecar separated", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("export did not finish")
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 4 {
+		t.Fatal("incomplete file pairs or staging data", entries, err)
+	}
+}
+
+// A song without source artwork or lyrics still saves playable audio with a
+// warning, without creating an empty sidecar or fabricating either asset.
+func TestSaveMissingAssets(t *testing.T) {
+	audio, err := os.ReadFile("../player/testdata/seek.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ := downloadFixture(t, audio)
+	tr.Cloud, tr.Album.PicURL = true, ""
+	lyricText = func(context.Context, int64) (string, string, string, error) { return "", "", "", nil }
+	coverImage = func(context.Context, string) ([]byte, error) {
+		t.Error("requested artwork without a source address")
+		return nil, nil
+	}
+	dir := t.TempDir()
+	got, err := Save(context.Background(), tr, Options{Directory: dir, Sidecar: true})
+	if err != nil || got.Path == "" || got.Warning == "" {
+		t.Fatal("missing assets prevented a warned export", got, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(got.Path) {
+		t.Fatal("empty sidecar or staging data left", entries, err)
+	}
+	tags, err := taglib.ReadTags(got.Path)
+	if err != nil || len(tags[taglib.Lyrics]) != 0 {
+		t.Fatal("invented lyrics", tags, err)
+	}
+	cover, err := taglib.ReadImage(got.Path)
+	if err != nil || len(cover) != 0 {
+		t.Fatal("invented cover", err)
 	}
 }
 

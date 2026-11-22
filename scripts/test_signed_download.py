@@ -45,7 +45,7 @@ def main():
         root = Path(temp)
         for package, tests in [
             ("download", "^TestSave"),
-            ("player", "^(TestTaggedFormatsPreservePCM|TestCopyAudioCacheAndNetwork|TestCopyAudioCancellation)$"),
+            ("player", "^(TestTaggedFormatsPreservePCM|TestCopyAudio.*)$"),
         ]:
             binary = root / (package + ".test")
             run("build-" + package, ["go", "test", "-c", "-o", str(binary), "./internal/" + package],
