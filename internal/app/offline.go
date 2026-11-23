@@ -14,6 +14,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // A snapshot belongs to the account that requested it. It is serialized on
@@ -194,7 +195,7 @@ func (a *app) failedLoads(manual bool) bool {
 	}
 	switch a.route.page {
 	case pageCloud:
-		if !a.cloud.loading() && a.cloud.failure != nil && retry(a.cloud.failure) {
+		if !a.cloud.Loading() && a.cloud.Failure != nil && retry(a.cloud.Failure) {
 			return true
 		}
 	case pageRecent:
@@ -263,8 +264,8 @@ func (a *app) retryLoads(manual bool) {
 	}
 	switch a.route.page {
 	case pageCloud:
-		if a.cloud.failure != nil && retry(a.cloud.failure) {
-			a.loadCloud(cloudNextPage)
+		if a.cloud.Failure != nil && retry(a.cloud.Failure) {
+			a.loadCloud(viewmodel.CloudNextPage)
 		}
 	case pageRecent:
 		if tab := &a.recent.tabs[a.recentTab]; tab.failure != nil && retry(tab.failure) {
@@ -446,7 +447,7 @@ func (a *app) recoveryBusy() bool {
 	}
 	switch a.route.page {
 	case pageCloud:
-		return a.cloud.loading()
+		return a.cloud.Loading()
 	case pageRecent:
 		return a.recent.readingSnapshot || a.recent.tabs[a.recentTab].loading
 	case pagePlaylist:

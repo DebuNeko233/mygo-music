@@ -11,6 +11,7 @@ import (
 	"rsc.io/qr"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // loginState is a QR code login under way.
@@ -191,7 +192,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	// What another listener played is not what this one played.
 	a.recent = recentData{}
 	a.cancelCloudLoad()
-	a.cloud = cloudViewModel{}
+	a.cloud = viewmodel.Cloud{}
 	a.homeGen++ // Invalidate pending home page requests
 	a.resetLibraryFreshness()
 	// What the listener may play, and follows, changed: load the pages

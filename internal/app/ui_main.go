@@ -139,7 +139,7 @@ func (a *app) open(r route) {
 // show shows the page of r.
 func (a *app) show(r route) {
 	if a.route.page == pageCloud && r.page != pageCloud {
-		a.cloud.locate = 0
+		a.cloud.Locate = 0
 	}
 	a.intro.open = false
 	a.route = r
@@ -171,7 +171,7 @@ func (a *app) load(r route) {
 	case pagePodcasts:
 		a.loadPodcastTab()
 	case pageCloud:
-		if !a.cloud.loading() && a.cloud.failure == nil && (!a.cloud.loaded || listDue(a.cloud.at, a.listsNow())) {
+		if !a.cloud.Loading() && a.cloud.Failure == nil && (!a.cloud.Loaded || listDue(a.cloud.At, a.listsNow())) {
 			a.refreshCloud()
 		}
 	case pageLocal:

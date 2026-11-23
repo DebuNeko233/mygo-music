@@ -1,14 +1,17 @@
 package app
 
-import "netease-music-mygo/internal/netease"
+import (
+	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
+)
 
 var cloudSongs = netease.CloudSongsContext
 
-func (a *app) cloudServices() cloudServices {
+func (a *app) cloudServices() viewmodel.CloudServices {
 	uid, generation := a.listenerID(), a.homeGen
-	return cloudServices{
-		fetch: cloudSongs,
-		post: func(update func() bool) {
+	return viewmodel.CloudServices{
+		Fetch: cloudSongs,
+		Post: func(update func() bool) {
 			a.postIfChanged(func() bool {
 				if a.homeGen != generation || a.listenerID() != uid {
 					return false
@@ -16,27 +19,27 @@ func (a *app) cloudServices() cloudServices {
 				return update()
 			})
 		},
-		now: a.listsNow,
-		appendQueue: func(tracks []netease.Track, revision uint64) uint64 {
+		Now: a.listsNow,
+		AppendQueue: func(tracks []netease.Track, revision uint64) uint64 {
 			if a.pl.AppendQueue(tracks, revision) {
 				return a.pl.QueueRevision()
 			}
 			return 0
 		},
-		changed: a.resolveCloudLocate,
+		Changed: a.resolveCloudLocate,
 	}
 }
 
-func (a *app) cancelCloudLoad() { a.cloud.stop() }
+func (a *app) cancelCloudLoad() { a.cloud.Stop() }
 
 func (a *app) refreshCloud() {
 	if !a.quitting && a.profile != nil {
-		a.cloud.refresh(a.cloudServices())
+		a.cloud.Refresh(a.cloudServices())
 	}
 }
 
-func (a *app) loadCloud(mode cloudLoadMode) {
+func (a *app) loadCloud(mode viewmodel.CloudLoadMode) {
 	if !a.quitting && a.profile != nil {
-		a.cloud.load(mode, a.cloudServices())
+		a.cloud.Load(mode, a.cloudServices())
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // A row or sidebar match chosen during loading gets the remaining cloud songs without restarting playback.
@@ -23,7 +24,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 				first[i] = cloudTrack(int64(i+1), fmt.Sprintf("First %03d", i+1))
 				later[i] = cloudTrack(int64(i+101), fmt.Sprintf("Later %03d", i+101))
 			}
-			a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: first, count: 200, offset: 100, more: true}, loaded: true}
+			a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: first, Count: 200, Offset: 100, More: true}, Loaded: true}
 			type reply struct {
 				page *netease.CloudPage
 				err  error
@@ -63,7 +64,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 				results <- reply{err: io.ErrUnexpectedEOF}
 				refreshPost(t, posts)
 				a.pl.Seek(23 * time.Second)
-				a.loadCloud(cloudNextPage)
+				a.loadCloud(viewmodel.CloudNextPage)
 				if got := wait(t, started, "retry cloud page"); got != 100 {
 					t.Fatalf("retry offset %d", got)
 				}
@@ -71,11 +72,11 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 			results <- reply{page: &netease.CloudPage{Tracks: later, Count: 200, NextOffset: 200}}
 			// Search suggestions may also post while the UI is being exercised.
 			// Wait for the cloud result, rather than assuming it is the next callback.
-			for a.cloud.loading() {
+			for a.cloud.Loading() {
 				refreshPost(t, posts)
 			}
 			tt.Frame()
-			if len(a.cloud.tracks) != 200 || a.cloud.loading() || a.cloud.more {
+			if len(a.cloud.Tracks) != 200 || a.cloud.Loading() || a.cloud.More {
 				t.Fatal("library did not complete")
 			}
 			want := 200
@@ -120,7 +121,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	oldTime := time.Unix(1000, 0)
 	now := oldTime.Add(24 * time.Hour)
 	a.listRefresh.now = func() time.Time { return now }
-	a.cloud = cloudViewModel{cloudListing: cloudListing{tracks: original, count: 3, offset: 3}, loaded: true, at: oldTime}
+	a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: original, Count: 3, Offset: 3}, Loaded: true, At: oldTime}
 	a.pl.Cue(slices.Clone(original))
 	calls := make(chan int, 4)
 	attempt := 0
@@ -137,25 +138,25 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	}
 	a.refreshCloud()
 	refreshPost(t, posts)
-	if a.cloud.pending == nil || len(a.cloud.tracks) != 3 || a.cloud.tracks[0].Name != "Old one" || a.cloud.count != 3 || a.cloud.at != oldTime {
+	if !a.cloud.Refreshing() || len(a.cloud.Tracks) != 3 || a.cloud.Tracks[0].Name != "Old one" || a.cloud.Count != 3 || a.cloud.At != oldTime {
 		t.Fatal("first refresh page replaced the published snapshot")
 	}
 	refreshPost(t, posts)
-	if a.cloud.failure == nil || len(a.trackSuggestions("Old two")) != 1 || len(a.cloud.tracks) != 3 {
+	if a.cloud.Failure == nil || len(a.trackSuggestions("Old two")) != 1 || len(a.cloud.Tracks) != 3 {
 		t.Fatal("refresh failure discarded known tracks")
 	}
 	a.load(a.route)
-	if a.cloud.loading() {
+	if a.cloud.Loading() {
 		t.Fatal("reopening after failure restarted refresh instead of retaining its retry offset")
 	}
-	a.loadCloud(cloudNextPage)
+	a.loadCloud(viewmodel.CloudNextPage)
 	refreshPost(t, posts)
 	for _, want := range []int{0, 1, 1} {
 		if got := wait(t, calls, "refresh request"); got != want {
 			t.Fatalf("offset %d, want %d", got, want)
 		}
 	}
-	if a.cloud.pending != nil || a.cloud.failure != nil || a.cloud.more || a.cloud.loading() || a.cloud.count != 2 || a.cloud.at != now || len(a.cloud.tracks) != 2 || a.cloud.tracks[0].Name != "New one" || a.cloud.tracks[1].ID != 4 {
+	if a.cloud.Refreshing() || a.cloud.Failure != nil || a.cloud.More || a.cloud.Loading() || a.cloud.Count != 2 || a.cloud.At != now || len(a.cloud.Tracks) != 2 || a.cloud.Tracks[0].Name != "New one" || a.cloud.Tracks[1].ID != 4 {
 		t.Fatalf("refresh not committed: %+v", a.cloud)
 	}
 	if len(a.trackSuggestions("Old two")) != 0 || len(a.trackSuggestions("New four")) != 1 {

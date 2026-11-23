@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // Both sides of the MVVM comparison use these same data and view entry points.
@@ -18,15 +19,15 @@ func featurePerfApp(cloud, jobs int) *app {
 	a.settingsPage = "download"
 	a.profile = &netease.Profile{UserID: 1}
 	a.route = route{page: pageCloud}
-	a.cloud.loaded = true
-	a.cloud.count = cloud
+	a.cloud.Loaded = true
+	a.cloud.Count = cloud
 	for i := range cloud {
-		a.cloud.tracks = append(a.cloud.tracks, cloudTrack(int64(i+1), fmt.Sprintf("Song %05d", i)))
+		a.cloud.Tracks = append(a.cloud.Tracks, cloudTrack(int64(i+1), fmt.Sprintf("Song %05d", i)))
 	}
 	for i := range jobs {
-		a.downloads.jobs = append(a.downloads.jobs, &downloadJob{
-			track:    netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("Download %05d", i)},
-			finished: true, result: download.Result{Path: "/tmp/song.flac", Format: "flac"},
+		a.downloads.Jobs = append(a.downloads.Jobs, &viewmodel.DownloadJob{
+			Track:    netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("Download %05d", i)},
+			Finished: true, Result: download.Result{Path: "/tmp/song.flac", Format: "flac"},
 		})
 	}
 	return a
@@ -100,32 +101,8 @@ func BenchmarkDownloadEnqueue(b *testing.B) {
 	}
 	b.ReportAllocs()
 	for b.Loop() {
-		a.downloads.jobs = a.downloads.jobs[:1]
+		a.downloads.Jobs = a.downloads.Jobs[:1]
 		a.enqueueDownloads(tracks)
-	}
-}
-
-// Re-enqueuing pending songs measures deduplication without network or worker
-// activity, including the allocations of requests that are entirely rejected.
-func BenchmarkDownloadDuplicateEnqueue(b *testing.B) {
-	for _, count := range []int{1, 1000} {
-		b.Run(fmt.Sprint(count), func(b *testing.B) {
-			opts := download.Options{Directory: "/tmp", Quality: "exhigh"}
-			m := downloadViewModel{}
-			tracks := make([]netease.Track, count)
-			for i := range tracks {
-				tracks[i].ID = int64(i + 1)
-				m.jobs = append(m.jobs, &downloadJob{track: tracks[i], options: opts})
-			}
-			// Represent an in-flight job without starting I/O in this benchmark.
-			m.active = &downloadRun{job: m.jobs[0], cancel: func() {}}
-			b.ReportAllocs()
-			for b.Loop() {
-				if n := m.enqueue(tracks, opts, downloadServices{}); n != 0 {
-					b.Fatal("duplicate requests enqueued", n)
-				}
-			}
-		})
 	}
 }
 

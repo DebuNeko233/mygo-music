@@ -105,5 +105,5 @@ jobs:
       - name: Test app concurrency under the race detector
         run: >-
           go test -v -count=1 -race
-          -run '^(TestSettingsSaver.*|TestSessionKeepsLatestSave|TestEarlyPostsAreNotLost|TestPostDispatchBelongsToApp|TestEpisodeLikeClickBeatsAnswer|TestArtReleaseUsesTheDispatcher|TestDownloadProgressAndPendingCancellation|TestDownloadsCancelOnAccountChange|TestDownloadQuitWaitsForCleanup|TestDownloadRetrySharesDedupAndClearsResult|TestCloudViewModel.*|TestDownloadViewModel.*)$'
+          -run '^(TestSettingsSaver.*|TestSessionKeepsLatestSave|TestEarlyPostsAreNotLost|TestPostDispatchBelongsToApp|TestEpisodeLikeClickBeatsAnswer|TestArtReleaseUsesTheDispatcher|TestDownloadProgressAndPendingCancellation|TestDownloadsCancelOnAccountChange|TestDownloadQuitWaitsForCleanup|TestDownloadRetrySharesDedupAndClearsResult)$'
           ./internal/app

@@ -54,7 +54,7 @@ func (a *app) searchTracks() trackSearchList {
 		}
 	case pageCloud:
 		if a.profile != nil {
-			return trackSearchList{tracks: a.cloud.tracks, revision: a.listRefresh.revision, label: "网盘", owner: a.listenerID()}
+			return trackSearchList{tracks: a.cloud.Tracks, revision: a.listRefresh.revision, label: "网盘", owner: a.listenerID()}
 		}
 	case pageLocal:
 		return trackSearchList{tracks: a.local.tracks, revision: a.local.revision, label: "本地"}

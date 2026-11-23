@@ -1,4 +1,4 @@
-package app
+package viewmodel
 
 import (
 	"context"
@@ -15,15 +15,15 @@ import (
 // A refresh publishes only its complete replacement, retaining the original
 // searchable snapshot while later pages fail and retry, without a UI instance.
 func TestCloudViewModelRefresh(t *testing.T) {
-	m := cloudViewModel{cloudListing: cloudListing{tracks: []netease.Track{{ID: 1}}, count: 1}, loaded: true}
+	m := Cloud{CloudListing: CloudListing{Tracks: []netease.Track{{ID: 1}}, Count: 1}, Loaded: true}
 	type reply struct {
 		page *netease.CloudPage
 		err  error
 	}
 	calls, replies := make(chan int, 4), make(chan reply, 4)
 	posts := make(chan func() bool, 4)
-	s := cloudServices{
-		fetch: func(ctx context.Context, _, offset int) (*netease.CloudPage, error) {
+	s := CloudServices{
+		Fetch: func(ctx context.Context, _, offset int) (*netease.CloudPage, error) {
 			calls <- offset
 			select {
 			case r := <-replies:
@@ -32,17 +32,17 @@ func TestCloudViewModelRefresh(t *testing.T) {
 				return nil, ctx.Err()
 			}
 		},
-		post: func(fn func() bool) { posts <- fn },
-		now:  func() time.Time { return time.Unix(1000, 0) },
+		Post: func(fn func() bool) { posts <- fn },
+		Now:  func() time.Time { return time.Unix(1000, 0) },
 	}
-	t.Cleanup(m.stop)
-	m.refresh(s)
+	t.Cleanup(m.Stop)
+	m.Refresh(s)
 	if got := wait(t, calls, "refresh first page"); got != 0 {
 		t.Fatal(got)
 	}
 	run := m.request
-	m.refresh(s)
-	if !m.loading() || m.request != run {
+	m.Refresh(s)
+	if !m.Loading() || m.request != run {
 		t.Fatal("refresh replaced an in-flight request")
 	}
 	replies <- reply{page: &netease.CloudPage{Tracks: []netease.Track{{ID: 2}}, Count: 2, HasMore: true, NextOffset: 1}}
@@ -52,16 +52,16 @@ func TestCloudViewModelRefresh(t *testing.T) {
 	}
 	replies <- reply{err: errors.New("temporary")}
 	wait(t, posts, "failed page")()
-	if m.tracks[0].ID != 1 || len(m.tracks) != 1 || m.pending == nil || m.failure == nil {
+	if m.Tracks[0].ID != 1 || len(m.Tracks) != 1 || m.pending == nil || m.Failure == nil {
 		t.Fatal("failed refresh replaced the published snapshot")
 	}
-	m.load(cloudNextPage, s)
+	m.Load(CloudNextPage, s)
 	if got := wait(t, calls, "retry same page"); got != 1 {
 		t.Fatal(got)
 	}
 	replies <- reply{page: &netease.CloudPage{Tracks: []netease.Track{{ID: 3}}, Count: 2, NextOffset: 2}}
 	wait(t, posts, "completed refresh")()
-	if len(m.tracks) != 2 || m.tracks[0].ID != 2 || m.tracks[1].ID != 3 || m.pending != nil || m.loading() || m.failure != nil || m.at != s.now() {
+	if len(m.Tracks) != 2 || m.Tracks[0].ID != 2 || m.Tracks[1].ID != 3 || m.pending != nil || m.Loading() || m.Failure != nil || m.At != s.Now() {
 		t.Fatal("refresh did not publish its complete replacement")
 	}
 }
@@ -69,58 +69,58 @@ func TestCloudViewModelRefresh(t *testing.T) {
 // Resetting a view model at the same address cannot let the retired request
 // overwrite a new account's request, even when the old fetch ignores cancellation.
 func TestCloudViewModelRejectsRetiredRequest(t *testing.T) {
-	var m cloudViewModel
+	var m Cloud
 	oldRelease, newRelease := make(chan struct{}), make(chan struct{})
 	closeOld, closeNew := sync.OnceFunc(func() { close(oldRelease) }), sync.OnceFunc(func() { close(newRelease) })
 	t.Cleanup(closeOld)
 	t.Cleanup(closeNew)
 	started := make(chan context.Context, 2)
 	posts := make(chan func() bool, 2)
-	s := cloudServices{
-		fetch: func(ctx context.Context, _, _ int) (*netease.CloudPage, error) {
+	s := CloudServices{
+		Fetch: func(ctx context.Context, _, _ int) (*netease.CloudPage, error) {
 			started <- ctx
 			<-oldRelease
 			return &netease.CloudPage{Tracks: []netease.Track{{ID: 1}}, Count: 1, NextOffset: 1}, nil
 		},
-		post: func(fn func() bool) { posts <- fn },
-		now:  func() time.Time { return time.Unix(1000, 0) },
+		Post: func(fn func() bool) { posts <- fn },
+		Now:  func() time.Time { return time.Unix(1000, 0) },
 	}
-	m.load(cloudNextPage, s)
+	m.Load(CloudNextPage, s)
 	old := wait(t, started, "old request")
-	m.stop()
+	m.Stop()
 	if old.Err() != context.Canceled {
 		t.Fatal("retired request was not canceled")
 	}
-	m = cloudViewModel{}
-	s.fetch = func(ctx context.Context, _, _ int) (*netease.CloudPage, error) {
+	m = Cloud{}
+	s.Fetch = func(ctx context.Context, _, _ int) (*netease.CloudPage, error) {
 		started <- ctx
 		<-newRelease
 		return &netease.CloudPage{Tracks: []netease.Track{{ID: 2}}, Count: 1, NextOffset: 1}, nil
 	}
-	m.load(cloudNextPage, s)
+	m.Load(CloudNextPage, s)
 	wait(t, started, "new request")
 	closeOld()
-	if wait(t, posts, "old completion")() || !m.loading() || len(m.tracks) != 0 {
+	if wait(t, posts, "old completion")() || !m.Loading() || len(m.Tracks) != 0 {
 		t.Fatal("retired completion changed the new request")
 	}
 	closeNew()
-	if !wait(t, posts, "new completion")() || m.loading() || len(m.tracks) != 1 || m.tracks[0].ID != 2 {
+	if !wait(t, posts, "new completion")() || m.Loading() || len(m.Tracks) != 1 || m.Tracks[0].ID != 2 {
 		t.Fatal("new request was not published")
 	}
 }
 
 type modelDownloadCall struct {
-	options download.Options
+	Options download.Options
 	reply   chan error
 }
 
-func downloadModelFixture(t *testing.T) (*downloadViewModel, downloadServices, chan modelDownloadCall, chan func() bool) {
+func downloadModelFixture(t *testing.T) (*Downloads, DownloadServices, chan modelDownloadCall, chan func() bool) {
 	t.Helper()
-	m := &downloadViewModel{}
+	m := &Downloads{}
 	calls := make(chan modelDownloadCall, 4)
 	posts := make(chan func() bool, 8)
-	s := downloadServices{
-		save: func(ctx context.Context, _ netease.Track, opts download.Options) (download.Result, error) {
+	s := DownloadServices{
+		Save: func(ctx context.Context, _ netease.Track, opts download.Options) (download.Result, error) {
 			reply := make(chan error, 1)
 			calls <- modelDownloadCall{opts, reply}
 			select {
@@ -133,10 +133,10 @@ func downloadModelFixture(t *testing.T) (*downloadViewModel, downloadServices, c
 				return download.Result{}, ctx.Err()
 			}
 		},
-		post:  func(fn func() bool) { posts <- fn },
-		cache: func() *player.Cache { return nil },
+		Post:  func(fn func() bool) { posts <- fn },
+		Cache: func() *player.Cache { return nil },
 	}
-	t.Cleanup(m.cancelAll)
+	t.Cleanup(m.CancelAll)
 	return m, s, calls, posts
 }
 
@@ -144,24 +144,24 @@ func downloadModelFixture(t *testing.T) (*downloadViewModel, downloadServices, c
 // callback; stale callbacks must not change the new attempt or request a redraw.
 func TestDownloadViewModelRetryRejectsOldProgress(t *testing.T) {
 	m, s, calls, posts := downloadModelFixture(t)
-	m.enqueue([]netease.Track{{ID: 1}}, download.Options{Directory: "/tmp", NameFormat: download.NameTitle}, s)
+	m.Enqueue([]netease.Track{{ID: 1}}, download.Options{Directory: "/tmp", NameFormat: download.NameTitle}, s)
 	first := wait(t, calls, "first attempt")
-	row := m.jobs[0]
+	row := m.Jobs[0]
 	first.reply <- errors.New("temporary")
 	wait(t, posts, "first completion")()
-	m.retry(row, s)
+	m.Retry(row, s)
 	second := wait(t, calls, "retry attempt")
-	first.options.Progress("retired", 90, 100)
-	if wait(t, posts, "old progress")() || row.received != 0 || row.finished || m.jobs[0] != row {
+	first.Options.Progress("retired", 90, 100)
+	if wait(t, posts, "old progress")() || row.Received != 0 || row.Finished || m.Jobs[0] != row {
 		t.Fatal("retired progress changed the retried row")
 	}
-	second.options.Progress("current", 20, 100)
-	if !wait(t, posts, "current progress")() || row.received != 20 || row.status != "current" {
+	second.Options.Progress("current", 20, 100)
+	if !wait(t, posts, "current progress")() || row.Received != 20 || row.Status != "current" {
 		t.Fatal("current attempt lost its progress")
 	}
 	second.reply <- nil
 	wait(t, posts, "retry completion")()
-	if !row.finished || row.err != nil || row.result.Path == "" || m.active != nil {
+	if !row.Finished || row.Err != nil || row.Result.Path == "" || m.active != nil {
 		t.Fatal("retry did not finish")
 	}
 }
@@ -172,14 +172,14 @@ func TestDownloadViewModelRequestAndCacheOwnership(t *testing.T) {
 	m, s, calls, posts := downloadModelFixture(t)
 	firstCache, secondCache := player.NewCache(t.TempDir(), 1<<20), player.NewCache(t.TempDir(), 1<<20)
 	current := firstCache
-	s.cache = func() *player.Cache { return current }
+	s.Cache = func() *player.Cache { return current }
 	opts := download.Options{Directory: "original", Quality: "lossless", Sidecar: true, NameFormat: download.NameTitle}
-	m.enqueue([]netease.Track{{ID: 1}, {ID: 2}}, opts, s)
+	m.Enqueue([]netease.Track{{ID: 1}, {ID: 2}}, opts, s)
 	first := wait(t, calls, "first cache")
-	if count := m.enqueue([]netease.Track{{ID: 1}, {ID: 2}}, opts, s); count != 0 || len(m.jobs) != 2 {
+	if count := m.Enqueue([]netease.Track{{ID: 1}, {ID: 2}}, opts, s); count != 0 || len(m.Jobs) != 2 {
 		t.Fatal("pending requests were not deduplicated")
 	}
-	if first.options.Cache != firstCache {
+	if first.Options.Cache != firstCache {
 		t.Fatal("first execution did not use its cache")
 	}
 	current = secondCache
@@ -187,12 +187,24 @@ func TestDownloadViewModelRequestAndCacheOwnership(t *testing.T) {
 	first.reply <- nil
 	wait(t, posts, "next queued job")()
 	second := wait(t, calls, "second cache")
-	if second.options.Cache != secondCache || second.options.Directory != "original" || !second.options.Sidecar || second.options.NameFormat != download.NameTitle {
+	if second.Options.Cache != secondCache || second.Options.Directory != "original" || !second.Options.Sidecar || second.Options.NameFormat != download.NameTitle {
 		t.Fatal("queued request changed or kept a retired cache")
 	}
 	second.reply <- nil
 	wait(t, posts, "second completion")()
-	if m.active != nil || len(m.jobs) != 2 || !m.jobs[1].finished {
+	if m.active != nil || len(m.Jobs) != 2 || !m.Jobs[1].Finished {
 		t.Fatal("queue did not finish")
+	}
+}
+
+func wait[T any](t *testing.T, ch <-chan T, what string) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out: " + what)
+		var zero T
+		return zero
 	}
 }

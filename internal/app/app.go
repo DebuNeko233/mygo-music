@@ -14,6 +14,7 @@ import (
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 type pageKind int
@@ -96,7 +97,7 @@ type app struct {
 	subsShown bool // whether subAlbums has loaded once
 	savingAlb map[int64]bool
 
-	cloud cloudViewModel
+	cloud viewmodel.Cloud
 
 	// What the listener played lately, on any of their devices, and what
 	// the page lists: see ui_recent.go.
@@ -224,7 +225,7 @@ type app struct {
 	quitting              bool
 
 	// Settings navigation stays in memory; only user preferences are persisted.
-	downloads         downloadViewModel
+	downloads         viewmodel.Downloads
 	downloadList      ui.ListState
 	settingsPage      string
 	settingsQuery     string

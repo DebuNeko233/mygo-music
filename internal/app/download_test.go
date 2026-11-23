@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func downloadTestApp(t *testing.T) (*app, chan func()) {
@@ -115,7 +116,7 @@ func TestDownloadSettingsNameFormat(t *testing.T) {
 	}
 	a.settings.DownloadNameFormat = download.NameTitle
 	a.enqueueDownloads([]netease.Track{{ID: 7}})
-	if len(a.downloads.jobs) != 2 || a.downloads.jobs[0].options.NameFormat != download.NameTitleArtist {
+	if len(a.downloads.Jobs) != 2 || a.downloads.Jobs[0].Options.NameFormat != download.NameTitleArtist {
 		t.Fatal("new choice changed or suppressed a different output request")
 	}
 	close(allow)
@@ -154,7 +155,7 @@ func TestDownloadQueueControls(t *testing.T) {
 	a.enqueueDownloads(tracks)
 	a.enqueueDownloads(tracks)
 	first := wait(t, calls, "first download")
-	if first.id != 1 || len(a.downloads.jobs) != 2 || len(calls) != 0 {
+	if first.id != 1 || len(a.downloads.Jobs) != 2 || len(calls) != 0 {
 		t.Fatal("queue duplicated")
 	}
 	if first.opts.Quality != a.settings.DownloadQuality {
@@ -167,14 +168,14 @@ func TestDownloadQueueControls(t *testing.T) {
 	}
 	refreshPost(t, posts)
 	second := wait(t, calls, "next download")
-	if second.id != 2 || !a.downloads.jobs[0].cancelled {
+	if second.id != 2 || !a.downloads.Jobs[0].Cancelled {
 		t.Fatal("cancel blocked queue")
 	}
 	answers <- errors.New("transient failure")
 	refreshPost(t, posts)
 	tt.Frame()
 	// Remove the canceled first job so the failure's retry is unambiguous.
-	a.downloads.jobs = a.downloads.jobs[1:]
+	a.downloads.Jobs = a.downloads.Jobs[1:]
 	tt.Frame()
 	if err := tt.Click("重试"); err != nil {
 		t.Fatal(err)
@@ -200,7 +201,7 @@ func TestDownloadQueueControls(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(a.downloads.jobs) != 0 {
+	if len(a.downloads.Jobs) != 0 {
 		t.Fatal("finished job retained")
 	}
 }
@@ -217,19 +218,19 @@ func TestDownloadRetrySharesDedupAndClearsResult(t *testing.T) {
 		return download.Result{Path: "/tmp/song.flac"}, nil
 	}
 	track := netease.Track{ID: 77}
-	failed := &downloadJob{track: track, options: download.Options{Directory: a.settings.DownloadDirectory, Quality: a.settings.DownloadQuality, NameFormat: download.NameArtistTitle}, finished: true, result: download.Result{Quality: "lossless", Format: "flac", Warning: "old warning"}}
-	a.downloads.jobs = []*downloadJob{failed}
+	failed := &viewmodel.DownloadJob{Track: track, Options: download.Options{Directory: a.settings.DownloadDirectory, Quality: a.settings.DownloadQuality, NameFormat: download.NameArtistTitle}, Finished: true, Result: download.Result{Quality: "lossless", Format: "flac", Warning: "old warning"}}
+	a.downloads.Jobs = []*viewmodel.DownloadJob{failed}
 	a.enqueueDownloads([]netease.Track{track})
 	wait(t, started, "new enqueue")
 	a.retryDownload(failed)
-	if !failed.finished {
+	if !failed.Finished {
 		t.Fatal("retry duplicated an active transfer")
 	}
 	close(release)
 	refreshPost(t, posts)
 	a.retryDownload(failed)
 	wait(t, started, "retry after other transfer finished")
-	if failed.result != (download.Result{}) || failed.cancelled || failed.finished {
+	if failed.Result != (download.Result{}) || failed.Cancelled || failed.Finished {
 		t.Fatal("retry retained a stale result")
 	}
 	refreshPost(t, posts)
@@ -249,7 +250,7 @@ func TestDownloadsCancelOnAccountChange(t *testing.T) {
 	wait(t, started, "download start")
 	a.cancelDownloads()
 	refreshPost(t, posts)
-	if a.downloads.active != nil || len(started) != 0 || !a.downloads.jobs[1].finished {
+	if a.downloads.Busy() || len(started) != 0 || !a.downloads.Jobs[1].Finished {
 		t.Fatal("private download survived account transition")
 	}
 }
@@ -275,12 +276,12 @@ func TestDownloadQuitWaitsForCleanup(t *testing.T) {
 		t.Fatal("quit did not defer")
 	}
 	a.enqueueDownloads([]netease.Track{{ID: 3}})
-	if len(a.downloads.jobs) != 2 {
+	if len(a.downloads.Jobs) != 2 {
 		t.Fatal("enqueued while quitting")
 	}
 	close(cleaned)
 	refreshPost(t, posts)
-	if quits != 1 || a.downloads.active != nil || a.deferDownloadQuit() {
+	if quits != 1 || a.downloads.Busy() || a.deferDownloadQuit() {
 		t.Fatal("cleanup did not finish quit")
 	}
 }
@@ -366,7 +367,7 @@ func TestDownloadDirectoryPickerKeepsChoice(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if a.settings.DownloadDirectory != before || len(a.downloads.jobs) != 0 || (a.downloads.err != "") != (failure != nil) {
+			if a.settings.DownloadDirectory != before || len(a.downloads.Jobs) != 0 || (a.downloads.Err != "") != (failure != nil) {
 				t.Fatal("picker changed the saved directory or enqueued work")
 			}
 		})
@@ -408,7 +409,7 @@ func TestDownloadBatchMenus(t *testing.T) {
 				refreshPost(t, posts)
 			}
 			tt.Frame()
-			if len(a.downloads.jobs) != 3 || a.downloads.active != nil || a.pl.Current() != nil || !reflect.DeepEqual(tracks, before) {
+			if len(a.downloads.Jobs) != 3 || a.downloads.Busy() || a.pl.Current() != nil || !reflect.DeepEqual(tracks, before) {
 				t.Fatal("batch changed its source, playback or queue membership")
 			}
 		})
@@ -435,29 +436,29 @@ func TestDownloadProgressAndPendingCancellation(t *testing.T) {
 	}
 	a.enqueueDownloads([]netease.Track{{ID: 1}, {ID: 2}})
 	progress := wait(t, started, "active transfer")
-	active, pending := a.downloads.jobs[0], a.downloads.jobs[1]
+	active, pending := a.downloads.Jobs[0], a.downloads.Jobs[1]
 	progress("test-stage", 20, 100)
-	if active.received != 0 {
+	if active.Received != 0 {
 		t.Fatal("worker mutated UI state before dispatch")
 	}
 	refreshPost(t, posts)
-	if active.received != 20 || active.total != 100 || active.status != "test-stage" {
+	if active.Received != 20 || active.Total != 100 || active.Status != "test-stage" {
 		t.Fatal("dispatched progress was lost")
 	}
 	a.cancelDownload(pending)
 	a.cancelDownload(active)
-	status := active.status
+	status := active.Status
 	progress("late-stage", 90, 100)
 	refreshPost(t, posts)
-	if active.status != status || active.received != 20 || !pending.finished || !pending.cancelled {
+	if active.Status != status || active.Received != 20 || !pending.Finished || !pending.Cancelled {
 		t.Fatal("late progress revived canceled work")
 	}
 	close(release)
 	refreshPost(t, posts)
-	status = active.status
+	status = active.Status
 	progress("after-completion", 100, 100)
 	refreshPost(t, posts)
-	if active.status != status || active.received != 20 || !active.finished || !active.cancelled || a.downloads.active != nil || len(started) != 0 {
+	if active.Status != status || active.Received != 20 || !active.Finished || !active.Cancelled || a.downloads.Busy() || len(started) != 0 {
 		t.Fatal("completion restarted canceled work or accepted stale progress")
 	}
 }
@@ -478,7 +479,7 @@ func TestDownloadSettingsFrames(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.settingsPage = "download"
-			a.downloads.jobs = []*downloadJob{{track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, status: "正在下载", received: 28, total: 100}, {track: netease.Track{Name: "没有封面的音乐"}, status: "下载完成", finished: true, result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {track: netease.Track{Name: "下载失败的歌曲"}, status: "下载失败", finished: true, err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
+			a.downloads.Jobs = []*viewmodel.DownloadJob{{Track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, Status: "正在下载", Received: 28, Total: 100}, {Track: netease.Track{Name: "没有封面的音乐"}, Status: "下载完成", Finished: true, Result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {Track: netease.Track{Name: "下载失败的歌曲"}, Status: "下载失败", Finished: true, Err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
 			tt := ui.NewTester(a.settingsView, size.w, size.h)
 			tt.SetDark(dark)
 			tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 78})

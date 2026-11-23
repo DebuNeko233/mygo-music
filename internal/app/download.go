@@ -11,6 +11,7 @@ import (
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 var saveDownload = download.Save
@@ -33,10 +34,10 @@ func (a *app) downloadDirectory() string {
 }
 
 func (a *app) enqueueDownloads(tracks []netease.Track) {
-	if a.quitting || a.downloads.quit {
+	if a.quitting || a.downloads.Quitting() {
 		return
 	}
-	if !slices.ContainsFunc(tracks, downloadableTrack) {
+	if !slices.ContainsFunc(tracks, viewmodel.CanDownload) {
 		return
 	}
 	directory := a.downloadDirectory()
@@ -60,34 +61,33 @@ func (a *app) enqueueDownloads(tracks []netease.Track) {
 
 	options := download.Options{Directory: directory, Quality: level, NameFormat: nameFormat, Sidecar: a.settings.DownloadSidecar}
 
-	count := a.downloads.enqueue(tracks, options, a.downloadServices())
+	count := a.downloads.Enqueue(tracks, options, a.downloadServices())
 	if count > 0 {
 		a.toast = fmt.Sprintf("已加入 %d 首下载，可在设置的下载页面查看", count)
 	}
 }
 
 // Application adapters supply the existing model services and UI dispatcher.
-func (a *app) downloadServices() downloadServices {
-	return downloadServices{
-		save: saveDownload,
-		post: func(update func() bool) {
+func (a *app) downloadServices() viewmodel.DownloadServices {
+	return viewmodel.DownloadServices{
+		Save: saveDownload,
+		Post: func(update func() bool) {
 			a.dispatch(func() {
 				if update() && a.settingsWin != nil {
 					a.settingsWin.Invalidate()
 				}
 			}, false)
 		},
-		cache: func() *player.Cache { return a.pl.Cache },
-		quit:  quitAfterDownload,
+		Cache: func() *player.Cache { return a.pl.Cache },
+		Quit:  quitAfterDownload,
 	}
 }
 
-func (a *app) hasPendingDownload(key downloadKey) bool { return a.downloads.hasPending(key) }
-func (a *app) retryDownload(j *downloadJob) {
+func (a *app) retryDownload(j *viewmodel.DownloadJob) {
 	if !a.quitting {
-		a.downloads.retry(j, a.downloadServices())
+		a.downloads.Retry(j, a.downloadServices())
 	}
 }
-func (a *app) cancelDownload(j *downloadJob) { a.downloads.cancel(j) }
-func (a *app) cancelDownloads()              { a.downloads.cancelAll() }
-func (a *app) deferDownloadQuit() bool       { return a.downloads.deferQuit() }
+func (a *app) cancelDownload(j *viewmodel.DownloadJob) { a.downloads.Cancel(j) }
+func (a *app) cancelDownloads()                        { a.downloads.CancelAll() }
+func (a *app) deferDownloadQuit() bool                 { return a.downloads.DeferQuit() }

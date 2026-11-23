@@ -7,30 +7,31 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func (a *app) resolveCloudLocate() {
 	d := &a.cloud
-	if d.locate == 0 {
+	if d.Locate == 0 {
 		return
 	}
 	current := a.pl.Current()
-	if a.route.page != pageCloud || a.nowPlaying || current == nil || current.Key() != d.locate {
-		d.locate = 0
+	if a.route.page != pageCloud || a.nowPlaying || current == nil || current.Key() != d.Locate {
+		d.Locate = 0
 		return
 	}
-	if d.failure != nil {
+	if d.Failure != nil {
 		a.toast = "定位歌曲失败，请稍后重试"
-		if errors.Is(d.failure, netease.ErrNotLoggedIn) {
+		if errors.Is(d.Failure, netease.ErrNotLoggedIn) {
 			a.toast = "登录已失效，请重新登录"
 		}
 		return
 	}
-	if at := a.currentTrackIndex(d.tracks); at >= 0 {
-		d.locate = 0
+	if at := a.currentTrackIndex(d.Tracks); at >= 0 {
+		d.Locate = 0
 		a.revealTrack(at)
-	} else if d.pending == nil && !d.more {
-		d.locate = 0
+	} else if !d.Refreshing() && !d.More {
+		d.Locate = 0
 		a.toast = "当前网盘中未找到这首歌曲"
 	}
 }
@@ -45,31 +46,31 @@ func (a *app) cloudPage(c *ui.Context) {
 		return
 	}
 	d := &a.cloud
-	if !d.loading() && d.failure == nil && (!d.loaded || d.more) {
-		a.loadCloud(cloudNextPage)
+	if !d.Loading() && d.Failure == nil && (!d.Loaded || d.More) {
+		a.loadCloud(viewmodel.CloudNextPage)
 	}
 	header := func(c *ui.Context) { a.cloudHeader(c) }
-	if !d.loaded && d.loading() {
+	if !d.Loaded && d.Loading() {
 		a.trackSkeleton(c, a.pageShimmer(c), true, header)
 		return
 	}
-	at := a.currentTrackIndex(d.tracks)
-	a.syncTrackViewport(c, trackHeaderKey{name: "音乐网盘", description: d.summary(), tracks: len(d.tracks)}, at)
+	at := a.currentTrackIndex(d.Tracks)
+	a.syncTrackViewport(c, trackHeaderKey{name: "音乐网盘", description: cloudSummary(d), tracks: len(d.Tracks)}, at)
 	var footer []func(*ui.Context)
-	if d.failure != nil || d.loaded && !d.loading() && len(d.tracks) == 0 {
+	if d.Failure != nil || d.Loaded && !d.Loading() && len(d.Tracks) == 0 {
 		footer = append(footer, func(c *ui.Context) {
 			switch {
-			case d.failure != nil:
+			case d.Failure != nil:
 				ui.Column(c).Center().Gap(12).Padding(24, 0, 24, 0).Children(func() {
 					message := "网盘加载失败，请重试"
-					if errors.Is(d.failure, netease.ErrNotLoggedIn) {
+					if errors.Is(d.Failure, netease.ErrNotLoggedIn) {
 						message = "登录已失效，请重新登录"
 					}
 					ui.Text(c, message).FontSize(13).TextColor(a.pal.muted)
-					if errors.Is(d.failure, netease.ErrNotLoggedIn) {
+					if errors.Is(d.Failure, netease.ErrNotLoggedIn) {
 						ui.Button(c.Key("cloud-login"), "重新登录").OnClick(a.openLogin)
 					} else {
-						ui.Button(c.Key("cloud-retry"), "重试加载").OnClick(func() { a.loadCloud(cloudNextPage) })
+						ui.Button(c.Key("cloud-retry"), "重试加载").OnClick(func() { a.loadCloud(viewmodel.CloudNextPage) })
 					}
 				})
 			default:
@@ -77,24 +78,24 @@ func (a *app) cloudPage(c *ui.Context) {
 			}
 		})
 	}
-	visible := a.trackRows(c, d.tracks, true, header, footer...)
+	visible := a.trackRows(c, d.Tracks, true, header, footer...)
 	if at >= 0 {
 		a.trackLocateButton(c, at, visible)
-	} else if current := a.pl.Current(); current != nil && current.Cloud && (d.more || d.pending != nil) {
+	} else if current := a.pl.Current(); current != nil && current.Cloud && (d.More || d.Refreshing()) {
 		a.locatePlayingButton(c, false, func() {
 			if current := a.pl.Current(); current != nil && current.Cloud {
-				d.locate = current.Key()
-				a.loadCloud(cloudNextPage)
+				d.Locate = current.Key()
+				a.loadCloud(viewmodel.CloudNextPage)
 			}
 		})
 	}
 }
 
-func (d *cloudViewModel) summary() string {
-	if !d.loaded {
+func cloudSummary(d *viewmodel.Cloud) string {
+	if !d.Loaded {
 		return ""
 	}
-	return fmt.Sprintf("%d 首歌曲", d.count)
+	return fmt.Sprintf("%d 首歌曲", d.Count)
 }
 
 func (a *app) cloudHeader(c *ui.Context) {
@@ -102,7 +103,7 @@ func (a *app) cloudHeader(c *ui.Context) {
 	ui.Row(c).Padding(0, 12, 14, 12).Gap(12).AlignItems(ui.Center).Children(func() {
 		ui.Column(c).Grow(1).Gap(4).Children(func() {
 			ui.Text(c, "音乐网盘").FontSize(30).FontWeight(700).LetterSpacing(-0.6)
-			if info := a.cloud.summary(); info != "" {
+			if info := cloudSummary(&a.cloud); info != "" {
 				ui.Text(c, info).FontSize(12).TextColor(p.muted)
 			}
 		})
