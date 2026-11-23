@@ -71,11 +71,11 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 			results <- reply{page: &netease.CloudPage{Tracks: later, Count: 200, NextOffset: 200}}
 			// Search suggestions may also post while the UI is being exercised.
 			// Wait for the cloud result, rather than assuming it is the next callback.
-			for a.cloud.loading {
+			for a.cloud.loading() {
 				refreshPost(t, posts)
 			}
 			tt.Frame()
-			if len(a.cloud.tracks) != 200 || a.cloud.loading || a.cloud.more {
+			if len(a.cloud.tracks) != 200 || a.cloud.loading() || a.cloud.more {
 				t.Fatal("library did not complete")
 			}
 			want := 200
@@ -145,7 +145,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 		t.Fatal("refresh failure discarded known tracks")
 	}
 	a.load(a.route)
-	if a.cloud.loading {
+	if a.cloud.loading() {
 		t.Fatal("reopening after failure restarted refresh instead of retaining its retry offset")
 	}
 	a.loadCloud(cloudNextPage)
@@ -155,7 +155,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 			t.Fatalf("offset %d, want %d", got, want)
 		}
 	}
-	if a.cloud.pending != nil || a.cloud.failure != nil || a.cloud.more || a.cloud.loading || a.cloud.count != 2 || a.cloud.at != now || len(a.cloud.tracks) != 2 || a.cloud.tracks[0].Name != "New one" || a.cloud.tracks[1].ID != 4 {
+	if a.cloud.pending != nil || a.cloud.failure != nil || a.cloud.more || a.cloud.loading() || a.cloud.count != 2 || a.cloud.at != now || len(a.cloud.tracks) != 2 || a.cloud.tracks[0].Name != "New one" || a.cloud.tracks[1].ID != 4 {
 		t.Fatalf("refresh not committed: %+v", a.cloud)
 	}
 	if len(a.trackSuggestions("Old two")) != 0 || len(a.trackSuggestions("New four")) != 1 {

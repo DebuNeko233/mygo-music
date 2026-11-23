@@ -45,18 +45,18 @@ func (a *app) cloudPage(c *ui.Context) {
 		return
 	}
 	d := &a.cloud
-	if !d.loading && d.failure == nil && (!d.loaded || d.more) {
+	if !d.loading() && d.failure == nil && (!d.loaded || d.more) {
 		a.loadCloud(cloudNextPage)
 	}
 	header := func(c *ui.Context) { a.cloudHeader(c) }
-	if !d.loaded && d.loading {
+	if !d.loaded && d.loading() {
 		a.trackSkeleton(c, a.pageShimmer(c), true, header)
 		return
 	}
 	at := a.currentTrackIndex(d.tracks)
 	a.syncTrackViewport(c, trackHeaderKey{name: "音乐网盘", description: d.summary(), tracks: len(d.tracks)}, at)
 	var footer []func(*ui.Context)
-	if d.failure != nil || d.loaded && !d.loading && len(d.tracks) == 0 {
+	if d.failure != nil || d.loaded && !d.loading() && len(d.tracks) == 0 {
 		footer = append(footer, func(c *ui.Context) {
 			switch {
 			case d.failure != nil:

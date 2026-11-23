@@ -143,7 +143,7 @@ func TestCloudRejectsPreviousAccount(t *testing.T) {
 	a.cloud = cloudViewModel{}
 	close(release)
 	refreshPost(t, posts)
-	if a.cloud.loaded || len(a.cloud.tracks) != 0 || a.cloud.loading {
+	if a.cloud.loaded || len(a.cloud.tracks) != 0 || a.cloud.loading() {
 		t.Fatal("old account leaked into new library")
 	}
 }
@@ -205,7 +205,10 @@ func TestCloudFrames(t *testing.T) {
 	} {
 		a.query = ""
 		a.dismissSuggestions()
-		a.cloud.loading = variant.loading
+		a.cloud.request = nil
+		if variant.loading {
+			a.cloud.request = &cloudRequest{cancel: func() {}}
+		}
 		a.cloud.more = variant.loading
 		if variant.loading {
 			a.cloud.count = 203
@@ -288,7 +291,7 @@ func TestCloudLoadAllRetriesAndFindsLaterSongs(t *testing.T) {
 	results <- reply{err: netease.ErrOffline}
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.loading || a.cloud.offset != 2 {
+	if a.cloud.loading() || a.cloud.offset != 2 {
 		t.Fatalf("failed scan state: %+v", a.cloud)
 	}
 	if err := tt.Click("重试加载"); err != nil {
@@ -339,12 +342,12 @@ func TestCloudCancellationRejectsLatePage(t *testing.T) {
 	wait(t, started, "resumed cloud request")
 	releaseOld()
 	refreshPost(t, posts)
-	if !a.cloud.loading || len(a.cloud.tracks) != 0 {
+	if !a.cloud.loading() || len(a.cloud.tracks) != 0 {
 		t.Fatal("stopped page overwrote the newer request")
 	}
 	releaseNew()
 	refreshPost(t, posts)
-	if a.cloud.loading || len(a.cloud.tracks) != 1 || a.cloud.tracks[0].ID != 2 {
+	if a.cloud.loading() || len(a.cloud.tracks) != 1 || a.cloud.tracks[0].ID != 2 {
 		t.Fatalf("resume result %+v", a.cloud)
 	}
 }
@@ -360,7 +363,7 @@ func TestCloudScanRejectsNonAdvancingPage(t *testing.T) {
 	}
 	a.loadCloud(cloudNextPage)
 	refreshPost(t, posts)
-	if a.cloud.failure == nil || a.cloud.loading || !a.cloud.more || calls.Load() != 1 || len(a.cloud.tracks) != 1 {
+	if a.cloud.failure == nil || a.cloud.loading() || !a.cloud.more || calls.Load() != 1 || len(a.cloud.tracks) != 1 {
 		t.Fatalf("non-advancing page %+v", a.cloud)
 	}
 }
@@ -479,7 +482,7 @@ func TestCloudSidebarSearchLoadsEntireLibrary(t *testing.T) {
 	if got := wait(t, calls, "search all cloud pages"); got != 1 {
 		t.Fatalf("search offset %d", got)
 	}
-	for a.cloud.loading {
+	for a.cloud.loading() {
 		refreshPost(t, posts)
 	}
 	tt.Frame()
@@ -553,7 +556,7 @@ func TestCloudRefreshesWhenReopenedAfterFreshnessInterval(t *testing.T) {
 		return &netease.CloudPage{Tracks: []netease.Track{cloudTrack(2, "新歌曲")}, Count: 1, NextOffset: 1}, nil
 	}
 	a.load(a.route)
-	if a.cloud.loading {
+	if a.cloud.loading() {
 		t.Fatal("reopening a fresh library repeated its request")
 	}
 	now = now.Add(listsFresh + time.Second)
@@ -562,7 +565,7 @@ func TestCloudRefreshesWhenReopenedAfterFreshnessInterval(t *testing.T) {
 		t.Fatalf("refresh offset %d", got)
 	}
 	refreshPost(t, posts)
-	if a.cloud.loading || a.cloud.tracks[0].ID != 2 || a.cloud.at != now {
+	if a.cloud.loading() || a.cloud.tracks[0].ID != 2 || a.cloud.at != now {
 		t.Fatal("automatic refresh did not replace the old library")
 	}
 }
@@ -639,7 +642,7 @@ func TestCloudAutomaticallyLoadsPagesAndRetries(t *testing.T) {
 	results <- reply{page: &netease.CloudPage{Tracks: next, Count: 202, NextOffset: 200, HasMore: true}}
 	refreshPost(t, posts)
 	tt.Frame()
-	if len(a.cloud.tracks) != 200 || !a.cloud.loading || a.pageScroll.Y != 0 {
+	if len(a.cloud.tracks) != 200 || !a.cloud.loading() || a.pageScroll.Y != 0 {
 		t.Fatal("background loading failed to continue or moved the list")
 	}
 	if a.pl.Current().ID != 999 || len(a.pl.Queue()) != 1 {
@@ -652,7 +655,7 @@ func TestCloudAutomaticallyLoadsPagesAndRetries(t *testing.T) {
 	refreshPost(t, posts)
 	tt.Frame()
 	tt.Frame()
-	if a.cloud.loading || len(calls) != 0 || len(a.cloud.tracks) != 200 {
+	if a.cloud.loading() || len(calls) != 0 || len(a.cloud.tracks) != 200 {
 		t.Fatal("failed pagination looped or discarded loaded songs")
 	}
 	tt.Scroll(750, 400, 0, 100000)
@@ -669,7 +672,7 @@ func TestCloudAutomaticallyLoadsPagesAndRetries(t *testing.T) {
 	tt.Frame()
 	tt.Scroll(750, 400, 0, 100000)
 	tt.Frame()
-	if a.cloud.more || a.cloud.loading || len(calls) != 0 || len(a.cloud.tracks) != 202 {
+	if a.cloud.more || a.cloud.loading() || len(calls) != 0 || len(a.cloud.tracks) != 202 {
 		t.Fatal("end-of-list continued loading or lost songs")
 	}
 }
@@ -757,7 +760,7 @@ func TestCloudLocateRevealsBeforeLoadingCompletes(t *testing.T) {
 	refreshPost(t, posts)
 	tt.Frame()
 	locatedRow(t, tt, "分页定位歌曲 250", 800)
-	if a.cloud.locate != 0 || !a.cloud.loading || len(a.cloud.tracks) != 300 || !a.cloud.more {
+	if a.cloud.locate != 0 || !a.cloud.loading() || len(a.cloud.tracks) != 300 || !a.cloud.more {
 		t.Fatal("locator did not reveal its target while the library kept loading")
 	}
 	if got := wait(t, calls, "remaining cloud page"); got != 300 {
@@ -767,7 +770,7 @@ func TestCloudLocateRevealsBeforeLoadingCompletes(t *testing.T) {
 	refreshPost(t, posts)
 	tt.Frame()
 	locatedRow(t, tt, "分页定位歌曲 250", 800)
-	if a.cloud.loading || a.cloud.more || len(a.cloud.tracks) != 400 {
+	if a.cloud.loading() || a.cloud.more || len(a.cloud.tracks) != 400 {
 		t.Fatal("cloud library did not finish after locating the target")
 	}
 	if a.pl.Current().ID != 250 || !a.pl.Playing() || a.pl.Position() != 37*time.Second || len(a.pl.Queue()) != 2 {
@@ -804,7 +807,7 @@ func TestCloudLocateDiscardsPreviousSongTarget(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.locate != 0 || a.cloud.loading || len(calls) != 0 || a.pageScroll.Y != 0 || a.pl.Current().ID != 999 {
+	if a.cloud.locate != 0 || a.cloud.loading() || len(calls) != 0 || a.pageScroll.Y != 0 || a.pl.Current().ID != 999 {
 		t.Fatal("stale locate continued or moved the new song")
 	}
 }
@@ -843,7 +846,7 @@ func TestCloudLocateDoesNotScrollAnotherPage(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.locate != 0 || a.cloud.loading || a.pageScroll.Y != 0 || a.route != (route{page: pagePlaylist, id: 7}) {
+	if a.cloud.locate != 0 || a.cloud.loading() || a.pageScroll.Y != 0 || a.route != (route{page: pagePlaylist, id: 7}) {
 		t.Fatal("old cloud locate affected the new page")
 	}
 }
@@ -880,7 +883,7 @@ func TestCloudLocateStaysCancelledAfterReturning(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.locate != 0 || a.cloud.loading || a.pageScroll.Y != 0 || a.route.page != pageCloud {
+	if a.cloud.locate != 0 || a.cloud.loading() || a.pageScroll.Y != 0 || a.route.page != pageCloud {
 		t.Fatal("returning revived the old locate action")
 	}
 }

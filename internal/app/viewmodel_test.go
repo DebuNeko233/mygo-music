@@ -40,6 +40,11 @@ func TestCloudViewModelRefresh(t *testing.T) {
 	if got := wait(t, calls, "refresh first page"); got != 0 {
 		t.Fatal(got)
 	}
+	run := m.request
+	m.refresh(s)
+	if !m.loading() || m.request != run {
+		t.Fatal("refresh replaced an in-flight request")
+	}
 	replies <- reply{page: &netease.CloudPage{Tracks: []netease.Track{{ID: 2}}, Count: 2, HasMore: true, NextOffset: 1}}
 	wait(t, posts, "first page")()
 	if got := wait(t, calls, "refresh next page"); got != 1 {
@@ -56,7 +61,7 @@ func TestCloudViewModelRefresh(t *testing.T) {
 	}
 	replies <- reply{page: &netease.CloudPage{Tracks: []netease.Track{{ID: 3}}, Count: 2, NextOffset: 2}}
 	wait(t, posts, "completed refresh")()
-	if len(m.tracks) != 2 || m.tracks[0].ID != 2 || m.tracks[1].ID != 3 || m.pending != nil || m.loading || m.failure != nil || m.at != s.now() {
+	if len(m.tracks) != 2 || m.tracks[0].ID != 2 || m.tracks[1].ID != 3 || m.pending != nil || m.loading() || m.failure != nil || m.at != s.now() {
 		t.Fatal("refresh did not publish its complete replacement")
 	}
 }
@@ -95,11 +100,11 @@ func TestCloudViewModelRejectsRetiredRequest(t *testing.T) {
 	m.load(cloudNextPage, s)
 	wait(t, started, "new request")
 	closeOld()
-	if wait(t, posts, "old completion")() || !m.loading || len(m.tracks) != 0 {
+	if wait(t, posts, "old completion")() || !m.loading() || len(m.tracks) != 0 {
 		t.Fatal("retired completion changed the new request")
 	}
 	closeNew()
-	if !wait(t, posts, "new completion")() || m.loading || len(m.tracks) != 1 || m.tracks[0].ID != 2 {
+	if !wait(t, posts, "new completion")() || m.loading() || len(m.tracks) != 1 || m.tracks[0].ID != 2 {
 		t.Fatal("new request was not published")
 	}
 }
@@ -171,6 +176,9 @@ func TestDownloadViewModelRequestAndCacheOwnership(t *testing.T) {
 	opts := download.Options{Directory: "original", Quality: "lossless", Sidecar: true, NameFormat: download.NameTitle}
 	m.enqueue([]netease.Track{{ID: 1}, {ID: 2}}, opts, s)
 	first := wait(t, calls, "first cache")
+	if count := m.enqueue([]netease.Track{{ID: 1}, {ID: 2}}, opts, s); count != 0 || len(m.jobs) != 2 {
+		t.Fatal("pending requests were not deduplicated")
+	}
 	if first.options.Cache != firstCache {
 		t.Fatal("first execution did not use its cache")
 	}

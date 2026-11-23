@@ -27,9 +27,11 @@ type downloadKey struct {
 	sidecar                        bool
 }
 
-func (j *downloadJob) key() downloadKey {
-	return downloadKey{j.track.ID, j.track.Cloud, j.options.Directory, j.options.Quality, j.options.NameFormat, j.options.Sidecar}
+func downloadRequestKey(track netease.Track, options download.Options) downloadKey {
+	return downloadKey{track.ID, track.Cloud, options.Directory, options.Quality, options.NameFormat, options.Sidecar}
 }
+
+func (j *downloadJob) key() downloadKey { return downloadRequestKey(j.track, j.options) }
 
 // A row keeps its identity across retries. An execution never does: callbacks
 // must match this attempt, rather than merely the row they originally targeted.
@@ -72,13 +74,12 @@ func (m *downloadViewModel) enqueue(tracks []netease.Track, options download.Opt
 		if !downloadableTrack(tr) {
 			continue
 		}
-		job := &downloadJob{track: tr, status: "等待下载", options: options}
-		key := job.key()
+		key := downloadRequestKey(tr, options)
 		if seen[key] {
 			continue
 		}
 		seen[key] = true
-		m.jobs = append(m.jobs, job)
+		m.jobs = append(m.jobs, &downloadJob{track: tr, status: "等待下载", options: options})
 		count++
 	}
 	m.startNext(s)

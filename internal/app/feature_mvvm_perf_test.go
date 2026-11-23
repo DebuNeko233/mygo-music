@@ -105,6 +105,30 @@ func BenchmarkDownloadEnqueue(b *testing.B) {
 	}
 }
 
+// Re-enqueuing pending songs measures deduplication without network or worker
+// activity, including the allocations of requests that are entirely rejected.
+func BenchmarkDownloadDuplicateEnqueue(b *testing.B) {
+	for _, count := range []int{1, 1000} {
+		b.Run(fmt.Sprint(count), func(b *testing.B) {
+			opts := download.Options{Directory: "/tmp", Quality: "exhigh"}
+			m := downloadViewModel{}
+			tracks := make([]netease.Track, count)
+			for i := range tracks {
+				tracks[i].ID = int64(i + 1)
+				m.jobs = append(m.jobs, &downloadJob{track: tracks[i], options: opts})
+			}
+			// Represent an in-flight job without starting I/O in this benchmark.
+			m.active = &downloadRun{job: m.jobs[0], cancel: func() {}}
+			b.ReportAllocs()
+			for b.Loop() {
+				if n := m.enqueue(tracks, opts, downloadServices{}); n != 0 {
+					b.Fatal("duplicate requests enqueued", n)
+				}
+			}
+		})
+	}
+}
+
 // Loaded cloud and download views remain asleep when no data or input changes.
 func TestFeatureViewsRestWithoutPolling(t *testing.T) {
 	for _, cloud := range []bool{false, true} {

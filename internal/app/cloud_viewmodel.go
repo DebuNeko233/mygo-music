@@ -29,17 +29,19 @@ type cloudListing struct {
 // results run on its owning thread; only fetching runs in the background.
 type cloudViewModel struct {
 	cloudListing
-	loaded, loading bool
-	failure         error
-	mode            cloudLoadMode
-	pending         *cloudListing
-	queue           uint64
-	request         *cloudRequest
-	at              time.Time
-	locate          int64
+	loaded  bool
+	failure error
+	mode    cloudLoadMode
+	pending *cloudListing
+	queue   uint64
+	request *cloudRequest
+	at      time.Time
+	locate  int64
 }
 
 type cloudRequest struct{ cancel context.CancelFunc }
+
+func (m *cloudViewModel) loading() bool { return m.request != nil }
 
 // The composition root supplies I/O, publication and the existing player.
 // These functions carry no window or UI context into the view model.
@@ -56,14 +58,12 @@ func (m *cloudViewModel) stop() {
 		m.request.cancel()
 		m.request = nil
 	}
-	m.locate, m.loading = 0, false
+	m.locate = 0
 	m.pending, m.queue = nil, 0
 }
 
 func (m *cloudViewModel) refresh(s cloudServices) {
-	if !m.loading {
-		m.load(cloudRefresh, s)
-	}
+	m.load(cloudRefresh, s)
 }
 
 // Refresh keeps the old listing visible until the complete replacement arrives.
@@ -72,7 +72,7 @@ func (m *cloudViewModel) load(mode cloudLoadMode, s cloudServices) {
 	if mode == cloudNextPage && m.failure != nil {
 		mode = m.mode
 	}
-	if m.loading {
+	if m.loading() {
 		return
 	}
 	listing := &m.cloudListing
@@ -89,7 +89,7 @@ func (m *cloudViewModel) load(mode cloudLoadMode, s cloudServices) {
 			m.pending = &cloudListing{}
 		}
 	}
-	m.loading, m.failure, m.mode = true, nil, mode
+	m.failure, m.mode = nil, mode
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &cloudRequest{cancel: cancel}
 	m.request = run
@@ -113,7 +113,8 @@ func (m *cloudViewModel) load(mode cloudLoadMode, s cloudServices) {
 }
 
 func (m *cloudViewModel) finishPage(page *netease.CloudPage, err error, offset int, s cloudServices) {
-	m.loading, m.failure, m.request = false, err, nil
+	m.failure, m.request = err, nil
+	more := false
 	if err == nil {
 		listing := &m.cloudListing
 		if m.pending != nil {
@@ -122,6 +123,7 @@ func (m *cloudViewModel) finishPage(page *netease.CloudPage, err error, offset i
 		before := len(listing.tracks)
 		listing.mergePage(page.Tracks, offset == 0)
 		listing.count, listing.offset, listing.more = page.Count, page.NextOffset, page.HasMore && page.NextOffset > offset
+		more = listing.more
 		if m.pending == nil {
 			m.loaded = true
 			if m.queue != 0 {
@@ -137,14 +139,8 @@ func (m *cloudViewModel) finishPage(page *netease.CloudPage, err error, offset i
 	if s.changed != nil {
 		s.changed()
 	}
-	if err == nil {
-		listing := &m.cloudListing
-		if m.pending != nil {
-			listing = m.pending
-		}
-		if listing.more {
-			m.load(cloudNextPage, s)
-		}
+	if more {
+		m.load(cloudNextPage, s)
 	}
 }
 
