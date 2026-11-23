@@ -2,11 +2,12 @@ package app
 
 import (
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
 )
 
-func trackMatches(tr *netease.Track, terms []string) bool { return viewmodel.TrackMatches(tr, terms) }
-func trackIndex(tracks []netease.Track, key int64) int    { return viewmodel.TrackIndex(tracks, key) }
+func trackMatches(tr *netease.Track, terms []string) bool { return searchvm.TrackMatches(tr, terms) }
+
+func trackIndex(tracks []netease.Track, key int64) int { return searchvm.TrackIndex(tracks, key) }
 
 // Keep a queue started from an incomplete cloud listing attached to that load.
 // Other sources still use the player's normal snapshot queue.

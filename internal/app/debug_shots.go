@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 // With NM_SHOTS set to a directory, the app walks through its views and
@@ -196,7 +196,7 @@ func init() {
 				shot("a-loading", a.win)
 				time.Sleep(4 * time.Second)
 				shot("a-artist", a.win)
-				step(0, func() { a.artists.Tab = viewmodel.ArtistLatest; a.loadLatest(a.nav.Current.ID) })
+				step(0, func() { a.artists.Tab = artistvm.ArtistLatest; a.loadLatest(a.nav.Current.ID) })
 				time.Sleep(3 * time.Second)
 				shot("a-latest", a.win)
 				mygo.RunOnMain(mygo.App.Quit)

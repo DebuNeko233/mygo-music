@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/desktop/components"
 )
 
 const coverFadeDuration = 180 * time.Millisecond
@@ -45,24 +47,14 @@ func (state *coverFadeState) draw(c *ui.Context, requested *artwork, hasCover bo
 		if old := bitmap(state.previous); old != nil {
 			// The incoming image covers the old one progressively, so
 			// the background never shows through between two covers.
-			artImage(c, old, radius, 1)
+			components.ArtImage(c, old, radius, 1)
 		} else {
-			coverPlaceholder(c, size, radius, 1, bg, fg)
+			components.CoverPlaceholder(c, size, radius, 1, bg, fg)
 		}
 	}
 	if current := bitmap(state.current); current != nil {
-		artImage(c, current, radius, in)
+		components.ArtImage(c, current, radius, in)
 	} else if state.previous != nil {
-		coverPlaceholder(c, size, radius, in, bg, fg)
+		components.CoverPlaceholder(c, size, radius, in, bg, fg)
 	}
-}
-
-func coverPlaceholder(c *ui.Context, size, radius, opacity float32, bg, fg ui.Color) {
-	if opacity <= 0 {
-		return
-	}
-	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(radius).
-		Background(bg).Center().Opacity(opacity).Children(func() {
-		ui.Icon(c, iconNote).Size(size*0.3, size*0.3).TextColor(fg)
-	})
 }

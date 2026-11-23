@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/shader"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -173,7 +174,7 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 					if bitmap(cs.previous) == nil {
 						card.Background(white.Alpha(0.08))
 					}
-					card.Children(func() { artImage(c, bitmap(cs.previous), 16, 1) })
+					card.Children(func() { components.ArtImage(c, bitmap(cs.previous), 16, 1) })
 				})
 			})
 		}
@@ -332,10 +333,10 @@ func (a *app) npCoverCard(c *ui.Context, tr *netease.Track, art *artwork, size f
 			box.RotateX(rx).RotateY(ry).Perspective(900)
 		}
 		box.AnimatePose(ui.Pose{Scale: scale}, coverBreath)
-		in := artIn(box, bitmap(art))
+		in := components.ArtIn(box, bitmap(art))
 		box.Children(func() {
-			coverPlaceholder(c, size, 16, 1-in, white.Alpha(0.08), white.Alpha(0.35))
-			artImage(c, bitmap(art), 16, in)
+			components.CoverPlaceholder(c, size, 16, 1-in, white.Alpha(0.08), white.Alpha(0.35))
+			components.ArtImage(c, bitmap(art), 16, in)
 			if shine > 0.01 {
 				ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 					glareShader().Draw(p, r, shader.Options{Radius: 16, Uniforms: map[string]any{

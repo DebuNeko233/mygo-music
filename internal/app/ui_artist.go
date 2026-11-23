@@ -7,8 +7,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 // artistLinks shows a track's artists as its credits read, each a link to
@@ -93,7 +94,7 @@ func (a *app) artistPage(c *ui.Context) {
 	}
 	header := func(c *ui.Context) { a.artistHeader(c, d) }
 	switch a.artists.Tab {
-	case viewmodel.ArtistAlbums:
+	case artistvm.ArtistAlbums:
 		a.scrollPage(c, func() {
 			header(c)
 			a.albumGrid(c, d.Albums)
@@ -103,7 +104,7 @@ func (a *app) artistPage(c *ui.Context) {
 			}
 		})
 		return
-	case viewmodel.ArtistEvents:
+	case artistvm.ArtistEvents:
 		a.scrollPage(c, func() {
 			header(c)
 			a.artistEvents(c, d)
@@ -111,7 +112,7 @@ func (a *app) artistPage(c *ui.Context) {
 		return
 	}
 	songs := d.Profile.Songs
-	if a.artists.Tab == viewmodel.ArtistLatest {
+	if a.artists.Tab == artistvm.ArtistLatest {
 		switch {
 		case d.Latest != nil:
 			songs = d.Latest
@@ -123,8 +124,8 @@ func (a *app) artistPage(c *ui.Context) {
 			header = func(c *ui.Context) {
 				a.artistHeader(c, d)
 				ui.Column(c).Padding(40, 0).Gap(12).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, d.LatestError).TextColor(a.pal.muted).FontSize(13)
-					if iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载歌曲").Tooltip("重新加载歌曲").Clicked() {
+					ui.Text(c, d.LatestError).TextColor(a.pal.Muted).FontSize(13)
+					if components.IconButton(c.Key("retry"), components.IconReload, 18, a.pal.Muted, "重新加载歌曲").Tooltip("重新加载歌曲").Clicked() {
 						a.loadLatest(d.Profile.ID)
 					}
 				})
@@ -147,18 +148,18 @@ func (a *app) scrollPage(c *ui.Context, content func()) {
 
 // empty says a list has nothing in it.
 func (a *app) empty(c *ui.Context, msg string) {
-	ui.Text(c, msg).FontSize(13).TextColor(a.pal.muted).Padding(40, 0).AlignSelf(ui.Center)
+	ui.Text(c, msg).FontSize(13).TextColor(a.pal.Muted).Padding(40, 0).AlignSelf(ui.Center)
 }
 
 // artistPhotoSize is the width of an artist's round photo on their page.
 const artistPhotoSize = 212
 
-func (a *app) artistHeader(c *ui.Context, d *viewmodel.ArtistPage) {
+func (a *app) artistHeader(c *ui.Context, d *artistvm.ArtistPage) {
 	p := a.pal
 	ar := d.Profile
 	// What the buttons play: the songs listed, or else the most popular.
 	songs := ar.Songs
-	if a.artists.Tab == viewmodel.ArtistLatest && d.Latest != nil {
+	if a.artists.Tab == artistvm.ArtistLatest && d.Latest != nil {
 		songs = d.Latest
 	}
 	ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
@@ -166,11 +167,11 @@ func (a *app) artistHeader(c *ui.Context, d *viewmodel.ArtistPage) {
 		if photo == "" {
 			photo = ar.PicURL
 		}
-		ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.CardShade).Children(func() {
 			a.coverFill(c, photo, 600, artistPhotoSize/2)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
-			ui.Text(c, "歌手").FontSize(12).FontWeight(600).TextColor(p.accent)
+			ui.Text(c, "歌手").FontSize(12).FontWeight(600).TextColor(p.Accent)
 			ui.Text(c, ar.Name).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
 			var meta []string
 			if aka := distinct(append([]string{ar.Trans}, ar.Alias...)); len(aka) > 0 {
@@ -182,26 +183,26 @@ func (a *app) artistHeader(c *ui.Context, d *viewmodel.ArtistPage) {
 			if ar.AlbumSize > 0 {
 				meta = append(meta, fmt.Sprintf("%d 张专辑", ar.AlbumSize))
 			}
-			ui.Text(c, strings.Join(meta, " · ")).FontSize(13).TextColor(p.muted)
+			ui.Text(c, strings.Join(meta, " · ")).FontSize(13).TextColor(p.Muted)
 			a.headerDescription(c, ar.Name+" · 简介", ar.BriefDesc, artistPhotoSize)
 			ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
-				if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
+				if components.PillButton(c.Key("play"), components.IconPlay, "播放", p.Accent, p.OnAccent).Clicked() {
 					if a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
 					a.pl.PlayQueueFrom(songs, firstPlayable(songs), a.playSource())
 				}
-				if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
+				if components.PillButton(c.Key("shuffle"), components.IconShuffle, "随机播放", p.Hover.Over(p.Background), p.Text).Clicked() {
 					if !a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
 					a.pl.PlayQueueFrom(songs, firstPlayable(songs), a.playSource())
 				}
-				icon, label := iconPlus, "关注"
+				icon, label := components.IconPlus, "关注"
 				if ar.Followed {
-					icon, label = iconCheck, "已关注"
+					icon, label = components.IconCheck, "已关注"
 				}
-				if pillButton(c.Key("follow"), icon, label, p.hover.Over(p.bg), p.text).Clicked() {
+				if components.PillButton(c.Key("follow"), icon, label, p.Hover.Over(p.Background), p.Text).Clicked() {
 					a.toggleFollow(ar.ID)
 				}
 			})
@@ -210,7 +211,7 @@ func (a *app) artistHeader(c *ui.Context, d *viewmodel.ArtistPage) {
 	ui.Row(c).AlignItems(ui.Center).Margin(34, 0, 14, 0).Children(func() {
 		ui.Text(c, artistTabTitles[a.artists.Tab]).FontSize(19).FontWeight(700).LetterSpacing(-0.3)
 		ui.Spacer(c)
-		if segmented(c.Key("tab"), &a.artists.Tab, "热门", "最新", "专辑", "动态") {
+		if components.Segmented(c.Key("tab"), &a.artists.Tab, "热门", "最新", "专辑", "动态") {
 			a.loadArtist(ar.ID)
 		}
 	})

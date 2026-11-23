@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -17,7 +18,7 @@ func (a *app) loginDialog(c *ui.Context) {
 	ui.DialogBase(c.Key("login"), &l.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(340).Padding(28, 28, 26, 28).Radius(22).Gap(6).AlignItems(ui.Center).
-			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
+			Background(p.Background).Border(1, p.Hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		title, sub := "扫码登录", "打开网易云音乐 App，扫一扫登录"
 		switch {
@@ -31,9 +32,9 @@ func (a *app) loginDialog(c *ui.Context) {
 			sub = "二维码已失效"
 		}
 		ui.Text(c, title).FontSize(20).FontWeight(700)
-		ui.Text(c, sub).FontSize(13).TextColor(p.muted).TextAlign(ui.Center).Margin(0, 0, 14, 0)
+		ui.Text(c, sub).FontSize(13).TextColor(p.Muted).TextAlign(ui.Center).Margin(0, 0, 14, 0)
 
-		ui.Box(c).Size(212, 212).Radius(16).Background(ui.RGB(255, 255, 255)).Border(1, p.hairline).Children(func() {
+		ui.Box(c).Size(212, 212).Radius(16).Background(ui.RGB(255, 255, 255)).Border(1, p.Hairline).Children(func() {
 			if l.Code != nil {
 				code := l.Code
 				opacity := float32(1)
@@ -52,20 +53,20 @@ func (a *app) loginDialog(c *ui.Context) {
 				case l.Finished || l.Status == netease.QRScanned:
 					if bmp := bitmap(a.art.get(netease.Sized(l.Avatar, 160), false)); bmp != nil {
 						pic := ui.Box(c).Size(72, 72).Radius(36).Shadow(0, 6, 16, -4, ui.RGBA(0, 0, 0, 0.3))
-						in := artIn(pic, bmp)
-						pic.Children(func() { artImage(c, bmp, 36, in) })
+						in := components.ArtIn(pic, bmp)
+						pic.Children(func() { components.ArtImage(c, bmp, 36, in) })
 					}
 					if l.Scanner != "" {
 						ui.Text(c, l.Scanner).FontSize(14).FontWeight(600).TextColor(ui.Hex("#1d1d1f"))
 					}
 				case l.Status == netease.QRExpired || l.Err != "":
-					if pillButton(c.Key("refresh"), iconRepeat, "刷新二维码", p.accent, p.onAccent).Clicked() {
+					if components.PillButton(c.Key("refresh"), components.IconRepeat, "刷新二维码", p.Accent, p.OnAccent).Clicked() {
 						a.openLogin()
 					}
 				}
 			})
 		})
-		ui.Text(c, "登录后，每日推荐与歌单将根据你的口味生成").FontSize(11.5).TextColor(p.faint).Margin(16, 0, 0, 0)
+		ui.Text(c, "登录后，每日推荐与歌单将根据你的口味生成").FontSize(11.5).TextColor(p.Faint).Margin(16, 0, 0, 0)
 	})
 	if !l.Open {
 		a.account.CloseLogin()
@@ -104,15 +105,15 @@ func (a *app) accountRow(c *ui.Context) {
 	p := a.pal
 	b := ui.ButtonBase(c.Key("account")).Height(40).PaddingX(8).Gap(10).Radius(10).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	if b.Hovered() || a.accountOpen && a.account.Profile != nil {
-		b.Background(p.hover)
+		b.Background(p.Hover)
 	}
 	if a.account.Profile == nil {
 		a.accountOpen = false
 		b.Label("登录").Children(func() {
-			ui.Box(c).Size(26, 26).Radius(13).Background(p.press).Center().Children(func() {
-				ui.Icon(c, iconUser).Size(14, 14).TextColor(p.muted)
+			ui.Box(c).Size(26, 26).Radius(13).Background(p.Press).Center().Children(func() {
+				ui.Icon(c, components.IconUser).Size(14, 14).TextColor(p.Muted)
 			})
-			ui.Text(c, "登录网易云音乐").FontSize(13).FontWeight(500).TextColor(p.muted)
+			ui.Text(c, "登录网易云音乐").FontSize(13).FontWeight(500).TextColor(p.Muted)
 		})
 		if b.Clicked() {
 			a.openLogin()
@@ -121,9 +122,9 @@ func (a *app) accountRow(c *ui.Context) {
 	}
 	prof := a.account.Profile
 	b.Label(prof.Nickname).Expanded(a.accountOpen).Children(func() {
-		a.avatar(c, prof.AvatarURL, 26, p.press)
+		a.avatar(c, prof.AvatarURL, 26, p.Press)
 		ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
-		ui.Icon(c, iconUpDown).Size(13, 13).TextColor(p.faint)
+		ui.Icon(c, components.IconUpDown).Size(13, 13).TextColor(p.Faint)
 	})
 	if b.Clicked() {
 		a.accountOpen = !a.accountOpen
@@ -135,7 +136,7 @@ func (a *app) accountRow(c *ui.Context) {
 // of the volume popover: the listener's own page and the settings, then
 // signing out.
 func (a *app) accountMenu(c *ui.Context, row ui.Element) {
-	pop := popoverColors(a.pal.dark)
+	pop := popoverColors(a.pal.Dark)
 	ui.PopoverBase(c.Key("account-menu"), row, &a.accountOpen, func(panel ui.Element) {
 		panel.AttachTo(row, ui.AnchorTopStart, ui.AnchorBottomStart).Margin(0, 0, 6, 0).Padding(5).Gap(1).
 			Radius(12).Background(pop.fill).Border(0.5, pop.edge).Shadow(0, 8, 24, -4, ui.RGBA(0, 0, 0, 0.2)).
@@ -148,16 +149,16 @@ func (a *app) accountMenu(c *ui.Context, row ui.Element) {
 		if runtime.GOOS == "darwin" {
 			shortcut = "⌘,"
 		}
-		if a.menuItem(c, iconUser, "我的主页", "").AutoFocus().Clicked() {
+		if a.menuItem(c, components.IconUser, "我的主页", "").AutoFocus().Clicked() {
 			a.accountOpen = false
 			a.open(route{Page: pageUser, ID: a.account.Profile.UserID})
 		}
-		if a.menuItem(c, iconSettings, "设置…", shortcut).Clicked() {
+		if a.menuItem(c, components.IconSettings, "设置…", shortcut).Clicked() {
 			a.accountOpen = false
 			a.openSettings()
 		}
 		ui.Box(c).Height(0.5).Margin(4, 8).Background(pop.edge)
-		if a.menuItem(c, iconSignOut, "退出登录", "").Clicked() {
+		if a.menuItem(c, components.IconSignOut, "退出登录", "").Clicked() {
 			a.accountOpen = false
 			a.signOut()
 		}
@@ -171,13 +172,13 @@ func (a *app) menuItem(c *ui.Context, icon *ui.SVG, label, shortcut string) ui.E
 	b := ui.ButtonBase(c.Key(label)).Role(ui.RoleMenuItem).Label(label).Height(30).PaddingX(8).Gap(9).Radius(7).
 		AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	if b.Hovered() || b.FocusVisible() {
-		b.Background(p.press)
+		b.Background(p.Press)
 	}
 	b.Children(func() {
-		ui.Icon(c, icon).Size(15, 15).TextColor(p.muted)
+		ui.Icon(c, icon).Size(15, 15).TextColor(p.Muted)
 		ui.Text(c, label).FontSize(13).Grow(1)
 		if shortcut != "" {
-			ui.Text(c, shortcut).FontSize(12).TextColor(p.faint)
+			ui.Text(c, shortcut).FontSize(12).TextColor(p.Faint)
 		}
 	})
 	return b
@@ -196,15 +197,15 @@ func (a *app) sidebarSection(c *ui.Context, title string, collapsed *bool, extra
 		}
 		b.Expanded(!*collapsed)
 		if b.Hovered() {
-			b.Background(p.hover)
+			b.Background(p.Hover)
 		}
 		b.Children(func() {
-			ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.faint).Grow(1)
-			arrow := iconDown
+			ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.Faint).Grow(1)
+			arrow := components.IconDown
 			if *collapsed {
-				arrow = iconForward
+				arrow = components.IconForward
 			}
-			ui.Icon(c, arrow).Size(12, 12).TextColor(p.faint)
+			ui.Icon(c, arrow).Size(12, 12).TextColor(p.Faint)
 		})
 		if extra != nil {
 			extra()
@@ -224,7 +225,7 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 	var new func()
 	if mine {
 		new = func() {
-			if iconButton(c.Key("new"), iconPlus, 13, p.faint, "新建歌单").Size(26, 26).Radius(6).Clicked() {
+			if components.IconButton(c.Key("new"), components.IconPlus, 13, p.Faint, "新建歌单").Size(26, 26).Radius(6).Clicked() {
 				a.newPlaylist(nil)
 			}
 		}
@@ -238,9 +239,9 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 		b := ui.ButtonBase(c.Key(pl.ID)).Height(34).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pl.Name)
 		switch {
 		case selected:
-			b.Background(p.press)
+			b.Background(p.Press)
 		case b.Hovered():
-			b.Background(p.hover)
+			b.Background(p.Hover)
 		}
 		b.Children(func() {
 			a.cover(c, pl.Cover(), 80, 22, 5)
@@ -287,9 +288,9 @@ func (a *app) myAlbums(c *ui.Context, albums []netease.AlbumProfile, collapsed *
 			AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(al.Name)
 		switch {
 		case selected:
-			b.Background(p.press)
+			b.Background(p.Press)
 		case b.Hovered():
-			b.Background(p.hover)
+			b.Background(p.Hover)
 		}
 		b.Children(func() {
 			a.cover(c, al.PicURL, 80, 22, 5)

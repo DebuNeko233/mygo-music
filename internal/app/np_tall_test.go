@@ -15,7 +15,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 func tallLyricsApp(t *testing.T) *app {
@@ -33,7 +33,7 @@ func tallLyricsApp(t *testing.T) *app {
 	a.pl.SetLyrics(lines)
 	a.pl.Hold(77 * time.Second)
 	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
-	a.comments = viewmodel.Comments{Track: 1, Loaded: true}
+	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	return a
 }
 

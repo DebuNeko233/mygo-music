@@ -11,6 +11,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/desktop/components"
+	"netease-music-mygo/internal/desktop/theme"
 )
 
 // openSettings shows the settings window, opening it the first time.
@@ -59,7 +62,7 @@ func (a *app) openSettings() {
 
 // backdropRow is the pictures of one page: those chosen, more added from
 // the disk or dropped on the row, and all of them let go.
-func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string) {
+func (a *app) backdropRow(c *ui.Context, p theme.Palette, key string, paths *[]string) {
 	ui.Column(c).Gap(8).Children(func() {
 		line := ui.Row(c).Gap(8).AlignItems(ui.Center)
 		// Anything dropped on the row is a picture of this page's.
@@ -83,7 +86,7 @@ func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string)
 				a.changed()
 			}
 			summary := pictureList(*paths)
-			status := ui.Text(c, summary).FontSize(12).TextColor(p.muted).SingleLine().Shrink(1).MinWidth(0)
+			status := ui.Text(c, summary).FontSize(12).TextColor(p.Muted).SingleLine().Shrink(1).MinWidth(0)
 			if len(*paths) != 0 {
 				status.Tooltip(summary)
 			}
@@ -94,7 +97,7 @@ func (a *app) backdropRow(c *ui.Context, p palette, key string, paths *[]string)
 // keyField is the control of a shortcut: the key an action has, which the
 // listener changes by clicking it and pressing the key they want, and a
 // button giving the action its own key back once it has another.
-func (a *app) keyField(c *ui.Context, p palette, kind keyKind, name string) {
+func (a *app) keyField(c *ui.Context, p theme.Palette, kind keyKind, name string) {
 	recording := a.recording == string(kind)+"/"+name
 	label := hotkeyLabel(a.binding(kind, name))
 	if recording {
@@ -108,7 +111,7 @@ func (a *app) keyField(c *ui.Context, p palette, kind keyKind, name string) {
 		// be given back. It sits before the key, which keeps the keys in one
 		// column whether or not they were changed.
 		if changed && !recording {
-			if iconButton(c.Key("default-"+string(kind)+"-"+name), iconReload, 16, p.muted, "恢复默认").Clicked() {
+			if components.IconButton(c.Key("default-"+string(kind)+"-"+name), components.IconReload, 16, p.Muted, "恢复默认").Clicked() {
 				a.restoreBinding(kind, name)
 			}
 		} else {
@@ -123,7 +126,7 @@ func (a *app) keyField(c *ui.Context, p palette, kind keyKind, name string) {
 				return a.recordKey(kind, name, ev)
 			})
 			if a.recordingNote != "" {
-				ui.Text(c, a.recordingNote).FontSize(12).TextColor(p.muted)
+				ui.Text(c, a.recordingNote).FontSize(12).TextColor(p.Muted)
 			}
 		case field.Clicked():
 			a.recording, a.recordingNote = string(kind)+"/"+name, ""
@@ -131,7 +134,7 @@ func (a *app) keyField(c *ui.Context, p palette, kind keyKind, name string) {
 			// The system keeps the key for another app, or another action
 			// of the app asked for it first.
 			if err := a.hotkeyErrs[name]; kind == kindGlobal && err != "" {
-				ui.Text(c, err).FontSize(12).TextColor(p.warn)
+				ui.Text(c, err).FontSize(12).TextColor(p.Warn)
 			}
 		}
 	})
@@ -216,9 +219,9 @@ func settingsMatch(query string, texts ...string) bool {
 func (a *app) settingsView(c *ui.Context) {
 	t := a.settings.uiTheme(c.Theme())
 	p := paletteFor(&t)
-	p.applyAccent(&t)
+	p.ApplyAccent(&t)
 	c.SetTheme(&t)
-	c.Root().Background(p.bg)
+	c.Root().Background(p.Background)
 	c.OnShortcut(ui.Cmd, ui.KeyW, func() {
 		if a.settingsWin != nil {
 			a.settingsWin.Close()
@@ -242,7 +245,7 @@ func (a *app) settingsView(c *ui.Context) {
 		if c.TitleBar().Left > 0 {
 			top = topBar(c) + 4
 		}
-		ui.Column(c).Width(settingsSidebarWidth).Shrink(0).Padding(top, 12, 14, 12).Gap(2).Background(p.sidebar).DragWindow().Children(func() {
+		ui.Column(c).Width(settingsSidebarWidth).Shrink(0).Padding(top, 12, 14, 12).Gap(2).Background(p.Sidebar).DragWindow().Children(func() {
 			a.settingsSearch(c, p)
 			ui.Scroll(c.Key("settings-nav")).Grow(1).MinHeight(0).Gap(2).Children(func() {
 				for _, sec := range sections {
@@ -250,7 +253,7 @@ func (a *app) settingsView(c *ui.Context) {
 				}
 			})
 		})
-		ui.Box(c).Width(1).Shrink(0).Background(p.hairline)
+		ui.Box(c).Width(1).Shrink(0).Background(p.Hairline)
 		// The page's title is in the header, the strip the window buttons leave. What
 		// scrolls goes under a hard edge there, showing only once there's something under it.
 		pad := max(24, topBar(c)+6)
@@ -272,11 +275,11 @@ func (a *app) settingsView(c *ui.Context) {
 					}
 				}
 				if !found {
-					ui.Text(c, "未找到相关设置").FontSize(13.5).TextColor(p.muted).Margin(8, 4, 0, 4)
+					ui.Text(c, "未找到相关设置").FontSize(13.5).TextColor(p.Muted).Margin(8, 4, 0, 4)
 				}
 			})
 			edge := ui.Box(c.Key("top-edge")).Absolute().Top(0).Left(0).Right(0).Height(topBar(c)).DragWindow().
-				Material(glass.ScrollEdge{Hard: true, Background: p.bg})
+				Material(glass.ScrollEdge{Hard: true, Background: p.Background})
 			title := current.title
 			if query != "" {
 				title = "搜索结果"
@@ -298,35 +301,35 @@ func (a *app) settingsView(c *ui.Context) {
 const settingsSidebarWidth = 200
 
 // settingsSearch is the field that finds settings across all the pages.
-func (a *app) settingsSearch(c *ui.Context, p palette) {
+func (a *app) settingsSearch(c *ui.Context, p theme.Palette) {
 	field := ui.Row(c).Height(30).Radius(8).AlignItems(ui.Stretch).Margin(0, 0, 10, 0)
 	if a.settingsSearchBox.Focused(c) {
-		field.Background(p.bg).Shadow(0, 0, 0, 3, p.accent.Alpha(0.25)).Border(1, p.accent)
+		field.Background(p.Background).Shadow(0, 0, 0, 3, p.Accent.Alpha(0.25)).Border(1, p.Accent)
 	} else {
-		field.Background(p.hover).Border(1, p.hairline)
+		field.Background(p.Hover).Border(1, p.Hairline)
 	}
 	field.Children(func() {
 		// The input fills the field, under its icon, so a click anywhere on
 		// the field focuses it.
 		ui.TextInputBase(c.Key("search"), &a.preferences.Query).Bind(&a.settingsSearchBox).Grow(1).MinWidth(0).PaddingStart(29).PaddingEnd(9).
 			Placeholder("搜索").FontSize(13).Label("搜索设置")
-		ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted).Absolute().Left(9).Top(7.5).IgnoreInput(true)
+		ui.Icon(c, components.IconSearch).Size(13, 13).TextColor(p.Muted).Absolute().Left(9).Top(7.5).IgnoreInput(true)
 	})
 }
 
 // settingsNavItem opens a page of the settings, leaving a search.
-func (a *app) settingsNavItem(c *ui.Context, p palette, sec settingsSection, selected bool) {
+func (a *app) settingsNavItem(c *ui.Context, p theme.Palette, sec settingsSection, selected bool) {
 	b := ui.ButtonBase(c.Key(sec.id)).Height(32).PaddingX(9).Gap(9).Radius(8).AlignItems(ui.Center).Justify(ui.Start).
 		FocusRing(false).Label(sec.title)
 	switch {
 	case selected:
-		b.Background(p.press)
+		b.Background(p.Press)
 	case b.Hovered():
-		b.Background(p.hover)
+		b.Background(p.Hover)
 	}
-	color := p.muted
+	color := p.Muted
 	if selected {
-		color = p.accent
+		color = p.Accent
 	}
 	b.Children(func() {
 		ui.Icon(c, sec.icon).Size(15, 15).TextColor(color)
@@ -354,12 +357,12 @@ func (a *app) settingsFinds(sec settingsSection, query string) bool {
 
 // settingsGroup draws a section's rows, those a search finds if there is one,
 // under its title if it has one.
-func (a *app) settingsGroup(c *ui.Context, p palette, sec settingsSection, title, query string) {
+func (a *app) settingsGroup(c *ui.Context, p theme.Palette, sec settingsSection, title, query string) {
 	if title != "" {
-		ui.Text(c, title).FontSize(12).FontWeight(600).TextColor(p.muted).Margin(14, 4, 4, 4)
+		ui.Text(c, title).FontSize(12).FontWeight(600).TextColor(p.Muted).Margin(14, 4, 4, 4)
 	}
 	all := query == "" || settingsMatch(query, sec.title)
-	ui.Column(c.Key(sec.id)).Radius(12).Background(p.bg).Border(1, p.hairline).Dividers(1, p.hairline).Children(func() {
+	ui.Column(c.Key(sec.id)).Radius(12).Background(p.Background).Border(1, p.Hairline).Dividers(1, p.Hairline).Children(func() {
 		sec.build(func(label, desc string, control func()) {
 			if !all && !settingsMatch(query, label, desc) {
 				return
@@ -368,7 +371,7 @@ func (a *app) settingsGroup(c *ui.Context, p palette, sec settingsSection, title
 				ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 					ui.Text(c, label).FontSize(13.5).FontWeight(500)
 					if desc != "" {
-						ui.Text(c, desc).FontSize(12).TextColor(p.muted).LineHeight(1.4)
+						ui.Text(c, desc).FontSize(12).TextColor(p.Muted).LineHeight(1.4)
 					}
 				})
 				control()
@@ -383,7 +386,7 @@ func (a *app) settingsGroup(c *ui.Context, p palette, sec settingsSection, title
 
 // settingsSections describe the fork's existing controls without constructing
 // them. Search can inspect labels/descriptions without running UI or I/O.
-func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
+func (a *app) settingsSections(c *ui.Context, p theme.Palette) []settingsSection {
 	s := &a.settings
 	var sections []settingsSection
 	add := func(id, title string, icon *ui.SVG, build func(settingsRow, settingsBlock)) {
@@ -411,7 +414,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		})
 	}
 
-	add("general", "通用", iconSettings, func(row settingsRow, block settingsBlock) {
+	add("general", "通用", components.IconSettings, func(row settingsRow, block settingsBlock) {
 		row("用本应用打开网易云链接", "", func() {
 			label := "设为默认打开"
 			if a.links.Registered {
@@ -422,7 +425,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					a.registerMusicLinkHandler()
 				}
 				if a.links.RegistrationError != "" {
-					ui.Text(c, a.links.RegistrationError).FontSize(12).TextColor(p.warn)
+					ui.Text(c, a.links.RegistrationError).FontSize(12).TextColor(p.Warn)
 				}
 			})
 		})
@@ -434,7 +437,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					i = k
 				}
 			}
-			if segmented(c.Key("appearance"), &i, "跟随系统", "浅色", "深色") {
+			if components.Segmented(c.Key("appearance"), &i, "跟随系统", "浅色", "深色") {
 				s.Appearance = modes[i]
 				a.changed()
 			}
@@ -466,7 +469,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	if a.notch != nil {
 
-		add("notch", "刘海播放器", iconLaptop, func(row settingsRow, block settingsBlock) {
+		add("notch", "刘海播放器", components.IconLaptop, func(row settingsRow, block settingsBlock) {
 
 			row("显示刘海播放器", "在屏幕顶部的刘海处显示迷你播放器，鼠标悬停即可展开", func() {
 				if ui.Switch(c.Key("notch"), &s.Notch).Label("显示刘海播放器").Changed() {
@@ -488,7 +491,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	}
 
-	add("playback", "播放", iconVolume, func(row settingsRow, block settingsBlock) {
+	add("playback", "播放", components.IconVolume, func(row settingsRow, block settingsBlock) {
 
 		row("音质", "无损与 Hi-Res 需要黑胶 VIP，没有时播放所能播放的最高音质；下一首歌曲开始生效", func() {
 			if qualitySelect(c.Key("quality"), &s.Quality, "音质") {
@@ -509,16 +512,16 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	})
 
-	add("download", "下载", iconDownload, func(row settingsRow, block settingsBlock) {
+	add("download", "下载", components.IconDownload, func(row settingsRow, block settingsBlock) {
 		a.downloadSettings(c, p, row, block)
 	})
 
-	add("keys", "快捷键", iconKeyboard, func(row settingsRow, block settingsBlock) {
+	add("keys", "快捷键", components.IconKeyboard, func(row settingsRow, block settingsBlock) {
 
 		block("键盘 快捷键 按键", func() {
 			ui.Column(c).Padding(12, 16).Children(func() {
 				ui.Text(c, "这些键在应用内按下即生效。点一下右边的键，再按下想要的按键；Backspace 清除，Esc 取消。改动过的键旁边有一个按钮，点了就收回默认的键。").
-					FontSize(12.5).TextColor(p.muted).LineHeight(1.4).Wrap()
+					FontSize(12.5).TextColor(p.Muted).LineHeight(1.4).Wrap()
 			})
 		})
 		for _, h := range hotkeys {
@@ -527,12 +530,12 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	})
 
-	add("globalkeys", "全局快捷键", iconKeyboard, func(row settingsRow, block settingsBlock) {
+	add("globalkeys", "全局快捷键", components.IconKeyboard, func(row settingsRow, block settingsBlock) {
 
 		block("键盘 全局快捷键 系统 后台", func() {
 			ui.Column(c).Padding(12, 16).Children(func() {
 				ui.Text(c, "应用在后台时也能用的键。系统的键由所有应用共用，所以都要带 Ctrl、⌘ 或 Alt，或者用多媒体键；多媒体键在应用内录不到，换掉之后点旁边的按钮就回到它。").
-					FontSize(12.5).TextColor(p.muted).LineHeight(1.4).Wrap()
+					FontSize(12.5).TextColor(p.Muted).LineHeight(1.4).Wrap()
 			})
 		})
 		for _, h := range hotkeys {
@@ -541,7 +544,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	})
 
-	add("appearance", "外观", iconPalette, func(row settingsRow, block settingsBlock) {
+	add("appearance", "外观", components.IconPalette, func(row settingsRow, block settingsBlock) {
 
 		background := func(key, label string, paths *[]string, opacity *float64) {
 			block(label+" 背景图片 透明度", func() {
@@ -549,7 +552,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, label).FontSize(13.5).FontWeight(500)
 						ui.Spacer(c)
-						ui.Text(c, "透明度").FontSize(12).TextColor(p.muted)
+						ui.Text(c, "透明度").FontSize(12).TextColor(p.Muted)
 						if ui.Slider(c.Key(key+"-opacity"), opacity, 0.05, 0.9).Width(150).Label("调整" + label + "透明度").Changed() {
 							a.changed()
 						}
@@ -569,7 +572,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				}
 			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				if dot := accentColor(s.Accent, p.dark); dot != (ui.Color{}) {
+				if dot := accentColor(s.Accent, p.Dark); dot != (ui.Color{}) {
 					ui.Box(c).Size(14, 14).Radius(999).Background(dot)
 				}
 				if ui.Select(c.Key("accent"), &chosen, append([]string{"跟随外观"}, labels...)).Label("选择主题颜色").Width(120).Changed() {
@@ -588,7 +591,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		background("playing", "播放页背景", &s.BackdropPlaying, &s.BackdropPlayingOpacity)
 	})
 
-	add("lyrics", "桌面歌词", iconDeskLyrics, func(row settingsRow, block settingsBlock) {
+	add("lyrics", "桌面歌词", components.IconDeskLyrics, func(row settingsRow, block settingsBlock) {
 
 		// So is a colour, beside a dot of it.
 		colour := func(key, label, desc string, chosen *string) {
@@ -602,7 +605,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					}
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Box(c).Size(12, 12).Radius(999).Border(1, p.hairline).Background(lyricColor(*chosen, p.text))
+					ui.Box(c).Size(12, 12).Radius(999).Border(1, p.Hairline).Background(lyricColor(*chosen, p.Text))
 					if ui.Select(c.Key(key), &now, names).Label(label).Width(110).Changed() {
 						*chosen = now
 						a.changed()
@@ -626,14 +629,14 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 			if s.LyricLines == 1 {
 				i = 0
 			}
-			if segmented(c.Key("lyric-lines"), &i, "单行", "双行") {
+			if components.Segmented(c.Key("lyric-lines"), &i, "单行", "双行") {
 				s.LyricLines = i + 1
 				a.changed()
 			}
 		})
 		alignment := func(key, label, desc string, value *int) {
 			row(label, desc, func() {
-				if segmented(c.Key(key), value, "靠左", "居中", "靠右") {
+				if components.Segmented(c.Key(key), value, "靠左", "居中", "靠右") {
 					a.changed()
 				}
 			})
@@ -687,7 +690,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 				s.LyricOutlineWidth = v
 				a.changed()
 			}
-			ui.Text(c, fmt.Sprintf("%.1f", v)).FontSize(12).TextColor(p.muted)
+			ui.Text(c, fmt.Sprintf("%.1f", v)).FontSize(12).TextColor(p.Muted)
 		})
 		colour("lyric-outline-color", "描边颜色", "歌词文字描边的颜色", &s.LyricOutlineColor)
 		row("翻译", "在歌词下方显示翻译", func() {
@@ -705,7 +708,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	})
 
-	add("cache", "缓存", iconDatabase, func(row settingsRow, block settingsBlock) {
+	add("cache", "缓存", components.IconDatabase, func(row settingsRow, block settingsBlock) {
 
 		row("缓存目录", a.cacheDirectoryDescription(), func() {
 			if ui.Button(c.Key("cache-directory"), "更改…").Label("更改缓存目录").Disabled(a.cacheSettings.Moving).Clicked() {
@@ -758,13 +761,13 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	if a.captionsShown() {
 
-		add("podcasts", "播客", iconPodcast, func(row settingsRow, block settingsBlock) {
+		add("podcasts", "播客", components.IconPodcast, func(row settingsRow, block settingsBlock) {
 			a.captionSettings(row, c)
 		})
 
 	}
 
-	add("experiments", "实验性功能", iconFlask, func(row settingsRow, block settingsBlock) {
+	add("experiments", "实验性功能", components.IconFlask, func(row settingsRow, block settingsBlock) {
 
 		row("进度条烟雾特效", "播放时进度条化作拖着烟雾的光点，随音乐起伏；会多用一些电量", func() {
 			if ui.Switch(c.Key("smoke"), &s.Smoke).Label("进度条烟雾特效").Changed() {
@@ -789,7 +792,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	})
 
-	add("account", "账号", iconUser, func(row settingsRow, block settingsBlock) {
+	add("account", "账号", components.IconUser, func(row settingsRow, block settingsBlock) {
 
 		if a.account.Profile == nil {
 			row("未登录", "登录后，每日推荐与歌单将根据你的口味生成", func() {
@@ -805,10 +808,10 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 			prof := a.account.Profile
 			ui.Row(c).Padding(12, 16).Gap(12).AlignItems(ui.Center).Children(func() {
-				a.avatar(c, prof.AvatarURL, 36, p.press)
+				a.avatar(c, prof.AvatarURL, 36, p.Press)
 				ui.Column(c).Grow(1).Gap(2).Children(func() {
 					ui.Text(c, prof.Nickname).FontSize(13.5).FontWeight(600)
-					ui.Text(c, "已登录网易云音乐").FontSize(12).TextColor(p.muted)
+					ui.Text(c, "已登录网易云音乐").FontSize(12).TextColor(p.Muted)
 				})
 				if ui.Button(c.Key("logout"), "退出登录").Clicked() {
 					a.signOut()
@@ -821,7 +824,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	if a.updates {
 
-		add("updates", "更新", iconReload, func(row settingsRow, block settingsBlock) {
+		add("updates", "更新", components.IconReload, func(row settingsRow, block settingsBlock) {
 
 			desc := "每天检查一次是否有新版本"
 			if t := lastUpdateCheck(); !t.IsZero() {

@@ -7,9 +7,10 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	playbackvm "netease-music-mygo/internal/viewmodel/playback"
 )
 
 var white = ui.RGB(255, 255, 255)
@@ -162,7 +163,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		barHeight := topBar(c)
 		ui.Row(c).Height(barHeight).Justify(ui.Center).AlignItems(ui.Center).DragWindow().Children(func() {
 			reveal(ui.Box(c.Key("close-reveal")), pointerIn).Children(func() {
-				close := iconButton(c.Key("close"), iconDown, 22, white.Alpha(0.7), "关闭")
+				close := components.IconButton(c.Key("close"), components.IconDown, 22, white.Alpha(0.7), "关闭")
 				closeBounds = close.Bounds()
 				if close.Clicked() {
 					a.playbackState.Open = false
@@ -446,9 +447,9 @@ func (a *app) choosePane(i int) {
 // radioChip says which radio plays, over the title: a click on it, or on
 // its cross, leaves the radio, playing on the song.
 func (a *app) radioChip(c *ui.Context, name string) {
-	icon, exit := iconRadio, "退出私人 FM"
+	icon, exit := components.IconRadio, "退出私人 FM"
 	if name == heartRadio {
-		icon, exit = iconHeartFill, "退出心动模式"
+		icon, exit = components.IconHeartFill, "退出心动模式"
 	}
 	chip := ui.ButtonBase(c.Key("radio-chip")).Gap(5).Padding(3, 6, 3, 8).Margin(0, 0, 4, -8).Radius(999).
 		AlignItems(ui.Center).AlignSelf(ui.Start).FocusRing(false).Label(exit).Tooltip(exit)
@@ -460,7 +461,7 @@ func (a *app) radioChip(c *ui.Context, name string) {
 	chip.Children(func() {
 		ui.Icon(c, icon).Size(12, 12)
 		ui.Text(c, radioLabel(name)).FontSize(11.5).FontWeight(700).LetterSpacing(0.3)
-		ui.Icon(c, iconX).Size(11, 11).Opacity(cross)
+		ui.Icon(c, components.IconX).Size(11, 11).Opacity(cross)
 	})
 	if chip.Clicked() {
 		a.exitRadio()
@@ -491,7 +492,7 @@ func (a *app) nowPlayingTime(c *ui.Context) {
 			next = min(next, fraction)
 			remaining += time.Second
 		}
-		status = playbackClock(remaining)
+		status = components.PlaybackClock(remaining)
 		if remaining > 0 {
 			status = "−" + status
 		}
@@ -512,7 +513,7 @@ func (a *app) nowPlayingTime(c *ui.Context) {
 			return ui.Text(c, text).Grow(1).Basis(0).MinWidth(0).SingleLine().
 				FontSize(11).FontFeatures("tnum").TextColor(white.Alpha(0.6))
 		}
-		label(playbackClock(elapsed))
+		label(components.PlaybackClock(elapsed))
 		if tr := pl.Current(); tr != nil && tr.IsLocal() {
 			ui.Text(c, "本地").FontSize(11).TextColor(white.Alpha(0.6))
 		} else {
@@ -555,7 +556,7 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 			})
 			a.transport(c, white, white.Alpha(0.45), white, 22)
 			ui.Row(c).Grow(1).Basis(0).MinWidth(0).Justify(ui.End).Children(func() {
-				ui.Text(c, clock(pl.Position())+" / "+clock(pl.Duration())).FontSize(11.5).FontFeatures("tnum").TextColor(white.Alpha(0.5))
+				ui.Text(c, components.Clock(pl.Position())+" / "+components.Clock(pl.Duration())).FontSize(11.5).FontFeatures("tnum").TextColor(white.Alpha(0.5))
 			})
 		})
 	})
@@ -601,10 +602,10 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 		a.seekLyricFollow()
 	}
 	switch a.lyricReading.FollowSeek(pl.SeekRevision(), a.settings.LyricEdgeFade) {
-	case viewmodel.LyricResumeFollow:
+	case playbackvm.LyricResumeFollow:
 		a.lyricGlide.offset = a.lyricScroll.Y
 		a.resumeLyricFollow()
-	case viewmodel.LyricInitialFollow:
+	case playbackvm.LyricInitialFollow:
 		a.seekLyricFollow()
 	}
 	hasSinging := display.HasSinging()
@@ -739,9 +740,11 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	a.timedLines(c, scroll, lines, cur, style, nil)
 }
 
-const lyricBrowseDelay = viewmodel.LyricBrowseDelay
-const lyricInitialFollow = viewmodel.LyricInitialFollow
-const lyricResumeFollow = viewmodel.LyricResumeFollow
+const lyricBrowseDelay = playbackvm.LyricBrowseDelay
+
+const lyricInitialFollow = playbackvm.LyricInitialFollow
+
+const lyricResumeFollow = playbackvm.LyricResumeFollow
 
 // Layout owns the scroll/glide; the ViewModel decides when manual browsing ends.
 func (a *app) lyricBrowsing(c *ui.Context) bool {
@@ -757,10 +760,12 @@ func (a *app) lyricBrowsing(c *ui.Context) bool {
 	}
 	return browsing
 }
+
 func (a *app) resumeLyricFollow() {
 	a.lyricReading.Resume()
 	a.lyricResizeAnchor = lyricReadingAnchor{}
 }
+
 func (a *app) seekLyricFollow() {
 	a.lyricReading.Seek()
 	a.lyricResizeAnchor = lyricReadingAnchor{}
@@ -777,7 +782,7 @@ type lyricReadingAnchor struct {
 func (a *app) lyricsNotice(c *ui.Context, size float32) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, a.pl.LyricsError()).FontSize(size).TextColor(white.Alpha(.5))
-		if a.pl.LyricsRetryable() && iconButton(c.Key("retry-lyrics"), iconReload, 18, white.Alpha(.5), "重新加载歌词").Tooltip("重新加载歌词").Clicked() {
+		if a.pl.LyricsRetryable() && components.IconButton(c.Key("retry-lyrics"), components.IconReload, 18, white.Alpha(.5), "重新加载歌词").Tooltip("重新加载歌词").Clicked() {
 			a.pl.RetryMetadata()
 		}
 	})
@@ -1175,7 +1180,7 @@ func (a *app) queuePane(c *ui.Context) {
 			if local {
 				ui.Text(c, "本地").FontSize(11).TextColor(white.Alpha(0.6)).SingleLine().Shrink(0)
 			}
-			ui.Text(c, clock(tr.Length())).FontSize(12).FontFeatures("tnum").TextColor(white.Alpha(0.4))
+			ui.Text(c, components.Clock(tr.Length())).FontSize(12).FontFeatures("tnum").TextColor(white.Alpha(0.4))
 		})
 		if row.Clicked() && tr.Playable() && !playing {
 			pl.Jump(i)

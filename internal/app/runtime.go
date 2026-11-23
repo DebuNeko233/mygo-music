@@ -7,7 +7,8 @@ import (
 
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	playbackvm "netease-music-mygo/internal/viewmodel/playback"
+	settingsvm "netease-music-mygo/internal/viewmodel/settings"
 )
 
 // Run owns the native application lifetime, including partial initialization.
@@ -27,9 +28,9 @@ func Run() error {
 
 func newApp() *app {
 	a := &app{
-		lyricReading:  viewmodel.LyricReading{At: -1},
+		lyricReading:  playbackvm.LyricReading{At: -1},
 		mainViewState: mainViewState{queueAt: -1},
-		cacheSettings: viewmodel.CacheSettings{Used: -1},
+		cacheSettings: settingsvm.CacheSettings{Used: -1},
 	}
 	a.library.Reset()
 	a.artists.Reset()

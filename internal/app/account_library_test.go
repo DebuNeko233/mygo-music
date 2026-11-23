@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	accountvm "netease-music-mygo/internal/viewmodel/account"
 )
 
 type pendingLibraryQR struct{}
@@ -15,6 +15,7 @@ type pendingLibraryQR struct{}
 func (*pendingLibraryQR) Check(string) (netease.QRStatus, error) {
 	return netease.QRStatus{Code: netease.QRWaiting}, nil
 }
+
 func (*pendingLibraryQR) Commit() {}
 
 // Escape retires the pending key, while reopening the same keyed dialog accepts only its new result.
@@ -24,7 +25,7 @@ func TestLoginDismissalRetiresQueuedKey(t *testing.T) {
 	a.settings = defaultSettings()
 	t.Cleanup(a.account.CloseLogin)
 	s := a.accountServices()
-	s.NewQR = func() (string, viewmodel.QRLoginAttempt, error) { return "test-key", &pendingLibraryQR{}, nil }
+	s.NewQR = func() (string, accountvm.QRLoginAttempt, error) { return "test-key", &pendingLibraryQR{}, nil }
 	a.account.OpenLogin(s)
 	old := wait(t, posts, "queued key")
 	tt := ui.NewTester(a.loginDialog, 800, 600)

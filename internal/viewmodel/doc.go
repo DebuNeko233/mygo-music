@@ -1,4 +1,5 @@
-// Package viewmodel owns feature presentation state and user commands.
+// Package viewmodel defines loading state and refresh timing shared by features.
+// Feature presentation state and commands live in its named subpackages.
 //
 // Commands and posted results run on one owning thread. Services perform I/O
 // in workers and post results back to that thread; Post is asynchronous.

@@ -40,10 +40,10 @@ func TestChoosingAccentColorsIt(t *testing.T) {
 	if a.settings.Accent != "湖蓝" {
 		t.Fatalf("chose %q", a.settings.Accent)
 	}
-	if got, want := paletteFor(&ui.Theme{}).accent, accentColor("湖蓝", false); got != want {
+	if got, want := paletteFor(&ui.Theme{}).Accent, accentColor("湖蓝", false); got != want {
 		t.Errorf("light accent %v, want %v", got, want)
 	}
-	if got, want := paletteFor(&ui.Theme{Dark: true}).accent, accentColor("湖蓝", true); got != want {
+	if got, want := paletteFor(&ui.Theme{Dark: true}).Accent, accentColor("湖蓝", true); got != want {
 		t.Errorf("dark accent %v, want %v", got, want)
 	}
 	// Following the appearance again gives its own accent back.
@@ -58,7 +58,7 @@ func TestChoosingAccentColorsIt(t *testing.T) {
 	if a.settings.Accent != "" {
 		t.Errorf("still %q", a.settings.Accent)
 	}
-	if got, want := paletteFor(&ui.Theme{}).accent, ui.Oklch(0.6, 0.21, 24); got != want {
+	if got, want := paletteFor(&ui.Theme{}).Accent, ui.Oklch(0.6, 0.21, 24); got != want {
 		t.Errorf("accent %v, want the appearance's %v", got, want)
 	}
 }
@@ -88,10 +88,10 @@ func TestToastUsesAppearancePalette(t *testing.T) {
 		}
 		px := tt.Image().RGBAAt(int(r.X)-3, int(r.Y+r.H/2))
 		got := ui.Color{R: px.R, G: px.G, B: px.B, A: px.A}
-		if want := paletteFor(&ui.Theme{Dark: dark}).text; got != want {
+		if want := paletteFor(&ui.Theme{Dark: dark}).Text; got != want {
 			t.Errorf("dark %v: toast fill %v, want %v", dark, got, want)
 		}
-		if theme.Inverse != got || theme.InverseText != paletteFor(&ui.Theme{Dark: dark}).bg {
+		if theme.Inverse != got || theme.InverseText != paletteFor(&ui.Theme{Dark: dark}).Background {
 			t.Errorf("dark %v: inverse colors %v on %v", dark, theme.InverseText, theme.Inverse)
 		}
 	}

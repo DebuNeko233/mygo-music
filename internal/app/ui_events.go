@@ -8,11 +8,11 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 // artistEvents lists what an artist posted, a page at a time.
-func (a *app) artistEvents(c *ui.Context, d *viewmodel.ArtistPage) {
+func (a *app) artistEvents(c *ui.Context, d *artistvm.ArtistPage) {
 	if d.Profile.AccountID == 0 {
 		a.empty(c, "这位歌手还没有自己的账号，没有动态")
 		return
@@ -33,12 +33,12 @@ func (a *app) artistEvents(c *ui.Context, d *viewmodel.ArtistPage) {
 // what it shares, which opens its page.
 func (a *app) event(c *ui.Context, e *netease.Event) {
 	p := a.pal
-	ui.Column(c).Gap(12).Padding(20, 0).BorderWidth(0, 0, 1, 0).BorderColor(p.hairline).Children(func() {
+	ui.Column(c).Gap(12).Padding(20, 0).BorderWidth(0, 0, 1, 0).BorderColor(p.Hairline).Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			a.cover(c, e.User.AvatarURL, 120, 40, 20)
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 				ui.Text(c, e.User.Nickname).FontSize(14).FontWeight(600).SingleLine()
-				ui.Text(c, time.UnixMilli(e.Time).Format("2006-01-02 15:04")).FontSize(12).TextColor(p.muted)
+				ui.Text(c, time.UnixMilli(e.Time).Format("2006-01-02 15:04")).FontSize(12).TextColor(p.Muted)
 			})
 		})
 		ct := &e.Content
@@ -46,7 +46,7 @@ func (a *app) event(c *ui.Context, e *netease.Event) {
 			ui.Text(c, msg).FontSize(14).LineHeight(1.6)
 		}
 		if ct.Forwarded != "" {
-			ui.Text(c, ct.Forwarded).FontSize(13).LineHeight(1.5).TextColor(p.muted).Padding(10, 12).Radius(8).Background(p.hover)
+			ui.Text(c, ct.Forwarded).FontSize(13).LineHeight(1.5).TextColor(p.Muted).Padding(10, 12).Radius(8).Background(p.Hover)
 		}
 		if len(e.Pictures) > 0 {
 			ui.Grid(c).Columns(3).Gap(8).MaxWidth(480).Children(func() {
@@ -67,10 +67,10 @@ func (a *app) event(c *ui.Context, e *netease.Event) {
 		case ct.Artist != nil:
 			a.shared(c, ct.Artist.Name, "歌手", ct.Artist.Avatar, route{Page: pageArtist, ID: ct.Artist.ID})
 		case ct.Video:
-			ui.Text(c, "分享了视频，暂不支持在应用内观看").FontSize(12.5).TextColor(p.muted)
+			ui.Text(c, "分享了视频，暂不支持在应用内观看").FontSize(12.5).TextColor(p.Muted)
 		}
 		ui.Text(c, fmt.Sprintf("%s 赞 · %s 评论 · %s 转发", count(e.Info.LikedCount), count(e.Info.CommentCount), count(e.Info.ShareCount))).
-			FontSize(12).TextColor(p.muted)
+			FontSize(12).TextColor(p.Muted)
 	})
 }
 
@@ -78,16 +78,16 @@ func (a *app) event(c *ui.Context, e *netease.Event) {
 // has one.
 func (a *app) shared(c *ui.Context, name, sub, pic string, r route) {
 	p := a.pal
-	card := ui.ButtonBase(c.Key("shared")).Gap(12).Padding(8).Radius(10).AlignItems(ui.Center).Background(p.hover).
+	card := ui.ButtonBase(c.Key("shared")).Gap(12).Padding(8).Radius(10).AlignItems(ui.Center).Background(p.Hover).
 		FocusRing(false).Label(name).Disabled(r.ID == 0).MaxWidth(480)
 	if card.Hovered() {
-		card.Background(p.press)
+		card.Background(p.Press)
 	}
 	card.Children(func() {
 		a.cover(c, pic, 120, 44, 6)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 			ui.Text(c, name).FontSize(13.5).FontWeight(600).SingleLine()
-			ui.Text(c, sub).FontSize(12).TextColor(p.muted).SingleLine()
+			ui.Text(c, sub).FontSize(12).TextColor(p.Muted).SingleLine()
 		})
 	})
 	if card.Clicked() {

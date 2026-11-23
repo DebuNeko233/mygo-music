@@ -11,8 +11,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // An ending word can finish before the next regular highlight tick without rebuilding the view.
@@ -383,7 +385,7 @@ func TestStaticBackdropStopsFog(t *testing.T) {
 	// before switching modes; no audio device or wall-clock phase is needed.
 	bd := &a.backdropCache
 	bd.speed, bd.last = 1, time.Unix(1, 0)
-	bd.level.h[0], bd.level.last = 1, bd.last
+	bd.level.Step(bd.last, [player.Bands]float32{1}, true)
 	a.settings.Fog = false
 	tt.Frame()
 	at, canvas := bd.at, bd.canvas
@@ -392,7 +394,7 @@ func TestStaticBackdropStopsFog(t *testing.T) {
 		tt.Frame()
 		// FramePending alone misses delayed Painter.After callbacks, so
 		// also verify that the cache and paint timestamp never change.
-		if bd.at != at || bd.canvas != canvas || bd.speed != 0 || bd.level != (barState{}) || !bd.last.IsZero() {
+		if bd.at != at || bd.canvas != canvas || bd.speed != 0 || bd.level != (components.BarState{}) || !bd.last.IsZero() {
 			t.Fatal("static background kept the fog's animation state or repainted")
 		}
 		if tt.FramePending() {

@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/desktop/components"
 )
 
 const (
@@ -54,9 +56,9 @@ func (a *app) descriptionSummary(c *ui.Context, title, text string, width float3
 	font := ui.Font{Family: c.Theme().Font, Size: descriptionSize, LineHeight: descriptionLineHeight}
 	d := measureDescription(column, text, width, font, true)
 	return column.Children(func() {
-		ui.Text(c, d.text).FontSize(font.Size).TextColor(a.pal.muted).MaxLines(maxLines).LineHeight(font.LineHeight)
+		ui.Text(c, d.text).FontSize(font.Size).TextColor(a.pal.Muted).MaxLines(maxLines).LineHeight(font.LineHeight)
 		if d.lines > maxLines {
-			a.descriptionMore(c, title, text, a.pal.dark)
+			a.descriptionMore(c, title, text, a.pal.Dark)
 		}
 	})
 }
@@ -84,14 +86,14 @@ func (a *app) descriptionDialog(c *ui.Context) {
 		w, h := c.Size()
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(min(540, w-48)).Padding(16, 24, 24, 24).Radius(18).Gap(12).
-			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
+			Background(p.Background).Border(1, p.Hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		ui.Row(c).AlignItems(ui.Center).Gap(12).Children(func() {
-			ui.Text(c, d.title).Grow(1).MinWidth(0).MaxLines(2).FontSize(17).FontWeight(700).TextColor(p.text)
-			iconButton(c.Key("close"), iconX, 18, p.muted, "关闭").Shrink(0).OnClick(func() { d.open = false })
+			ui.Text(c, d.title).Grow(1).MinWidth(0).MaxLines(2).FontSize(17).FontWeight(700).TextColor(p.Text)
+			components.IconButton(c.Key("close"), components.IconX, 18, p.Muted, "关闭").Shrink(0).OnClick(func() { d.open = false })
 		})
 		ui.Scroll(c.Key("text")).TrackScroll(&d.scroll).MaxHeight(min(420, h-140)).Padding(0, 10, 0, 0).Children(func() {
-			ui.Text(c, d.text).FontSize(14).LineHeight(1.65).TextColor(p.text).Selectable()
+			ui.Text(c, d.text).FontSize(14).LineHeight(1.65).TextColor(p.Text).Selectable()
 		})
 	})
 }

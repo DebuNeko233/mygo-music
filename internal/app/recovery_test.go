@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 // Permanent page failures used to keep retrying on focus and network recovery.
@@ -57,7 +57,7 @@ func TestRecoverySkipsHiddenArtistTab(t *testing.T) {
 	if d.LatestLoading {
 		t.Fatal("recovery fetched a hidden tab")
 	}
-	a.artists.Tab = viewmodel.ArtistLatest
+	a.artists.Tab = artistvm.ArtistLatest
 	if !a.needsRecovery() {
 		t.Fatal("visible temporary failure cannot recover")
 	}
@@ -129,7 +129,7 @@ func TestRecoveryDoesNotCascadeIntoPermanentArtistTab(t *testing.T) {
 	calls := 0
 	artistLatestSongs = func(int64, int) ([]netease.Track, error) { calls++; return nil, netease.ErrNotLoggedIn }
 	a.nav.Current = route{Page: pageArtist, ID: 9}
-	a.artists.Tab = viewmodel.ArtistLatest
+	a.artists.Tab = artistvm.ArtistLatest
 	d := a.artist(9)
 	d.Error, d.Failure = "profile failed", netease.ErrOffline
 	d.LatestError, d.LatestFailure = "songs refused", netease.ErrNotLoggedIn
@@ -172,7 +172,7 @@ func TestRecoveryIgnoresHiddenArtistLoads(t *testing.T) {
 	if a.recovery.attempts != 0 {
 		t.Fatal("hidden request kept visible recovery busy")
 	}
-	a.artists.Tab = viewmodel.ArtistLatest
+	a.artists.Tab = artistvm.ArtistLatest
 	a.recovery.attempts = 2
 	a.recoveryFrame(true)
 	if a.recovery.attempts != 2 {

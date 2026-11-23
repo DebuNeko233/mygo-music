@@ -11,11 +11,14 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 
 // A snapshot belongs to the account that requested it. It is serialized on
@@ -23,6 +26,7 @@ import (
 func (a *app) cacheRequest(key string) diskcache.Snapshot {
 	return diskcache.Snapshot{Store: a.browseCache, Scope: fmt.Sprint(a.listenerID()), Key: key, Epoch: a.browseCache.Epoch()}
 }
+
 func (a *app) initOffline() {
 	if paths, err := cachePaths(a.settings); err == nil {
 		a.browseCache = diskcache.New(paths.Browse, 64<<20)
@@ -142,6 +146,7 @@ func (a *app) recoveryFrame(active bool) {
 	})
 	a.recovery.timer = timer
 }
+
 func (a *app) needsRecovery() bool { return a.failedLoads(false) }
 
 // Manual refresh includes permanent failures, while timers and reconnection
@@ -182,15 +187,15 @@ func (a *app) failedLoads(manual bool) bool {
 				return true
 			}
 			switch a.artists.Tab {
-			case viewmodel.ArtistLatest:
+			case artistvm.ArtistLatest:
 				if !d.LatestLoading && d.LatestError != "" && retry(d.LatestFailure) {
 					return true
 				}
-			case viewmodel.ArtistAlbums:
+			case artistvm.ArtistAlbums:
 				if !d.AlbumsPage.Loading && d.AlbumsPage.Error != "" && retry(d.AlbumsPage.Failure) {
 					return true
 				}
-			case viewmodel.ArtistEvents:
+			case artistvm.ArtistEvents:
 				if !d.EventsPage.Loading && d.EventsPage.Error != "" && retry(d.EventsPage.Failure) {
 					return true
 				}
@@ -204,7 +209,9 @@ func (a *app) failedLoads(manual bool) bool {
 	}
 	return a.art.hasFailed(manual) || a.pl.MetadataPending()
 }
+
 func (a *app) recoverLoads() { a.retryLoads(false) }
+
 func (a *app) retryLoads(manual bool) {
 	if a.network.offline {
 		return
@@ -223,7 +230,7 @@ func (a *app) retryLoads(manual bool) {
 	switch a.nav.Current.Page {
 	case pageCloud:
 		if a.cloud.Failure != nil && retry(a.cloud.Failure) {
-			a.loadCloud(viewmodel.CloudNextPage)
+			a.loadCloud(cloudvm.CloudNextPage)
 		}
 	case pageRecent:
 		if tab := &a.recent.Tabs[a.recent.Selected]; tab.Failure != nil && retry(tab.Failure) {
@@ -238,13 +245,13 @@ func (a *app) retryLoads(manual bool) {
 			if d.Error != "" && retry(d.Failure) {
 				a.loadArtistProfile(a.nav.Current.ID)
 			}
-			if a.artists.Tab == viewmodel.ArtistLatest && d.LatestError != "" && retry(d.LatestFailure) {
+			if a.artists.Tab == artistvm.ArtistLatest && d.LatestError != "" && retry(d.LatestFailure) {
 				a.loadLatest(a.nav.Current.ID)
 			}
-			if d.AlbumsPage.Error != "" && a.artists.Tab == viewmodel.ArtistAlbums && retry(d.AlbumsPage.Failure) {
+			if d.AlbumsPage.Error != "" && a.artists.Tab == artistvm.ArtistAlbums && retry(d.AlbumsPage.Failure) {
 				a.loadAlbums(a.nav.Current.ID)
 			}
-			if d.EventsPage.Error != "" && a.artists.Tab == viewmodel.ArtistEvents && retry(d.EventsPage.Failure) {
+			if d.EventsPage.Error != "" && a.artists.Tab == artistvm.ArtistEvents && retry(d.EventsPage.Failure) {
 				a.loadEvents(a.nav.Current.ID)
 			}
 		}
@@ -279,10 +286,10 @@ func (a *app) offlineNotice(c *ui.Context) {
 		// action, but never display the offline symbol for that online state.
 		if a.network.offline {
 			ui.Box(c.Key("offline-icon")).Size(30, 30).Center().Label("离线").Tooltip("离线，可浏览缓存").Children(func() {
-				ui.Icon(c, iconOffline).Size(18, 18).TextColor(a.pal.muted)
+				ui.Icon(c, components.IconOffline).Size(18, 18).TextColor(a.pal.Muted)
 			})
 		}
-		if iconButton(c.Key("refresh-connection"), iconReload, 18, a.pal.muted, "刷新内容").Size(30, 30).Tooltip("刷新内容").Clicked() {
+		if components.IconButton(c.Key("refresh-connection"), components.IconReload, 18, a.pal.Muted, "刷新内容").Size(30, 30).Tooltip("刷新内容").Clicked() {
 			a.refreshConnection()
 		}
 	})
@@ -294,12 +301,14 @@ func (a *app) clearBrowseCache() {
 	}
 	a.browseCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
 }
+
 func (a *app) clearImageCache() {
 	if a.cacheSettings.Moving {
 		return
 	}
 	a.imageCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
 }
+
 func (a *app) measureOfflineCache() {
 	browse, images := a.browseCache, a.imageCache
 	browseEpoch, imageEpoch := browse.Epoch(), images.Epoch()
@@ -321,12 +330,12 @@ func (a *app) measureOfflineCache() {
 }
 
 func (a *app) persistLibrary(ids ...int64) {
-	a.persistLibraryChanges(viewmodel.SnapshotLists|viewmodel.SnapshotAlbums|viewmodel.SnapshotLikes, ids...)
+	a.persistLibraryChanges(libraryvm.SnapshotLists|libraryvm.SnapshotAlbums|libraryvm.SnapshotLikes, ids...)
 }
 
 // Accumulate changes across overlapping edits and persist only after the
 // final success or rollback has landed.
-func (a *app) persistLibraryChanges(changed viewmodel.LibrarySnapshots, ids ...int64) {
+func (a *app) persistLibraryChanges(changed libraryvm.LibrarySnapshots, ids ...int64) {
 	// An edit can temporarily pin cached playlists, even without a disk store.
 	defer a.trimPlaylistCache()
 	if a.browseCache == nil || a.account.Profile == nil {
@@ -348,13 +357,13 @@ func (a *app) persistLibraryChanges(changed viewmodel.LibrarySnapshots, ids ...i
 			go func() { write(cacheBytes(value)) }()
 		}
 	}
-	if a.library.Dirty&viewmodel.SnapshotLists != 0 && (a.library.Mine != nil || a.library.Saved != nil) {
+	if a.library.Dirty&libraryvm.SnapshotLists != 0 && (a.library.Mine != nil || a.library.Saved != nil) {
 		keep("mine", library.Lists{Mine: copyPlaylists(a.library.Mine), Saved: copyPlaylists(a.library.Saved)})
 	}
-	if a.library.Dirty&viewmodel.SnapshotAlbums != 0 && a.library.SubsShown {
+	if a.library.Dirty&libraryvm.SnapshotAlbums != 0 && a.library.SubsShown {
 		keep("albums", slices.Clone(a.library.SubAlbums))
 	}
-	if a.library.Dirty&viewmodel.SnapshotLikes != 0 && a.library.Liked != nil {
+	if a.library.Dirty&libraryvm.SnapshotLikes != 0 && a.library.Liked != nil {
 		likes := make([]int64, 0, len(a.library.Liked))
 		for id, liked := range a.library.Liked {
 			if liked {
@@ -399,7 +408,7 @@ func (a *app) recoveryBusy() bool {
 		return d != nil && d.Loading
 	case pageArtist:
 		d := a.artists.Pages.Get(a.nav.Current.ID)
-		return d != nil && (d.Loading || a.artists.Tab == viewmodel.ArtistLatest && d.LatestLoading || a.artists.Tab == viewmodel.ArtistAlbums && d.AlbumsPage.Loading || a.artists.Tab == viewmodel.ArtistEvents && d.EventsPage.Loading)
+		return d != nil && (d.Loading || a.artists.Tab == artistvm.ArtistLatest && d.LatestLoading || a.artists.Tab == artistvm.ArtistAlbums && d.AlbumsPage.Loading || a.artists.Tab == artistvm.ArtistEvents && d.EventsPage.Loading)
 	case pageSearch:
 		d := a.searches.Pages.Get(a.nav.Current)
 		return d != nil && d.Page.Loading

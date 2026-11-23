@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 // Visible artist events recover temporary failures automatically and permanent failures only on explicit refresh.
@@ -19,7 +19,7 @@ func TestArtistEventsRecovery(t *testing.T) {
 			a := newTestApp()
 			posts := testPosts(a)
 			a.nav.Current = route{Page: pageArtist, ID: 9}
-			a.artists.Tab = viewmodel.ArtistEvents
+			a.artists.Tab = artistvm.ArtistEvents
 			d := a.artist(9)
 			d.Profile = &netease.ArtistProfile{ID: 9, AccountID: 42}
 			old := accountEvents
@@ -32,11 +32,11 @@ func TestArtistEventsRecovery(t *testing.T) {
 			if a.needsRecovery() != temporary || !a.failedLoads(true) || d.EventsPage.Failure != failure {
 				t.Fatal("artist events lost their retry policy or underlying failure")
 			}
-			a.artists.Tab = viewmodel.ArtistAlbums
+			a.artists.Tab = artistvm.ArtistAlbums
 			if a.needsRecovery() || a.failedLoads(true) {
 				t.Fatal("a hidden events tab kept recovery active")
 			}
-			a.artists.Tab = viewmodel.ArtistEvents
+			a.artists.Tab = artistvm.ArtistEvents
 			requested := make(chan struct{}, 2)
 			release := make(chan struct{})
 			defer close(release)

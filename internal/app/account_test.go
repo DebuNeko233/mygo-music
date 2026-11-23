@@ -13,7 +13,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	accountvm "netease-music-mygo/internal/viewmodel/account"
+	uservm "netease-music-mygo/internal/viewmodel/user"
 )
 
 type confirmedQR struct {
@@ -36,7 +37,7 @@ func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			a := newTestApp()
 			posts := testPosts(a)
-			a.account.Login = viewmodel.LoginState{Open: true, Generation: 1}
+			a.account.Login = accountvm.LoginState{Open: true, Generation: 1}
 			previous := &netease.Profile{UserID: 42}
 			a.account.Profile = previous
 			queue := make(chan func(playReporter), 1)
@@ -55,7 +56,7 @@ func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
 				t.Error("Escape did not close the dialog")
 			}
 			if reopen {
-				a.account.Login = viewmodel.LoginState{Open: true, Generation: 2}
+				a.account.Login = accountvm.LoginState{Open: true, Generation: 2}
 			}
 			apply()
 			if !wait(t, stopped, "the stale poll to stop") {
@@ -75,7 +76,7 @@ func TestLoginSaveFailureStaysVisible(t *testing.T) {
 	saveLoginSession = func() error { return errors.New("keychain unavailable") }
 	a := newTestApp()
 	posts := testPosts(a)
-	a.account.Login = viewmodel.LoginState{Open: true, Generation: 1, Finished: true}
+	a.account.Login = accountvm.LoginState{Open: true, Generation: 1, Finished: true}
 	a.account.SaveLogin(func() {
 		a.account.Login.Open = false
 	}, a.accountServices())
@@ -107,7 +108,7 @@ func TestLoginSaveSuccessClosesDialog(t *testing.T) {
 	saveLoginSession = func() error { return nil }
 	a := newTestApp()
 	posts := testPosts(a)
-	a.account.Login = viewmodel.LoginState{Open: true, Generation: 1}
+	a.account.Login = accountvm.LoginState{Open: true, Generation: 1}
 	a.account.SaveLogin(func() {
 		a.account.Login.Finished = true
 		a.account.Login.Open = false
@@ -216,7 +217,7 @@ func ownPageApp() *app {
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 9, Nickname: "听歌的人"}
 	user := netease.User{UserID: 9, Nickname: "听歌的人", Signature: "在音乐里，寻找同路的人。", Follows: 12, Followeds: 24}
-	a.users.Pages.Set(9, &viewmodel.UserPage{
+	a.users.Pages.Set(9, &uservm.UserPage{
 		User:         &user,
 		Playlists:    []netease.Playlist{{ID: 30, Name: "通勤路上", TrackCount: 40}},
 		Artists:      []netease.ArtistProfile{{Artist: netease.Artist{ID: 7, Name: "MyGO!!!!!"}}, {Artist: netease.Artist{ID: 10, Name: "Ave Mujica"}}},

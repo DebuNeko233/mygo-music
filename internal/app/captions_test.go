@@ -14,7 +14,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/speech"
-	"netease-music-mygo/internal/viewmodel"
+	captionsvm "netease-music-mygo/internal/viewmodel/captions"
 )
 
 const sec = time.Second
@@ -94,8 +94,8 @@ func TestTranscriptReloadWhileSavePending(t *testing.T) {
 // A cancelled transcription's queued callbacks must not write into its
 // replacement for the same episode.
 func TestCancelledCaptionWorkIsIgnored(t *testing.T) {
-	old := &viewmodel.CaptionWork{Program: 42}
-	current := &viewmodel.CaptionWork{Program: 42, From: 10 * sec}
+	old := &captionsvm.CaptionWork{Program: 42}
+	current := &captionsvm.CaptionWork{Program: 42, From: 10 * sec}
 	a := newTestApp()
 	a.captions.Program = 42
 	a.captions.Transcript = &transcript{}
@@ -204,14 +204,14 @@ func TestCaptionsOnTheirWay(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	for _, c := range []struct {
 		name  string
-		state viewmodel.Captions
+		state captionsvm.Captions
 	}{
-		{"after a song", viewmodel.Captions{}},
-		{"after another episode", viewmodel.Captions{Program: 41, Transcript: &transcript{Spans: []span{{0, 600 * sec}}}, Lines: speech.Lines([]speech.Segment{{Start: 0, End: sec, Text: "上一期"}})}},
-		{"loaded, the audio not yet", viewmodel.Captions{Program: 42, Transcript: &transcript{Model: speech.ModelName}}},
+		{"after a song", captionsvm.Captions{}},
+		{"after another episode", captionsvm.Captions{Program: 41, Transcript: &transcript{Spans: []span{{0, 600 * sec}}}, Lines: speech.Lines([]speech.Segment{{Start: 0, End: sec, Text: "上一期"}})}},
+		{"loaded, the audio not yet", captionsvm.Captions{Program: 42, Transcript: &transcript{Model: speech.ModelName}}},
 	} {
 		a.captions = c.state
-		a.captions.Model = viewmodel.CaptionModel{Checked: true, Installed: true}
+		a.captions.Model = captionsvm.CaptionModel{Checked: true, Installed: true}
 		tt.Frame()
 		tt.Frame()
 		if !tt.HasText("正在识别…") || tt.HasText("上一期") || tt.HasText("这期节目没有识别到语音") || tt.HasText("字幕生成失败") {
@@ -219,7 +219,7 @@ func TestCaptionsOnTheirWay(t *testing.T) {
 		}
 	}
 	// Written down whole, with nothing said, there is no speech.
-	a.captions = viewmodel.Captions{Program: 42, Transcript: &transcript{Spans: []span{{0, 600 * sec}}}, Model: viewmodel.CaptionModel{Checked: true, Installed: true}}
+	a.captions = captionsvm.Captions{Program: 42, Transcript: &transcript{Spans: []span{{0, 600 * sec}}}, Model: captionsvm.CaptionModel{Checked: true, Installed: true}}
 	tt.Frame()
 	if !tt.HasText("这期节目没有识别到语音") {
 		t.Errorf("written down whole: %q", tt.Texts())

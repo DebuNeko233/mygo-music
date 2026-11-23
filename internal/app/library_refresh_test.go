@@ -14,6 +14,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
+	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 
 func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {
@@ -28,6 +29,7 @@ func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {
 	a.library.Refresh.Now = func() time.Time { return now }
 	return a, posts, &now
 }
+
 func refreshPost(t *testing.T, posts chan func()) {
 	t.Helper()
 	select {
@@ -527,23 +529,24 @@ func TestLibraryRefreshRetryFailureStops(t *testing.T) {
 
 // Reset only refresh bookkeeping to isolate the app account-generation guard.
 func (a *app) resetLibraryFreshness() {
-	a.library.Refresh = viewmodel.LibraryRefresh{Now: a.library.Refresh.Now}
+	a.library.Refresh = libraryvm.LibraryRefresh{Now: a.library.Refresh.Now}
 	a.library.Loading = map[int64]bool{}
 	a.library.PlayWhenLoaded = map[int64]bool{}
 }
 
-func (a *app) playlistRequest(id int64) *viewmodel.ListRequest {
+func (a *app) playlistRequest(id int64) *libraryvm.ListRequest {
 	if a.library.Refresh.Playlists == nil {
-		a.library.Refresh.Playlists = map[int64]*viewmodel.ListRequest{}
+		a.library.Refresh.Playlists = map[int64]*libraryvm.ListRequest{}
 	}
 	if a.library.Refresh.Playlists[id] == nil {
-		a.library.Refresh.Playlists[id] = &viewmodel.ListRequest{}
+		a.library.Refresh.Playlists[id] = &libraryvm.ListRequest{}
 	}
 	return a.library.Refresh.Playlists[id]
 }
+
 func (a *app) usePlaylist(id int64) { a.library.UsePlaylist(id) }
 
-const playlistCachePages = viewmodel.PlaylistCachePages
+const playlistCachePages = libraryvm.PlaylistCachePages
 
 func (a *app) forgetPlaylist(id int64) {
 	a.library.ForgetPlaylist(id)

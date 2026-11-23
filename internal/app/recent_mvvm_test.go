@@ -10,7 +10,7 @@ import (
 
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	recentvm "netease-music-mygo/internal/viewmodel/recent"
 )
 
 // Switching away from a stalled tab keeps ready songs usable, and its retry action refreshes only the failed record.
@@ -36,15 +36,15 @@ func TestRecentTabSwitchAndRetry(t *testing.T) {
 	}
 	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.recentPage(c) }, 1200, 800)
 	tt.Frame()
-	for len(a.recent.Tracks) == 0 || a.recent.Tabs[viewmodel.RecentPlaylists].Loading || a.recent.Tabs[viewmodel.RecentPodcasts].Loading || a.recent.Tabs[viewmodel.RecentVoices].Loading {
+	for len(a.recent.Tracks) == 0 || a.recent.Tabs[recentvm.RecentPlaylists].Loading || a.recent.Tabs[recentvm.RecentPodcasts].Loading || a.recent.Tabs[recentvm.RecentVoices].Loading {
 		refreshPost(t, posts)
 	}
 	tt.Frame()
 	if err := tt.Click("专辑"); err != nil {
 		t.Fatal(err)
 	}
-	if a.recent.Selected != viewmodel.RecentAlbums || !a.recent.Tabs[viewmodel.RecentAlbums].Loading {
-		t.Fatalf("tab selection did not bind to the loading record: selected=%d loading=%v", a.recent.Selected, a.recent.Tabs[viewmodel.RecentAlbums].Loading)
+	if a.recent.Selected != recentvm.RecentAlbums || !a.recent.Tabs[recentvm.RecentAlbums].Loading {
+		t.Fatalf("tab selection did not bind to the loading record: selected=%d loading=%v", a.recent.Selected, a.recent.Tabs[recentvm.RecentAlbums].Loading)
 	}
 	if err := tt.Click("歌曲"); err != nil {
 		t.Fatal(err)
@@ -61,11 +61,11 @@ func TestRecentTabSwitchAndRetry(t *testing.T) {
 	if err := tt.Click("重新加载内容"); err != nil {
 		t.Fatal(err)
 	}
-	for a.recent.Tabs[viewmodel.RecentAlbums].Loading {
+	for a.recent.Tabs[recentvm.RecentAlbums].Loading {
 		refreshPost(t, posts)
 	}
 	tt.Frame()
-	if albumCalls.Load() != 2 || calls.Load() != 1 || !a.recent.Tabs[viewmodel.RecentAlbums].Shown || len(a.recent.AlbumItems) != 1 || a.recent.AlbumItems[0].ID != 77 || a.pl.Current() != nil {
+	if albumCalls.Load() != 2 || calls.Load() != 1 || !a.recent.Tabs[recentvm.RecentAlbums].Shown || len(a.recent.AlbumItems) != 1 || a.recent.AlbumItems[0].ID != 77 || a.pl.Current() != nil {
 		t.Fatal("tab retry lost data, refetched songs, or started playback")
 	}
 }
@@ -82,11 +82,11 @@ func TestRecentRepliesRespectSameUserNewLogin(t *testing.T) {
 			a := newTestApp()
 			a.account.Profile = &netease.Profile{UserID: 7}
 			posts := testPosts(a)
-			count := viewmodel.RecentTabCount
+			count := recentvm.RecentTabCount
 			if cached {
 				a.browseCache = diskcache.New(t.TempDir(), 1<<20)
 				defer a.browseCache.Close()
-				a.browseCache.Put("7", "recent", cacheBytes(viewmodel.RecentSnapshot{Songs: []netease.Play{{Track: netease.Track{ID: 42}}}}), a.browseCache.Epoch())
+				a.browseCache.Put("7", "recent", cacheBytes(recentvm.RecentSnapshot{Songs: []netease.Play{{Track: netease.Track{ID: 42}}}}), a.browseCache.Epoch())
 				count = 1
 			}
 			a.loadRecent()
@@ -96,11 +96,11 @@ func TestRecentRepliesRespectSameUserNewLogin(t *testing.T) {
 			}
 			a.account.Accept(&netease.Profile{UserID: 7})
 			a.recent.SetSongs([]netease.Play{{Track: netease.Track{ID: 99}}})
-			a.recent.Tabs[viewmodel.RecentSongs].Loading = true
+			a.recent.Tabs[recentvm.RecentSongs].Loading = true
 			for _, apply := range old {
 				apply()
 			}
-			if a.recent.Tracks[0].ID != 99 || !a.recent.Tabs[viewmodel.RecentSongs].Loading || cached && !a.recent.ReadingSnapshot {
+			if a.recent.Tracks[0].ID != 99 || !a.recent.Tabs[recentvm.RecentSongs].Loading || cached && !a.recent.ReadingSnapshot {
 				t.Fatal("old account generation changed a new pending record")
 			}
 		})

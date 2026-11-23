@@ -7,8 +7,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
 )
 
 // These load a podcast and its episodes from NetEase, and subscribe to it,
@@ -40,7 +41,7 @@ func (a *app) podcastPage(c *ui.Context) {
 	a.scrollPage(c, func() {
 		const coverSize = 212
 		ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
-			ui.Box(c).Size(coverSize, coverSize).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+			ui.Box(c).Size(coverSize, coverSize).Radius(14).Shadow(0, 18, 40, -10, p.CardShade).Children(func() {
 				a.coverFill(c, pod.PicURL, 600, 14)
 			})
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
@@ -48,25 +49,25 @@ func (a *app) podcastPage(c *ui.Context) {
 				if pod.Category != "" {
 					kind += " · " + pod.Category
 				}
-				ui.Text(c, kind).FontSize(12).FontWeight(600).TextColor(p.accent)
+				ui.Text(c, kind).FontSize(12).FontWeight(600).TextColor(p.Accent)
 				ui.Text(c, pod.Name).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
-				ui.RichText(c).FontSize(13).TextColor(p.muted).Children(func() {
+				ui.RichText(c).FontSize(13).TextColor(p.Muted).Children(func() {
 					if pod.DJ.UserID != 0 {
-						a.link(c.Key("dj"), pod.DJ.Nickname, p.muted, p.text, route{Page: pageUser, ID: pod.DJ.UserID})
+						a.link(c.Key("dj"), pod.DJ.Nickname, p.Muted, p.Text, route{Page: pageUser, ID: pod.DJ.UserID})
 						ui.Text(c, " · ")
 					}
 					ui.Text(c, fmt.Sprintf("%d 期 · %s 人订阅", pod.ProgramCount, count(int(pod.SubCount))))
 				})
 				a.headerDescription(c, pod.Name+" · 简介", pod.Description, coverSize)
 				ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
-					if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
+					if components.PillButton(c.Key("play"), components.IconPlay, "播放", p.Accent, p.OnAccent).Clicked() {
 						a.playProgram(d, 0)
 					}
-					icon, label := iconPlus, "订阅"
+					icon, label := components.IconPlus, "订阅"
 					if a.podcasts.IsSubscribed(pod) {
-						icon, label = iconCheck, "已订阅"
+						icon, label = components.IconCheck, "已订阅"
 					}
-					if pillButton(c.Key("subscribe"), icon, label, p.hover.Over(p.bg), p.text).Clicked() {
+					if components.PillButton(c.Key("subscribe"), icon, label, p.Hover.Over(p.Background), p.Text).Clicked() {
 						a.toggleSubscribe(d)
 					}
 				})
@@ -84,7 +85,7 @@ func (a *app) podcastPage(c *ui.Context) {
 }
 
 // programRow is an episode in its podcast's list, which a click plays.
-func (a *app) programRow(c *ui.Context, d *viewmodel.PodcastPage, i int, cur *netease.Track) {
+func (a *app) programRow(c *ui.Context, d *podcastvm.PodcastPage, i int, cur *netease.Track) {
 	p := a.pal
 	pr := &d.Programs[i]
 	playing := cur != nil && cur.ProgramID == pr.ID
@@ -92,9 +93,9 @@ func (a *app) programRow(c *ui.Context, d *viewmodel.PodcastPage, i int, cur *ne
 		Label(pr.Name).Disabled(pr.MainSong.ID == 0)
 	switch {
 	case playing:
-		row.Background(p.accent.Alpha(0.08))
+		row.Background(p.Accent.Alpha(0.08))
 	case row.Hovered():
-		row.Background(p.hover)
+		row.Background(p.Hover)
 	}
 	row.Children(func() {
 		cover := pr.CoverURL
@@ -105,9 +106,9 @@ func (a *app) programRow(c *ui.Context, d *viewmodel.PodcastPage, i int, cur *ne
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
 			title := ui.Text(c, pr.Name).FontSize(13.5).FontWeight(500).SingleLine()
 			if playing {
-				title.TextColor(p.accent)
+				title.TextColor(p.Accent)
 			}
-			ui.Text(c, time.UnixMilli(pr.CreateTime).Format("2006-01-02")).FontSize(12).TextColor(p.muted)
+			ui.Text(c, time.UnixMilli(pr.CreateTime).Format("2006-01-02")).FontSize(12).TextColor(p.Muted)
 		})
 		if playing {
 			a.nowPlayingBars(c)
@@ -116,10 +117,10 @@ func (a *app) programRow(c *ui.Context, d *viewmodel.PodcastPage, i int, cur *ne
 		ui.Box(c).Size(32, 32).Center().Children(func() {
 			if a.library.LikedPrograms[pr.ID] || row.Hovered() {
 				tr := pr.Track(d.Podcast)
-				a.likeButton(c.Key(fmt.Sprintf("like-%d", pr.ID)), &tr, 15, p.muted)
+				a.likeButton(c.Key(fmt.Sprintf("like-%d", pr.ID)), &tr, 15, p.Muted)
 			}
 		})
-		ui.Text(c, clock(time.Duration(pr.Duration)*time.Millisecond)).FontSize(12).FontFeatures("tnum").TextColor(p.muted)
+		ui.Text(c, components.Clock(time.Duration(pr.Duration)*time.Millisecond)).FontSize(12).FontFeatures("tnum").TextColor(p.Muted)
 	})
 	if row.Clicked() {
 		a.playProgram(d, i)
@@ -144,7 +145,7 @@ func (a *app) podcastRow(c *ui.Context, pod *netease.Podcast, width float32) {
 	const pad, gap, cover = 12, 14, 64
 	row := ui.ButtonBase(c).Padding(10, pad).Gap(gap).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(pod.Name)
 	if row.Hovered() {
-		row.Background(p.hover)
+		row.Background(p.Hover)
 	}
 	row.Children(func() {
 		a.cover(c, pod.PicURL, 160, cover, 8)
@@ -154,7 +155,7 @@ func (a *app) podcastRow(c *ui.Context, pod *netease.Podcast, width float32) {
 			if pod.DJ.Nickname != "" {
 				meta = append([]string{pod.DJ.Nickname}, meta...)
 			}
-			ui.Text(c, strings.Join(meta, " · ")).FontSize(12.5).TextColor(p.muted).SingleLine()
+			ui.Text(c, strings.Join(meta, " · ")).FontSize(12.5).TextColor(p.Muted).SingleLine()
 			a.descriptionSummary(c, pod.Name+" · 简介", pod.Description, width-2*pad-gap-cover, 1)
 		})
 	})

@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"netease-music-mygo/internal/speech"
-	"netease-music-mygo/internal/viewmodel"
+	captionsvm "netease-music-mygo/internal/viewmodel/captions"
 )
 
 var (
@@ -21,8 +21,8 @@ var (
 
 type transcriber = speech.Transcriber
 
-func (a *app) captionServices() viewmodel.CaptionServices {
-	return viewmodel.CaptionServices{
+func (a *app) captionServices() captionsvm.CaptionServices {
+	return captionsvm.CaptionServices{
 		Player: a.pl, Engine: &a.captionEngine, Post: a.post,
 		Available: captionsAvailable, Enabled: func() bool { return a.settings.Captions },
 		Enable: func() { a.settings.Captions = true; a.settings.saveSoon() },
@@ -36,7 +36,9 @@ func (a *app) captionServices() viewmodel.CaptionServices {
 		Installed: modelInstalled, Download: downloadModel, Remove: removeModel, NewTranscriber: newTranscriber,
 	}
 }
+
 func (a *app) captionsShown() bool { return captionsAvailable() }
+
 func (a *app) modelReady() bool {
 	m := &a.captions.Model
 	if m.Checked || m.Checking || m.Downloading || m.Deleting {
@@ -44,12 +46,19 @@ func (a *app) modelReady() bool {
 	}
 	return a.captions.ModelReady(a.captionServices())
 }
-func (a *app) captionsOn() bool      { return a.settings.Captions && a.captionsShown() && a.modelReady() }
-func (a *app) startModelDownload()   { a.captions.StartModelDownload(a.captionServices()) }
-func (a *app) cancelModelDownload()  { a.captions.CancelModelDownload() }
-func (a *app) deleteModel()          { a.captions.DeleteModel(a.captionServices()) }
-func (a *app) syncCaptions()         { a.captions.Sync(a.captionServices()) }
+
+func (a *app) captionsOn() bool { return a.settings.Captions && a.captionsShown() && a.modelReady() }
+
+func (a *app) startModelDownload() { a.captions.StartModelDownload(a.captionServices()) }
+
+func (a *app) cancelModelDownload() { a.captions.CancelModelDownload() }
+
+func (a *app) deleteModel() { a.captions.DeleteModel(a.captionServices()) }
+
+func (a *app) syncCaptions() { a.captions.Sync(a.captionServices()) }
+
 func (a *app) captionsWritten() bool { return a.captions.Written(a.pl.Duration()) }
+
 func (a *app) captionsWriting(pos time.Duration) bool {
 	on := false
 	if a.captions.Transcript == nil {
@@ -57,6 +66,7 @@ func (a *app) captionsWriting(pos time.Duration) bool {
 	}
 	return a.captions.Writing(pos, on)
 }
+
 func (a *app) transcriptWrite() func() { return a.captions.Write(transcriptPath) }
 
 // modelDir is where the model and the libraries that run it download to.

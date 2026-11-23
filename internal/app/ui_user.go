@@ -38,13 +38,13 @@ func (a *app) userPage(c *ui.Context) {
 	own := a.account.Profile != nil && a.account.Profile.UserID == id
 	a.scrollPage(c, func() {
 		ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Children(func() {
-			ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+			ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.CardShade).Children(func() {
 				a.coverFill(c, u.AvatarURL, 600, artistPhotoSize/2)
 			})
 			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
-				ui.Text(c, "用户").FontSize(12).FontWeight(600).TextColor(p.accent)
+				ui.Text(c, "用户").FontSize(12).FontWeight(600).TextColor(p.Accent)
 				ui.Text(c, u.Nickname).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
-				ui.Text(c, fmt.Sprintf("%s 关注 · %s 粉丝", count(u.Follows), count(u.Followeds))).FontSize(13).TextColor(p.muted)
+				ui.Text(c, fmt.Sprintf("%s 关注 · %s 粉丝", count(u.Follows), count(u.Followeds))).FontSize(13).TextColor(p.Muted)
 				a.headerDescription(c, u.Nickname+" · 个人签名", u.Signature, artistPhotoSize)
 			})
 		})
@@ -95,7 +95,7 @@ func (a *app) userRow(c *ui.Context, u *netease.User) {
 	const pad, gap, cover = 12, 14, 48
 	row := ui.ButtonBase(c).Padding(10, pad).Gap(gap).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(u.Nickname)
 	if row.Hovered() {
-		row.Background(p.hover)
+		row.Background(p.Hover)
 	}
 	row.Children(func() {
 		a.cover(c, u.AvatarURL, 120, cover, cover/2)

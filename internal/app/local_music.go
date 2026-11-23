@@ -9,7 +9,7 @@ import (
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/userdata"
-	"netease-music-mygo/internal/viewmodel"
+	localvm "netease-music-mygo/internal/viewmodel/local"
 )
 
 var localExtensions = audioformat.Extensions()
@@ -30,8 +30,8 @@ func (a *app) initLocalMusic() {
 	a.pl.LocalLyrics = a.local.LyricsLoader
 }
 
-func (a *app) localServices() viewmodel.LocalServices {
-	return viewmodel.LocalServices{
+func (a *app) localServices() localvm.LocalServices {
+	return localvm.LocalServices{
 		Post: a.post, Check: localcatalog.MissingFiles, UpdateTracks: a.pl.UpdateLocalTracks,
 		Save: func(path string, catalog localcatalog.Catalog) bool { return userdata.WriteJSON(path, catalog) },
 		Changed: func() {
@@ -49,13 +49,19 @@ func (a *app) playbackLocalSong(track *netease.Track) localcatalog.Song {
 	}
 	return a.local.Song(track.LocalID)
 }
-func (a *app) checkLocalFiles()               { a.local.CheckFiles(a.localServices()) }
+
+func (a *app) checkLocalFiles() { a.local.CheckFiles(a.localServices()) }
+
 func (a *app) addLocalFolders(paths []string) { a.local.AddFolders(paths, a.localServices()) }
+
 func (a *app) refreshLocalSongs() {
 	if !a.localView.picking {
 		a.local.Refresh(a.localServices())
 	}
 }
-func (a *app) removeLocalFolder(path string)         { a.local.RemoveFolder(path, a.localServices()) }
+
+func (a *app) removeLocalFolder(path string) { a.local.RemoveFolder(path, a.localServices()) }
+
 func (a *app) relinkLocalSong(id int64, path string) { a.local.Relink(id, path, a.localServices()) }
-func (a *app) removeLocalSong(id int64)              { a.local.RemoveSong(id, a.localServices()) }
+
+func (a *app) removeLocalSong(id int64) { a.local.RemoveSong(id, a.localServices()) }

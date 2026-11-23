@@ -8,11 +8,12 @@ import (
 
 	"netease-music-mygo/internal/cachemove"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	settingsvm "netease-music-mygo/internal/viewmodel/settings"
 )
 
 // openCacheDirectory asks for a folder, as the system's own picker does.
 var openCacheDirectory = mygo.Dialog.Open
+
 var quitAfterCacheMove = mygo.App.Quit
 
 // changeCacheDirectory suspends all stores before moving them off the UI
@@ -68,7 +69,7 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 	if err != nil {
 		return err
 	}
-	return a.cacheSettings.Change(viewmodel.CacheChange{Source: source, Target: target, Directory: directory, Journal: journal, Migrate: migrate, Shared: shared, Default: isDefault}, a.cacheServices())
+	return a.cacheSettings.Change(settingsvm.CacheChange{Source: source, Target: target, Directory: directory, Journal: journal, Migrate: migrate, Shared: shared, Default: isDefault}, a.cacheServices())
 }
 
 // chooseCacheDirectory asks for the shared cache root.
@@ -116,7 +117,7 @@ func (a *app) confirmCacheDirectory(directory string) {
 		}
 		return
 	}
-	a.cacheSettings.Confirm = viewmodel.CacheConfirmation{Open: true, Directory: directory, Target: target}
+	a.cacheSettings.Confirm = settingsvm.CacheConfirmation{Open: true, Directory: directory, Target: target}
 }
 
 // submitCacheDirectory moves all caches when requested; otherwise old files stay.
@@ -182,6 +183,7 @@ func (a *app) recoverCacheDirectory() {
 }
 
 func (a *app) cancelCacheChange() { a.cacheSettings.Cancel(); a.redraw() }
+
 func (a *app) deferCacheQuit() bool {
 	deferred := a.cacheSettings.DeferQuit()
 	if deferred {
@@ -189,9 +191,11 @@ func (a *app) deferCacheQuit() bool {
 	}
 	return deferred
 }
+
 func (a *app) cacheMoveLabel() string { return a.cacheSettings.Label() }
-func (a *app) cacheServices() viewmodel.CacheServices {
-	return viewmodel.CacheServices{Post: a.post, PostResource: a.postResource, Player: a.pl, Browse: a.browseCache, Images: a.imageCache,
+
+func (a *app) cacheServices() settingsvm.CacheServices {
+	return settingsvm.CacheServices{Post: a.post, PostResource: a.postResource, Player: a.pl, Browse: a.browseCache, Images: a.imageCache,
 		Commit: func(directory string) error {
 			next := a.settings
 			next.CacheDir = directory

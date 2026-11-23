@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 func detailPerfApp(scene string) *app {
@@ -24,16 +24,16 @@ func detailPerfApp(scene string) *app {
 	switch scene {
 	case "artist-hot":
 		a.nav.Current = route{Page: pageArtist, ID: 7}
-		a.artists.Tab = viewmodel.ArtistHot
+		a.artists.Tab = artistvm.ArtistHot
 	case "artist-latest":
 		a.nav.Current = route{Page: pageArtist, ID: 7}
-		a.artists.Tab = viewmodel.ArtistLatest
+		a.artists.Tab = artistvm.ArtistLatest
 	case "artist-albums":
 		a.nav.Current = route{Page: pageArtist, ID: 7}
-		a.artists.Tab = viewmodel.ArtistAlbums
+		a.artists.Tab = artistvm.ArtistAlbums
 	case "artist-events":
 		a.nav.Current = route{Page: pageArtist, ID: 7}
-		a.artists.Tab = viewmodel.ArtistEvents
+		a.artists.Tab = artistvm.ArtistEvents
 	case "album":
 		a.nav.Current = route{Page: pageAlbum, ID: 8}
 	case "user":

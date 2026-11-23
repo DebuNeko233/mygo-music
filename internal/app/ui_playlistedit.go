@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -48,7 +49,7 @@ func (a *app) playlistNameDialog(c *ui.Context) {
 	ui.DialogBase(c.Key("playlist-name"), &d.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(360).Padding(24).Radius(18).Gap(16).
-			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
+			Background(p.Background).Border(1, p.Hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		title, action := "新建歌单", "创建"
 		if d.Rename != 0 {
@@ -63,10 +64,10 @@ func (a *app) playlistNameDialog(c *ui.Context) {
 			a.submitName()
 		}
 		ui.Row(c).Gap(10).Justify(ui.End).Children(func() {
-			if pillButton(c.Key("cancel"), nil, "取消", p.hover.Over(p.bg), p.text).Clicked() {
+			if components.PillButton(c.Key("cancel"), nil, "取消", p.Hover.Over(p.Background), p.Text).Clicked() {
 				d.Open = false
 			}
-			ok := pillButton(c.Key("ok"), nil, action, p.accent, p.onAccent)
+			ok := components.PillButton(c.Key("ok"), nil, action, p.Accent, p.OnAccent)
 			if strings.TrimSpace(d.Name) == "" {
 				ok.Disabled(true).Opacity(0.5)
 			}
@@ -85,15 +86,15 @@ func (a *app) deletePlaylistDialog(c *ui.Context) {
 	ui.DialogBase(c.Key("playlist-delete"), &d.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(360).Padding(24).Radius(18).Gap(8).
-			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
+			Background(p.Background).Border(1, p.Hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		ui.Text(c, "删除歌单").FontSize(17).FontWeight(700)
-		ui.Text(c, "确定删除歌单“"+d.Name+"”吗？删除后无法恢复。").FontSize(13).TextColor(p.muted).LineHeight(1.45)
+		ui.Text(c, "确定删除歌单“"+d.Name+"”吗？删除后无法恢复。").FontSize(13).TextColor(p.Muted).LineHeight(1.45)
 		ui.Row(c).Gap(10).Justify(ui.End).Margin(8, 0, 0, 0).Children(func() {
-			if pillButton(c.Key("cancel"), nil, "取消", p.hover.Over(p.bg), p.text).Clicked() {
+			if components.PillButton(c.Key("cancel"), nil, "取消", p.Hover.Over(p.Background), p.Text).Clicked() {
 				d.Open = false
 			}
-			if pillButton(c.Key("ok"), nil, "删除", p.accent, p.onAccent).Clicked() {
+			if components.PillButton(c.Key("ok"), nil, "删除", p.Accent, p.OnAccent).Clicked() {
 				a.deleteChosen()
 			}
 		})

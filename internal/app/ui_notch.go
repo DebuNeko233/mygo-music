@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -37,7 +38,7 @@ type notch struct {
 	active     bool   // the app is active, when they go unseen over the menu bar
 	polling    bool   // a poll is due
 
-	bars  barState
+	bars  components.BarState
 	scrub scrubState
 }
 
@@ -452,10 +453,10 @@ func (n *notch) compact(c *ui.Context, tr *netease.Track, shown float32) {
 	s := n.h0 - 12
 	ui.Row(c).Absolute().Top(0).Left(0).Right(0).Height(n.h0).PaddingX(7).AlignItems(ui.Center).Opacity(shown).Children(func() {
 		cov := ui.Box(c).Size(s, s).Radius(s * 0.28)
-		in := artIn(cov, bitmap(art))
+		in := components.ArtIn(cov, bitmap(art))
 		cov.Children(func() {
-			coverPlaceholder(c, s, s*0.28, 1-in, white.Alpha(0.12), white.Alpha(0.35))
-			artImage(c, bitmap(art), s*0.28, in)
+			components.CoverPlaceholder(c, s, s*0.28, 1-in, white.Alpha(0.12), white.Alpha(0.35))
+			components.ArtImage(c, bitmap(art), s*0.28, in)
 		})
 		ui.Spacer(c)
 		n.levels(c, tr, 16, s*0.7, 4)
@@ -471,9 +472,9 @@ func (n *notch) levels(c *ui.Context, tr *netease.Track, w, h float32, count int
 	}
 	ui.Box(c).Size(w, h).Draw(func(p *ui.Painter, r ui.Rect) {
 		lv, live := a.pl.Levels()
-		n.bars.step(p.Now(), lv, live)
-		drawBars(p, r, &n.bars, count, color, 2.5)
-		if live || n.bars.group(0, player.Bands) > 0.01 {
+		n.bars.Step(p.Now(), lv, live)
+		components.DrawBars(p, r, &n.bars, count, color, 2.5)
+		if live || n.bars.Group(0, player.Bands) > 0.01 {
 			p.AnimationFrame()
 		}
 	})
@@ -494,10 +495,10 @@ func (n *notch) expanded(c *ui.Context, tr *netease.Track, open, left float32) {
 				lift.Scale = 1.05
 			}
 			cov.AnimatePose(lift, ui.Snappy)
-			in := artIn(cov, bitmap(art))
+			in := components.ArtIn(cov, bitmap(art))
 			cov.Children(func() {
-				coverPlaceholder(c, 60, 12, 1-in, white.Alpha(0.12), white.Alpha(0.35))
-				artImage(c, bitmap(art), 12, in)
+				components.CoverPlaceholder(c, 60, 12, 1-in, white.Alpha(0.12), white.Alpha(0.35))
+				components.ArtImage(c, bitmap(art), 12, in)
 			})
 			if cov.Clicked() {
 				a.playbackState.Open = true
@@ -516,9 +517,9 @@ func (n *notch) expanded(c *ui.Context, tr *netease.Track, open, left float32) {
 			n.levels(c, tr, 26, 22, 5)
 		})
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, clock(pl.Position())).FontSize(10.5).FontFeatures("tnum").TextColor(white.Alpha(0.5)).Width(30)
+			ui.Text(c, components.Clock(pl.Position())).FontSize(10.5).FontFeatures("tnum").TextColor(white.Alpha(0.5)).Width(30)
 			a.scrubber(c.Key("notch-scrub"), &n.scrub, white.Alpha(0.18), white.Alpha(0.9), 14, ui.Color{}).Grow(1)
-			ui.Text(c, "-"+clock(pl.Duration()-pl.Position())).FontSize(10.5).FontFeatures("tnum").TextColor(white.Alpha(0.5)).Width(34).TextAlign(ui.End)
+			ui.Text(c, "-"+components.Clock(pl.Duration()-pl.Position())).FontSize(10.5).FontFeatures("tnum").TextColor(white.Alpha(0.5)).Width(34).TextAlign(ui.End)
 		})
 		ui.Box(c).Margin(-6, 0, 0, 0).Children(func() {
 			a.transport(c, white, white.Alpha(0.4), white, 20)
@@ -544,7 +545,7 @@ func (n *notch) helloRow(c *ui.Context, shown, left float32) {
 			ui.Text(c, title).FontSize(13.5).FontWeight(700).SingleLine()
 			ui.Text(c, hint).FontSize(11.5).TextColor(white.Alpha(0.55)).SingleLine()
 		})
-		b := ui.ButtonBase(c.Key("keep")).Padding(6, 14).Radius(999).Background(a.pal.accent).FocusRing(false).Label("开启刘海播放器")
+		b := ui.ButtonBase(c.Key("keep")).Padding(6, 14).Radius(999).Background(a.pal.Accent).FocusRing(false).Label("开启刘海播放器")
 		b.Children(func() { ui.Text(c, "开启").FontSize(12.5).FontWeight(600) })
 		if b.Clicked() {
 			n.keep()
@@ -560,8 +561,8 @@ func (n *notch) idle(c *ui.Context, open, left float32) {
 	a := n.a
 	ui.Row(c).Absolute().Top(n.h0+4).Left(left).Width(notchIdleW).Padding(10, 20, 14, 20).Gap(12).AlignItems(ui.Center).
 		Opacity(max(0, open*1.4-0.4)).Children(func() {
-		ui.Box(c).Size(36, 36).Radius(10).Background(a.pal.accent).Center().Children(func() {
-			ui.Icon(c, iconNote).Size(18, 18).TextColor(white)
+		ui.Box(c).Size(36, 36).Radius(10).Background(a.pal.Accent).Center().Children(func() {
+			ui.Icon(c, components.IconNote).Size(18, 18).TextColor(white)
 		})
 		ui.Column(c).Grow(1).Gap(2).Children(func() {
 			ui.Text(c, mygo.App.Name()).FontSize(14).FontWeight(700)

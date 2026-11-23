@@ -5,7 +5,7 @@ import (
 
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	localvm "netease-music-mygo/internal/viewmodel/local"
 )
 
 func (a *app) chooseTemporaryAudio() {
@@ -35,7 +35,7 @@ func (a *app) openTemporaryAudio(path string) {
 		return
 	}
 	a.showMain()
-	a.local.OpenTemporary(path, viewmodel.LocalOpenServices{
+	a.local.OpenTemporary(path, localvm.LocalOpenServices{
 		Post: a.post, PostResource: a.postResource, Stopped: func() bool { return a.quitting }, Prepare: localcatalog.PrepareTemporary,
 		Release: func(audio *player.LocalAudio) { audio.Close() },
 		Play: func(previous, song localcatalog.Song, audio *player.LocalAudio) {

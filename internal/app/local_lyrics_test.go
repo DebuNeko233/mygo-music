@@ -13,7 +13,7 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	localvm "netease-music-mygo/internal/viewmodel/local"
 )
 
 // Matching requires a version confirmation, keeps playback intact, and
@@ -128,7 +128,7 @@ func TestLocalLyricsTemporaryMatchStaysInMemory(t *testing.T) {
 	a.pl.Cue([]netease.Track{track})
 	a.pl.RetryMetadata()
 	wait(t, posts, "temporary metadata")()
-	d := &viewmodel.LocalLyricMatch{Open: true, Track: a.pl.Current(), Selected: 12}
+	d := &localvm.LocalLyricMatch{Open: true, Track: a.pl.Current(), Selected: 12}
 	a.local.LyricMatch = d
 	old := lyricsRequest
 	lyricsRequest = func(id int64) (string, string, string, error) { return "[00:00.00]试听歌词", "", "", nil }
@@ -171,7 +171,7 @@ func TestLocalLyricsRemovedFolderDoesNotKeepMatches(t *testing.T) {
 		return "[00:00.00]迟到的匹配", "", "", nil
 	}
 	t.Cleanup(func() { close(finish); lyricsRequest = old })
-	dialog := &viewmodel.LocalLyricMatch{Open: true, Selected: 10, Track: a.pl.Current()}
+	dialog := &localvm.LocalLyricMatch{Open: true, Selected: 10, Track: a.pl.Current()}
 	a.local.LyricMatch = dialog
 	a.confirmLocalLyricMatch(dialog)
 	wait(t, started, "lyric request")
@@ -205,7 +205,7 @@ func TestLocalLyricsDialogInputAndDismissal(t *testing.T) {
 		return []netease.Track{{ID: 7, Name: "version"}}, nil
 	}
 	t.Cleanup(func() { searchLocalLyrics = old })
-	d := &viewmodel.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "initial"}
+	d := &localvm.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "initial"}
 	a.local.LyricMatch = d
 	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.localLyricMatchDialog(c) }, 780, 600)
 	tt.Frame()
@@ -230,7 +230,7 @@ func TestLocalLyricsDialogInputAndDismissal(t *testing.T) {
 	if d.Open {
 		t.Fatal("Escape did not update the ViewModel's dialog state")
 	}
-	a.local.LyricMatch = &viewmodel.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "reopened"}
+	a.local.LyricMatch = &localvm.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "reopened"}
 	tt.Frame()
 	pending()
 	tt.Frame()

@@ -6,8 +6,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 // These load a page of a thread's comments, and like a comment or unlike
@@ -17,17 +18,20 @@ var (
 	likeComment    = netease.LikeComment
 )
 
-func (a *app) commentServices() viewmodel.CommentServices {
-	return viewmodel.CommentServices{Post: a.detailPost(), Fetch: threadComments, Like: likeComment, Notify: func(message string) { a.toast = message }}
+func (a *app) commentServices() commentsvm.CommentServices {
+	return commentsvm.CommentServices{Post: a.detailPost(), Fetch: threadComments, Like: likeComment, Notify: func(message string) { a.toast = message }}
 }
+
 func (a *app) resetComments() { a.comments.Reset(); a.commentScroll = ui.ScrollState{} }
-func (a *app) commentsFor(tr *netease.Track) *viewmodel.Comments {
+
+func (a *app) commentsFor(tr *netease.Track) *commentsvm.Comments {
 	if a.comments.Track != tr.Key() {
 		a.commentScroll = ui.ScrollState{}
 		a.comments.For(tr, a.commentServices())
 	}
 	return &a.comments
 }
+
 func (a *app) loadComments() {
 	if !a.comments.Loading {
 		a.comments.Load(a.commentServices())
@@ -122,7 +126,7 @@ func count(n int) string {
 	if n >= 1e4 && n < 1e6 {
 		return fmt.Sprintf("%.1f万", float64(n)/1e4)
 	}
-	return plays(float64(n))
+	return components.Plays(float64(n))
 }
 
 type commentKey struct {
@@ -147,11 +151,11 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 			switch {
 			case cs.Error != "":
 				ui.Text(c, cs.Error).FontSize(15).TextColor(white.Alpha(0.5))
-				if pillButton(c.Key("retry"), iconComment, "重试", white.Alpha(0.14), white).Clicked() {
+				if components.PillButton(c.Key("retry"), components.IconComment, "重试", white.Alpha(0.14), white).Clicked() {
 					a.loadComments()
 				}
 			default:
-				ui.Icon(c, iconComment).Size(40, 40).TextColor(white.Alpha(0.3))
+				ui.Icon(c, components.IconComment).Size(40, 40).TextColor(white.Alpha(0.3))
 				ui.Text(c, "还没有评论，快来抢沙发").FontSize(17).FontWeight(600).TextColor(white.Alpha(0.45))
 			}
 		})
@@ -238,7 +242,7 @@ func (a *app) commentRow(c *ui.Context, cm *netease.Comment, now time.Time) {
 func (a *app) commentLike(c *ui.Context, cm *netease.Comment) {
 	label, fg := "赞", white.Alpha(0.42)
 	if cm.Liked {
-		label, fg = "取消赞", a.pal.accent
+		label, fg = "取消赞", a.pal.Accent
 	}
 	b := ui.ButtonBase(c).Gap(4).Padding(3, 6).Margin(-3, -6).Radius(999).AlignItems(ui.Center).FocusRing(false).Label(label)
 	if b.Hovered() && !cm.Liked {
@@ -246,9 +250,9 @@ func (a *app) commentLike(c *ui.Context, cm *netease.Comment) {
 	}
 	b.TextColor(b.AnimateColor("fg", fg, ui.Animation{Duration: 120 * time.Millisecond}))
 	b.Children(func() {
-		icon := iconThumb
+		icon := components.IconThumb
 		if cm.Liked {
-			icon = iconThumbFill
+			icon = components.IconThumbFill
 		}
 		ui.Icon(c, icon).Size(13, 13)
 		if cm.LikedCount > 0 {
@@ -275,11 +279,11 @@ func (a *app) toggleCommentLike(id int64) {
 func (a *app) avatar(c *ui.Context, url string, size float32, empty ui.Color) {
 	box := ui.Box(c).Size(size, size).Radius(size / 2).Shrink(0)
 	bmp := bitmap(a.art.getInView(netease.Sized(url, int(size*3)), false, box))
-	in := artIn(box, bmp)
+	in := components.ArtIn(box, bmp)
 	if in < 1 {
 		box.Background(empty)
 	}
-	box.Children(func() { artImage(c, bmp, size/2, in) })
+	box.Children(func() { components.ArtImage(c, bmp, size/2, in) })
 }
 
 // commentTime says when a comment was written, as NetEase does: in

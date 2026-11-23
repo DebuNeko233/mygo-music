@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -21,10 +22,10 @@ func (a *app) dailyArt(c *ui.Context, now time.Time, size float32) {
 	}
 	radius := size * 0.07
 	box := ui.Box(c).Size(size, size).Radius(radius).Background(ui.Hex("#3a3a40")).
-		Shadow(0, 18, 40, -10, a.pal.cardShade)
-	in := artIn(box, backdrop(art))
+		Shadow(0, 18, 40, -10, a.pal.CardShade)
+	in := components.ArtIn(box, backdrop(art))
 	box.Children(func() {
-		artImage(c, backdrop(art), radius, in)
+		components.ArtImage(c, backdrop(art), radius, in)
 		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(radius).
 			LinearGradient(ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
 				{Color: ui.RGBA(0, 0, 0, 0), At: 0.35},
@@ -62,7 +63,7 @@ func (a *app) dailyCard(c *ui.Context, now time.Time) {
 	deep, rich, glow = card.AnimateColor("deep", deep, fade), card.AnimateColor("rich", rich, fade), card.AnimateColor("glow", glow, fade)
 	card.Background(deep)
 	lift := card.AnimateTo("lift", b2f(hovered), ui.Snappy)
-	card.Shadow(0, 14+8*lift, 34+12*lift, -14, a.pal.cardShade)
+	card.Shadow(0, 14+8*lift, 34+12*lift, -14, a.pal.CardShade)
 	// A sheen sweeps across once as the pointer comes in.
 	sweep := float32(0)
 	if hovered && !still {
@@ -118,7 +119,7 @@ func (a *app) dailyCard(c *ui.Context, now time.Time) {
 				ui.Text(c, dailyArtists(songs)).FontSize(13).TextColor(white.Alpha(0.8)).MaxLines(1)
 				ui.Row(c).Gap(10).Margin(12, 0, 0, 0).Children(func() {
 					a.dailyPlayButton(c.Key("play"), songs, ours, playing)
-					if a.account.Profile == nil && pillButton(c.Key("login"), iconUser, "登录", white.Alpha(0.16), white).Clicked() {
+					if a.account.Profile == nil && components.PillButton(c.Key("login"), components.IconUser, "登录", white.Alpha(0.16), white).Clicked() {
 						a.openLogin()
 					}
 				})
@@ -318,19 +319,19 @@ func (a *app) dailyPlayButton(c *ui.Context, songs []netease.Track, ours, playin
 	b.Label(label)
 	b.Children(func() {
 		if playing && !b.Hovered() {
-			accent := a.pal.accent
+			accent := a.pal.Accent
 			ui.Box(c).Size(14, 13).Draw(func(p *ui.Painter, r ui.Rect) {
 				lv, live := a.pl.Levels()
-				a.dailyBars.step(p.Now(), lv, live)
-				drawBars(p, r, &a.dailyBars, 4, accent, 2.5)
-				if live || a.dailyBars.group(0, player.Bands) > 0.01 {
+				a.dailyBars.Step(p.Now(), lv, live)
+				components.DrawBars(p, r, &a.dailyBars, 4, accent, 2.5)
+				if live || a.dailyBars.Group(0, player.Bands) > 0.01 {
 					p.AnimationFrameRate(dailyRate)
 				}
 			})
 		} else {
-			icon := iconPlay
+			icon := components.IconPlay
 			if playing {
-				icon = iconPause
+				icon = components.IconPause
 			}
 			ui.Icon(c, icon).Size(14, 14)
 		}
@@ -363,7 +364,7 @@ func (a *app) dailyPicks(c *ui.Context, songs []netease.Track, ours bool) {
 			row.Children(func() {
 				ui.Box(c).Width(18).Center().Children(func() {
 					if current {
-						ui.Icon(c, iconPlay).Size(11, 11).TextColor(white)
+						ui.Icon(c, components.IconPlay).Size(11, 11).TextColor(white)
 					} else {
 						ui.Textf(c, "%02d", i+1).FontSize(12).FontWeight(700).FontFeatures("tnum").TextColor(white.Alpha(0.45))
 					}
@@ -486,7 +487,7 @@ func (a *app) dailyPage(c *ui.Context) {
 		ui.Row(c).Gap(28).AlignItems(ui.End).Padding(0, 0, 26, 0).Children(func() {
 			a.dailyArt(c, now, 212)
 			ui.Column(c).Gap(8).Children(func() {
-				ui.Text(c, "每日推荐").FontSize(12).FontWeight(600).TextColor(p.accent)
+				ui.Text(c, "每日推荐").FontSize(12).FontWeight(600).TextColor(p.Accent)
 				ui.Text(c, "每日歌曲推荐").FontSize(30).FontWeight(800).LetterSpacing(-0.6)
 				if loading {
 					s.text(c, 13, 1.3).Width(240)
@@ -496,15 +497,15 @@ func (a *app) dailyPage(c *ui.Context) {
 					})
 					return
 				}
-				ui.Text(c, fmt.Sprintf("%d 首 · %s", len(songs), a.dailyBlurb())).FontSize(13).TextColor(p.muted)
+				ui.Text(c, fmt.Sprintf("%d 首 · %s", len(songs), a.dailyBlurb())).FontSize(13).TextColor(p.Muted)
 				ui.Row(c).Gap(10).Margin(8, 0, 0, 0).Children(func() {
-					if pillButton(c.Key("play"), iconPlay, "播放全部", p.accent, p.onAccent).Clicked() {
+					if components.PillButton(c.Key("play"), components.IconPlay, "播放全部", p.Accent, p.OnAccent).Clicked() {
 						if a.pl.Shuffle() {
 							a.pl.ToggleShuffle()
 						}
 						a.pl.PlayQueueFrom(songs, firstPlayable(songs), a.playSource())
 					}
-					if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
+					if components.PillButton(c.Key("shuffle"), components.IconShuffle, "随机播放", p.Hover.Over(p.Background), p.Text).Clicked() {
 						a.pl.PlayShuffledFrom(songs, a.playSource())
 					}
 				})

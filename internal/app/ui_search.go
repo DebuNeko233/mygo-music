@@ -6,8 +6,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
 )
 
 // searchResults and searchSuggest search NetEase; tests replace them.
@@ -66,7 +67,8 @@ func (a *app) loadSearch(r route, again bool) {
 		a.searches.Pages.Get(r)
 	}
 }
-func (a *app) moreResults(r route, d *viewmodel.SearchPage) {
+
+func (a *app) moreResults(r route, d *searchvm.SearchPage) {
 	a.searches.LoadMore(r, d, a.searchServices())
 }
 
@@ -142,7 +144,7 @@ func (a *app) searchPage(c *ui.Context) {
 	})
 }
 
-func (a *app) searchEmpty(c *ui.Context, d *viewmodel.SearchPage) {
+func (a *app) searchEmpty(c *ui.Context, d *searchvm.SearchPage) {
 	if d.Page.Loaded && d.Res.Len() == 0 {
 		a.empty(c, "没有找到相关结果")
 	}
@@ -150,7 +152,7 @@ func (a *app) searchEmpty(c *ui.Context, d *viewmodel.SearchPage) {
 
 // searchHeader is what was searched for, how many it found, and the tabs
 // of what it may look for instead.
-func (a *app) searchHeader(c *ui.Context, d *viewmodel.SearchPage) {
+func (a *app) searchHeader(c *ui.Context, d *searchvm.SearchPage) {
 	r := a.nav.Current
 	sub := "搜索"
 	at := 0
@@ -168,7 +170,7 @@ func (a *app) searchHeader(c *ui.Context, d *viewmodel.SearchPage) {
 		for i, k := range searchKinds {
 			labels[i] = k.label
 		}
-		if segmented(c.Key("kind"), &at, labels...) {
+		if components.Segmented(c.Key("kind"), &at, labels...) {
 			r.Kind = searchKinds[at].kind
 			a.show(r)
 		}
@@ -187,9 +189,9 @@ func (a *app) artistCard(c *ui.Context, ar *netease.ArtistProfile) {
 		}
 		art := ui.Box(c).AspectRatio(1).Radius(999)
 		if hovered {
-			art.Shadow(0, 12, 28, -6, p.cardShade)
+			art.Shadow(0, 12, 28, -6, p.CardShade)
 		} else {
-			art.Shadow(0, 2, 8, -2, p.cardShade)
+			art.Shadow(0, 2, 8, -2, p.CardShade)
 		}
 		art.Children(func() { a.coverFill(c, photo, 400, 999) })
 		ui.Text(c, ar.Name).FontSize(13).FontWeight(500).SingleLine().AlignSelf(ui.Center)

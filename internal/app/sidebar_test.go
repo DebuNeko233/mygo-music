@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	albumvm "netease-music-mygo/internal/viewmodel/album"
 )
 
 // Each playlist header hides only its own rows without changing the page
@@ -66,7 +66,7 @@ func TestSidebarSavedAlbums(t *testing.T) {
 	a.library.SubsShown = true
 	// The saved albums were just loaded, so nothing asks NetEase for them.
 	a.library.Refresh.Albums.At = time.Now()
-	a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{
+	a.albums.Pages.Set(77, &albumvm.AlbumPage{Album: &netease.AlbumProfile{
 		Album:   netease.Album{ID: 77, Name: "神的游戏"},
 		Artists: []netease.Artist{{ID: 3, Name: "张悬"}},
 	}})

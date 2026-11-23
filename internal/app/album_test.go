@@ -8,7 +8,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	albumvm "netease-music-mygo/internal/viewmodel/album"
+	uservm "netease-music-mygo/internal/viewmodel/user"
 )
 
 // albumTestApp is signed in, showing one album that the listener has not
@@ -19,7 +20,7 @@ func albumTestApp(t *testing.T) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
-	a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{
+	a.albums.Pages.Set(77, &albumvm.AlbumPage{Album: &netease.AlbumProfile{
 		Album:   netease.Album{ID: 77, Name: "神的游戏", PicURL: "https://p1.music.126.net/cover.jpg"},
 		Artists: []netease.Artist{{ID: 3, Name: "张悬"}},
 		Songs: []netease.Track{
@@ -125,7 +126,7 @@ func TestSavedAlbumsOnOwnPage(t *testing.T) {
 	fakeSubscriptions(t)
 	a := albumTestApp(t)
 	user := netease.User{UserID: 1, Nickname: "小明"}
-	a.users.Pages.Set(1, &viewmodel.UserPage{User: &user})
+	a.users.Pages.Set(1, &uservm.UserPage{User: &user})
 	a.library.SubAlbums, a.library.SubsShown = []netease.AlbumProfile{{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}}}, true
 	posts := testPosts(a)
 	a.open(route{Page: pageUser, ID: 1})

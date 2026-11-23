@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 // The count on the comments' tab holds the last song's while the next
@@ -15,10 +15,10 @@ import (
 // next song turns out to have none.
 func TestCommentCountHoldsWhileLoading(t *testing.T) {
 	a, tt, _ := coverApp(t)
-	a.comments = viewmodel.Comments{Track: 2, Loaded: true, Total: 128}
+	a.comments = commentsvm.Comments{Track: 2, Loaded: true, Total: 128}
 	tt.Frame()
 	a.pl.Next()
-	a.comments = viewmodel.Comments{Track: 3, Loading: true}
+	a.comments = commentsvm.Comments{Track: 3, Loading: true}
 	tt.Frame()
 	if got := a.commentCount(); got != 128 {
 		t.Fatalf("the count went to %d as the next song's loads", got)
@@ -29,7 +29,7 @@ func TestCommentCountHoldsWhileLoading(t *testing.T) {
 		t.Errorf("the count did not change once loaded: %d", got)
 	}
 	a.pl.Next()
-	a.comments = viewmodel.Comments{Track: 1, Loaded: true}
+	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	tt.Advance(time.Second)
 	tt.Frame()
 	if got := a.commentCount(); got != 0 {
@@ -85,7 +85,7 @@ func TestLikeComment(t *testing.T) {
 	a, tt, _ := coverApp(t)
 	a.account.Profile = &netease.Profile{UserID: 1}
 	cm := netease.Comment{ID: 9, Content: "好听", LikedCount: 41}
-	a.comments = viewmodel.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true, Total: 1, Hot: []netease.Comment{cm}, Latest: []netease.Comment{cm}}
+	a.comments = commentsvm.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true, Total: 1, Hot: []netease.Comment{cm}, Latest: []netease.Comment{cm}}
 	a.playbackState.Pane = paneComments
 	tt.Frame()
 	if err := tt.Click("赞"); err != nil {

@@ -10,7 +10,7 @@ import (
 
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
 )
 
 // Both sides of the MVVM comparison use these same data and view entry points.
@@ -26,7 +26,7 @@ func featurePerfApp(cloud, jobs int) *app {
 		a.cloud.Tracks = append(a.cloud.Tracks, cloudTrack(int64(i+1), fmt.Sprintf("Song %05d", i)))
 	}
 	for i := range jobs {
-		a.downloads.Jobs = append(a.downloads.Jobs, &viewmodel.DownloadJob{
+		a.downloads.Jobs = append(a.downloads.Jobs, &downloadsvm.DownloadJob{
 			Track:    netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("Download %05d", i)},
 			Finished: true, Result: download.Result{Path: "/tmp/song.flac", Format: "flac"},
 		})

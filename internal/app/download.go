@@ -11,10 +11,11 @@ import (
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
 )
 
 var saveDownload = download.Save
+
 var quitAfterDownload = mygo.App.Quit
 
 var downloadNameFormats = []struct{ value, label string }{
@@ -37,7 +38,7 @@ func (a *app) enqueueDownloads(tracks []netease.Track) {
 	if a.quitting || a.downloads.Quitting() {
 		return
 	}
-	if !slices.ContainsFunc(tracks, viewmodel.CanDownload) {
+	if !slices.ContainsFunc(tracks, downloadsvm.CanDownload) {
 		return
 	}
 	directory := a.downloadDirectory()
@@ -68,8 +69,8 @@ func (a *app) enqueueDownloads(tracks []netease.Track) {
 }
 
 // Application adapters supply the existing model services and UI dispatcher.
-func (a *app) downloadServices() viewmodel.DownloadServices {
-	return viewmodel.DownloadServices{
+func (a *app) downloadServices() downloadsvm.DownloadServices {
+	return downloadsvm.DownloadServices{
 		Save: saveDownload,
 		Post: func(update func() bool) {
 			a.dispatch(func() {
@@ -83,11 +84,14 @@ func (a *app) downloadServices() viewmodel.DownloadServices {
 	}
 }
 
-func (a *app) retryDownload(j *viewmodel.DownloadJob) {
+func (a *app) retryDownload(j *downloadsvm.DownloadJob) {
 	if !a.quitting {
 		a.downloads.Retry(j, a.downloadServices())
 	}
 }
-func (a *app) cancelDownload(j *viewmodel.DownloadJob) { a.downloads.Cancel(j) }
-func (a *app) cancelDownloads()                        { a.downloads.CancelAll() }
-func (a *app) deferDownloadQuit() bool                 { return a.downloads.DeferQuit() }
+
+func (a *app) cancelDownload(j *downloadsvm.DownloadJob) { a.downloads.Cancel(j) }
+
+func (a *app) cancelDownloads() { a.downloads.CancelAll() }
+
+func (a *app) deferDownloadQuit() bool { return a.downloads.DeferQuit() }

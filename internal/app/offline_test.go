@@ -14,7 +14,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
 func offlineFixture(t *testing.T) (*app, chan func()) {
@@ -402,8 +402,8 @@ func TestOfflineArtistRestoresCachedPages(t *testing.T) {
 	a, posts := offlineFixture(t)
 	old := albumsBy
 	t.Cleanup(func() { albumsBy = old })
-	a.browseCache.Put("7", "artist-albums/1/0", cacheBytes(viewmodel.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
-	a.browseCache.Put("7", "artist-albums/1/1", cacheBytes(viewmodel.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
+	a.browseCache.Put("7", "artist-albums/1/0", cacheBytes(artistvm.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
+	a.browseCache.Put("7", "artist-albums/1/1", cacheBytes(artistvm.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
 	albumsBy = func(int64, int, int) ([]netease.AlbumProfile, bool, error) { return nil, false, netease.ErrOffline }
 	a.loadAlbums(1)
 	refreshPost(t, posts)

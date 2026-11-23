@@ -8,7 +8,7 @@ import (
 	"rsc.io/qr"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	accountvm "netease-music-mygo/internal/viewmodel/account"
 )
 
 // Account controls reuse retained UI state without polling or rebuilding their data.
@@ -18,7 +18,7 @@ func BenchmarkAccountSurfaceFrame(b *testing.B) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
-			a.account.Login = viewmodel.LoginState{Open: dialog, Status: netease.QRWaiting}
+			a.account.Login = accountvm.LoginState{Open: dialog, Status: netease.QRWaiting}
 			a.account.Login.Code, _ = qr.Encode("https://music.163.com/login?code=test", qr.M)
 			tt := ui.NewTester(func(c *ui.Context) {
 				a.pal = paletteFor(c.Theme())

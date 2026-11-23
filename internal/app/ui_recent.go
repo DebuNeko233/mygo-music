@@ -5,8 +5,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	recentvm "netease-music-mygo/internal/viewmodel/recent"
 )
 
 var recentTabTitles = [...]string{"歌曲", "歌单", "专辑", "播客", "声音"}
@@ -33,7 +34,7 @@ func (a *app) recentPage(c *ui.Context) {
 		return
 	}
 	switch a.recent.Selected {
-	case viewmodel.RecentPlaylists:
+	case recentvm.RecentPlaylists:
 		a.scrollPage(c, func() {
 			header(c)
 			if len(d.Playlists) == 0 {
@@ -46,7 +47,7 @@ func (a *app) recentPage(c *ui.Context) {
 				}
 			})
 		})
-	case viewmodel.RecentAlbums:
+	case recentvm.RecentAlbums:
 		a.scrollPage(c, func() {
 			header(c)
 			if len(d.Albums) == 0 {
@@ -55,7 +56,7 @@ func (a *app) recentPage(c *ui.Context) {
 			}
 			a.albumGrid(c, d.AlbumItems)
 		})
-	case viewmodel.RecentPodcasts:
+	case recentvm.RecentPodcasts:
 		a.scrollPage(c, func() {
 			header(c)
 			if len(d.Podcasts) == 0 {
@@ -64,7 +65,7 @@ func (a *app) recentPage(c *ui.Context) {
 			}
 			a.podcastGrid(c, len(d.Podcasts), func(i int) *netease.Podcast { return &d.Podcasts[i].Item })
 		})
-	case viewmodel.RecentVoices:
+	case recentvm.RecentVoices:
 		a.scrollPage(c, func() {
 			header(c)
 			if len(d.Voices) == 0 {
@@ -99,7 +100,7 @@ func (a *app) recentHeader(c *ui.Context) {
 	ui.Row(c).AlignItems(ui.Center).Margin(34, 0, 14, 0).Children(func() {
 		ui.Text(c, recentTabTitles[a.recent.Selected]).FontSize(19).FontWeight(700).LetterSpacing(-0.3)
 		ui.Spacer(c)
-		segmented(c.Key("tab"), &a.recent.Selected, recentTabTitles[:]...)
+		components.Segmented(c.Key("tab"), &a.recent.Selected, recentTabTitles[:]...)
 	})
 }
 
@@ -110,15 +111,15 @@ func (a *app) voiceRow(c *ui.Context, v *netease.Played[netease.Voice]) {
 	tr := v.Item.Program.Track(&v.Item.Podcast)
 	row := ui.ButtonBase(c.Key(v.Item.Program.ID)).Height(54).Padding(0, 12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
 	if row.Hovered() {
-		row.Background(p.hover)
+		row.Background(p.Hover)
 	}
 	row.Children(func() {
 		a.cover(c, tr.Album.PicURL, 96, 38, 6)
 		ui.Column(c).Grow(3).Basis(0).MinWidth(0).Gap(3).Children(func() {
 			ui.Text(c, tr.Name).FontSize(14).FontWeight(500).SingleLine()
-			ui.Text(c, v.Item.Podcast.Name).FontSize(12.5).TextColor(p.muted).SingleLine()
+			ui.Text(c, v.Item.Podcast.Name).FontSize(12.5).TextColor(p.Muted).SingleLine()
 		})
-		ui.Text(c, playedAt(v.At, v.Device, c.Now())).FontSize(12.5).TextColor(p.faint).MinWidth(88).TextAlign(ui.End)
+		ui.Text(c, playedAt(v.At, v.Device, c.Now())).FontSize(12.5).TextColor(p.Faint).MinWidth(88).TextAlign(ui.End)
 	})
 	if row.Clicked() {
 		a.pl.PlayQueue([]netease.Track{tr}, 0)

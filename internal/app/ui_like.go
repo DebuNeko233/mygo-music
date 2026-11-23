@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -47,9 +48,9 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 		a.askProgramLikes([]int64{tr.ProgramID})
 	}
 	liked := a.isLiked(tr)
-	icon, label := iconHeart, "喜欢"
+	icon, label := components.IconHeart, "喜欢"
 	if liked {
-		icon, color, label = iconHeartFill, a.pal.accent, "取消喜欢"
+		icon, color, label = components.IconHeartFill, a.pal.Accent, "取消喜欢"
 	}
 	// The label names the song or the episode too: a page shows several
 	// hearts, and which one is which has to be said.
@@ -59,7 +60,7 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 	// The burst goes on a wrapper, which the heart's pop does not scale.
 	wrap := ui.Box(c).Center()
 	var b ui.Element
-	wrap.Children(func() { b = iconButton(c, icon, size, color, label) })
+	wrap.Children(func() { b = components.IconButton(c, icon, size, color, label) })
 	scale := b.AnimateTo("pop", 1, ui.Animation{Spring: ui.SpringOptions{Duration: 550 * time.Millisecond, Bounce: 0.55}})
 	b.Scale(scale, scale)
 	burst := ui.Local(wrap, "burst", func() time.Time { return time.Time{} })
@@ -75,7 +76,7 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 		a.toggleLike(tr)
 	}
 	if !burst.IsZero() {
-		start, accent := *burst, a.pal.accent
+		start, accent := *burst, a.pal.Accent
 		wrap.DrawOver(func(p *ui.Painter, r ui.Rect) {
 			if drawBurst(p, r, size, p.Now().Sub(start), accent) {
 				p.AnimationFrame()

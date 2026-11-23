@@ -11,6 +11,9 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
+	accountvm "netease-music-mygo/internal/viewmodel/account"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
 )
 
 // skeletonScenes are the views that load, as they show while they do.
@@ -27,20 +30,20 @@ var skeletonScenes = []struct {
 	}},
 	{"search", func(a *app) {
 		a.nav.Current = route{Page: pageSearch, Query: "春日影", Kind: netease.SearchSongs}
-		a.searches.Pages.Set(a.nav.Current, &viewmodel.SearchPage{Page: viewmodel.Page{Loading: true}})
+		a.searches.Pages.Set(a.nav.Current, &searchvm.SearchPage{Page: viewmodel.Page{Loading: true}})
 	}},
 	{"artists", func(a *app) {
 		a.nav.Current = route{Page: pageSearch, Query: "春日影", Kind: netease.SearchArtists}
-		a.searches.Pages.Set(a.nav.Current, &viewmodel.SearchPage{Page: viewmodel.Page{Loading: true}})
+		a.searches.Pages.Set(a.nav.Current, &searchvm.SearchPage{Page: viewmodel.Page{Loading: true}})
 	}},
-	{"login", func(a *app) { a.account.Login = viewmodel.LoginState{Open: true} }},
+	{"login", func(a *app) { a.account.Login = accountvm.LoginState{Open: true} }},
 	{"comments", func(a *app) {
 		a.playbackState.Open, a.playbackState.Pane = true, paneComments
-		a.comments = viewmodel.Comments{Track: 1, Loading: true}
+		a.comments = commentsvm.Comments{Track: 1, Loading: true}
 	}},
 	{"more-comments", func(a *app) {
 		a.playbackState.Open, a.playbackState.Pane = true, paneComments
-		a.comments = viewmodel.Comments{Track: 1, Loading: true, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "好听"}}}
+		a.comments = commentsvm.Comments{Track: 1, Loading: true, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "好听"}}}
 	}},
 	{"lyrics", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics }},
 	{"stage", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, paneStage }},

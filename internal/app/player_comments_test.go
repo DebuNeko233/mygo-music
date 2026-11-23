@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 // The player's bubble opens the current song or episode's comments, not its lyrics or description.
@@ -35,7 +35,7 @@ func TestPlayerBarOpensComments(t *testing.T) {
 			a.settings = defaultSettings()
 			a.settings.LyricsStage = true
 			a.playbackState.Pane = tc.pane
-			a.comments = viewmodel.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true}
+			a.comments = commentsvm.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true}
 			a.pl.Cue([]netease.Track{tc.track})
 			a.pl.SetLyrics(nil)
 			a.pl.Hold(30 * time.Second)

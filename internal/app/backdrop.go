@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/shader"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/player"
 )
 
@@ -165,7 +166,7 @@ type backdropCache struct {
 	at            time.Time // when it was painted
 	drift         float64   // the clouds' time, in seconds, which stops on pause
 	speed         float64   // how fast drift goes: 1 playing, 0 paused
-	level         barState
+	level         components.BarState
 	last          time.Time
 }
 
@@ -182,7 +183,7 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		// edges to fade into.
 		a.backdropCache.canvas, a.backdropCache.before = nil, nil
 		a.backdropCache.still, a.backdropCache.previousStill = nil, nil
-		a.backdropCache.speed, a.backdropCache.level, a.backdropCache.last = 0, barState{}, time.Time{}
+		a.backdropCache.speed, a.backdropCache.level, a.backdropCache.last = 0, components.BarState{}, time.Time{}
 		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 			drawPicture(p, r, pic, float32(a.settings.BackdropPlayingOpacity))
 			// Darker toward the foot, under the controls.
@@ -197,7 +198,7 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		bd.prepareStill(art, tint, c.Now())
 		// Static mode must not ease the old fog's speed or spectrum down:
 		// that scheduled about two seconds of full-size static repaints.
-		bd.speed, bd.level, bd.last = 0, barState{}, time.Time{}
+		bd.speed, bd.level, bd.last = 0, components.BarState{}, time.Time{}
 	} else {
 		bd.still, bd.previousStill = nil, nil
 	}
@@ -254,7 +255,7 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 				bd.canvas = ui.NewCanvas(cw, ch)
 			}
 			bd.art, bd.tint, bd.fog, bd.at = art, tint, fog, now
-			bass := bd.level.group(0, 6)
+			bass := bd.level.Group(0, 6)
 			bd.canvas.Draw(p, func(cp *ui.Painter) {
 				box := ui.Rect{W: float32(cw), H: float32(ch)}
 				if fog {
@@ -299,8 +300,8 @@ func (bd *backdropCache) step(now time.Time, playing bool, lv [player.Bands]floa
 		bd.speed = to
 	}
 	bd.drift += bd.speed * dt
-	bd.level.step(now, lv, live)
-	return bd.speed > 0 || bd.level.group(0, 6) > 0.004
+	bd.level.Step(now, lv, live)
+	return bd.speed > 0 || bd.level.Group(0, 6) > 0.004
 }
 
 // drawBackdrop paints the still backdrop in r.

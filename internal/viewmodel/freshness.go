@@ -1,6 +1,8 @@
 package viewmodel
 
-import "time"
+import (
+	"time"
+)
 
 // ListsFresh is the existing revalidation interval for cached library and recent lists.
 const ListsFresh = 30 * time.Second

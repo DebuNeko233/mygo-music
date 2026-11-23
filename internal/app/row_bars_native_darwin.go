@@ -12,6 +12,8 @@ import (
 	"github.com/ebitengine/purego/objc"
 	_ "github.com/egoist/mygo/native" // opt in to ui.NativeView hosting
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/desktop/components"
 )
 
 // Native row bars update only their AppKit layers rather than repainting
@@ -96,10 +98,10 @@ func init() {
 		// A view's opaque background cannot reproduce a user picture or a
 		// wide-gamut accent through a transparent hole; retain the normal
 		// renderer for these cases until a matching native path exists.
-		if m == nil || len(a.settings.BackdropHome) != 0 || a.pal.accent != a.pal.accent.SRGB() || background != background.SRGB() {
+		if m == nil || len(a.settings.BackdropHome) != 0 || a.pal.Accent != a.pal.Accent.SRGB() || background != background.SRGB() {
 			return false
 		}
-		m.tint, m.bg = a.pal.accent, background
+		m.tint, m.bg = a.pal.Accent, background
 		m.suspended = c.WindowHidden()
 		ui.NativeView(c, m).Size(16, 14).TabStop(false).PassThrough().AccessHidden(true).
 			Children(func() { ui.Box(c).Absolute().Fill().AccessHidden(true) }).
@@ -219,9 +221,9 @@ func (m *nativeBarMeter) tick() {
 	}
 	m.ticks++
 	levels, live := m.a.pl.Levels()
-	m.a.rowBars.step(time.Now(), levels, live)
+	m.a.rowBars.Step(time.Now(), levels, live)
 	defer func() {
-		if !live && m.a.rowBars.group(0, len(levels)) <= 0.01 {
+		if !live && m.a.rowBars.Group(0, len(levels)) <= 0.01 {
 			m.pause(true)
 		}
 	}()
@@ -232,7 +234,7 @@ func (m *nativeBarMeter) tick() {
 	if scale <= 0 {
 		scale = 1
 	}
-	eachBarRect(ui.Rect{W: 16, H: 14}, &m.a.rowBars, 4, 2.5, func(r ui.Rect) {
+	components.EachBarRect(ui.Rect{W: 16, H: 14}, &m.a.rowBars, 4, 2.5, func(r ui.Rect) {
 		// Match Painter.snap exactly, including the element's fractional origin.
 		snap := func(v float32) float32 { return float32(math.Round(float64(v*scale))) / scale }
 		x0, y0 := snap(m.origin.X+r.X), snap(m.origin.Y+r.Y)

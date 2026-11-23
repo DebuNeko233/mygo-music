@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -37,18 +38,18 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 	p := a.pal
 	const coverSize = 212
 	ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 26, 0).Children(func() {
-		ui.Box(c).Size(coverSize, coverSize).Radius(14).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
+		ui.Box(c).Size(coverSize, coverSize).Radius(14).Shadow(0, 18, 40, -10, p.CardShade).Children(func() {
 			a.coverFill(c, al.PicURL, 600, 14)
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(8).Children(func() {
-			ui.Text(c, "专辑").FontSize(12).FontWeight(600).TextColor(p.accent)
+			ui.Text(c, "专辑").FontSize(12).FontWeight(600).TextColor(p.Accent)
 			ui.Text(c, al.Name).FontSize(30).FontWeight(800).LetterSpacing(-0.6).MaxLines(2).LineHeight(1.2)
-			ui.RichText(c).FontSize(13).TextColor(p.muted).Children(func() {
+			ui.RichText(c).FontSize(13).TextColor(p.Muted).Children(func() {
 				for i, ar := range al.Artists {
 					if i > 0 {
 						ui.Text(c, ", ")
 					}
-					a.link(c.Key(i), ar.Name, p.muted, p.text, route{Page: pageArtist, ID: ar.ID})
+					a.link(c.Key(i), ar.Name, p.Muted, p.Text, route{Page: pageArtist, ID: ar.ID})
 				}
 				meta := fmt.Sprintf(" · %d 首", len(al.Songs))
 				if al.PublishTime > 0 {
@@ -58,20 +59,20 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 			})
 			a.headerDescription(c, al.Name+" · 简介", al.Description, coverSize)
 			ui.Row(c).Gap(10).Margin(10, 0, 0, 0).Children(func() {
-				if pillButton(c.Key("play"), iconPlay, "播放", p.accent, p.onAccent).Clicked() {
+				if components.PillButton(c.Key("play"), components.IconPlay, "播放", p.Accent, p.OnAccent).Clicked() {
 					if a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
 					a.pl.PlayQueueFrom(al.Songs, firstPlayable(al.Songs), a.playSource())
 				}
-				icon, label := iconPlus, "收藏"
+				icon, label := components.IconPlus, "收藏"
 				if a.albumSaved(al.ID) {
-					icon, label = iconCheck, "已收藏"
+					icon, label = components.IconCheck, "已收藏"
 				}
-				if pillButton(c.Key("save"), icon, label, p.hover.Over(p.bg), p.text).Clicked() {
+				if components.PillButton(c.Key("save"), icon, label, p.Hover.Over(p.Background), p.Text).Clicked() {
 					a.toggleAlbumSaved(*al)
 				}
-				iconButton(c.Key("more"), iconMore, 18, p.muted, "更多").Menu(func(m *ui.Menu) {
+				components.IconButton(c.Key("more"), components.IconMore, 18, p.Muted, "更多").Menu(func(m *ui.Menu) {
 					if m.Item("下载全部").Disabled(len(al.Songs) == 0).Chosen() {
 						a.enqueueDownloads(al.Songs)
 					}
@@ -101,9 +102,9 @@ func (a *app) albumCard(c *ui.Context, al *netease.AlbumProfile) {
 		lift := ui.Pose{}
 		if hovered {
 			lift = ui.Pose{Y: -3}
-			art.Shadow(0, 12, 28, -6, p.cardShade)
+			art.Shadow(0, 12, 28, -6, p.CardShade)
 		} else {
-			art.Shadow(0, 2, 8, -2, p.cardShade)
+			art.Shadow(0, 2, 8, -2, p.CardShade)
 		}
 		art.AnimatePose(lift, ui.Snappy)
 		art.Children(func() { a.coverFill(c, al.PicURL, 400, 10) })
@@ -115,7 +116,7 @@ func (a *app) albumCard(c *ui.Context, al *netease.AlbumProfile) {
 		if al.PublishTime > 0 {
 			meta = append(meta, time.UnixMilli(al.PublishTime).Format("2006"))
 		}
-		ui.Text(c, strings.Join(meta, " · ")).FontSize(12).TextColor(p.muted).SingleLine().Margin(-6, 0, 0, 0)
+		ui.Text(c, strings.Join(meta, " · ")).FontSize(12).TextColor(p.Muted).SingleLine().Margin(-6, 0, 0, 0)
 	})
 	if card.Clicked() {
 		a.open(route{Page: pageAlbum, ID: al.ID})

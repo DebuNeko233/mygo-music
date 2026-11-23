@@ -9,6 +9,12 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
+	albumvm "netease-music-mygo/internal/viewmodel/album"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
+	recentvm "netease-music-mygo/internal/viewmodel/recent"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
+	uservm "netease-music-mygo/internal/viewmodel/user"
 )
 
 // A long introduction on any detail page opens in a dialog that
@@ -30,11 +36,11 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.nav.Current = route{Page: tc.page, ID: 77}
-			a.artists.Pages.Set(77, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
-			a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
+			a.artists.Pages.Set(77, &artistvm.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
+			a.albums.Pages.Set(77, &albumvm.AlbumPage{Album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
 			a.library.Playlists[77] = &netease.Playlist{ID: 77, Name: "歌单名称", Description: text}
-			a.podcasts.Pages.Set(77, &viewmodel.PodcastPage{Podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
-			a.users.Pages.Set(77, &viewmodel.UserPage{User: &netease.User{UserID: 77, Nickname: "用户名称", Signature: text}})
+			a.podcasts.Pages.Set(77, &podcastvm.PodcastPage{Podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
+			a.users.Pages.Set(77, &uservm.UserPage{User: &netease.User{UserID: 77, Nickname: "用户名称", Signature: text}})
 			view := ui.NewTester(a.view, 1180, 780)
 			more := "更多：" + tc.title
 			if err := view.Click(more); err != nil {
@@ -76,7 +82,7 @@ func TestDetailDescriptionMoreFollowsAvailableWidth(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.nav.Current = route{Page: pageAlbum, ID: 77}
-	a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{
+	a.albums.Pages.Set(77, &albumvm.AlbumPage{Album: &netease.AlbumProfile{
 		Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: strings.Repeat("这是一段专辑介绍。", 10),
 	}})
 	view := ui.NewTester(a.view, 1420, 780)
@@ -110,7 +116,7 @@ func TestDescriptionMoreInSearchResults(t *testing.T) {
 			a.settings = defaultSettings()
 			r := route{Page: pageSearch, Query: "测试", Kind: tc.kind}
 			a.nav.Current = r
-			d := &viewmodel.SearchPage{Page: viewmodel.Page{Loaded: true}}
+			d := &searchvm.SearchPage{Page: viewmodel.Page{Loaded: true}}
 			if tc.kind == netease.SearchPodcasts {
 				d.Res.Podcasts = []netease.Podcast{{ID: 1, Name: "甲", Description: short}, {ID: 2, Name: "乙", Description: long}}
 			} else {
@@ -136,11 +142,11 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.nav.Current, a.recent.Selected = route{Page: pageRecent}, viewmodel.RecentPodcasts
+	a.nav.Current, a.recent.Selected = route{Page: pageRecent}, recentvm.RecentPodcasts
 	for i := range a.recent.Tabs {
 		a.recent.Tabs[i].At = a.listsNow()
 	}
-	a.recent.Tabs[viewmodel.RecentPodcasts].Shown = true
+	a.recent.Tabs[recentvm.RecentPodcasts].Shown = true
 	desc := strings.Repeat("播客介绍", 12)
 	a.recent.Podcasts = []netease.Played[netease.Podcast]{{Item: netease.Podcast{ID: 2, Name: "播客名称", Description: desc}}}
 	view := ui.NewTester(a.view, 1180, 780)

@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
 )
 
 // A row or sidebar match chosen during loading gets the remaining cloud songs without restarting playback.
@@ -24,7 +24,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 				first[i] = cloudTrack(int64(i+1), fmt.Sprintf("First %03d", i+1))
 				later[i] = cloudTrack(int64(i+101), fmt.Sprintf("Later %03d", i+101))
 			}
-			a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: first, Count: 200, Offset: 100, More: true}, Loaded: true}
+			a.cloud = cloudvm.Cloud{CloudListing: cloudvm.CloudListing{Tracks: first, Count: 200, Offset: 100, More: true}, Loaded: true}
 			type reply struct {
 				page *netease.CloudPage
 				err  error
@@ -64,7 +64,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 				results <- reply{err: io.ErrUnexpectedEOF}
 				refreshPost(t, posts)
 				a.pl.Seek(23 * time.Second)
-				a.loadCloud(viewmodel.CloudNextPage)
+				a.loadCloud(cloudvm.CloudNextPage)
 				if got := wait(t, started, "retry cloud page"); got != 100 {
 					t.Fatalf("retry offset %d", got)
 				}
@@ -121,7 +121,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	oldTime := time.Unix(1000, 0)
 	now := oldTime.Add(24 * time.Hour)
 	a.library.Refresh.Now = func() time.Time { return now }
-	a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: original, Count: 3, Offset: 3}, Loaded: true, At: oldTime}
+	a.cloud = cloudvm.Cloud{CloudListing: cloudvm.CloudListing{Tracks: original, Count: 3, Offset: 3}, Loaded: true, At: oldTime}
 	a.pl.Cue(slices.Clone(original))
 	calls := make(chan int, 4)
 	attempt := 0
@@ -149,7 +149,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	if a.cloud.Loading() {
 		t.Fatal("reopening after failure restarted refresh instead of retaining its retry offset")
 	}
-	a.loadCloud(viewmodel.CloudNextPage)
+	a.loadCloud(cloudvm.CloudNextPage)
 	refreshPost(t, posts)
 	for _, want := range []int{0, 1, 1} {
 		if got := wait(t, calls, "refresh request"); got != want {

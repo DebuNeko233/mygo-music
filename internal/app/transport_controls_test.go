@@ -9,7 +9,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 // Clicking or pressing Space toggles shuffle and its accessible state without changing the current track in any transport size.
@@ -63,7 +63,7 @@ func TestNowPlayingVolumeTrackAndMute(t *testing.T) {
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "歌曲", Duration: 200000}})
 	a.pl.SetLyrics(nil)
-	a.comments = viewmodel.Comments{Track: 1, Loaded: true}
+	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	a.playbackState.Open = true
 	a.setVolume(0.5)
 	tt := ui.NewTester(a.view, 1200, 800)

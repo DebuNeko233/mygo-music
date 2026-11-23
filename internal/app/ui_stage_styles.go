@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/lyrics"
 )
 
@@ -42,7 +43,7 @@ func (a *app) stageStyleButton(c *ui.Context) {
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
 	b.Children(func() {
 		ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(fg)
-		ui.Icon(c, iconDown).Size(12, 12).TextColor(fg)
+		ui.Icon(c, components.IconDown).Size(12, 12).TextColor(fg)
 	})
 	b.Menu(func(m *ui.Menu) {
 		for _, s := range stageStyles {

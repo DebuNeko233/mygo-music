@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	albumvm "netease-music-mygo/internal/viewmodel/album"
 )
 
 // Old owner-profile requests cannot publish subscriptions after leaving and re-entering the same account session.
@@ -88,7 +88,7 @@ func TestDetailAlbumSaveUsesSharedLibrary(t *testing.T) {
 	posts := testPosts(a)
 	a.account.Profile = &netease.Profile{UserID: 7}
 	al := &netease.AlbumProfile{Album: netease.Album{ID: 8, Name: "album"}}
-	a.albums.Pages.Set(8, &viewmodel.AlbumPage{Album: al})
+	a.albums.Pages.Set(8, &albumvm.AlbumPage{Album: al})
 	old := subscribeAlbum
 	t.Cleanup(func() { subscribeAlbum = old })
 	subscribeAlbum = func(int64, bool) error { return nil }

@@ -12,7 +12,7 @@ import (
 
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	localvm "netease-music-mygo/internal/viewmodel/local"
 )
 
 func localPerfApp(count int) *app {
@@ -129,7 +129,7 @@ func TestLocalLyricMatchFrames(t *testing.T) {
 			a := newTestApp()
 			track := netease.Track{LocalID: 7, Name: "試唱 recording", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 180000}
 			a.pl.Cue([]netease.Track{track})
-			a.local.LyricMatch = &viewmodel.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "試唱 MyGO!!!!!", Searching: searching}
+			a.local.LyricMatch = &localvm.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "試唱 MyGO!!!!!", Searching: searching}
 			if !searching {
 				a.local.LyricMatch.Results = []netease.Track{{ID: 1, Name: "录音室版", Duration: 180000}, {ID: 2, Name: "现场版", Duration: 190000}, {ID: 3, Name: "instrumental", Duration: 180000}}
 				a.local.LyricMatch.Selected = 1

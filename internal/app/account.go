@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	accountvm "netease-music-mygo/internal/viewmodel/account"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
 )
 
-func (a *app) accountServices() viewmodel.AccountServices {
+func (a *app) accountServices() accountvm.AccountServices {
 	store, restore, identityOf := a.identityCache, restoreLoginSession, loginIdentity
-	return viewmodel.AccountServices{
+	return accountvm.AccountServices{
 		Offline: func() bool { return a.network.offline }, Stopped: func() bool { return a.quitting },
 		Post: a.post, Ask: accountAsk, Identity: identityOf, Save: saveLoginSession, Clear: clearLoginSession, Cookies: netease.SessionCookies, Logout: logoutSession,
 		Restore: func() (*netease.Profile, bool) {
@@ -25,7 +26,7 @@ func (a *app) accountServices() viewmodel.AccountServices {
 			}
 			return kept, restored
 		},
-		NewQR: func() (string, viewmodel.QRLoginAttempt, error) {
+		NewQR: func() (string, accountvm.QRLoginAttempt, error) {
 			attempt := netease.NewQRLogin()
 			key, err := attempt.Key()
 			return key, attempt, err
@@ -40,12 +41,17 @@ func (a *app) accountServices() viewmodel.AccountServices {
 		},
 	}
 }
-func (a *app) boot()           { a.home.Loading = true; a.account.Boot(a.accountServices()) }
+
+func (a *app) boot() { a.home.Loading = true; a.account.Boot(a.accountServices()) }
+
 func (a *app) confirmAccount() { a.account.Confirm(a.accountServices()) }
-func (a *app) openLogin()      { a.account.OpenLogin(a.accountServices()) }
-func (a *app) checkLogin(gen int, key string, attempt viewmodel.QRLoginAttempt) bool {
+
+func (a *app) openLogin() { a.account.OpenLogin(a.accountServices()) }
+
+func (a *app) checkLogin(gen int, key string, attempt accountvm.QRLoginAttempt) bool {
 	return a.account.CheckLogin(gen, key, attempt, a.accountServices())
 }
+
 func (a *app) signOut() { a.account.SignOut(a.accountServices()) }
 
 // Session adapters preserve the existing cache, player and page lifecycle.
@@ -84,7 +90,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	// What another listener played is not what this one played.
 	a.recent.Reset()
 	a.cancelCloudLoad()
-	a.cloud = viewmodel.Cloud{}
+	a.cloud = cloudvm.Cloud{}
 
 	// What the listener may play, and follows, changed: load the pages
 	// again.
@@ -106,8 +112,13 @@ func (a *app) signedIn(prof *netease.Profile) {
 }
 
 var accountAsk = netease.Account
+
 var restoreLoginSession = netease.RestoreSession
+
 var saveLoginSession = netease.SaveSession
+
 var clearLoginSession = netease.ClearSession
+
 var logoutSession = netease.Logout
+
 var loginIdentity = netease.SessionIdentity

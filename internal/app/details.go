@@ -1,7 +1,9 @@
 package app
 
 import (
-	"netease-music-mygo/internal/viewmodel"
+	albumvm "netease-music-mygo/internal/viewmodel/album"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	uservm "netease-music-mygo/internal/viewmodel/user"
 )
 
 // detailPost publishes only into the account session that started the work.
@@ -15,8 +17,9 @@ func (a *app) detailPost() func(func()) {
 		})
 	}
 }
-func (a *app) artistServices() viewmodel.ArtistServices {
-	return viewmodel.ArtistServices{
+
+func (a *app) artistServices() artistvm.ArtistServices {
+	return artistvm.ArtistServices{
 		Post: a.detailPost(), Cache: a.cacheRequest, Detail: artistDetail, Latest: artistLatestSongs,
 		Albums: albumsBy, Events: accountEvents, Follow: followArtist,
 		Visible: func() int64 {
@@ -28,7 +31,9 @@ func (a *app) artistServices() viewmodel.ArtistServices {
 		Notify: func(message string) { a.toast = message },
 	}
 }
-func (a *app) artist(id int64) *viewmodel.ArtistPage { return a.artists.Page(id) }
+
+func (a *app) artist(id int64) *artistvm.ArtistPage { return a.artists.Page(id) }
+
 func (a *app) loadArtist(id int64) {
 	if !a.artists.NeedsLoad(id) {
 		a.artists.Pages.Get(id)
@@ -36,10 +41,15 @@ func (a *app) loadArtist(id int64) {
 	}
 	a.artists.Load(id, a.artistServices())
 }
+
 func (a *app) loadArtistProfile(id int64) { a.artists.LoadProfile(id, a.artistServices()) }
-func (a *app) loadLatest(id int64)        { a.artists.LoadLatest(id, a.artistServices()) }
-func (a *app) loadAlbums(id int64)        { a.artists.LoadAlbums(id, a.artistServices()) }
-func (a *app) loadEvents(id int64)        { a.artists.LoadEvents(id, a.artistServices()) }
+
+func (a *app) loadLatest(id int64) { a.artists.LoadLatest(id, a.artistServices()) }
+
+func (a *app) loadAlbums(id int64) { a.artists.LoadAlbums(id, a.artistServices()) }
+
+func (a *app) loadEvents(id int64) { a.artists.LoadEvents(id, a.artistServices()) }
+
 func (a *app) toggleFollow(id int64) {
 	d := a.artist(id)
 	if d.Profile == nil || d.Following {
@@ -51,13 +61,15 @@ func (a *app) toggleFollow(id int64) {
 	}
 	a.artists.ToggleFollow(id, a.artistServices())
 }
+
 func (a *app) loadAlbum(id int64) {
 	if !a.albums.NeedsLoad(id) {
 		a.albums.Pages.Get(id)
 		return
 	}
-	a.albums.Load(id, viewmodel.AlbumServices{Post: a.detailPost(), Cache: a.cacheRequest, Detail: albumDetail})
+	a.albums.Load(id, albumvm.AlbumServices{Post: a.detailPost(), Cache: a.cacheRequest, Detail: albumDetail})
 }
+
 func (a *app) loadUser(id int64) {
 	uid := a.listenerID()
 	if uid != 0 && uid == id {
@@ -68,5 +80,5 @@ func (a *app) loadUser(id int64) {
 		a.users.Pages.Get(id)
 		return
 	}
-	a.users.Load(id, uid, viewmodel.UserServices{Post: a.detailPost(), Detail: userDetail, Playlists: userPlaylists, Artists: followedArtists})
+	a.users.Load(id, uid, uservm.UserServices{Post: a.detailPost(), Detail: userDetail, Playlists: userPlaylists, Artists: followedArtists})
 }

@@ -6,7 +6,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 
 var (
@@ -28,9 +28,9 @@ func (a *app) visiblePlaylist() int64 {
 	return 0
 }
 
-func (a *app) playlistServices() viewmodel.PlaylistServices {
+func (a *app) playlistServices() libraryvm.PlaylistServices {
 	uid, generation := a.listenerID(), a.account.Generation
-	return viewmodel.PlaylistServices{
+	return libraryvm.PlaylistServices{
 		Post: func(update func() bool) {
 			a.postIfChanged(func() bool {
 				if a.listenerID() != uid || a.account.Generation != generation {
@@ -65,14 +65,17 @@ func (a *app) freshenLikes() {
 		a.library.FreshenLikes(a.listenerID(), a.libraryServices())
 	}
 }
+
 func (a *app) freshenAlbums() {
 	if a.library.AlbumsDue(a.listenerID()) {
 		a.library.FreshenAlbums(a.listenerID(), a.libraryServices())
 	}
 }
+
 func (a *app) freshenLibrary() {
 	a.library.Freshen(a.listenerID(), a.visiblePlaylist(), a.libraryServices())
 }
+
 func (a *app) retryLibraryRefresh() {
 	if a.library.NeedsRefreshRetry(a.listenerID(), a.visiblePlaylist()) {
 		a.library.RetryRefresh(a.listenerID(), a.visiblePlaylist(), a.libraryServices())

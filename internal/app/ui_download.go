@@ -7,10 +7,12 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/theme"
 	"netease-music-mygo/internal/netease"
 )
 
 var openDownloadDirectory = mygo.Dialog.Open
+
 var revealDownload = mygo.Shell.ShowItemInFolder
 
 func (a *app) chooseDownloadDirectory() bool {
@@ -30,7 +32,7 @@ func (a *app) chooseDownloadDirectory() bool {
 	return true
 }
 
-func (a *app) downloadSettings(c *ui.Context, p palette, row settingsRow, block settingsBlock) {
+func (a *app) downloadSettings(c *ui.Context, p theme.Palette, row settingsRow, block settingsBlock) {
 	s := &a.settings
 	row("默认下载音质", "以网易云实际提供的下载音质为准", func() {
 		if qualitySelect(c.Key("download-quality"), &s.DownloadQuality, "默认下载音质") {
@@ -72,13 +74,13 @@ func (a *app) downloadSettings(c *ui.Context, p palette, row settingsRow, block 
 	block("下载任务", func() { a.downloadJobs(c, p) })
 }
 
-func (a *app) downloadJobs(c *ui.Context, p palette) {
+func (a *app) downloadJobs(c *ui.Context, p theme.Palette) {
 	ui.Column(c).Padding(12, 16).Gap(10).Children(func() {
 		if a.downloads.Err != "" {
-			ui.Text(c, a.downloads.Err).FontSize(12).TextColor(p.muted).Wrap()
+			ui.Text(c, a.downloads.Err).FontSize(12).TextColor(p.Muted).Wrap()
 		}
 		if len(a.downloads.Jobs) == 0 {
-			ui.Text(c, "日常播放有本地缓存，离线也可用，通常无需额外下载。需要在其他设备或播放器中使用时，再下载歌曲即可。").FontSize(12.5).TextColor(p.muted).Wrap()
+			ui.Text(c, "日常播放有本地缓存，离线也可用，通常无需额外下载。需要在其他设备或播放器中使用时，再下载歌曲即可。").FontSize(12.5).TextColor(p.Muted).Wrap()
 			return
 		}
 		ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
@@ -113,7 +115,7 @@ func (a *app) downloadJobs(c *ui.Context, p palette) {
 					if j.Result.Warning != "" {
 						status += " · " + j.Result.Warning
 					}
-					ui.Text(c, status).FontSize(11.5).TextColor(p.muted).MaxLines(2).Wrap()
+					ui.Text(c, status).FontSize(11.5).TextColor(p.Muted).MaxLines(2).Wrap()
 				})
 				switch {
 				case !j.Finished:

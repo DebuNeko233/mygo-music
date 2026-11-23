@@ -3,7 +3,7 @@ package app
 import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	recentvm "netease-music-mygo/internal/viewmodel/recent"
 )
 
 var (
@@ -13,9 +13,9 @@ var (
 	recentVoices    = netease.RecentVoices
 )
 
-func (a *app) recentServices() viewmodel.RecentServices {
+func (a *app) recentServices() recentvm.RecentServices {
 	gen := a.account.Generation
-	return viewmodel.RecentServices{
+	return recentvm.RecentServices{
 		SignedIn: a.account.Profile != nil, Post: a.post, Now: a.listsNow,
 		Valid:        func() bool { return a.account.Generation == gen },
 		Cache:        func() diskcache.Snapshot { return a.cacheRequest("recent") },
@@ -23,9 +23,11 @@ func (a *app) recentServices() viewmodel.RecentServices {
 		Songs:        recentPlays, Playlists: recentPlaylists, Albums: recentAlbums, Podcasts: recentPodcasts, Voices: recentVoices,
 	}
 }
+
 func (a *app) loadRecent() {
 	if a.account.Profile != nil && a.recent.NeedsLoad(a.listsNow()) {
 		a.recent.Load(a.recentServices())
 	}
 }
+
 func (a *app) loadRecentTab(tab int) { a.recent.LoadTab(tab, a.recentServices()) }

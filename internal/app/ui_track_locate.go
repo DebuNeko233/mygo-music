@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -83,13 +84,13 @@ func (a *app) locatePlayingButton(c *ui.Context, visible bool, locate func()) {
 	// The same glass plugin as the page/player bars: blur what lies beneath,
 	// follow the theme and honor the system's Reduce Transparency setting.
 	b := ui.ButtonBase(c.Key("locate-playing-track")).Absolute().Right(24).Bottom(playerBarHeight+24).
-		Size(48, 48).Radius(999).Center().Material(glass.Glass{Interactive: true}).Shadow(0, 4, 16, -2, p.cardShade).
+		Size(48, 48).Radius(999).Center().Material(glass.Glass{Interactive: true}).Shadow(0, 4, 16, -2, p.CardShade).
 		Label("定位正在播放的歌曲").Tooltip("定位正在播放的歌曲")
-	color := p.muted
+	color := p.Muted
 	if b.Hovered() || b.Pressed() {
-		color = p.text
+		color = p.Text
 	}
-	b.Children(func() { ui.Icon(c, iconLocate).Size(25, 25).TextColor(color) })
+	b.Children(func() { ui.Icon(c, components.IconLocate).Size(25, 25).TextColor(color) })
 	if b.Clicked() {
 		// The source callback can reveal a virtual row or fetch missing list
 		// pages; the control itself never changes playback.

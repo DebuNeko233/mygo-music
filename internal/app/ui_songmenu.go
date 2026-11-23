@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -13,7 +14,7 @@ var copyText = func(text string) error { return mygo.Clipboard.Write(transfer.Te
 
 // songMenu is three dots that open the menu of tr.
 func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.Color) ui.Element {
-	b := iconButton(c, iconMore, size, color, "更多")
+	b := components.IconButton(c, components.IconMore, size, color, "更多")
 	b.Menu(a.songItems(tr, 0))
 	return b
 }

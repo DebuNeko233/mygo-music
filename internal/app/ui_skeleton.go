@@ -26,7 +26,7 @@ const (
 // pageShimmer is the shimmer of the pages, on their background.
 func (a *app) pageShimmer(c *ui.Context) shimmer {
 	s := shimmer{base: ui.RGBA(0, 0, 0, 0.06), sheen: ui.RGBA(0, 0, 0, 0.022)}
-	if a.pal.dark {
+	if a.pal.Dark {
 		s.base, s.sheen = white.Alpha(0.07), white.Alpha(0.13)
 	}
 	return s.in(c)
@@ -111,7 +111,7 @@ func (a *app) chartCardsSkeleton(c *ui.Context, s shimmer) {
 	cols := min(4, max(2, a.columns(c, 260)))
 	ui.Grid(c).Columns(cols).Gap(20).Children(func() {
 		for i := range 4 {
-			ui.Row(c.Key(i)).Gap(14).Padding(12).Radius(14).AlignItems(ui.Center).Background(a.pal.hover).Children(func() {
+			ui.Row(c.Key(i)).Gap(14).Padding(12).Radius(14).AlignItems(ui.Center).Background(a.pal.Hover).Children(func() {
 				s.bone(c, 9).Size(84, 84)
 				ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(5).Children(func() {
 					s.text(c, 14, 1.3).WidthPercent(46)

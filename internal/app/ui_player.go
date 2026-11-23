@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/player"
 )
 
@@ -18,7 +19,7 @@ type scrubState struct {
 	// it has gone since: Pressed is false off the bar, which is thin.
 	held   bool
 	active bool // dragged since the last frame, to seek once let go
-	level  barState
+	level  components.BarState
 }
 
 func secs(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
@@ -95,8 +96,8 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 			p.FillGradient(played, ui.LinearGradient{Angle: 90, Oklab: true,
 				From: fill.Mix(smoke, smoking).Alpha(0.3), To: fill.Mix(smoke, 0.8*smoking)}, thick/2)
 			lv, live := pl.Levels()
-			st.level.step(p.Now(), lv, live)
-			bass := st.level.group(0, 6)
+			st.level.Step(p.Now(), lv, live)
+			bass := st.level.Group(0, 6)
 			drawSmoke(p, head, cy, p.Now(), bass, smoke, smoking)
 			// The glow of the head, swelling with the bass, and its core.
 			glow := 9 + 8*bass
@@ -176,12 +177,12 @@ func (a *app) tickTimes(c *ui.Context) {
 // percent over it. The wheel over the speaker turns it up and down
 // without opening it.
 func (a *app) volumeButton(c *ui.Context, color ui.Color) {
-	b := iconButton(c.Key("volume-button"), volumeIcon(a.playbackState.Volume), 16, color, "音量")
+	b := components.IconButton(c.Key("volume-button"), volumeIcon(a.playbackState.Volume), 16, color, "音量")
 	if b.Clicked() {
 		a.volumeOpen = !a.volumeOpen
 	}
 	b.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
-	pop := popoverColors(a.pal.dark)
+	pop := popoverColors(a.pal.Dark)
 	ui.PopoverBase(c.Key("volume-popover"), b, &a.volumeOpen, func(panel ui.Element) {
 		const arrow = 7
 		panel.AttachTo(b, ui.AnchorTop, ui.AnchorBottom).Margin(0, 0, arrow+3, 0).Width(52).Padding(11, 0, 12, 0).
@@ -198,7 +199,7 @@ func (a *app) volumeButton(c *ui.Context, color ui.Color) {
 				QuadTo(cx, foot+arrow, cx+1.2, foot+arrow-1.2).LineTo(cx+arrow+1, foot)
 			p.StrokePath(edge, 0.5, pop.edge)
 		})
-		ui.Textf(c, "%d%%", int(a.playbackState.Volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
+		ui.Textf(c, "%d%%", int(a.playbackState.Volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.Muted)
 		a.nativeVolumeSlider(c, pop)
 	})
 }
@@ -227,7 +228,7 @@ func (a *app) nativeVolumeSlider(c *ui.Context, pop popover) {
 	s.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
 	pressed := s.Pressed()
 	v := float32(a.playbackState.Volume)
-	accent := a.pal.accent
+	accent := a.pal.Accent
 	s.Draw(func(p *ui.Painter, r ui.Rect) {
 		top, foot := r.Y+knob/2, r.Y+r.H-knob/2
 		x := r.X + (r.W-track)/2
@@ -295,21 +296,21 @@ func (a *app) stepVolume(down bool) {
 func volumeIcon(v float64) *ui.SVG {
 	switch {
 	case v == 0:
-		return iconMute
+		return components.IconMute
 	case v < 0.4:
-		return iconVolumeLow
+		return components.IconVolumeLow
 	default:
-		return iconVolume
+		return components.IconVolume
 	}
 }
 
 // muteButton is the speaker, which mutes and unmutes.
 func (a *app) muteButton(c *ui.Context, color ui.Color) {
-	icon := iconVolume
+	icon := components.IconVolume
 	if a.playbackState.Volume == 0 {
-		icon = iconMute
+		icon = components.IconMute
 	}
-	if iconButton(c.Key("mute"), icon, 16, color, "静音").Clicked() {
+	if components.IconButton(c.Key("mute"), icon, 16, color, "静音").Clicked() {
 		a.playbackState.ToggleMute(a.volumeServices())
 	}
 }
@@ -348,39 +349,39 @@ func (a *app) transport(c *ui.Context, color, dim, on ui.Color, size float32) {
 		if shuffling {
 			shuffle = on
 		}
-		button := roundButton(c.Key("shuffle"), size*0.62, shuffle, "随机播放", shuffling).
+		button := components.RoundButton(c.Key("shuffle"), size*0.62, shuffle, "随机播放", shuffling).
 			Role(ui.RoleToggleButton).Checked(shuffling)
-		button.Children(func() { ui.Icon(c, iconShuffle).Size(size*0.62, size*0.62) })
+		button.Children(func() { ui.Icon(c, components.IconShuffle).Size(size*0.62, size*0.62) })
 		if button.Clicked() {
 			pl.ToggleShuffle()
 		}
-		if iconButton(c.Key("prev"), iconPrev, size*0.85, color, "上一首").Clicked() {
+		if components.IconButton(c.Key("prev"), components.IconPrev, size*0.85, color, "上一首").Clicked() {
 			pl.Prev()
 		}
 		// Reuse the primary control for recovery rather than adding another
 		// playback button beside the track or changing its selected position.
 		var play ui.Element
 		if pl.PlaybackRetryable() {
-			play = iconButton(c.Key("play"), iconReload, size*1.25, color, "重试播放").Tooltip("重试播放")
+			play = components.IconButton(c.Key("play"), components.IconReload, size*1.25, color, "重试播放").Tooltip("重试播放")
 		} else {
-			play = playButton(c.Key("play"), pl.Playing(), size*1.25, color)
+			play = components.PlayButton(c.Key("play"), pl.Playing(), size*1.25, color)
 		}
 		if play.Clicked() {
 			pl.TogglePlay()
 		}
-		if iconButton(c.Key("next"), iconNext, size*0.85, color, "下一首").Clicked() {
+		if components.IconButton(c.Key("next"), components.IconNext, size*0.85, color, "下一首").Clicked() {
 			pl.Next()
 		}
 		mode := pl.Repeat()
 		repeating := mode == player.RepeatAll || mode == player.RepeatOne
-		repeatColor, repeatIcon := dim, iconRepeat
+		repeatColor, repeatIcon := dim, components.IconRepeat
 		if repeating {
 			repeatColor = on
 		}
 		if mode == player.RepeatOne {
-			repeatIcon = iconRepeat1
+			repeatIcon = components.IconRepeat1
 		}
-		repeatButton := roundButton(c.Key("repeat"), size*0.62, repeatColor, "循环", repeating)
+		repeatButton := components.RoundButton(c.Key("repeat"), size*0.62, repeatColor, "循环", repeating)
 		repeatButton.Children(func() { ui.Icon(c, repeatIcon).Size(size*0.62, size*0.62) })
 		if repeatButton.Clicked() {
 			pl.CycleRepeat()
@@ -405,7 +406,7 @@ func (a *app) playerBar(c *ui.Context) {
 	// Over the foot of the page: while content is under it, its edge frosts
 	// it, with a hairline along the top.
 	edge := ui.Box(c.Key("bottom-edge")).Absolute().Left(0).Right(0).Bottom(0).Height(playerBarHeight).
-		Material(glass.ScrollEdge{Hard: true, Bottom: true, Background: p.bg})
+		Material(glass.ScrollEdge{Hard: true, Bottom: true, Background: p.Background})
 	edge.Opacity(edgeShown(edge, a.underBottom))
 	// The controls keep the middle, between sides that share what is left:
 	// narrower, the middle gives up to 140 DIPs, and what plays keeps room
@@ -416,10 +417,10 @@ func (a *app) playerBar(c *ui.Context) {
 		ui.Row(c).Grow(1).Basis(0).MinWidth(150).Children(func() {
 			if tr == nil {
 				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-					ui.Box(c).Size(48, 48).Radius(8).Background(p.hover).Center().Children(func() {
-						ui.Icon(c, iconNote).Size(18, 18).TextColor(p.faint)
+					ui.Box(c).Size(48, 48).Radius(8).Background(p.Hover).Center().Children(func() {
+						ui.Icon(c, components.IconNote).Size(18, 18).TextColor(p.Faint)
 					})
-					ui.Text(c, "未在播放").FontSize(13).TextColor(p.muted)
+					ui.Text(c, "未在播放").FontSize(13).TextColor(p.Muted)
 				})
 				return
 			}
@@ -431,7 +432,7 @@ func (a *app) playerBar(c *ui.Context) {
 					if hovered {
 						ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Radius(8).Center().
 							Background(ui.RGBA(0, 0, 0, 0.35)).TextColor(ui.RGB(255, 255, 255)).Children(func() {
-							ui.Icon(c, iconDown).Size(18, 18).Rotate(180)
+							ui.Icon(c, components.IconDown).Size(18, 18).Rotate(180)
 						})
 					}
 				})
@@ -439,17 +440,17 @@ func (a *app) playerBar(c *ui.Context) {
 					ui.Text(c, tr.Name).FontSize(13.5).FontWeight(600).SingleLine()
 					// What it is waiting on shows in place of the artists.
 					var sub string
-					color := p.muted
+					color := p.Muted
 					switch {
 					case a.picked.id != 0 && a.picked.id == tr.ID:
 						sub = a.picked.heard
 					case pl.Buffering():
 						sub = "正在缓冲…"
 					case pl.Err() != "" && !pl.PlaybackRetryable():
-						sub, color = pl.Err(), p.accent
+						sub, color = pl.Err(), p.Accent
 					}
 					if sub == "" {
-						a.artistLinks(c, tr, p.muted, p.text).FontSize(12).SingleLine()
+						a.artistLinks(c, tr, p.Muted, p.Text).FontSize(12).SingleLine()
 					} else {
 						ui.Text(c, sub).FontSize(12).TextColor(color).SingleLine()
 					}
@@ -458,38 +459,38 @@ func (a *app) playerBar(c *ui.Context) {
 			if info.Clicked() {
 				a.playbackState.Open = true
 			}
-			a.likeButton(c.Key("like"), tr, 16, p.muted).Margin(0, 0, 0, 4).Shrink(0)
+			a.likeButton(c.Key("like"), tr, 16, p.Muted).Margin(0, 0, 0, 4).Shrink(0)
 		})
 
 		// Controls over the progress.
 		ui.Column(c).Width(440).Shrink(1).MinWidth(300).Gap(0).AlignItems(ui.Stretch).Children(func() {
-			a.transport(c, p.text, p.muted, p.accent, 18)
+			a.transport(c, p.Text, p.Muted, p.Accent, 18)
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Margin(-4, 0, 0, 0).Children(func() {
-				ui.Text(c, clock(pl.Position())).FontSize(10.5).FontFeatures("tnum").TextColor(p.faint).Width(34).TextAlign(ui.End)
-				a.scrubber(c.Key("bar-scrub"), &a.barScrub, p.press, p.text.Alpha(0.75), 14, p.accent).Grow(1)
-				ui.Text(c, clock(pl.Duration())).FontSize(10.5).FontFeatures("tnum").TextColor(p.faint).Width(34)
+				ui.Text(c, components.Clock(pl.Position())).FontSize(10.5).FontFeatures("tnum").TextColor(p.Faint).Width(34).TextAlign(ui.End)
+				a.scrubber(c.Key("bar-scrub"), &a.barScrub, p.Press, p.Text.Alpha(0.75), 14, p.Accent).Grow(1)
+				ui.Text(c, components.Clock(pl.Duration())).FontSize(10.5).FontFeatures("tnum").TextColor(p.Faint).Width(34)
 			})
 		})
 
 		// Desktop lyrics, comments, queue and volume.
 		ui.Row(c).Grow(1).Basis(0).MinWidth(controls).Justify(ui.End).AlignItems(ui.Center).Gap(4).Children(func() {
 			// Desktop lyrics toggle
-			deskLyrColor := p.muted
+			deskLyrColor := p.Muted
 			if a.settings.LyricWindow {
-				deskLyrColor = p.accent
+				deskLyrColor = p.Accent
 			}
-			if iconButton(c.Key("desk-lyrics"), iconDeskLyrics, 16, deskLyrColor, "桌面歌词").Clicked() {
+			if components.IconButton(c.Key("desk-lyrics"), components.IconDeskLyrics, 16, deskLyrColor, "桌面歌词").Clicked() {
 				a.toggleDeskLyrics()
 			}
 			if tr == nil || !tr.IsLocal() {
-				if iconButton(c.Key("comments"), iconComment, 16, p.muted, "评论").Clicked() && tr != nil {
+				if components.IconButton(c.Key("comments"), components.IconComment, 16, p.Muted, "评论").Clicked() && tr != nil {
 					a.playbackState.Open, a.playbackState.Pane = true, paneComments
 				}
 			}
-			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {
+			if components.IconButton(c.Key("queue"), components.IconQueue, 16, p.Muted, "播放队列").Clicked() && tr != nil {
 				a.playbackState.Open, a.playbackState.Pane = true, paneQueue
 			}
-			a.volumeButton(c, p.text.Alpha(0.75))
+			a.volumeButton(c, p.Text.Alpha(0.75))
 		})
 	})
 }

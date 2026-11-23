@@ -11,7 +11,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 // quietApp is Now Playing a song sung from 20 s to 30 s, quiet before and
@@ -34,7 +34,7 @@ func quietApp(pos time.Duration) (*app, netease.Track, []lyrics.Line) {
 		{ID: 2, Content: "从前从前，有个人爱你很久", LikedCount: 31000},
 	}
 	hot[0].User.Nickname, hot[1].User.Nickname = "听众甲", "听众乙"
-	a.comments = viewmodel.Comments{Track: tr.ID, Loaded: true}
+	a.comments = commentsvm.Comments{Track: tr.ID, Loaded: true}
 	a.comments.SetHot(hot)
 	return a, tr, lines
 }

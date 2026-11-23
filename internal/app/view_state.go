@@ -4,21 +4,24 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/desktop/components"
+	"netease-music-mygo/internal/desktop/theme"
 )
 
 // mainViewState belongs to the main window. It never owns playback or page data.
 type mainViewState struct {
 	wasBehind bool
 
-	pal  palette
+	pal  theme.Palette
 	pics map[string]*backdropEntry // shared by the home and playing backdrops
 
 	accountOpen bool // the dropdown of the account row shows
 	intro       descriptionDialog
 	toast       string // a message to show once
 
-	dailySpin spinState // the record on the daily card
-	dailyBars barState  // the bars on its play button
+	dailySpin spinState           // the record on the daily card
+	dailyBars components.BarState // the bars on its play button
 
 	trackList      ui.ListState
 	trackRowsCache trackRowsCache
@@ -59,7 +62,7 @@ type mainViewState struct {
 	volumeScroll     float64 // precise scroll DIPs saved toward the next ten-percent step
 	volumeScrollDown bool    // the direction those DIPs were going
 
-	rowBars               barState
+	rowBars               components.BarState
 	underTop, underBottom bool
 
 	barScrub              scrubState

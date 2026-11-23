@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 
 // editTestApp is signed in, with liked songs, two playlists of their own
@@ -350,7 +350,7 @@ func TestRenameFailureFromPreviousAccount(t *testing.T) {
 	t.Cleanup(func() { renamePlaylist = oldRename })
 	renamePlaylist = func(int64, string) error { return <-reply }
 
-	a.library.Naming = viewmodel.PlaylistName{Open: true, Rename: 10, Name: "A new"}
+	a.library.Naming = libraryvm.PlaylistName{Open: true, Rename: 10, Name: "A new"}
 	a.submitName()
 	a.account.Profile = &netease.Profile{UserID: 2}
 	a.account.Generation++

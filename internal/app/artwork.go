@@ -5,9 +5,6 @@ import (
 	"encoding/binary"
 	"image"
 	"image/color"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"math"
 	"slices"
 	"sync"
@@ -72,9 +69,13 @@ type artPage struct {
 }
 
 const artJobs = 8
+
 const artResultLimit = 16 << 20
+
 const artRefreshAfter = 24 * time.Hour
+
 const artRefreshRetry = time.Minute
+
 const artScrollGrace = time.Second
 
 // artLimit bounds encoded data and estimated decoded pixels in the cache.
@@ -666,6 +667,7 @@ func (c *artCache) beginFrame() {
 	}
 	clear(c.seen)
 }
+
 func (c *artCache) hasFailed(manual bool) bool {
 	for key := range c.seen {
 		if a := c.art[key]; a != nil && a.failed && (manual || a.retryable) {
@@ -674,6 +676,7 @@ func (c *artCache) hasFailed(manual bool) bool {
 	}
 	return false
 }
+
 func (c *artCache) retryFailed(manual bool) {
 	for key := range c.seen {
 		if a := c.art[key]; a != nil && a.failed && (manual || a.retryable) {

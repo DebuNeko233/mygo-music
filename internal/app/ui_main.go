@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 )
@@ -17,10 +18,10 @@ func (a *app) view(c *ui.Context) {
 	t := a.settings.uiTheme(c.Theme())
 	a.pal = paletteFor(&t)
 	p := a.pal
-	t.Background, t.Text = p.bg, p.text
-	t.Inverse, t.InverseText = p.text, p.bg
-	p.applyAccent(&t)
-	t.Selection = p.accent.Alpha(0.3)
+	t.Background, t.Text = p.Background, p.Text
+	t.Inverse, t.InverseText = p.Text, p.Background
+	p.ApplyAccent(&t)
+	t.Selection = p.Accent.Alpha(0.3)
 	c.SetTheme(&t)
 
 	defer a.recoveryFrame(c.WindowActive())
@@ -65,14 +66,14 @@ func (a *app) view(c *ui.Context) {
 			}
 			side := ui.Column(c).Width(sidebarWidth)
 			if !c.Vibrancy() && len(home) == 0 {
-				side.Background(p.sidebar)
+				side.Background(p.Sidebar)
 			}
 			side.Children(func() { a.sidebar(c) })
 			// Keyed, so that a popover of the sidebar opening or closing
 			// keeps what the page and its bars hold, their edges' fades.
-			content := ui.Box(c.Key("main")).Grow(1).BorderWidth(0, 0, 0, 1).BorderColor(p.hairline)
+			content := ui.Box(c.Key("main")).Grow(1).BorderWidth(0, 0, 0, 1).BorderColor(p.Hairline)
 			if len(home) == 0 {
-				content.Background(p.bg)
+				content.Background(p.Background)
 			}
 			content.Children(func() {
 				a.content(c)
@@ -143,11 +144,13 @@ func (a *app) leavingPage(r route) {
 		a.cloud.Locate = 0
 	}
 }
+
 func (a *app) show(r route) {
 	a.leavingPage(r)
 	a.nav.Current = r
 	a.displayPage()
 }
+
 func (a *app) displayPage() {
 	a.intro.open = false
 	r := a.nav.Current
@@ -223,16 +226,16 @@ func (a *app) sidebar(c *ui.Context) {
 		a.searchField(c)
 
 		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
-			a.navItem(c, iconHome, "为你推荐", route{Page: pageHome})
-			a.navItem(c, iconDaily, "每日推荐", route{Page: pageDaily})
-			a.navItem(c, iconHistory, "最近播放", route{Page: pageRecent})
-			a.navItem(c, iconRadio, "私人 FM", route{Page: pageFM})
-			a.navItem(c, iconCharts, "排行榜", route{Page: pageCharts})
-			a.navItem(c, iconPodcast, "播客", route{Page: pagePodcasts})
-			a.navItem(c, iconNote, "本地歌曲", route{Page: pageLocal})
-			a.navItem(c, iconCloud, "音乐网盘", route{Page: pageCloud})
+			a.navItem(c, components.IconHome, "为你推荐", route{Page: pageHome})
+			a.navItem(c, components.IconDaily, "每日推荐", route{Page: pageDaily})
+			a.navItem(c, components.IconHistory, "最近播放", route{Page: pageRecent})
+			a.navItem(c, components.IconRadio, "私人 FM", route{Page: pageFM})
+			a.navItem(c, components.IconCharts, "排行榜", route{Page: pageCharts})
+			a.navItem(c, components.IconPodcast, "播客", route{Page: pagePodcasts})
+			a.navItem(c, components.IconNote, "本地歌曲", route{Page: pageLocal})
+			a.navItem(c, components.IconCloud, "音乐网盘", route{Page: pageCloud})
 			if a.searches.Last.Query != "" {
-				a.navItem(c, iconSearch, "搜索结果", a.searches.Last)
+				a.navItem(c, components.IconSearch, "搜索结果", a.searches.Last)
 			}
 			a.myPlaylists(c, "我的歌单", a.library.Mine, true, &a.mineCollapsed)
 			a.myPlaylists(c, "收藏的歌单", a.library.Saved, false, &a.savedCollapsed)
@@ -250,18 +253,18 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	bg := ui.Transparent
 	switch {
 	case selected:
-		bg = p.press
+		bg = p.Press
 	case b.Hovered():
-		bg = p.hover
+		bg = p.Hover
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	color := p.text
+	color := p.Text
 	if selected {
-		color = p.accent
+		color = p.Accent
 	}
 	b.Children(func() {
 		ui.Icon(c, icon).Size(17, 17).TextColor(color)
-		ui.Text(c, label).FontSize(13.5).FontWeight(500).TextColor(p.text)
+		ui.Text(c, label).FontSize(13.5).FontWeight(500).TextColor(p.Text)
 	})
 	if b.Clicked() {
 		a.open(r)
@@ -345,18 +348,18 @@ func edgeShown(el ui.Element, under bool) float32 {
 func (a *app) pageTop(c *ui.Context) {
 	top, _ := a.insets(c)
 	edge := ui.Box(c.Key("top-edge")).Absolute().Top(0).Left(0).Right(0).Height(top).DragWindow().
-		Material(glass.ScrollEdge{Hard: true, Background: a.pal.bg})
+		Material(glass.ScrollEdge{Hard: true, Background: a.pal.Background})
 	edge.Opacity(edgeShown(edge, a.underTop))
 	if len(a.nav.History) > 0 || len(a.nav.Forward) > 0 {
 		ui.Row(c).Absolute().Top(0).Left(20).Height(topBar(c)).AlignItems(ui.Center).Children(func() {
-			back := iconButton(c.Key("back"), iconBack, 18, a.pal.muted, "返回").Disabled(len(a.nav.History) == 0)
+			back := components.IconButton(c.Key("back"), components.IconBack, 18, a.pal.Muted, "返回").Disabled(len(a.nav.History) == 0)
 			if len(a.nav.History) == 0 {
 				back.Opacity(0.35)
 			}
 			if back.Clicked() {
 				a.back()
 			}
-			if len(a.nav.Forward) > 0 && iconButton(c.Key("forward"), iconForward, 18, a.pal.muted, "前进").Clicked() {
+			if len(a.nav.Forward) > 0 && components.IconButton(c.Key("forward"), components.IconForward, 18, a.pal.Muted, "前进").Clicked() {
 				a.goForward()
 			}
 		})
@@ -410,11 +413,11 @@ func (a *app) centered(c *ui.Context, err string, retry func()) {
 	top, bottom := a.insets(c)
 	ui.Column(c).Grow(1).Padding(top, 0, bottom, 0).Center().Gap(12).Children(func() {
 		if a.network.offline {
-			ui.Icon(c, iconOffline).Size(24, 24).TextColor(a.pal.muted)
+			ui.Icon(c, components.IconOffline).Size(24, 24).TextColor(a.pal.Muted)
 			err = "暂无缓存内容"
 		}
-		ui.Text(c, err).TextColor(a.pal.muted).FontSize(13)
-		if retry != nil && iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载内容").Tooltip("重新加载内容").Clicked() {
+		ui.Text(c, err).TextColor(a.pal.Muted).FontSize(13)
+		if retry != nil && components.IconButton(c.Key("retry"), components.IconReload, 18, a.pal.Muted, "重新加载内容").Tooltip("重新加载内容").Clicked() {
 			retry()
 		}
 	})

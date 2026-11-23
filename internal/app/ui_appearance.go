@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/theme"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -273,3 +274,5 @@ func coverSource(r ui.Rect, w, h float32) ui.Rect {
 	s := max(r.W/w, r.H/h)
 	return ui.Rect{X: w/2 - r.W/(2*s), Y: h/2 - r.H/(2*s), W: r.W / s, H: r.H / s}
 }
+
+func paletteFor(t *ui.Theme) theme.Palette { return theme.For(t, accentColor(accentChosen, t.Dark)) }

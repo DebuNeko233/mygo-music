@@ -16,7 +16,7 @@ import (
 
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
 )
 
 func downloadTestApp(t *testing.T) (*app, chan func()) {
@@ -219,8 +219,8 @@ func TestDownloadRetrySharesDedupAndClearsResult(t *testing.T) {
 		return download.Result{Path: "/tmp/song.flac"}, nil
 	}
 	track := netease.Track{ID: 77}
-	failed := &viewmodel.DownloadJob{Track: track, Options: download.Options{Directory: a.settings.DownloadDirectory, Quality: a.settings.DownloadQuality, NameFormat: download.NameArtistTitle}, Finished: true, Result: download.Result{Quality: "lossless", Format: "flac", Warning: "old warning"}}
-	a.downloads.Jobs = []*viewmodel.DownloadJob{failed}
+	failed := &downloadsvm.DownloadJob{Track: track, Options: download.Options{Directory: a.settings.DownloadDirectory, Quality: a.settings.DownloadQuality, NameFormat: download.NameArtistTitle}, Finished: true, Result: download.Result{Quality: "lossless", Format: "flac", Warning: "old warning"}}
+	a.downloads.Jobs = []*downloadsvm.DownloadJob{failed}
 	a.enqueueDownloads([]netease.Track{track})
 	wait(t, started, "new enqueue")
 	a.retryDownload(failed)
@@ -480,7 +480,7 @@ func TestDownloadSettingsFrames(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.preferences.Section = "download"
-			a.downloads.Jobs = []*viewmodel.DownloadJob{{Track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, Status: "正在下载", Received: 28, Total: 100}, {Track: netease.Track{Name: "没有封面的音乐"}, Status: "下载完成", Finished: true, Result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {Track: netease.Track{Name: "下载失败的歌曲"}, Status: "下载失败", Finished: true, Err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
+			a.downloads.Jobs = []*downloadsvm.DownloadJob{{Track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, Status: "正在下载", Received: 28, Total: 100}, {Track: netease.Track{Name: "没有封面的音乐"}, Status: "下载完成", Finished: true, Result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {Track: netease.Track{Name: "下载失败的歌曲"}, Status: "下载失败", Finished: true, Err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
 			tt := ui.NewTester(a.settingsView, size.w, size.h)
 			tt.SetDark(dark)
 			tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 78})

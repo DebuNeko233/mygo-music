@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/components"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/speech"
@@ -79,7 +80,7 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 func (a *app) captionsNote(c *ui.Context, text, button string, act func()) {
 	ui.Column(c).Grow(1).Center().Gap(18).Children(func() {
 		ui.Text(c, text).FontSize(22).FontWeight(700).TextColor(white.Alpha(0.4))
-		if button != "" && pillButton(c.Key("act"), nil, button, white.Alpha(0.14), white).Clicked() {
+		if button != "" && components.PillButton(c.Key("act"), nil, button, white.Alpha(0.14), white).Clicked() {
 			act()
 		}
 	})
@@ -104,7 +105,7 @@ func (a *app) modelCard(c *ui.Context) {
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, fmt.Sprintf("正在下载 %s / %s", megabytes(m.Done), megabytes(m.Total))).FontSize(12.5).FontFeatures("tnum").TextColor(white.Alpha(0.5))
 				ui.Spacer(c)
-				if pillButton(c.Key("cancel"), nil, "取消", white.Alpha(0.14), white).Clicked() {
+				if components.PillButton(c.Key("cancel"), nil, "取消", white.Alpha(0.14), white).Clicked() {
 					a.cancelModelDownload()
 				}
 			})
@@ -118,7 +119,7 @@ func (a *app) modelCard(c *ui.Context) {
 			label = "重试"
 		}
 		ui.Row(c).Margin(6, 0, 0, 0).Children(func() {
-			if pillButton(c.Key("download"), nil, label, white, ui.Hex("#141416")).Clicked() {
+			if components.PillButton(c.Key("download"), nil, label, white, ui.Hex("#141416")).Clicked() {
 				a.startModelDownload()
 			}
 		})

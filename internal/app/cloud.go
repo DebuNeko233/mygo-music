@@ -2,14 +2,14 @@ package app
 
 import (
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
 )
 
 var cloudSongs = netease.CloudSongsContext
 
-func (a *app) cloudServices() viewmodel.CloudServices {
+func (a *app) cloudServices() cloudvm.CloudServices {
 	uid, generation := a.listenerID(), a.account.Generation
-	return viewmodel.CloudServices{
+	return cloudvm.CloudServices{
 		Fetch: cloudSongs,
 		Post: func(update func() bool) {
 			a.postIfChanged(func() bool {
@@ -38,7 +38,7 @@ func (a *app) refreshCloud() {
 	}
 }
 
-func (a *app) loadCloud(mode viewmodel.CloudLoadMode) {
+func (a *app) loadCloud(mode cloudvm.CloudLoadMode) {
 	if !a.quitting && a.account.Profile != nil {
 		a.cloud.Load(mode, a.cloudServices())
 	}

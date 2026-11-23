@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	recentvm "netease-music-mygo/internal/viewmodel/recent"
 )
 
 func recentPerfApp(count int) *app {
@@ -20,7 +20,7 @@ func recentPerfApp(count int) *app {
 	a.account.Profile = &netease.Profile{UserID: 7, Nickname: "小明"}
 	a.nav.Current = route{Page: pageRecent}
 	for i := range a.recent.Tabs {
-		a.recent.Tabs[i] = viewmodel.RecentTab{Shown: true, At: time.Now().Add(time.Hour)}
+		a.recent.Tabs[i] = recentvm.RecentTab{Shown: true, At: time.Now().Add(time.Hour)}
 	}
 	plays := make([]netease.Play, count)
 	for i := range plays {
@@ -82,7 +82,7 @@ func TestRecentMVVMFrames(t *testing.T) {
 	for _, scene := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8} {
 		for _, dark := range []bool{false, true} {
 			a := recentPerfApp(6)
-			if scene < viewmodel.RecentTabCount {
+			if scene < recentvm.RecentTabCount {
 				a.recent.Selected = scene
 			}
 			switch scene {

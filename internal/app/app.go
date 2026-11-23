@@ -10,10 +10,28 @@ import (
 	"netease-music-mygo/internal/navigation"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/speech"
-	"netease-music-mygo/internal/viewmodel"
+	accountvm "netease-music-mygo/internal/viewmodel/account"
+	albumvm "netease-music-mygo/internal/viewmodel/album"
+	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	captionsvm "netease-music-mygo/internal/viewmodel/captions"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
+	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
+	homevm "netease-music-mygo/internal/viewmodel/home"
+	libraryvm "netease-music-mygo/internal/viewmodel/library"
+	linksvm "netease-music-mygo/internal/viewmodel/links"
+	localvm "netease-music-mygo/internal/viewmodel/local"
+	playbackvm "netease-music-mygo/internal/viewmodel/playback"
+	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
+	radiovm "netease-music-mygo/internal/viewmodel/radio"
+	recentvm "netease-music-mygo/internal/viewmodel/recent"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
+	settingsvm "netease-music-mygo/internal/viewmodel/settings"
+	uservm "netease-music-mygo/internal/viewmodel/user"
 )
 
 type pageKind = navigation.Page
+
 type route = navigation.Route
 
 const (
@@ -41,9 +59,9 @@ type app struct {
 	appDispatch
 	appLifetime
 	startup startupState
-	account viewmodel.Account
-	library viewmodel.Library
-	home    viewmodel.Home
+	account accountvm.Account
+	library libraryvm.Library
+	home    homevm.Home
 	network networkState
 
 	playlistWrites                         sync.Map // cacheRequest to the latest accepted write's done channel
@@ -62,11 +80,11 @@ type app struct {
 
 	picked pickedUp // the song a login picked up, waiting to play
 
-	cloud viewmodel.Cloud
+	cloud cloudvm.Cloud
 
 	// What the listener played lately, on any of their devices, and what
 	// the page lists: see ui_recent.go.
-	recent viewmodel.Recent
+	recent recentvm.Recent
 
 	// heard is the actual audio session; reports leave in playback order.
 	heard           heardPlay
@@ -74,20 +92,20 @@ type app struct {
 	reportDone      chan struct{}
 	newPlayReporter func() playReporter
 
-	artists  viewmodel.Artists
-	albums   viewmodel.Albums
-	users    viewmodel.Users
-	podcasts viewmodel.Podcasts
-	local    viewmodel.LocalLibrary
+	artists  artistvm.Artists
+	albums   albumvm.Albums
+	users    uservm.Users
+	podcasts podcastvm.Podcasts
+	local    localvm.LocalLibrary
 
-	searches viewmodel.Search // the results of each search, by its page
-	links    viewmodel.Links
+	searches searchvm.Search // the results of each search, by its page
+	links    linksvm.Links
 
-	playbackState viewmodel.Playback
-	lyricReading  viewmodel.LyricReading
-	comments      viewmodel.Comments
+	playbackState playbackvm.Playback
+	lyricReading  playbackvm.LyricReading
+	comments      commentsvm.Comments
 
-	radio viewmodel.Radio
+	radio radiovm.Radio
 
 	// mix is the app's volume in the system's mixer, when the system keeps
 	// one: it applies the volume the app shows, and what it is set to there
@@ -100,17 +118,17 @@ type app struct {
 	// action: another app holds them.
 	hotkeyErrs map[string]string
 
-	captions      viewmodel.Captions // the episode playing's captions, and the model that writes them
+	captions      captionsvm.Captions // the episode playing's captions, and the model that writes them
 	captionEngine speech.Engine
 	quitting      bool
 
 	// Settings navigation stays in memory; only user preferences are persisted.
-	downloads   viewmodel.Downloads
-	preferences viewmodel.Preferences
+	downloads   downloadsvm.Downloads
+	preferences settingsvm.Preferences
 
 	settings      settings
 	settingsWin   *mygo.Window
-	cacheSettings viewmodel.CacheSettings
+	cacheSettings settingsvm.CacheSettings
 	updates       bool // the update plugin is used (useUpdater)
 
 	restored    bool // playback picked up where it was left

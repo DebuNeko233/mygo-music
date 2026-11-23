@@ -9,7 +9,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
 // Windows lays out a minimized window at zero size. The cover divided its
@@ -28,7 +28,7 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 				lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Lyric %03d", i)}
 			}
 			a.pl.SetLyrics(lines)
-			a.comments = viewmodel.Comments{Track: 1, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
+			a.comments = commentsvm.Comments{Track: 1, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
 			a.playbackState.Open, a.playbackState.Pane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
 			if pane.id == paneLyrics {

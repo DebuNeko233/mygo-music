@@ -8,19 +8,20 @@ import (
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
 )
 
 // A worker publishes only on the owning thread and follows the complete cloud listing automatically.
 func TestCloudPublishesOnOwnerThread(t *testing.T) {
-	var m viewmodel.Cloud
+	var m cloudvm.Cloud
 	type call struct {
 		offset int
 		reply  chan *netease.CloudPage
 	}
 	calls, posts := make(chan call, 2), make(chan func() bool, 2)
 	now := time.Unix(1000, 0)
-	s := viewmodel.CloudServices{
+	s := cloudvm.CloudServices{
 		Fetch: func(ctx context.Context, _, offset int) (*netease.CloudPage, error) {
 			reply := make(chan *netease.CloudPage, 1)
 			calls <- call{offset, reply}
@@ -35,7 +36,7 @@ func TestCloudPublishesOnOwnerThread(t *testing.T) {
 		Now:  func() time.Time { return now },
 	}
 	t.Cleanup(m.Stop)
-	m.Load(viewmodel.CloudNextPage, s)
+	m.Load(cloudvm.CloudNextPage, s)
 	first := receive(t, calls)
 	if first.offset != 0 {
 		t.Fatal("initial request did not start at zero")
@@ -56,7 +57,7 @@ func TestCloudPublishesOnOwnerThread(t *testing.T) {
 	if !receive(t, posts)() || m.Loading() || m.More || len(m.Tracks) != 2 || m.At != now {
 		t.Fatal("complete listing was not published and deduplicated")
 	}
-	m.Load(viewmodel.CloudNextPage, s)
+	m.Load(cloudvm.CloudNextPage, s)
 	if m.Loading() {
 		t.Fatal("completed listing restarted without a refresh command")
 	}
@@ -64,13 +65,13 @@ func TestCloudPublishesOnOwnerThread(t *testing.T) {
 
 // Canceling an execution leaves it busy until its posted cleanup runs, then advances the queue once.
 func TestDownloadsWaitForPublishedCleanup(t *testing.T) {
-	var m viewmodel.Downloads
+	var m downloadsvm.Downloads
 	type call struct {
 		ctx context.Context
 		id  int64
 	}
 	calls, posts := make(chan call, 4), make(chan func() bool, 4)
-	s := viewmodel.DownloadServices{
+	s := downloadsvm.DownloadServices{
 		Save: func(ctx context.Context, tr netease.Track, _ download.Options) (download.Result, error) {
 			calls <- call{ctx, tr.ID}
 			<-ctx.Done()

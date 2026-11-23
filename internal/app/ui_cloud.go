@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
 )
 
 func (a *app) resolveCloudLocate() {
@@ -40,14 +40,14 @@ func (a *app) cloudPage(c *ui.Context) {
 	if a.account.Profile == nil {
 		top, bottom := a.insets(c)
 		ui.Column(c).Grow(1).Padding(top, 0, bottom, 0).Center().Gap(12).Children(func() {
-			ui.Text(c, "登录后查看音乐网盘").FontSize(14).TextColor(a.pal.muted)
+			ui.Text(c, "登录后查看音乐网盘").FontSize(14).TextColor(a.pal.Muted)
 			ui.PrimaryButton(c.Key("cloud-sign-in"), "登录网易云音乐").OnClick(a.openLogin)
 		})
 		return
 	}
 	d := &a.cloud
 	if !d.Loading() && d.Failure == nil && (!d.Loaded || d.More) {
-		a.loadCloud(viewmodel.CloudNextPage)
+		a.loadCloud(cloudvm.CloudNextPage)
 	}
 	header := func(c *ui.Context) { a.cloudHeader(c) }
 	if !d.Loaded && d.Loading() {
@@ -66,11 +66,11 @@ func (a *app) cloudPage(c *ui.Context) {
 					if errors.Is(d.Failure, netease.ErrNotLoggedIn) {
 						message = "登录已失效，请重新登录"
 					}
-					ui.Text(c, message).FontSize(13).TextColor(a.pal.muted)
+					ui.Text(c, message).FontSize(13).TextColor(a.pal.Muted)
 					if errors.Is(d.Failure, netease.ErrNotLoggedIn) {
 						ui.Button(c.Key("cloud-login"), "重新登录").OnClick(a.openLogin)
 					} else {
-						ui.Button(c.Key("cloud-retry"), "重试加载").OnClick(func() { a.loadCloud(viewmodel.CloudNextPage) })
+						ui.Button(c.Key("cloud-retry"), "重试加载").OnClick(func() { a.loadCloud(cloudvm.CloudNextPage) })
 					}
 				})
 			default:
@@ -85,13 +85,13 @@ func (a *app) cloudPage(c *ui.Context) {
 		a.locatePlayingButton(c, false, func() {
 			if current := a.pl.Current(); current != nil && current.Cloud {
 				d.Locate = current.Key()
-				a.loadCloud(viewmodel.CloudNextPage)
+				a.loadCloud(cloudvm.CloudNextPage)
 			}
 		})
 	}
 }
 
-func cloudSummary(d *viewmodel.Cloud) string {
+func cloudSummary(d *cloudvm.Cloud) string {
 	if !d.Loaded {
 		return ""
 	}
@@ -104,7 +104,7 @@ func (a *app) cloudHeader(c *ui.Context) {
 		ui.Column(c).Grow(1).Gap(4).Children(func() {
 			ui.Text(c, "音乐网盘").FontSize(30).FontWeight(700).LetterSpacing(-0.6)
 			if info := cloudSummary(&a.cloud); info != "" {
-				ui.Text(c, info).FontSize(12).TextColor(p.muted)
+				ui.Text(c, info).FontSize(12).TextColor(p.Muted)
 			}
 		})
 	})

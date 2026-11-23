@@ -8,6 +8,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
 )
 
 func searchPerfApp() *app {
@@ -18,7 +19,7 @@ func searchPerfApp() *app {
 	for i := range songs {
 		songs[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌曲 %03d", i), Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}
 	}
-	a.searches.Pages.Set(r, &viewmodel.SearchPage{Res: netease.SearchResult{Songs: songs, Total: 300}, Page: viewmodel.Page{Loaded: true}})
+	a.searches.Pages.Set(r, &searchvm.SearchPage{Res: netease.SearchResult{Songs: songs, Total: 300}, Page: viewmodel.Page{Loaded: true}})
 	return a
 }
 

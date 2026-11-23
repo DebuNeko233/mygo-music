@@ -8,6 +8,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
+	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
 )
 
 // Unsubscribing in the detail immediately updates the already loaded personal page without a second subscription cache.
@@ -17,7 +18,7 @@ func TestPodcastMVVMSubscriptionUpdatesPersonalPage(t *testing.T) {
 	pod := a.podcasts.Home.Subs[0]
 	pod.Subed = true
 	pod.SubCount = 10
-	d := &viewmodel.PodcastPage{Podcast: &pod, Page: viewmodel.Page{Loaded: true}}
+	d := &podcastvm.PodcastPage{Podcast: &pod, Page: viewmodel.Page{Loaded: true}}
 	a.podcasts.Pages.Set(pod.ID, d)
 	a.nav.Current = route{Page: pagePodcast, ID: pod.ID}
 	old := subscribePodcast

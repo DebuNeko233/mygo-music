@@ -11,7 +11,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/speech"
-	"netease-music-mygo/internal/viewmodel"
+	captionsvm "netease-music-mygo/internal/viewmodel/captions"
 )
 
 // A long translated song builds only nearby controls after a distant seek and resize.
@@ -189,7 +189,7 @@ func TestCaptionAppendKeepsManualPosition(t *testing.T) {
 	for _, count := range []int{timedListThreshold - 1, 300} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			a := captionsTestApp(t, true)
-			work := &viewmodel.CaptionWork{Program: 42}
+			work := &captionsvm.CaptionWork{Program: 42}
 			cs := &a.captions
 			cs.Program, cs.Transcript, cs.Work = 42, &transcript{}, work
 			add := func(i int) {
@@ -233,8 +233,8 @@ func TestCaptionAppendKeepsManualPosition(t *testing.T) {
 // Caption language follows new text and out-of-order segments while duplicate segments leave the list alone.
 func TestCaptionLanguageAfterAppendAndInsert(t *testing.T) {
 	a := newTestApp()
-	work := &viewmodel.CaptionWork{Program: 42}
-	a.captions = viewmodel.Captions{Program: 42, Transcript: &transcript{}, Work: work}
+	work := &captionsvm.CaptionWork{Program: 42}
+	a.captions = captionsvm.Captions{Program: 42, Transcript: &transcript{}, Work: work}
 	english := speech.Segment{Start: 5 * sec, End: 7 * sec, Text: "First caption"}
 	japanese := speech.Segment{Start: 8 * sec, End: 10 * sec, Text: "次のことば"}
 	a.captions.Said(work, english)
