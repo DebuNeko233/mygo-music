@@ -232,14 +232,14 @@ func TestPlayerBarCoverFrameBudget(t *testing.T) {
 		img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 		a.art.add(netease.Sized(url, barCoverPixels), &artwork{bmp: ui.NewBitmap(img)})
 	}
-	url := before
+	track := &netease.Track{Album: netease.Album{PicURL: before}}
 	builds := 0
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
-		a.playerBarArtwork(c, url)
+		a.playerBarArtwork(c, track)
 	}, 64, 64)
 	tt.Advance(time.Second)
-	url = after
+	track.Album.PicURL = after
 	tt.Frame()
 	if !tt.FramePending() {
 		t.Fatal("a new cover did not schedule animation frames")
@@ -509,6 +509,29 @@ func TestStageHotCommentsReducedMotion(t *testing.T) {
 				elapsed += 200 * time.Millisecond
 				if *builds != before {
 					t.Fatalf("static hot comment requested %d extra builds", *builds-before)
+				}
+			}
+		})
+	}
+}
+
+// Loading a large cloud library should not copy and scan all prior songs on every page.
+func BenchmarkCloudMergePages(b *testing.B) {
+	for _, count := range []int{1000, 10000} {
+		b.Run(fmt.Sprint(count), func(b *testing.B) {
+			tracks := make([]netease.Track, count)
+			for i := range tracks {
+				tracks[i].ID = int64(i + 1)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				var d cloudData
+				for start := 0; start < count; start += cloudPageSize {
+					d.mergePage(tracks[start:min(start+cloudPageSize, count)], start == 0)
+				}
+				if len(d.tracks) != count {
+					b.Fatal("lost cloud songs")
 				}
 			}
 		})

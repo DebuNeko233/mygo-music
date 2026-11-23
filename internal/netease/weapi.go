@@ -2,6 +2,7 @@ package netease
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -27,13 +28,17 @@ var weapiRandom = rand.Reader
 // weapiPost uses the web player's request protocol for operations its servers
 // expect through that protocol, rather than the desktop client's eapi.
 func weapiPost(path string, data map[string]any, out any) error {
+	return weapiPostContext(context.Background(), path, data, out)
+}
+
+func weapiPostContext(ctx context.Context, path string, data map[string]any, out any) error {
 	token := csrf()
 	data["csrf_token"] = token
 	form, err := weapiEncrypt(data)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest("POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,7 @@ import (
 // MetadataPending excludes an in-flight request: recovery never starts a
 // second copy, and it never restarts audio or changes pause/seek state.
 func (p *Player) MetadataPending() bool {
-	return p.track != nil && !p.track.IsLocal() && !p.cacheChanging && (!p.lyricsLoaded && !p.lyricBusy && metadataRecoverable(p.lyricFailure) || !p.coverLoaded && !p.coverBusy && p.track.Album.PicURL != "" && metadataRecoverable(p.coverFailure))
+	return p.track != nil && !p.track.IsLocal() && !p.cacheChanging && (!p.lyricsLoaded && !p.lyricBusy && metadataRecoverable(p.lyricFailure) || !p.coverLoaded && !p.coverBusy && netease.CoverURL(p.track.Album.PicURL) != "" && metadataRecoverable(p.coverFailure))
 }
 func metadataRecoverable(err error) bool { return err == nil || netease.RetryableError(err) }
 
@@ -29,7 +29,7 @@ func (p *Player) retryMetadata(manual bool) {
 		}
 		return
 	}
-	if !p.coverLoaded && !p.coverBusy && t.Album.PicURL != "" && (manual || metadataRecoverable(p.coverFailure)) {
+	if !p.coverLoaded && !p.coverBusy && netease.CoverURL(t.Album.PicURL) != "" && (manual || metadataRecoverable(p.coverFailure)) {
 		p.coverBusy = true
 		go func() {
 			cover, err := netease.Fetch(netease.Sized(t.Album.PicURL, 600))

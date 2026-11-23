@@ -28,7 +28,7 @@ func TestADTSDecoderInitFailureClosesDecoder(t *testing.T) {
 			decoder.Close(context.Background())
 		}
 	})
-	s := &adtsFAADStream{}
+	s := &adtsStream{}
 	if err := s.resetDecoder(0); err == nil {
 		t.Fatal("empty decoder configuration was accepted")
 	}
@@ -40,14 +40,14 @@ func TestADTSDecoderInitFailureClosesDecoder(t *testing.T) {
 	}
 }
 
-// Failed ADTS opens release the initialized decoder while a successful stream keeps it until Close.
+// Failed ADTS opens release their decoder; a buffered prefix survives source truncation and Close releases a successful stream.
 func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
 	for _, name := range []string{"packet read failure", "decode failure", "success"} {
 		t.Run(name, func(t *testing.T) {
 			data := testAudio(t, "seek-he.aac")
 			if name == "packet read failure" {
-				// Leave the first packet outside the final read-ahead window,
-				// so truncation still exercises a file read after indexing.
+				// Keep enough packets for playback to exhaust the buffered prefix
+				// and encounter the truncated source after a successful open.
 				data = bytes.Repeat(data, audioReadBuffer/len(data)+1)
 			}
 			if name == "decode failure" {
@@ -91,13 +91,29 @@ func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
 					decoder.Close(context.Background())
 				}
 			})
-			s, err := openFAADADTS(dl)
+			s, err := openAACStreamSpectrum(dl, true)
 			if decoder == nil {
 				t.Fatal("no decoder was initialized")
 			}
-			if name == "success" {
+			if name == "success" || name == "packet read failure" {
 				if err != nil {
 					t.Fatal(err)
+				}
+				if name == "packet read failure" {
+					frames := int64(0)
+					for {
+						n, readErr := s.Read(make([]float32, 4096))
+						frames += int64(n / 2)
+						if readErr != nil {
+							if !errors.Is(readErr, io.EOF) {
+								t.Fatalf("truncated read: %v", readErr)
+							}
+							break
+						}
+					}
+					if frames == 0 || frames >= s.Len() {
+						t.Fatalf("truncated source decoded %d/%d frames", frames, s.Len())
+					}
 				}
 				if _, err := decoder.Decode(t.Context(), testADTSPacket(t, 0)); err != nil {
 					t.Fatalf("successful open released its decoder: %v", err)
@@ -107,8 +123,6 @@ func TestADTSOpenOwnsDecoderUntilSuccess(t *testing.T) {
 				}
 			} else if err == nil || s != nil {
 				t.Fatalf("open returned stream=%t, error=%v, want failure", s != nil, err)
-			} else if name == "packet read failure" && !errors.Is(err, io.EOF) {
-				t.Fatalf("packet read returned %v, want EOF after truncation", err)
 			} else if name == "decode failure" && !errors.Is(err, faad2.ErrDecodeFailed) {
 				t.Fatalf("decode returned %v, want a decoding error", err)
 			}
@@ -142,7 +156,7 @@ func TestADTSPMAppendsStereo(t *testing.T) {
 // The FAAD2 MP4 codec uses the same append conversion as the ADTS stream.
 func TestFAADCodecAppendsPCM(t *testing.T) {
 	config := testADTSPackets(t)
-	codec, err := newFAADCodec(config)
+	codec, err := newFAADCodec(config[:])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +188,7 @@ func TestADTSPendingAndSeek(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := raw.(*adtsFAADStream)
+	s := raw.(*adtsStream)
 	defer s.Close()
 	whole := readADTS(t, s, 4096)
 	if err := s.SetPosition(0); err != nil {
@@ -210,7 +224,7 @@ func TestADTSPendingAndSeek(t *testing.T) {
 	}
 }
 
-func readADTS(t *testing.T, s *adtsFAADStream, size int) []float32 {
+func readADTS(t *testing.T, s *adtsStream, size int) []float32 {
 	t.Helper()
 	var out []float32
 	buf := make([]float32, size)
@@ -233,7 +247,7 @@ func testADTSPackets(t *testing.T) []byte {
 	if !ok {
 		t.Fatal("invalid test ADTS header")
 	}
-	return config
+	return config[:]
 }
 
 func testADTSPacket(t *testing.T, i int) []byte {
@@ -276,7 +290,7 @@ func BenchmarkFAADCodecDecode(b *testing.B) {
 	if !ok {
 		b.Fatal("invalid test ADTS header")
 	}
-	codec, err := newFAADCodec(config)
+	codec, err := newFAADCodec(config[:])
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -306,7 +320,7 @@ func BenchmarkADTSStreamRead(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		s := raw.(*adtsFAADStream)
+		s := raw.(*adtsStream)
 		buf := make([]float32, 4096)
 		for {
 			_, err := s.Read(buf)

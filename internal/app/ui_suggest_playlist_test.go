@@ -143,7 +143,7 @@ func TestPlaylistSuggestionSmallWindow(t *testing.T) {
 	}
 	a.suggestions.items = suggestionList(netease.Suggestions{Playlists: remote})
 	tt.Frame()
-	for range playlistSuggestLimit + len(remote) {
+	for range trackSuggestLimit + len(remote) {
 		tt.Key(0, ui.KeyDown)
 	}
 	tt.Frame()
@@ -195,7 +195,7 @@ func TestPlaylistSuggestionMatches(t *testing.T) {
 		{"春日", true}, {"mygo", true}, {"迷跡", true}, {"HARUHIKAGE", true},
 		{"mygo  春日\t迷跡波", true}, {"MyGO missing", false}, {"other", false}, {"", false},
 	} {
-		if got := len(a.playlistSuggestions(tc.query)) > 0; got != tc.want {
+		if got := len(a.trackSuggestions(tc.query)) > 0; got != tc.want {
 			t.Errorf("%q matched %v, want %v", tc.query, got, tc.want)
 		}
 	}
@@ -204,8 +204,8 @@ func TestPlaylistSuggestionMatches(t *testing.T) {
 		tr.ID = int64(i)
 		pl.Tracks = append(pl.Tracks, tr)
 	}
-	got := a.playlistSuggestions("春日")
-	if len(got) != playlistSuggestLimit {
+	got := a.trackSuggestions("春日")
+	if len(got) != trackSuggestLimit {
 		t.Fatalf("got %d local suggestions", len(got))
 	}
 	for i, sg := range got {
@@ -221,25 +221,25 @@ func TestPlaylistSuggestionRefreshes(t *testing.T) {
 	a := newTestApp()
 	a.route = route{page: pagePlaylist, id: 7}
 	a.playlists[7] = &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "old"}}}
-	a.playlistSuggestions("old")
+	a.trackSuggestions("old")
 	a.playlists[7] = &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 2, Name: "new"}}}
-	if len(a.playlistSuggestions("old")) != 0 {
+	if len(a.trackSuggestions("old")) != 0 {
 		t.Fatal("refresh kept a removed match")
 	}
-	if got := a.playlistSuggestions("new"); len(got) != 1 || got[0].song != 2 {
+	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].song != 2 {
 		t.Fatal("new query missed refreshed tracks")
 	}
 	a.playlists[7].Tracks = []netease.Track{{ID: 3, Name: "new"}}
-	if got := a.playlistSuggestions("new"); len(got) != 1 || got[0].song != 3 {
+	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].song != 3 {
 		t.Fatal("track replacement reused old results")
 	}
 	a.playlists[8] = &netease.Playlist{ID: 8, Tracks: []netease.Track{{ID: 4, Name: "new"}}}
 	a.route.id = 8
-	if got := a.playlistSuggestions("new"); len(got) != 1 || got[0].song != 4 {
+	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].song != 4 {
 		t.Fatal("page change searched the previous playlist")
 	}
 	a.route.page = pageAlbum
-	if len(a.playlistSuggestions("new")) != 0 {
+	if len(a.trackSuggestions("new")) != 0 {
 		t.Fatal("album page searched a playlist with the same ID")
 	}
 }
@@ -265,7 +265,7 @@ func TestPlaylistSuggestionPrioritizesPlayable(t *testing.T) {
 				pl.Tracks = append(pl.Tracks, netease.Track{ID: int64(i + 1), Name: "match", Fee: fee})
 			}
 			a.playlists[7] = pl
-			got := a.playlistSuggestions("match")
+			got := a.trackSuggestions("match")
 			if len(got) != len(tc.want) {
 				t.Fatalf("got %d suggestions, want %d", len(got), len(tc.want))
 			}
@@ -312,18 +312,18 @@ func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
 	a.route = route{page: pagePlaylist, id: 7}
 	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}, {ID: 2, Name: "other"}}}
 	a.playlists[7] = pl
-	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != 1 {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != 1 {
 		t.Fatal("initial match missing")
 	}
 	before := removeFromPlaylist
 	removeFromPlaylist = func(int64, ...int64) error { return errors.New("offline") }
 	t.Cleanup(func() { removeFromPlaylist = before })
 	a.removeFrom(7, &pl.Tracks[0])
-	if len(a.playlistSuggestions("match")) != 0 {
+	if len(a.trackSuggestions("match")) != 0 {
 		t.Fatal("removed song remained in suggestions")
 	}
 	refreshPost(t, posts)
-	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != 1 {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != 1 {
 		t.Fatal("failed removal did not restore its suggestion")
 	}
 	playlistDetail = func(id int64) (*netease.Playlist, error) {
@@ -331,11 +331,11 @@ func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
 	}
 	a.loadPlaylist(7, false)
 	refreshPost(t, posts)
-	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != 3 {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != 3 {
 		t.Fatal("network refresh reused the old suggestion")
 	}
 	a.forgetPlaylist(7)
-	if len(a.playlistSuggestions("match")) != 0 {
+	if len(a.trackSuggestions("match")) != 0 {
 		t.Fatal("forgotten playlist kept its suggestions")
 	}
 }
@@ -348,17 +348,17 @@ func TestPlaylistSuggestionFollowsInPlaceEdit(t *testing.T) {
 	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}}}
 	a.playlists[7] = pl
 	original := pl.Tracks[0]
-	if len(a.playlistSuggestions("match")) != 1 {
+	if len(a.trackSuggestions("match")) != 1 {
 		t.Fatal("initial match missing")
 	}
 	finishEdit := a.beginLibraryEdit()
 	pl.Tracks[0].Name = "renamed"
-	if len(a.playlistSuggestions("match")) != 0 {
+	if len(a.trackSuggestions("match")) != 0 {
 		t.Fatal("shared edit entry point kept stale results")
 	}
 	pl.Tracks[0] = original
 	finishEdit()
-	if got := a.playlistSuggestions("match"); len(got) != 1 || got[0].song != original.ID {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != original.ID {
 		t.Fatal("edit rollback kept stale results")
 	}
 }
@@ -375,7 +375,7 @@ func TestPlaylistSuggestionRevalidatesSelection(t *testing.T) {
 			a.route = route{page: pagePlaylist, id: 7}
 			pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}, {ID: 2, Name: "other"}}}
 			a.playlists[7] = pl
-			sg := a.playlistSuggestions("match")[0]
+			sg := a.trackSuggestions("match")[0]
 			q := "match"
 			switch change {
 			case "reorder":
@@ -475,14 +475,14 @@ func BenchmarkPlaylistSuggestions(b *testing.B) {
 	a.playlists[7] = pl
 	for _, cold := range []bool{false, true} {
 		b.Run(fmt.Sprintf("cold=%v", cold), func(b *testing.B) {
-			a.playlistSuggestions("春日影")
+			a.trackSuggestions("春日影")
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
 				if cold {
 					a.listRefresh.revision++
 				}
-				a.playlistSuggestions("春日影")
+				a.trackSuggestions("春日影")
 			}
 		})
 	}

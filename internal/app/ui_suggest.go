@@ -16,11 +16,11 @@ const suggestDelay = 220 * time.Millisecond
 
 // suggestState is what a search may be after, as its query is typed.
 type suggestState struct {
-	query    string // what they are for
-	items    []suggestion
-	playlist playlistSuggestState
-	timer    *time.Timer // waiting for typing to pause
-	gen      uint64      // which request the query is waiting for
+	query  string // what they are for
+	items  []suggestion
+	tracks trackSuggestState
+	timer  *time.Timer // waiting for typing to pause
+	gen    uint64      // which request the query is waiting for
 }
 
 // suggestion is a page a query may be after: a song's search, or an
@@ -193,9 +193,10 @@ func (a *app) searchField(c *ui.Context) {
 					ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
 					ui.Text(c, "搜索“"+q+"”").FontSize(13).FontWeight(500).SingleLine().Shrink(1).MinWidth(0)
 				})
-				for _, sg := range a.playlistSuggestions(q) {
+				for _, sg := range a.trackSuggestions(q) {
 					showSuggestion(sg.suggestion, true, sg.playable)
 				}
+
 				if s.query == q {
 					for _, sg := range s.items {
 						showSuggestion(sg, false, true)
@@ -220,7 +221,7 @@ func (a *app) searchField(c *ui.Context) {
 
 // choose goes where the option chosen in the search field's popup goes.
 func (a *app) choose(key, q string) {
-	if a.choosePlaylistSuggestion(key, q) {
+	if a.chooseTrackSuggestion(key, q) {
 		return
 	}
 	if h, ok := strings.CutPrefix(key, "history:"); ok {

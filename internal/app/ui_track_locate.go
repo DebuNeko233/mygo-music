@@ -7,20 +7,21 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// playlistHeaderKey holds the text sources that can change the header's height.
+// trackHeaderKey holds the text sources that can change the header's height.
 // Keep values: a rename or refresh can mutate the existing playlist in place.
-type playlistHeaderKey struct {
+type trackHeaderKey struct {
 	name, description, creator, frequency string
 	tracks                                int
 	plays                                 float64
 }
 
-// playlistViewport keeps viewport/target values, never UI elements.
-type playlistViewport struct {
+// trackViewport keeps viewport/target values, never UI elements.
+type trackViewport struct {
 	y, width, height float32
 	playlist, song   int64
+	page             pageKind
 	index            int
-	header           playlistHeaderKey
+	header           trackHeaderKey
 }
 
 // Geometry queries read the committed frame. After a scroll or resize, build
@@ -30,19 +31,19 @@ type playlistViewport struct {
 // rows behind a bar even while the scroll offset and list range stay the same.
 // No frames are requested while these are unchanged.
 func (a *app) syncPlaylistViewport(c *ui.Context, pl *netease.Playlist, at int) {
+	a.syncTrackViewport(c, trackHeaderKey{name: pl.Name, description: pl.Description, creator: pl.Creator.Nickname, frequency: pl.UpdateFreq, tracks: len(pl.Tracks), plays: pl.PlayCount}, at)
+}
+
+func (a *app) syncTrackViewport(c *ui.Context, header trackHeaderKey, at int) {
 	w, h := c.Size()
 	var song int64
 	if current := a.pl.Current(); current != nil {
-		song = current.ID
+		song = current.Key()
 	}
-	next := playlistViewport{
+	next := trackViewport{
 		y: a.pageScroll.Y, width: w, height: h,
-		playlist: a.route.id, song: song, index: at,
-		header: playlistHeaderKey{
-			name: pl.Name, description: pl.Description,
-			creator: pl.Creator.Nickname, frequency: pl.UpdateFreq,
-			tracks: len(pl.Tracks), plays: pl.PlayCount,
-		},
+		playlist: a.route.id, page: a.route.page, song: song, index: at,
+		header: header,
 	}
 	if next != a.locateViewport {
 		a.locateViewport = next
@@ -54,22 +55,27 @@ func (a *app) syncPlaylistViewport(c *ui.Context, pl *netease.Playlist, at int) 
 
 // Resolve the song by ID in the displayed list, not by its queue position:
 // shuffle, another queue or a refreshed playlist can all give it another index.
-func (a *app) playlistCurrentIndex(tracks []netease.Track) int {
+func (a *app) currentTrackIndex(tracks []netease.Track) int {
 	current := a.pl.Current()
-	if current == nil || current.ID <= 0 {
+	if current == nil || current.Key() == 0 {
 		return -1
 	}
-	for i := range tracks {
-		if tracks[i].ID == current.ID {
-			return i
-		}
-	}
-	return -1
+	return trackIndex(tracks, current.Key())
 }
 
-// playlistLocateButton stays above the player bar while the playlist scrolls.
-func (a *app) playlistLocateButton(c *ui.Context, at int, visible bool) {
-	if visible || at < 0 {
+// Row zero is the scrolling source header in every supported music list.
+func (a *app) revealTrack(at int) { a.trackList.ScrollTo(at+1, ui.Center) }
+
+// trackLocateButton stays above the player bar while the music list scrolls.
+func (a *app) trackLocateButton(c *ui.Context, at int, visible bool) {
+	if at < 0 {
+		return
+	}
+	a.locatePlayingButton(c, visible, func() { a.revealTrack(at) })
+}
+
+func (a *app) locatePlayingButton(c *ui.Context, visible bool, locate func()) {
+	if visible {
 		return
 	}
 
@@ -85,8 +91,8 @@ func (a *app) playlistLocateButton(c *ui.Context, at int, visible bool) {
 	}
 	b.Children(func() { ui.Icon(c, iconLocate).Size(25, 25).TextColor(color) })
 	if b.Clicked() {
-		// Row zero is the scrolling playlist header. ScrollTo can locate an
-		// unbuilt virtual row, without loading songs or changing playback.
-		a.trackList.ScrollTo(at+1, ui.Center)
+		// The source callback can reveal a virtual row or fetch missing list
+		// pages; the control itself never changes playback.
+		locate()
 	}
 }

@@ -78,6 +78,9 @@ func (a *app) chooseLocalFolders() {
 func (a *app) localPage(c *ui.Context) {
 	p := a.pal
 	tracks := a.local.tracks
+	at := a.currentTrackIndex(tracks)
+	a.syncTrackViewport(c, trackHeaderKey{name: "本地歌曲", description: a.local.status, tracks: len(tracks)}, at)
+	visible := false
 	pane := ui.Column(c.Key("local-music")).Grow(1).MinHeight(0)
 	if files := pane.DroppedFiles(); len(files) != 0 {
 		a.addLocalFolders(files)
@@ -104,16 +107,17 @@ func (a *app) localPage(c *ui.Context) {
 			})
 		}
 		if len(tracks) == 0 {
-			a.trackRows(c, tracks, true, header, func(c *ui.Context) {
+			visible = a.trackRows(c, tracks, true, header, func(c *ui.Context) {
 				ui.Column(c).Center().Padding(48, 0, 48, 0).Gap(12).Children(func() {
 					ui.Icon(c, iconNote).Size(34, 34).TextColor(p.faint)
-					ui.Text(c, "拖入包含 MP3 或 FLAC 的文件夹").FontSize(14).TextColor(p.muted)
+					ui.Text(c, "拖入音乐文件或文件夹").FontSize(14).TextColor(p.muted)
 				})
 			})
 			return
 		}
-		a.trackRows(c, tracks, true, header)
+		visible = a.trackRows(c, tracks, true, header)
 	})
+	a.trackLocateButton(c, at, visible)
 }
 
 func (a *app) localFoldersView(c *ui.Context) {
@@ -170,27 +174,10 @@ func (a *app) localSongItems(tr *netease.Track, fromLibrary bool) func(*ui.Menu)
 		if song.Path == "" {
 			return
 		}
-		order, at := a.pl.PlayOrder()
-		position := a.pl.QueuePosition(track.Key())
-		scheduled := position >= 0 && position >= at
 		missing := a.local.missing[track.LocalID]
-		canRemove := fromLibrary && position >= 0 && position != at
-		if !missing {
-			if m.Item("下一首播放").Disabled(scheduled && position <= at+1).Chosen() {
-				a.pl.Enqueue(track, true)
-			}
-		}
-		if canRemove {
-			if m.Item("移除队列").Chosen() {
-				a.pl.RemoveQueueEntry(order[position])
-			}
-		} else if !missing {
-			if m.Item("加入队列").Disabled(scheduled).Chosen() {
-				a.pl.Enqueue(track, false)
-			}
-		}
+		queued := a.queueItems(m, track, !missing, fromLibrary)
 		if !song.Scanned || missing {
-			if !missing || canRemove {
+			if queued {
 				m.Separator()
 			}
 			if m.Item("重新定位").Chosen() {

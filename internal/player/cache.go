@@ -13,11 +13,12 @@ import (
 	"sync"
 	"time"
 
+	"netease-music-mygo/internal/audioformat"
 	"netease-music-mygo/internal/netease"
 )
 
 // Cache keeps the songs played on disk, so that they play again at once,
-// and without the network: each as <id>-<level>.mp3 or .flac, with what
+// and without the network: each as <id>-<level>.<format>, with what
 // its stream was beside it in <id>-<level>.json. Once they take more than
 // the limit, those played longest ago go first.
 type Cache struct {
@@ -89,7 +90,7 @@ func (s keptSong) audioName(key string) string {
 // keepable reports whether a song of level and type ext may be kept: they
 // name its file, so only those known, which keep it in the cache's folder.
 func keepable(level, ext string) bool {
-	return slices.Contains(netease.Levels, level) && (ext == "mp3" || ext == "flac")
+	return slices.Contains(netease.Levels, level) && audioformat.Canonical(ext)
 }
 
 // lookup returns a song kept at level or a better one, open to read, with
@@ -186,8 +187,13 @@ func (c *Cache) download(id int64, level string, st *netease.Stream) *download {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	d := newDownload(st.URL, st.Size, c.part(st), func(path string, n int64) (string, bool) {
-		return c.keep(id, level, st, path, n)
+	var d *download
+	d = newDownload(st.URL, st.Size, c.part(st), func(path string, n int64) (string, bool) {
+		resolved := *st
+		if d.format != "" {
+			resolved.Type = d.format
+		}
+		return c.keep(id, level, &resolved, path, n)
 	})
 	c.trackLocked(d)
 	d.start()
@@ -224,6 +230,11 @@ func (c *Cache) keep(id int64, asked string, st *netease.Stream, part string, n 
 	kept := keptSong{Stream: *st, Asked: asked}
 	if kept.Type == "" {
 		kept.Type = "mp3"
+	} else {
+		kept.Type = audioformat.Normalize(kept.Type)
+		if kept.Type == "" {
+			return part, false
+		}
 	}
 	kept.Size = n
 	if !keepable(kept.Level, kept.Type) {
@@ -332,7 +343,7 @@ func (c *Cache) songs() ([]cachedSong, error) {
 	var out []cachedSong
 	for _, e := range entries {
 		ext := filepath.Ext(e.Name())
-		if !e.Type().IsRegular() || (ext != ".mp3" && ext != ".flac") {
+		if !e.Type().IsRegular() || !audioformat.Canonical(strings.TrimPrefix(ext, ".")) {
 			continue
 		}
 		info, statErr := e.Info()

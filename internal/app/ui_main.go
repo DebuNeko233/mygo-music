@@ -138,6 +138,9 @@ func (a *app) open(r route) {
 
 // show shows the page of r.
 func (a *app) show(r route) {
+	if a.route.page == pageCloud && r.page != pageCloud {
+		a.cloud.locate = 0
+	}
 	a.intro.open = false
 	a.route = r
 	if r.page == pageSearch {
@@ -167,6 +170,10 @@ func (a *app) load(r route) {
 		a.loadPodcast(r.id)
 	case pagePodcasts:
 		a.loadPodcastTab()
+	case pageCloud:
+		if !a.cloud.loading && a.cloud.failure == nil && (!a.cloud.loaded || listDue(a.cloud.at, a.listsNow())) {
+			a.refreshCloud()
+		}
 	case pageLocal:
 		a.refreshLocalSongs()
 	}
@@ -221,6 +228,7 @@ func (a *app) sidebar(c *ui.Context) {
 			a.navItem(c, iconCharts, "排行榜", route{page: pageCharts})
 			a.navItem(c, iconPodcast, "播客", route{page: pagePodcasts})
 			a.navItem(c, iconNote, "本地歌曲", route{page: pageLocal})
+			a.navItem(c, iconCloud, "音乐网盘", route{page: pageCloud})
 			if a.searched.query != "" {
 				a.navItem(c, iconSearch, "搜索结果", a.searched)
 			}
@@ -358,7 +366,7 @@ func (a *app) content(c *ui.Context) {
 	// list, as a page's tabs in its header, opens it as the list builds.
 	if a.scrolled != a.route {
 		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.route
-		a.playlistRows = playlistRows{}
+		a.trackRowsCache = trackRowsCache{}
 	}
 	// Pages mark where their content is, as they scroll.
 	a.underTop, a.underBottom = false, false
@@ -387,6 +395,8 @@ func (a *app) content(c *ui.Context) {
 		a.podcastPage(c)
 	case pagePodcasts:
 		a.podcastsPage(c)
+	case pageCloud:
+		a.cloudPage(c)
 	case pageLocal:
 		a.localPage(c)
 	}

@@ -32,7 +32,11 @@ func (r *bufferedReaderAt) ReadAt(p []byte, off int64) (int, error) {
 				r.buf = make([]byte, audioReadBuffer)
 			}
 			r.at = off
-			r.n, r.err = r.source.ReadAt(r.buf, off)
+			if d, ok := r.source.(*download); ok {
+				r.n, r.err = d.readAheadAt(r.buf, off, min(len(p), len(r.buf)))
+			} else {
+				r.n, r.err = r.source.ReadAt(r.buf, off)
+			}
 			if r.n == 0 {
 				if r.err != nil {
 					return read, r.err

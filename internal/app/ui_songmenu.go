@@ -32,11 +32,19 @@ func (a *app) songItems(tr *netease.Track, pid int64) func(m *ui.Menu) {
 			a.programItems(m, tr)
 			return
 		}
+		if tr.Cloud {
+			a.queueItems(m, *tr, true, true)
+			m.Separator()
+		}
 		if m.Item("复制歌名").Chosen() {
 			copyText(tr.Name)
 		}
 		if m.Item("复制歌名和歌手").Chosen() {
 			copyText(tr.Name + " - " + tr.ArtistNames())
+		}
+		// Private uploads have no public song link or catalogue playlist entry.
+		if tr.Cloud {
+			return
 		}
 		m.Separator()
 		if m.Item("复制链接").Chosen() {
@@ -75,4 +83,28 @@ func (a *app) programItems(m *ui.Menu, tr *netease.Track) {
 	if m.Item("查看播客").Chosen() {
 		a.openPage(route{page: pagePodcast, id: tr.PodcastID})
 	}
+}
+
+// queueItems uses the player's play order for both local and uploaded songs.
+// It reports whether it added anything, for callers separating later actions.
+func (a *app) queueItems(m *ui.Menu, track netease.Track, available, allowRemove bool) bool {
+	order, at := a.pl.PlayOrder()
+	position := a.pl.QueuePosition(track.Key())
+	scheduled := position >= 0 && position >= at
+	canRemove := allowRemove && position >= 0 && position != at
+	if available {
+		if m.Item("下一首播放").Disabled(scheduled && position <= at+1).Chosen() {
+			a.pl.Enqueue(track, true)
+		}
+	}
+	if canRemove {
+		if m.Item("移除队列").Chosen() {
+			a.pl.RemoveQueueEntry(order[position])
+		}
+	} else if available {
+		if m.Item("加入队列").Disabled(scheduled).Chosen() {
+			a.pl.Enqueue(track, false)
+		}
+	}
+	return available || canRemove
 }

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"netease-music-mygo/internal/audioformat"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -44,7 +45,7 @@ func songFiles(dir string) ([]string, error) {
 			netease.Stream
 			File string `json:"file"`
 		}
-		if json.Unmarshal(data, &stream) != nil || (stream.Type != "mp3" && stream.Type != "flac") || stream.Size < 0 {
+		if json.Unmarshal(data, &stream) != nil || !audioformat.Canonical(stream.Type) || stream.Size < 0 {
 			continue
 		}
 		audio := key + "." + stream.Type

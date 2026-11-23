@@ -189,6 +189,8 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.subAlbums, a.subsShown, a.savingAlb = nil, false, nil
 	// What another listener played is not what this one played.
 	a.recent = recentData{}
+	a.cancelCloudLoad()
+	a.cloud = cloudData{}
 	a.homeGen++ // Invalidate pending home page requests
 	a.resetLibraryFreshness()
 	// What the listener may play, and follows, changed: load the pages

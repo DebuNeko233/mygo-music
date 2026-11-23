@@ -284,6 +284,27 @@ func (p *Player) PlayQueueFrom(tracks []netease.Track, start int, source PlaySou
 	p.playQueue(tracks, max(start, 0), source)
 }
 
+// AppendQueue completes a source snapshot only while the queue is unchanged.
+// It reuses the radio's batch deduplication without attaching a radio or restarting audio.
+func (p *Player) AppendQueue(tracks []netease.Track, revision uint64) bool {
+	if revision != p.queueRevision || len(p.queue) == 0 || p.feed != nil || p.hasTemporary() {
+		return false
+	}
+	before := len(p.order)
+	p.appendTracks(tracks)
+	if len(p.order) != before {
+		if p.shuffle {
+			upcoming := p.order[p.at+1:]
+			rand.Shuffle(len(upcoming), func(i, j int) { upcoming[i], upcoming[j] = upcoming[j], upcoming[i] })
+		}
+		if !p.cacheChanging {
+			p.prefetch(p.at + 1)
+		}
+		p.sync()
+	}
+	return true
+}
+
 // QueuePosition finds a song anywhere in play order, preferring the current
 // or first upcoming entry over a played one. It returns -1 if absent.
 func (p *Player) QueuePosition(key int64) int {
@@ -819,7 +840,11 @@ func (p *Player) TogglePlay() {
 	}
 	p.playing = true
 	if !p.seeking && !out.Playing() {
-		if out.Position() >= out.Duration()-time.Second {
+		duration := out.Duration()
+		if duration <= 0 {
+			duration = p.Duration()
+		}
+		if duration > 0 && out.Position() >= duration-time.Second {
 			out.Seek(0)
 			p.pause()
 		}
@@ -1556,7 +1581,13 @@ func (p *Player) open(t netease.Track, level string, ahead *ahead, ask asker, ca
 	if err != nil {
 		return nil, nil, err
 	}
-	return info, s, nil
+	resolved := *info
+	dl.mu.Lock()
+	if dl.format != "" {
+		resolved.Type = dl.format
+	}
+	dl.mu.Unlock()
+	return &resolved, s, nil
 }
 
 func openDownload(dl *download, duration int64) (stream, error) {

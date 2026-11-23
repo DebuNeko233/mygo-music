@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/audio"
 	gomp3 "github.com/hajimehoshi/go-mp3"
+	"netease-music-mygo/internal/audioformat"
 )
 
 // A window reads a download a piece at a time, for scanning it byte by
@@ -101,18 +102,33 @@ type stream interface {
 	cut() error
 }
 
-// openStream opens the song dl fetches, MP3 or FLAC, as its first bytes
-// say. An MP3 says nothing of its length: durationMs is it.
+// openStream opens any supported container from its bytes, regardless of source.
+// An MP3 uses durationMs when its length is not known.
 func openStream(dl *download, durationMs int64) (stream, error) {
 	return openStreamSpectrum(dl, durationMs, true)
 }
 
 func openStreamSpectrum(dl *download, durationMs int64, measure bool) (stream, error) {
 	off := id3Size(dl)
-	if dl.waitFor(off+4) >= off+4 && string(dl.peek(off, 4)) == "fLaC" {
+	dl.waitRange(off, off+12)
+	kind := audioformat.Detect(dl.peek(off, 12))
+	dl.mu.Lock()
+	dl.format = kind
+	dl.mu.Unlock()
+	switch kind {
+	case "wav":
+		return openWAVStreamSpectrum(dl, measure)
+	case "ogg":
+		return openOggStreamSpectrum(dl, measure)
+	case "m4a":
+		return openMP4StreamSpectrum(dl, measure)
+	case "aac":
+		return openAACStreamSpectrum(dl, measure)
+	case "flac":
 		return openFLACStreamSpectrum(dl, measure)
+	default:
+		return openMP3StreamSpectrum(dl, durationMs, measure)
 	}
-	return openMP3StreamSpectrum(dl, durationMs, measure)
 }
 
 // openShared opens a second stream of what dl fetches, for decoding apart
@@ -131,6 +147,14 @@ func openShared(dl *download, durationMs int64) (stream, error) {
 	case *mp3Stream:
 		s.drop = dl.release
 	case *flacStream:
+		s.drop = dl.release
+	case *wavStream:
+		s.drop = dl.release
+	case *oggStream:
+		s.drop = dl.release
+	case *decoderStream:
+		s.drop = dl.release
+	case *adtsStream:
 		s.drop = dl.release
 	}
 	return s, nil
@@ -188,12 +212,7 @@ func openMP3StreamSpectrum(dl *download, durationMs int64, measure bool) (*mp3St
 // id3Size returns the length of the ID3v2 tag at the start of the file.
 func id3Size(dl *download) int64 {
 	dl.waitFor(10)
-	b := dl.peek(0, 10)
-	if len(b) < 10 || string(b[:3]) != "ID3" {
-		return 0
-	}
-	size := int64(b[6]&0x7f)<<21 | int64(b[7]&0x7f)<<14 | int64(b[8]&0x7f)<<7 | int64(b[9]&0x7f)
-	return 10 + size
+	return audioformat.ID3Size(dl.peek(0, 10))
 }
 
 func (s *mp3Stream) SampleRate() int { return s.rate }

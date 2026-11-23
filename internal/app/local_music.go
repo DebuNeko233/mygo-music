@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"netease-music-mygo/internal/audioformat"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -42,18 +43,19 @@ type localMusic struct {
 	busy            bool
 	picking         bool
 	check           uint64
+	revision        uint64 // searchable catalog or availability changed
 	window          *mygo.Window
 	temporary       localSong
 	temporaryID     int64
 	temporaryLyrics keptLyrics
 	lyricCache      localLyricCache
-	artwork         localArtworkState
+	embeddedArtwork embeddedArtworkCache
 	lyricDialog     *localLyricDialog
 	pendingFile     string
 	openRequest     uint64
 }
 
-var localExtensions = []string{"mp3", "flac", "wav", "ogg", "m4a", "aac", "3gp", "3g2"}
+var localExtensions = audioformat.Extensions()
 
 func (a *app) initLocalMusic() {
 	if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
@@ -78,13 +80,29 @@ func (a *app) initLocalMusic() {
 		}
 		return a.local.song(id).Path
 	}
-	a.pl.LocalMissing = func(id int64) { a.local.missing[id] = true }
+	a.pl.LocalMissing = a.local.markMissing
 	a.pl.LocalLyrics = a.localLyricsLoader
+}
+
+// Availability changes invalidate cached suggestions without touching the file-check generation.
+func (m *localMusic) setMissing(missing map[int64]bool) {
+	m.missing = missing
+	m.revision++
+}
+func (m *localMusic) markMissing(id int64) {
+	if m.missing[id] {
+		return
+	}
+	if m.missing == nil {
+		m.missing = make(map[int64]bool)
+	}
+	m.missing[id] = true
+	m.revision++
 }
 
 func (m *localMusic) replace(catalog localCatalog) {
 	m.byID = make(map[int64]int, len(catalog.Songs))
-	m.missing = make(map[int64]bool)
+	m.setMissing(make(map[int64]bool))
 	m.catalog = catalog
 	m.tracks = make([]netease.Track, len(catalog.Songs))
 	for i, song := range catalog.Songs {
@@ -118,7 +136,7 @@ func (a *app) checkLocalFiles() {
 		missing := missingLocalFiles(songs, nil)
 		a.post(func() {
 			if a.local.check == check {
-				a.local.missing = missing
+				a.local.setMissing(missing)
 			}
 		})
 	}()
@@ -225,7 +243,7 @@ func (a *app) changeLocal(work func(*localCatalog, map[string]struct{}) (bool, s
 				}
 				a.local.replace(catalog)
 			}
-			a.local.missing = missing
+			a.local.setMissing(missing)
 			a.pl.UpdateLocalTracks(updated)
 			a.redrawLocalFolders()
 		})

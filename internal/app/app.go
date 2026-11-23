@@ -32,6 +32,7 @@ const (
 	pagePodcast
 	pagePodcasts
 	pageLocal
+	pageCloud
 )
 
 type route struct {
@@ -95,6 +96,8 @@ type app struct {
 	subsShown bool // whether subAlbums has loaded once
 	savingAlb map[int64]bool
 
+	cloud cloudData
+
 	// What the listener played lately, on any of their devices, and what
 	// the page lists: see ui_recent.go.
 	recent    recentData
@@ -116,26 +119,27 @@ type app struct {
 	homeAt      time.Time // when what the home page shows was asked for
 	homeGen     int       // generation counter to discard stale responses
 
-	playlists    map[int64]*netease.Playlist
-	loadingPl    map[int64]bool
-	plPlay       map[int64]bool // playlists asked to play once they are in
-	plErr        map[int64]string
-	artists      pageCache[int64, *artistData]
-	artistTab    int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
-	albums       pageCache[int64, *albumData]
-	users        pageCache[int64, *userData]
-	podcasts     pageCache[int64, *podcastData]
-	podcastTab   *podcastTab // the podcasts tab's lists
-	trackList    ui.ListState
-	playlistRows playlistRows
-	local        localMusic
+	playlists      map[int64]*netease.Playlist
+	loadingPl      map[int64]bool
+	plPlay         map[int64]bool // playlists asked to play once they are in
+	plErr          map[int64]string
+	artists        pageCache[int64, *artistData]
+	artistTab      int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
+	albums         pageCache[int64, *albumData]
+	users          pageCache[int64, *userData]
+	podcasts       pageCache[int64, *podcastData]
+	podcastTab     *podcastTab // the podcasts tab's lists
+	trackList      ui.ListState
+	trackRowsCache trackRowsCache
+	local          localMusic
+	trackArt       trackArtworkState
 	// Where the page and the sidebar are scrolled, kept while Now Playing
 	// covers them, unbuilt.
 	pageScroll ui.ScrollState
 	navScroll  ui.ScrollState
 	scrolled   route // the page trackList and pageScroll are of
 
-	locateViewport playlistViewport
+	locateViewport trackViewport
 
 	mineCollapsed, savedCollapsed, albumsCollapsed bool
 
@@ -382,7 +386,7 @@ func Run() error {
 		a.pl.Changed = func() {
 			a.keepSession()
 			a.syncCaptions()
-			a.syncLocalArtwork()
+			a.syncTrackArtwork()
 		}
 		a.pl.Playback = a.playback
 		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.flushPlayReports() })
@@ -482,6 +486,7 @@ func Run() error {
 			return
 		}
 		a.quitting = true
+		a.cancelCloudLoad()
 		a.settings.Volume = a.volume
 		if a.lyrics != nil {
 			// Where the lyrics were left, before the window goes.
