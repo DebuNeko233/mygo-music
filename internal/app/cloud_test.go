@@ -589,7 +589,7 @@ func TestMissingArtworkFrames(t *testing.T) {
 		pane int
 		open bool
 	}{{"list", paneLyrics, false}, {"classic", paneLyrics, true}, {"stage", paneStage, true}, {"wall", paneWall, true}} {
-		a.nowPlaying, a.npPane = tc.open, tc.pane
+		a.playbackState.Open, a.playbackState.Pane = tc.open, tc.pane
 		tt := ui.NewTester(a.view, 1200, 800)
 		tt.Frame()
 		tt.Advance(2 * time.Second)

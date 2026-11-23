@@ -70,7 +70,7 @@ func TestOfflineUnavailableFrames(t *testing.T) {
 		for a.pl.Loading() || a.pl.MetadataLoading() {
 			refreshPost(t, posts)
 		}
-		a.nowPlaying, a.npPane = true, paneLyrics
+		a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
 		tt := ui.NewTester(a.view, 1180, 780)
 		tt.SetDark(dark)
 		tt.Frame()

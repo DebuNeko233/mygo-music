@@ -74,7 +74,7 @@ func TestPlaylistLocateFindsCurrentWithoutPlaying(t *testing.T) {
 			beforeRoute := a.nav.Current
 			clickLocate(t, tt)
 			locatedRow(t, tt, name, 760)
-			if a.pl.Current().ID != 250 || a.pl.Playing() != playing || a.pl.Position() != pos || !reflect.DeepEqual(a.pl.Queue(), queue) || a.nav.Current != beforeRoute || a.nowPlaying {
+			if a.pl.Current().ID != 250 || a.pl.Playing() != playing || a.pl.Position() != pos || !reflect.DeepEqual(a.pl.Queue(), queue) || a.nav.Current != beforeRoute || a.playbackState.Open {
 				t.Fatal("locating changed playback, queue or page")
 			}
 		})

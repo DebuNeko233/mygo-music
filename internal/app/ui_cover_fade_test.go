@@ -25,7 +25,7 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, tt, arts := paintedCoverApp(t, 5, false)
-			a.npPane = tc.pane
+			a.playbackState.Pane = tc.pane
 			tt.Frame()
 			tt.Advance(time.Second)
 			state := &a.stageCover
@@ -108,10 +108,10 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 			}
 			save("placeholder")
 			tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-			a.npPane = paneLyrics
+			a.playbackState.Pane = paneLyrics
 			tt.Frame()
 			a.pl.Jump(0)
-			a.npPane = tc.pane
+			a.playbackState.Pane = tc.pane
 			tt.Frame()
 			if state.current != arts[0] || state.previous != nil || center() != old {
 				t.Fatal("returning with reduced motion should show the ready cover immediately")

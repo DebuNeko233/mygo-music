@@ -49,7 +49,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 				t.Fatal("the fixture cover did not initially render")
 			}
 			if mode == "now playing" {
-				a.nowPlaying = true
+				a.playbackState.Open = true
 			} else {
 				a.nav.Current = route{Page: pagePlaylist, ID: 43}
 			}
@@ -62,7 +62,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			if a.art.art[key] == nil || a.art.art["offscreen"] != nil || a.art.size > a.art.limit {
 				t.Fatal("the return page's cover was evicted despite room for it")
 			}
-			a.nowPlaying, a.nav.Current = false, page
+			a.playbackState.Open, a.nav.Current = false, page
 			view.Frame()
 			view.Advance(time.Second)
 			view.Frame()
@@ -119,7 +119,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 		tt.Frame()
 		name, before := anchor()
 
-		a.nowPlaying = true
+		a.playbackState.Open = true
 		tt.Frame()
 		tt.Advance(time.Second)
 		tt.Frame()
@@ -127,7 +127,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 			t.Errorf("%+v: the sidebar is built under Now Playing", r)
 		}
 
-		a.nowPlaying = false
+		a.playbackState.Open = false
 		tt.Frame()
 		tt.Advance(time.Second)
 		tt.Frame()

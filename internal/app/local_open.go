@@ -41,7 +41,7 @@ func (a *app) openTemporaryAudio(path string) {
 		Play: func(previous, song localcatalog.Song, audio *player.LocalAudio) {
 			delete(a.trackArt.known, localArtworkKey(previous, true))
 			a.pl.PlayTemporary(song.Track, audio)
-			a.nowPlaying = true
+			a.playbackState.Open = true
 		},
 		Notify: func(message string) { a.toast = message },
 	})

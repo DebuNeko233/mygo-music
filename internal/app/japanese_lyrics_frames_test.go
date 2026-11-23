@@ -1,14 +1,16 @@
 package app
 
 import (
-	"github.com/egoist/mygo/ui"
 	"image/png"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/lyrics"
+	"netease-music-mygo/internal/netease"
 )
 
 // With NM_FRAMES set, inspect Japanese glyphs beside Chinese translations in
@@ -32,7 +34,7 @@ func TestJapaneseLyricsFrames(t *testing.T) {
 	}
 	a.pl.SetLyrics(lines)
 	a.pl.Hold(12 * time.Second)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	d := &deskLyrics{a: a}
 	a.lyrics = d
 	a.settings.LyricTrans = true
@@ -41,11 +43,11 @@ func TestJapaneseLyricsFrames(t *testing.T) {
 		view := a.view
 		switch surface {
 		case "lyrics":
-			a.npPane = paneLyrics
+			a.playbackState.Pane = paneLyrics
 		case "stage":
-			a.npPane = paneStage
+			a.playbackState.Pane = paneStage
 		case "wall":
-			a.npPane = paneWall
+			a.playbackState.Pane = paneWall
 		case "desktop":
 			view = d.view
 		}

@@ -12,26 +12,26 @@ import (
 func TestTheKeysTheSettingsKeepRunTheActions(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.volume = 0.5
+	a.playbackState.Volume = 0.5
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	// Volume up is CmdOrCtrl+Shift+Up until the listener changes it.
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyUp)
 	tt.Frame()
-	if a.volume != 0.55 {
-		t.Fatalf("CmdOrCtrl+Shift+Up made the volume %v, want 0.55", a.volume)
+	if a.playbackState.Volume != 0.55 {
+		t.Fatalf("CmdOrCtrl+Shift+Up made the volume %v, want 0.55", a.playbackState.Volume)
 	}
 	a.setBinding(kindInApp, "volumeUp", "CmdOrCtrl+Alt+Up")
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyUp)
 	tt.Frame()
-	if a.volume != 0.55 {
-		t.Errorf("the key the action no longer has changed the volume to %v", a.volume)
+	if a.playbackState.Volume != 0.55 {
+		t.Errorf("the key the action no longer has changed the volume to %v", a.playbackState.Volume)
 	}
 	tt.Key(ui.Cmd|ui.Alt, ui.KeyUp)
 	tt.Frame()
-	if a.volume != 0.6 {
-		t.Errorf("CmdOrCtrl+Alt+Up made the volume %v, want 0.6", a.volume)
+	if a.playbackState.Volume != 0.6 {
+		t.Errorf("CmdOrCtrl+Alt+Up made the volume %v, want 0.6", a.playbackState.Volume)
 	}
 }
 

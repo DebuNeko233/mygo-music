@@ -11,7 +11,7 @@ func volumeTester(t *testing.T) (*app, *ui.Tester, float32, float32) {
 	t.Helper()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.volume = 0
+	a.playbackState.Volume = 0
 	tt := ui.NewTester(a.view, 1000, 600)
 	tt.Frame()
 	r, ok := tt.Find("音量")
@@ -24,8 +24,8 @@ func volumeTester(t *testing.T) (*app, *ui.Tester, float32, float32) {
 // nearVolume says whether the volume is at the ten-percent step wanted.
 func nearVolume(t *testing.T, a *app, want float64) {
 	t.Helper()
-	if a.volume < want-0.001 || a.volume > want+0.001 {
-		t.Fatalf("volume %.2f, want %.2f", a.volume, want)
+	if a.playbackState.Volume < want-0.001 || a.playbackState.Volume > want+0.001 {
+		t.Fatalf("volume %.2f, want %.2f", a.playbackState.Volume, want)
 	}
 }
 
@@ -83,7 +83,7 @@ func TestVolumeScrollCapsOneGesture(t *testing.T) {
 	a, tt, x, y := volumeTester(t)
 	tt.Scroll(x, y, 0, -100000)
 	tt.Frame()
-	if a.volume <= 0 || a.volume > 0.5 {
-		t.Fatalf("one gesture took the volume to %.2f", a.volume)
+	if a.playbackState.Volume <= 0 || a.playbackState.Volume > 0.5 {
+		t.Fatalf("one gesture took the volume to %.2f", a.playbackState.Volume)
 	}
 }

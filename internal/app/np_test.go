@@ -21,7 +21,7 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	a.pl.SetLyrics(nil)
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.SetDark(false)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt.Frame()
 	tt.Advance(time.Second)
 	tt.Frame()
@@ -30,7 +30,7 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
-	if a.nowPlaying {
+	if a.playbackState.Open {
 		t.Fatal("escape left now playing open")
 	}
 	// Mid-way out, it still covers the page and the sidebar alike.
@@ -73,7 +73,7 @@ func TestNowPlayingClockTicksEverySecond(t *testing.T) {
 			out.Play()
 			a.pl.Attach(out)
 			defer out.Close()
-			a.nowPlaying, a.npPane = true, tc.pane
+			a.playbackState.Open, a.playbackState.Pane = true, tc.pane
 			builds := 0
 			tt := ui.NewTester(func(c *ui.Context) {
 				builds++
@@ -100,7 +100,7 @@ func TestQueueStaysAsATrackIsPlayed(t *testing.T) {
 		tracks = append(tracks, netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌%02d", i), Duration: 200000})
 	}
 	a.pl.Cue(tracks)
-	a.nowPlaying, a.npPane = true, paneQueue
+	a.playbackState.Open, a.playbackState.Pane = true, paneQueue
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
@@ -137,7 +137,7 @@ func TestPrevGoesBackASong(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "一", Duration: 200000}, {ID: 2, Name: "二", Duration: 200000}})
 	a.pl.SetLyrics(nil)
 	a.pl.Hold(30 * time.Second)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Advance(time.Second)
@@ -158,7 +158,7 @@ func TestNowPlayingHoldsStillWithoutBadge(t *testing.T) {
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "一", Duration: 200000}})
 	a.pl.SetLyrics(nil)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	var at []float32
 	for _, st := range []*netease.Stream{{Level: "lossless"}, nil} {
@@ -193,7 +193,7 @@ func TestCmdNumberChoosesTab(t *testing.T) {
 		a.settings = defaultSettings()
 		a.pl.Cue([]netease.Track{c.track})
 		a.pl.SetLyrics(nil)
-		a.nowPlaying = true
+		a.playbackState.Open = true
 		tt := ui.NewTester(a.view, 1200, 800)
 		tt.Frame()
 		for i, n := range c.keys {
@@ -202,8 +202,8 @@ func TestCmdNumberChoosesTab(t *testing.T) {
 			}
 			tt.Key(ui.Cmd, ui.Key1+ui.Key(n-1))
 			tt.Frame()
-			if a.npPane != c.panes[i] {
-				t.Errorf("%s: ⌘%d chose pane %d, want %d", c.track.Name, n, a.npPane, c.panes[i])
+			if a.playbackState.Pane != c.panes[i] {
+				t.Errorf("%s: ⌘%d chose pane %d, want %d", c.track.Name, n, a.playbackState.Pane, c.panes[i])
 			}
 		}
 	}
@@ -216,7 +216,7 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "一", Duration: 200000}})
 	a.pl.SetLyrics(nil)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	settle := func() {
 		tt.Frame()
@@ -233,8 +233,8 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 			t.Fatal(err)
 		}
 		settle()
-		if a.npPane != tab.pane {
-			t.Fatalf("%s chose pane %d, want %d", tab.label, a.npPane, tab.pane)
+		if a.playbackState.Pane != tab.pane {
+			t.Fatalf("%s chose pane %d, want %d", tab.label, a.playbackState.Pane, tab.pane)
 		}
 		r, ok := tt.Find("歌词")
 		if !ok {
@@ -245,7 +245,7 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 		}
 	}
 	for _, pane := range []int{paneStage, paneLyrics} {
-		a.npPane = pane
+		a.playbackState.Pane = pane
 		a.comments.loaded, a.comments.total = true, 0
 		settle()
 		start, startOK := tt.Find("歌词")

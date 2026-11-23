@@ -23,7 +23,7 @@ func TestScrubSeeksOnRelease(t *testing.T) {
 	// to draw the window under the race detector.
 	const start = 3 * time.Second
 	a.pl.Hold(start)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
 	tt.Frame()

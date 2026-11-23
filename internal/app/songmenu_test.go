@@ -22,7 +22,7 @@ func TestSongMenuCopies(t *testing.T) {
 	tr := netease.Track{ID: 1859245776, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}, {Name: "小明"}}, Duration: 200000}
 	a.pl.Cue([]netease.Track{tr})
 	a.pl.SetLyrics(nil)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
 	tt.Frame()

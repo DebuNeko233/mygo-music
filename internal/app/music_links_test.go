@@ -55,8 +55,8 @@ func TestMusicLinkSearchEnter(t *testing.T) {
 			tt.Type(tc.input)
 			tt.Key(0, ui.KeyEnter)
 			tt.Frame()
-			if a.nav.Current != tc.want || a.nowPlaying {
-				t.Fatalf("opened %+v, nowPlaying=%v", a.nav.Current, a.nowPlaying)
+			if a.nav.Current != tc.want || a.playbackState.Open {
+				t.Fatalf("opened %+v, nowPlaying=%v", a.nav.Current, a.playbackState.Open)
 			}
 			if len(a.settings.SearchHistory) != 1 || a.settings.SearchHistory[0] != "春日影" {
 				t.Fatal("URL entered search history")
@@ -113,7 +113,7 @@ func TestMusicLinkLatestWins(t *testing.T) {
 	wait(t, posts, "second result")()
 	first.reply <- netease.Track{ID: 1, Name: "first"}
 	wait(t, posts, "first result")()
-	if tr := a.pl.Current(); tr == nil || tr.ID != 2 || !a.nowPlaying {
+	if tr := a.pl.Current(); tr == nil || tr.ID != 2 || !a.playbackState.Open {
 		t.Fatalf("wrong linked song: %+v", tr)
 	}
 }
@@ -149,7 +149,7 @@ func TestMusicLinkFailureAndNavigation(t *testing.T) {
 	}
 	close(release)
 	wait(t, posts, "stale result")()
-	if a.pl.Current().ID != 7 || a.nowPlaying {
+	if a.pl.Current().ID != 7 || a.playbackState.Open {
 		t.Fatal("navigation was overwritten by stale link")
 	}
 }
@@ -181,7 +181,7 @@ func TestMusicLinkReusesQueue(t *testing.T) {
 		t.Fatal("current song's queue was replaced")
 	}
 	a.openMusicInput("orpheus://song/2")
-	if a.pl.Current().ID != 2 || len(a.pl.Queue()) != 2 || !a.nowPlaying {
+	if a.pl.Current().ID != 2 || len(a.pl.Queue()) != 2 || !a.playbackState.Open {
 		t.Fatal("queued song could not play offline")
 	}
 }
@@ -291,7 +291,7 @@ func TestMusicLinkSearchPlaysSong(t *testing.T) {
 	tt.Key(0, ui.KeyEnter)
 	wait(t, posts, "song metadata")()
 	tt.Frame()
-	if tr := a.pl.Current(); tr == nil || tr.ID != 42 || !a.nowPlaying {
+	if tr := a.pl.Current(); tr == nil || tr.ID != 42 || !a.playbackState.Open {
 		t.Fatalf("song URL did not play: %+v", tr)
 	}
 	if len(a.settings.SearchHistory) != 0 {
@@ -312,7 +312,7 @@ func TestMusicLinkRejectsAccountChange(t *testing.T) {
 	update := wait(t, posts, "old link")
 	a.account.Generation++
 	update()
-	if a.pl.Current() != nil || a.nowPlaying {
+	if a.pl.Current() != nil || a.playbackState.Open {
 		t.Fatal("old link crossed account boundary")
 	}
 }

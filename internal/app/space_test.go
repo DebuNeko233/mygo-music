@@ -28,7 +28,7 @@ func TestSpaceAfterOpeningNowPlaying(t *testing.T) {
 	}
 	tt.Advance(time.Second)
 	tt.Frame()
-	if !a.nowPlaying {
+	if !a.playbackState.Open {
 		t.Fatal("now playing did not open")
 	}
 	tt.Key(0, ui.KeySpace)

@@ -382,8 +382,8 @@ func TestPlayEpisode(t *testing.T) {
 	}
 	tt.Advance(time.Second)
 	tt.Frame()
-	if !a.nowPlaying || a.npPane != paneProgram || !tt.HasText("第一期的简介") {
-		t.Fatalf("Now Playing open %v on pane %d", a.nowPlaying, a.npPane)
+	if !a.playbackState.Open || a.playbackState.Pane != paneProgram || !tt.HasText("第一期的简介") {
+		t.Fatalf("Now Playing open %v on pane %d", a.playbackState.Open, a.playbackState.Pane)
 	}
 }
 
@@ -396,7 +396,7 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 	d := a.podcasts.Pages.Get(5)
 	a.playProgram(d, 0)
 	a.pl.SetLyrics(nil)
-	a.nowPlaying, a.npPane = true, paneProgram
+	a.playbackState.Open, a.playbackState.Pane = true, paneProgram
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
 	tt.Frame()
@@ -405,8 +405,8 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.nowPlaying || a.nav.Current != (route{Page: pagePodcast, ID: 5}) {
-		t.Fatalf("Now Playing open %v over %+v", a.nowPlaying, a.nav.Current)
+	if a.playbackState.Open || a.nav.Current != (route{Page: pagePodcast, ID: 5}) {
+		t.Fatalf("Now Playing open %v over %+v", a.playbackState.Open, a.nav.Current)
 	}
 }
 

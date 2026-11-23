@@ -341,7 +341,7 @@ func TestImmersiveLyricReleasesCanvas(t *testing.T) {
 	}
 	a.settings.LyricEdgeFade = true
 	a.lyricBlurPass = ui.NewCanvas(1, 1)
-	a.npPane = paneQueue
+	a.playbackState.Pane = paneQueue
 	tt.Frame()
 	if a.lyricBlurPass != nil {
 		t.Fatal("canvas was retained after switching panes")

@@ -105,10 +105,9 @@ type app struct {
 	searches                                       viewmodel.Search // the results of each search, by its page
 	links                                          viewmodel.Links
 
-	nowPlaying                     bool
+	playbackState                  viewmodel.Playback
 	npOpen                         bool      // Now Playing as it last showed: open or not
 	npChangedAt                    time.Time // when it last opened or closed
-	npPane                         int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
 	npPointer                      ui.Point
 	npPointerUntil                 time.Time
 	lyricScroll                    ui.ScrollState
@@ -132,22 +131,15 @@ type app struct {
 	tabCount                       rollState // the count on the comments' tab, as it rolls
 	stageWords                     stageWordLayout
 
-	fmMode        int    // the FM mode chosen, in fmModes
-	fmSynced      string // the radio fmMode was last taken from
-	radioStarting string // the radio asked for its first songs, or ""
+	radio viewmodel.Radio
 
-	volume           float64
-	volumeOpen       bool // the volume popover of the player bar shows
-	mutedFrom        float64
+	volumeOpen       bool    // the volume popover of the player bar shows
 	volumeScroll     float64 // precise scroll DIPs saved toward the next ten-percent step
 	volumeScrollDown bool    // the direction those DIPs were going
 	// mix is the app's volume in the system's mixer, when the system keeps
 	// one: it applies the volume the app shows, and what it is set to there
 	// comes back to volume.
 	mix *mixvol.Mixer
-	// mixVolume is set while the mixer applies the volume, so that the app
-	// leaves it out of what the player mixes.
-	mixVolume bool
 	// globalKeys are the keys the system holds for the app, which they give
 	// back when the bindings change and when the app quits.
 	globalKeys []string
@@ -311,7 +303,7 @@ func Run() error {
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
 		a.settings.applyAppearance()
-		a.npPane = a.lyricsPaneChosen()
+		a.playbackState.Pane = a.lyricsPaneChosen()
 		a.preloadPictures()
 		if runtime.GOOS == "darwin" {
 			// Start Metal's shader and pipeline compilation before the first
@@ -334,7 +326,7 @@ func Run() error {
 		}
 		a.pl.Playback = a.playback
 		mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.flushPlayReports() })
-		a.volume = a.settings.Volume
+		a.playbackState.Volume = a.settings.Volume
 		// The system's mixer applies the volume too, where it keeps one for
 		// the app, which is from the first sound on.
 		a.mix = mixvol.Open(func(s mixvol.State) {
@@ -437,7 +429,7 @@ func Run() error {
 		a.account.CloseLogin()
 		a.cancelCloudLoad()
 		a.cancelDownloads()
-		a.settings.Volume = a.volume
+		a.settings.Volume = a.playbackState.Volume
 		if a.lyrics != nil {
 			// Where the lyrics were left, before the window goes.
 			a.lyrics.remember()

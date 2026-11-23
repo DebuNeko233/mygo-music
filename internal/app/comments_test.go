@@ -50,23 +50,23 @@ func TestEpisodeComments(t *testing.T) {
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3, PodcastID: 5, Duration: 600000}})
 	a.pl.SetLyrics(nil)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
 	tt.Frame()
 	if thread := wait(t, asked, "the comments"); thread != "A_DJ_1_3" {
 		t.Fatalf("asked for the comments of %s", thread)
 	}
-	if a.npPane != paneProgram {
-		t.Fatalf("opened on pane %d", a.npPane)
+	if a.playbackState.Pane != paneProgram {
+		t.Fatalf("opened on pane %d", a.playbackState.Pane)
 	}
 	if err := tt.Click("评论"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Advance(time.Second)
 	tt.Frame()
-	if a.npPane != paneComments {
-		t.Errorf("on pane %d", a.npPane)
+	if a.playbackState.Pane != paneComments {
+		t.Errorf("on pane %d", a.playbackState.Pane)
 	}
 }
 
@@ -85,7 +85,7 @@ func TestLikeComment(t *testing.T) {
 	a.account.Profile = &netease.Profile{UserID: 1}
 	cm := netease.Comment{ID: 9, Content: "好听", LikedCount: 41}
 	a.comments = commentState{track: 2, thread: "R_SO_4_2", loaded: true, total: 1, hot: []netease.Comment{cm}, latest: []netease.Comment{cm}}
-	a.npPane = paneComments
+	a.playbackState.Pane = paneComments
 	tt.Frame()
 	if err := tt.Click("赞"); err != nil {
 		t.Fatal(err)

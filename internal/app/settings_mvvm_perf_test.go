@@ -1,8 +1,9 @@
 package app
 
 import (
-	"github.com/egoist/mygo/ui"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // Settings builds retain the same controls and reuse the published preference data.

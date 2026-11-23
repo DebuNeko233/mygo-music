@@ -188,7 +188,7 @@ func captionsTestApp(t *testing.T, installed bool) *app {
 	a.captions.model.checked, a.captions.model.installed = true, installed
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "510 泰国侨批沉浮录", ProgramID: 42, Duration: 600000, Description: "下南洋"}})
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	return a
 }
 
@@ -207,8 +207,8 @@ func TestDownloadModelFromCaptions(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
-	if a.npPane != paneProgram {
-		t.Fatalf("pane %d: an episode without captions opens on 简介", a.npPane)
+	if a.playbackState.Pane != paneProgram {
+		t.Fatalf("pane %d: an episode without captions opens on 简介", a.playbackState.Pane)
 	}
 	if err := tt.Click("字幕"); err != nil {
 		t.Fatal(err)
@@ -245,8 +245,8 @@ func TestCaptionClickSeeks(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
-	if a.npPane != paneCaptions {
-		t.Fatalf("pane %d: an episode with captions opens on 字幕", a.npPane)
+	if a.playbackState.Pane != paneCaptions {
+		t.Fatalf("pane %d: an episode with captions opens on 字幕", a.playbackState.Pane)
 	}
 	if err := tt.Click("比如说，我的婚姻结束了"); err != nil {
 		t.Fatal(err)

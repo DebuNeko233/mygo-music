@@ -63,7 +63,7 @@ func TestNowPlayingVolumeTrackAndMute(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "歌曲", Duration: 200000}})
 	a.pl.SetLyrics(nil)
 	a.comments = commentState{track: 1, loaded: true}
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	a.setVolume(0.5)
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})

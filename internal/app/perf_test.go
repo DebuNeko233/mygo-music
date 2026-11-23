@@ -334,14 +334,14 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 	// Its rows still, the wall asks for no more than the lyrics beside it
 	// do: it moves only as it is moved.
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-	a.nowPlaying, a.npPane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
 	lyricsFrames := framesAt(a, tt, 12*time.Second)
-	a.npPane = paneWall
+	a.playbackState.Pane = paneWall
 	if n := framesAt(a, tt, 12*time.Second); n > lyricsFrames+3 {
 		t.Errorf("the wall, still: %d frames a second, the lyrics %d", n, lyricsFrames)
 	}
 	tt.SetPreferences(ui.Preferences{})
-	a.npPane = paneStage
+	a.playbackState.Pane = paneStage
 	a.settings.StageSparks = true
 	for _, s := range stageStyles {
 		a.settings.StageStyle = s.id

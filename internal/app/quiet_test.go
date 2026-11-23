@@ -130,7 +130,7 @@ func TestQuietCommentAfterHotListReplacement(t *testing.T) {
 func TestQuietCard(t *testing.T) {
 	for _, pane := range []int{paneLyrics, paneStage} {
 		a, _, _ := quietApp(5 * time.Second)
-		a.nowPlaying, a.npPane = true, pane
+		a.playbackState.Open, a.playbackState.Pane = true, pane
 		tt := ui.NewTester(a.view, 1000, 640)
 		tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 		tt.Frame()
@@ -142,7 +142,7 @@ func TestQuietCard(t *testing.T) {
 		if err := tt.Click("查看评论"); err != nil {
 			t.Fatal(err)
 		}
-		if a.npPane != paneComments {
+		if a.playbackState.Pane != paneComments {
 			t.Errorf("pane %d: the comment did not open the comments", pane)
 		}
 	}

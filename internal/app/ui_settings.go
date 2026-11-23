@@ -506,7 +506,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 		})
 		row("音量均衡", "按网易云音乐测得的响度调整每首歌的音量，让歌曲听起来一样响", func() {
 			if ui.Switch(c.Key("normalize"), &s.Normalize).Label("音量均衡").Changed() {
-				a.pl.SetVolume(a.volume)
+				a.pl.SetVolume(a.playbackState.Volume)
 				a.changed()
 			}
 		})

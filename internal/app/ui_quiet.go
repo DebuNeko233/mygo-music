@@ -191,6 +191,6 @@ func (a *app) hotCard(c *ui.Context, dim, size float32, place func(ui.Element)) 
 		})
 	})
 	if card.Clicked() {
-		a.npPane = paneComments
+		a.playbackState.Pane = paneComments
 	}
 }

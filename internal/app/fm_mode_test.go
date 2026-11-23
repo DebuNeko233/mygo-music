@@ -34,8 +34,8 @@ func TestFMKeepsTheModeChosenWhileItStarts(t *testing.T) {
 
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
-	if a.fmMode != 0 {
-		t.Fatalf("mode %d, for the radio playing 推荐", a.fmMode)
+	if a.radio.Mode != 0 {
+		t.Fatalf("mode %d, for the radio playing 推荐", a.radio.Mode)
 	}
 
 	// 探索, then back to 推荐 before its songs arrive.
@@ -47,16 +47,16 @@ func TestFMKeepsTheModeChosenWhileItStarts(t *testing.T) {
 	if mode := <-asked; mode != netease.FMExplore {
 		t.Fatalf("asked for %q, for the mode clicked", mode)
 	}
-	if a.fmMode != 2 {
-		t.Fatalf("mode %d, for the mode clicked", a.fmMode)
+	if a.radio.Mode != 2 {
+		t.Fatalf("mode %d, for the mode clicked", a.radio.Mode)
 	}
 	if err := tt.Click("推荐"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	tt.Frame()
-	if a.fmMode != 0 {
-		t.Fatalf("mode %d, for the mode clicked last", a.fmMode)
+	if a.radio.Mode != 0 {
+		t.Fatalf("mode %d, for the mode clicked last", a.radio.Mode)
 	}
 
 	// The songs 探索 asked for land now, and must not start it.
@@ -67,7 +67,7 @@ func TestFMKeepsTheModeChosenWhileItStarts(t *testing.T) {
 	if radio := a.pl.Radio(); radio != fmRadio(netease.FMDefault) {
 		t.Fatalf("radio %q, for the mode clicked last", radio)
 	}
-	if a.fmMode != 0 {
-		t.Errorf("mode %d, for the mode clicked last", a.fmMode)
+	if a.radio.Mode != 0 {
+		t.Errorf("mode %d, for the mode clicked last", a.radio.Mode)
 	}
 }

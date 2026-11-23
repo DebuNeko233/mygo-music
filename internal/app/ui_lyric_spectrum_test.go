@@ -248,17 +248,17 @@ func TestLyricSpectrumStops(t *testing.T) {
 	}
 	seedLyricSpectrum(a, tt.Now())
 	peak, mask := a.npSpectrum.peak, a.npSpectrum.renderer.mask
-	a.npPane = paneStage
+	a.playbackState.Pane = paneStage
 	tt.Frame()
 	if a.npSpectrum.peak != peak || a.npSpectrum.renderer.mask != mask {
 		t.Error("switching to the stage discarded the current spectrum")
 	}
-	a.npPane = paneQueue
+	a.playbackState.Pane = paneQueue
 	tt.Frame()
 	if a.npSpectrum != (lyricSpectrum{}) {
 		t.Error("the queue kept the lyrics page's spectrum")
 	}
-	a.npPane = paneLyrics
+	a.playbackState.Pane = paneLyrics
 	tt.Frame()
 	seedLyricSpectrum(a, tt.Now())
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
@@ -318,7 +318,7 @@ func TestLyricSpectrumFrames(t *testing.T) {
 		pane          int
 	}{{"desktop", 1200, 800, paneLyrics}, {"compact", 750, 580, paneLyrics}, {"stage", 1200, 800, paneStage}} {
 		a := spectrumTestApp()
-		a.npPane = size.pane
+		a.playbackState.Pane = size.pane
 		tt := ui.NewTester(a.view, size.width, size.height)
 		tt.Advance(time.Second)
 		seedLyricSpectrum(a, tt.Now())
@@ -339,7 +339,7 @@ func spectrumTestApp() *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.LyricSpectrum = true
-	a.nowPlaying, a.npPane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "夜航", Artists: []netease.Artist{{Name: "测试音轨"}}, Duration: 200000}})
 	a.pl.SetLyrics(lyrics.Build("[00:00.00]夜色落在海面\n[00:04.00]星光照亮归途\n[00:08.00]远处的灯缓缓亮起\n[00:12.00]风从耳边经过\n[00:16.00]潮水轻轻退去\n[00:20.00]月亮停在天边\n", "", ""))
 	a.pl.Seek(8 * time.Second)

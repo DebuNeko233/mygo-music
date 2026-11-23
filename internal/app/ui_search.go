@@ -52,7 +52,7 @@ func (a *app) searchFor(r route) {
 	a.rememberSearch(r.Query)
 	a.dismissSuggestions()
 	if r == a.nav.Current {
-		a.nowPlaying = false
+		a.playbackState.Open = false
 		a.loadSearch(r, true)
 		return
 	}

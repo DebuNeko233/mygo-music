@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -30,7 +31,7 @@ func tallLyricsApp(t *testing.T) *app {
 	}
 	a.pl.SetLyrics(lines)
 	a.pl.Hold(77 * time.Second)
-	a.nowPlaying, a.npPane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
 	a.comments = commentState{track: 1, loaded: true}
 	return a
 }
@@ -145,7 +146,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 		for _, count := range []int{30, 120} {
 			t.Run(fmt.Sprintf("immersive=%t/rows=%d", immersive, count), func(t *testing.T) {
 				a := tallLyricsApp(t)
-				a.nowPlaying = false
+				a.playbackState.Open = false
 				a.settings.LyricEdgeFade = immersive
 				a.settings.HotComments = false
 				lines := make([]lyrics.Line, count)
@@ -174,7 +175,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 				}
 				openAtEnd := func() float32 {
 					a.pl.Hold(last.At + 2*time.Second)
-					a.nowPlaying = true
+					a.playbackState.Open = true
 					tt.Frame()
 					visibleY(last)
 					tt.Advance(npSettle)
@@ -185,7 +186,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 				tt.Frame()
 				tt.Advance(time.Second)
 				want := visibleY(middle)
-				a.nowPlaying = false
+				a.playbackState.Open = false
 				tt.Frame()
 				tt.Advance(npSettle)
 				reopened := openAtEnd()

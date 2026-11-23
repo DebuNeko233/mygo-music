@@ -77,7 +77,7 @@ func TestDailyCardPlayPauseKeepsSharedQueue(t *testing.T) {
 	if err := tt.Click("继续播放"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.pl.Playing() || a.pl.Position() != 17*time.Second || a.pl.Current().ID != 2 || a.nowPlaying {
+	if !a.pl.Playing() || a.pl.Position() != 17*time.Second || a.pl.Current().ID != 2 || a.playbackState.Open {
 		t.Fatal("resume restarted the queue or opened another page")
 	}
 }

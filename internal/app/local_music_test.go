@@ -36,7 +36,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	if err := tt.ChooseMenuItem("下一首播放"); err != nil {
 		t.Fatal(err)
 	}
-	a.nowPlaying, a.npPane = true, paneQueue
+	a.playbackState.Open, a.playbackState.Pane = true, paneQueue
 	tt.Frame()
 	tt.Advance(time.Second)
 	if err := tt.RightClick(local.Name); err != nil {

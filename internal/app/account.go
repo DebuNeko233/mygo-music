@@ -62,6 +62,8 @@ func (a *app) signedIn(prof *netease.Profile) {
 		a.recovery.timer.Stop()
 		a.recovery.timer = nil
 	}
+	a.radio.CancelPending()
+	a.cancelMusicLink()
 	a.account.Accept(prof)
 	a.library.Reset()
 	a.bindOfflineLyrics()

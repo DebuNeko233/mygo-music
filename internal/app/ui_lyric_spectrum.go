@@ -48,13 +48,13 @@ type lyricSpectrum struct {
 
 func (a *app) lyricSpectrumLayer(c *ui.Context, tr *netease.Track, tint ui.Color, height float32) {
 	st := &a.npSpectrum
-	if !a.nowPlaying || (a.npPane != paneLyrics && a.npPane != paneStage) || tr.ProgramID != 0 ||
+	if !a.playbackState.Open || (a.playbackState.Pane != paneLyrics && a.playbackState.Pane != paneStage) || tr.ProgramID != 0 ||
 		!a.settings.LyricSpectrum || c.Preferences().ReduceMotion || c.WindowHidden() {
 		*st = lyricSpectrum{}
 		return
 	}
 	layerHeight, opacity, peakLight := min(height*0.216, 208), float32(0.16), float32(0.75)
-	if a.npPane == paneStage {
+	if a.playbackState.Pane == paneStage {
 		layerHeight, opacity, peakLight = min(height*0.35, 340), 0.31, 1
 	}
 	tint = tint.Mix(ui.RGB(112, 112, 200), 0.45).Mix(white, 0.07)

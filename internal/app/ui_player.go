@@ -176,7 +176,7 @@ func (a *app) tickTimes(c *ui.Context) {
 // percent over it. The wheel over the speaker turns it up and down
 // without opening it.
 func (a *app) volumeButton(c *ui.Context, color ui.Color) {
-	b := iconButton(c.Key("volume-button"), volumeIcon(a.volume), 16, color, "音量")
+	b := iconButton(c.Key("volume-button"), volumeIcon(a.playbackState.Volume), 16, color, "音量")
 	if b.Clicked() {
 		a.volumeOpen = !a.volumeOpen
 	}
@@ -198,7 +198,7 @@ func (a *app) volumeButton(c *ui.Context, color ui.Color) {
 				QuadTo(cx, foot+arrow, cx+1.2, foot+arrow-1.2).LineTo(cx+arrow+1, foot)
 			p.StrokePath(edge, 0.5, pop.edge)
 		})
-		ui.Textf(c, "%d%%", int(a.volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
+		ui.Textf(c, "%d%%", int(a.playbackState.Volume*100+0.5)).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(a.pal.muted)
 		a.nativeVolumeSlider(c, pop)
 	})
 }
@@ -219,14 +219,14 @@ func popoverColors(dark bool) popover {
 // track, filled with the accent from the foot to a round knob.
 func (a *app) nativeVolumeSlider(c *ui.Context, pop popover) {
 	const knob, track = 20, 4
-	s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Vertical().Size(knob+8, 124).PaddingY(knob / 2).
+	s := ui.SliderBase(c.Key("volume"), &a.playbackState.Volume, 0, 1).Vertical().Size(knob+8, 124).PaddingY(knob / 2).
 		Step(0.01).AutoFocus().FocusRing(false).Label("音量")
 	if s.Changed() {
 		a.syncVolume()
 	}
 	s.HandleInput(func(ev ui.InputEvent) bool { return a.scrollVolume(ev) })
 	pressed := s.Pressed()
-	v := float32(a.volume)
+	v := float32(a.playbackState.Volume)
 	accent := a.pal.accent
 	s.Draw(func(p *ui.Painter, r ui.Rect) {
 		top, foot := r.Y+knob/2, r.Y+r.H-knob/2
@@ -288,12 +288,7 @@ func (a *app) scrollVolume(ev ui.InputEvent) bool {
 
 // stepVolume takes one ten-percent step of the volume, clamped to its range.
 func (a *app) stepVolume(down bool) {
-	step := 0.1
-	if down {
-		step = -step
-	}
-	a.volume = math.Round(min(1, max(0, a.volume+step))*100) / 100
-	a.syncVolume()
+	a.playbackState.StepVolume(down, a.volumeServices())
 }
 
 // volumeIcon is the speaker for volume v: silent, or with one or two waves.
@@ -311,16 +306,11 @@ func volumeIcon(v float64) *ui.SVG {
 // muteButton is the speaker, which mutes and unmutes.
 func (a *app) muteButton(c *ui.Context, color ui.Color) {
 	icon := iconVolume
-	if a.volume == 0 {
+	if a.playbackState.Volume == 0 {
 		icon = iconMute
 	}
 	if iconButton(c.Key("mute"), icon, 16, color, "静音").Clicked() {
-		if a.volume > 0 {
-			a.mutedFrom, a.volume = a.volume, 0
-		} else {
-			a.volume = max(a.mutedFrom, 0.5)
-		}
-		a.syncVolume()
+		a.playbackState.ToggleMute(a.volumeServices())
 	}
 }
 
@@ -330,7 +320,7 @@ func (a *app) volumeSlider(c *ui.Context, color, track ui.Color, width float32) 
 	// its center sits 6 DIPs right of the column's axis for optical balance.
 	ui.Row(c).Gap(4).Padding(0, 24, 0, 0).AlignItems(ui.Center).Children(func() {
 		a.muteButton(c, color)
-		s := ui.SliderBase(c.Key("volume"), &a.volume, 0, 1).Width(width).Height(16).FocusRing(false).Label("音量")
+		s := ui.SliderBase(c.Key("volume"), &a.playbackState.Volume, 0, 1).Width(width).Height(16).FocusRing(false).Label("音量")
 		if s.Changed() {
 			a.syncVolume()
 		}
@@ -340,7 +330,7 @@ func (a *app) volumeSlider(c *ui.Context, color, track ui.Color, width float32) 
 			thick = 5
 		}
 		thick = s.AnimateTo("thick", thick, ui.Snappy)
-		v := float32(a.volume)
+		v := float32(a.playbackState.Volume)
 		s.Draw(func(p *ui.Painter, r ui.Rect) {
 			y := r.Y + (r.H-thick)/2
 			p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: thick}, track, thick/2)
@@ -466,7 +456,7 @@ func (a *app) playerBar(c *ui.Context) {
 				})
 			})
 			if info.Clicked() {
-				a.nowPlaying = true
+				a.playbackState.Open = true
 			}
 			a.likeButton(c.Key("like"), tr, 16, p.muted).Margin(0, 0, 0, 4).Shrink(0)
 		})
@@ -493,11 +483,11 @@ func (a *app) playerBar(c *ui.Context) {
 			}
 			if tr == nil || !tr.IsLocal() {
 				if iconButton(c.Key("comments"), iconComment, 16, p.muted, "评论").Clicked() && tr != nil {
-					a.nowPlaying, a.npPane = true, paneComments
+					a.playbackState.Open, a.playbackState.Pane = true, paneComments
 				}
 			}
 			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {
-				a.nowPlaying, a.npPane = true, paneQueue
+				a.playbackState.Open, a.playbackState.Pane = true, paneQueue
 			}
 			a.volumeButton(c, p.text.Alpha(0.75))
 		})

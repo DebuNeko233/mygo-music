@@ -450,7 +450,7 @@ func (n *notch) expanded(c *ui.Context, tr *netease.Track, open, left float32) {
 				artImage(c, bitmap(art), 12, in)
 			})
 			if cov.Clicked() {
-				a.nowPlaying = true
+				a.playbackState.Open = true
 				a.showMain()
 				a.win.Invalidate()
 			}
@@ -533,7 +533,7 @@ func (a *app) syncWindows() {
 	if tr := pl.Current(); tr != nil {
 		id = tr.Key()
 	}
-	sig := playerSig{id, pl.Playing(), pl.Loading(), pl.Buffering(), pl.Shuffle(), pl.Repeat(), a.volume, a.nowPlaying, pl.Err()}
+	sig := playerSig{id, pl.Playing(), pl.Loading(), pl.Buffering(), pl.Shuffle(), pl.Repeat(), a.playbackState.Volume, a.playbackState.Open, pl.Err()}
 	if sig != a.sig {
 		a.sig = sig
 		a.redraw()

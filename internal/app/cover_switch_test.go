@@ -140,7 +140,7 @@ func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*ar
 	a.pl.Cue(q)
 	a.pl.Hold(0)
 	a.pl.SetLyrics(nil)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTesterWith(a.view, 640, 440,
 		ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}, Dark: true})
 	tt.Advance(2 * time.Second)
@@ -347,12 +347,12 @@ func TestCoverSwitchAfterHiddenPane(t *testing.T) {
 	}
 	x, y := int(r.X+r.W/2), int(r.Y+r.H/2)
 	covered := tt.Image().RGBAAt(x, y)
-	a.npPane = paneStage
+	a.playbackState.Pane = paneStage
 	tt.Frame()
 	a.pl.Next()
 	a.pl.SetLyrics(nil)
 	tt.Frame()
-	a.npPane = paneLyrics
+	a.playbackState.Pane = paneLyrics
 	tt.Frame()
 	if got := tt.Image().RGBAAt(x, y); got != covered {
 		t.Fatalf("first frame showed %v, want the held cover %v", got, covered)

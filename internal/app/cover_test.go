@@ -17,7 +17,7 @@ func coverApp(t *testing.T) (*app, *ui.Tester, ui.Rect) {
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
 	a.pl.Next()
 	a.pl.SetLyrics(nil)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 860, 560)
 	// Without the tilt and the swing, which the CPU draws slowly in depth:
 	// the gestures do as they would.

@@ -53,7 +53,7 @@ var hotkeys = []hotkey{
 
 // stepVolumeBy turns the volume up or down by d, as the shortcut keys do.
 func (a *app) stepVolumeBy(d float64) {
-	a.setVolume(math.Round(min(1, max(0, a.volume+d))*100) / 100)
+	a.setVolume(math.Round(min(1, max(0, a.playbackState.Volume+d))*100) / 100)
 }
 
 // stepLyricSize makes the lines of the lyrics window d points larger or

@@ -32,12 +32,12 @@ func TestBackAndForward(t *testing.T) {
 
 	// Back closes Now Playing before it leaves the page under it.
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "一张相片"}})
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt.Frame()
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
-	if a.nowPlaying || a.nav.Current != list {
-		t.Fatalf("back with Now Playing open: open %v, page %+v", a.nowPlaying, a.nav.Current)
+	if a.playbackState.Open || a.nav.Current != list {
+		t.Fatalf("back with Now Playing open: open %v, page %+v", a.playbackState.Open, a.nav.Current)
 	}
 
 	// A new page leaves nothing to go forward to.

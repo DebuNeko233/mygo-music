@@ -22,12 +22,12 @@ const npSettle = 600 * time.Millisecond
 // open and whether it has come to rest, open or closed. Call it once a
 // build, before the window's content.
 func (a *app) npState(c *ui.Context) (open, settled bool) {
-	open = a.nowPlaying && a.pl.Current() != nil
+	open = a.playbackState.Open && a.pl.Current() != nil
 	now := c.Now()
 	if open != a.npOpen {
 		a.npOpen, a.npChangedAt = open, now
 		a.npPointerUntil = time.Time{}
-		if open && a.npPane == paneLyrics {
+		if open && a.playbackState.Pane == paneLyrics {
 			// The new scroll may clamp before it has measured its
 			// contents. Start following before reading that offset.
 			a.seekLyricFollow()
@@ -78,7 +78,7 @@ func (a *app) nowPlayingLayer(c *ui.Context, open, settled bool) {
 		layer.PassThrough()
 	}
 	layer.Children(func() { a.nowPlayingView(c) })
-	if a.npPane != paneLyrics || !a.settings.LyricEdgeFade {
+	if a.playbackState.Pane != paneLyrics || !a.settings.LyricEdgeFade {
 		// The framebuffer is only reused while the effect is in view.
 		a.lyricBlurPass = nil
 	}
@@ -93,7 +93,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	a.tickTimes(c)
 	w, h := c.Size()
 	art := a.playbackTrackArtwork(tr, nowPlayingCoverRequest)
-	if cs := &a.npCoverState; a.npPane == paneStage || a.npPane == paneWall {
+	if cs := &a.npCoverState; a.playbackState.Pane == paneStage || a.playbackState.Pane == paneWall {
 		cs.previous = nil
 		cs.switching = false
 	}
@@ -126,8 +126,8 @@ func (a *app) nowPlayingView(c *ui.Context) {
 func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool) {
 	pl := a.pl
 	if tr.IsLocal() {
-		if a.npPane == paneComments {
-			a.npPane = a.lyricsPaneChosen()
+		if a.playbackState.Pane == paneComments {
+			a.playbackState.Pane = a.lyricsPaneChosen()
 		}
 	} else {
 		a.commentsFor(tr)
@@ -135,23 +135,23 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 	// An episode has what it is about and its captions in place of lyrics;
 	// a song, lyrics in place of those.
 	switch program := tr.ProgramID != 0; {
-	case program && a.npPane == paneWall:
-		a.npPane = paneQueue
-	case program && (a.npPane == paneLyrics || a.npPane == paneStage):
-		a.npPane = paneProgram
+	case program && a.playbackState.Pane == paneWall:
+		a.playbackState.Pane = paneQueue
+	case program && (a.playbackState.Pane == paneLyrics || a.playbackState.Pane == paneStage):
+		a.playbackState.Pane = paneProgram
 		if a.captionsOn() {
-			a.npPane = paneCaptions
+			a.playbackState.Pane = paneCaptions
 		}
-	case program && a.npPane == paneCaptions && !a.captionsShown():
-		a.npPane = paneProgram
-	case !program && (a.npPane == paneProgram || a.npPane == paneCaptions):
-		a.npPane = a.lyricsPaneChosen()
+	case program && a.playbackState.Pane == paneCaptions && !a.captionsShown():
+		a.playbackState.Pane = paneProgram
+	case !program && (a.playbackState.Pane == paneProgram || a.playbackState.Pane == paneCaptions):
+		a.playbackState.Pane = a.lyricsPaneChosen()
 	}
 	pointerIn = a.npPointerActive(c, pointerIn)
-	if a.npPane != paneQueue {
+	if a.playbackState.Pane != paneQueue {
 		a.queueAt = -1
 	}
-	if a.npPane != paneWall {
+	if a.playbackState.Pane != paneWall {
 		a.wallState.track = 0
 	}
 	{
@@ -164,11 +164,11 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				close := iconButton(c.Key("close"), iconDown, 22, white.Alpha(0.7), "关闭")
 				closeBounds = close.Bounds()
 				if close.Clicked() {
-					a.nowPlaying = false
+					a.playbackState.Open = false
 				}
 			})
 		})
-		if a.npPane == paneStage {
+		if a.playbackState.Pane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
 			a.npTabsRow(c, npTabsAnchor(c, w, h), pointerIn).Children(func() { a.paneTabs(c) })
@@ -180,7 +180,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 			a.stageBar(c, tr, art, accent)
 			return
 		}
-		if a.npPane == paneWall {
+		if a.playbackState.Pane == paneWall {
 			// The wall takes the whole view too, under the song playing.
 			a.wallPane(c, tr, art, accent, w, h, pointerIn)
 			return
@@ -191,7 +191,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		padX := npSideX(w)
 		gap := float32(72)
 		immersiveLyrics := false
-		if a.npPane == paneLyrics {
+		if a.playbackState.Pane == paneLyrics {
 			display, loaded := pl.LyricsDisplay()
 			static := loaded && !display.HasSinging()
 			immersiveLyrics = a.settings.LyricEdgeFade && !static
@@ -253,7 +253,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				// Only the cover column sinks in tall windows; this pane keeps
 				// the height above it for lyrics, comments and the queue.
 				ui.Box(c).Height(npTabsHeight + npTabsGap)
-				switch a.npPane {
+				switch a.playbackState.Pane {
 				case paneLyrics:
 					height := max(0, h-barHeight-npTabsHeight-npTabsGap-npPaneBottom)
 					a.lyricsPane(c, tr, height, ui.Rect{}, (side-coverSize)/2)
@@ -346,7 +346,7 @@ const npPointerIdleDelay = 2 * time.Second
 
 // npPointerActive treats an idle pointer like one that left the window.
 func (a *app) npPointerActive(c *ui.Context, pointerIn bool) bool {
-	if !pointerIn || !a.pl.Playing() || (a.npPane != paneLyrics && a.npPane != paneStage) {
+	if !pointerIn || !a.pl.Playing() || (a.playbackState.Pane != paneLyrics && a.playbackState.Pane != paneStage) {
 		a.npPointerUntil = time.Time{}
 		return pointerIn
 	}
@@ -432,10 +432,10 @@ func (a *app) paneTabs(c *ui.Context) {
 // choosePane shows pane i in Now Playing, remembering lyrics or the stage,
 // whichever was chosen, for the next song.
 func (a *app) choosePane(i int) {
-	if i == paneLyrics && a.npPane != paneLyrics {
+	if i == paneLyrics && a.playbackState.Pane != paneLyrics {
 		a.seekLyricFollow()
 	}
-	a.npPane = i
+	a.playbackState.Pane = i
 	if (i == paneLyrics || i == paneStage) && a.settings.LyricsStage != (i == paneStage) {
 		a.settings.LyricsStage = i == paneStage
 		a.settings.saveSoon()
@@ -563,7 +563,7 @@ func (a *app) stageBar(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 func (a *app) paneTab(c *ui.Context, i int, label string) {
 	b := ui.ButtonBase(c.Key(i)).Padding(6, 14).Radius(999).FocusRing(false).Label(label)
 	bg, fg := ui.Transparent, white.Alpha(0.55)
-	if a.npPane == i {
+	if a.playbackState.Pane == i {
 		bg, fg = white.Alpha(0.14), white
 	} else if b.Hovered() {
 		bg = white.Alpha(0.06)

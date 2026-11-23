@@ -94,7 +94,7 @@ func init() {
 						panes = panes[1:]
 					}
 					for _, pane := range panes {
-						step(0, func() { a.nowPlaying, a.npPane = true, pane })
+						step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, pane })
 						for i := range 4 {
 							mark(fmt.Sprint("pane", pane, "-", i))
 							time.Sleep(5 * time.Second)
@@ -117,10 +117,10 @@ func init() {
 						}
 					}
 					mark(fmt.Sprint("open", round))
-					step(0, func() { a.nowPlaying, a.npPane = true, paneLyrics })
+					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics })
 					time.Sleep(3 * time.Second)
 					mark(fmt.Sprint("close", round))
-					step(0, func() { a.nowPlaying = false })
+					step(0, func() { a.playbackState.Open = false })
 					time.Sleep(2 * time.Second)
 				}
 				for round := range 2 {
@@ -136,10 +136,10 @@ func init() {
 						}
 					}
 					mark(fmt.Sprint("stage", round))
-					step(0, func() { a.nowPlaying, a.npPane = true, paneStage })
+					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, paneStage })
 					time.Sleep(4 * time.Second)
 					mark(fmt.Sprint("shut", round))
-					step(0, func() { a.nowPlaying = false })
+					step(0, func() { a.playbackState.Open = false })
 					time.Sleep(2 * time.Second)
 				}
 				mark("end")
@@ -154,7 +154,7 @@ func init() {
 				shot("q-daily", a.win)
 				step(0, func() { a.pl.PlayQueue(a.home.Daily, 0); a.setVolume(0.15) })
 				time.Sleep(4 * time.Second)
-				step(0, func() { a.nowPlaying = true })
+				step(0, func() { a.playbackState.Open = true })
 				time.Sleep(4 * time.Second)
 				shot("q-np", a.win)
 				mygo.RunOnMain(mygo.App.Quit)
@@ -188,7 +188,7 @@ func init() {
 				time.Sleep(5 * time.Second)
 				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
 				time.Sleep(3 * time.Second)
-				step(0, func() { a.nowPlaying, a.npPane = true, paneLyrics })
+				step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics })
 				time.Sleep(3 * time.Second)
 				shot("a-np", a.win)
 				step(0, func() { a.openArtist(a.pl.Current().Artists[0].ID) })
@@ -239,10 +239,10 @@ func init() {
 			step(0, func() { a.notch.open = true; a.notch.lastInside = time.Now().Add(time.Hour) })
 			time.Sleep(2 * time.Second)
 			shot("5-notch-open", a.notch.win)
-			step(0, func() { a.nowPlaying = true })
+			step(0, func() { a.playbackState.Open = true })
 			time.Sleep(4 * time.Second)
 			shot("6-now-playing", a.win)
-			step(0, func() { a.npPane = paneQueue })
+			step(0, func() { a.playbackState.Pane = paneQueue })
 			time.Sleep(2 * time.Second)
 			shot("7-queue", a.win)
 			step(0, func() { a.search("周杰伦") })

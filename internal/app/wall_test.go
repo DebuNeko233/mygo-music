@@ -28,7 +28,7 @@ func wallApp(n, at int) (*app, *ui.Tester) {
 		a.pl.Jump(at)
 	}
 	a.pl.SetLyrics(nil)
-	a.nowPlaying, a.npPane = true, paneWall
+	a.playbackState.Open, a.playbackState.Pane = true, paneWall
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Advance(time.Second)

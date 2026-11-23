@@ -28,7 +28,7 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			}
 			a.pl.SetLyrics(lines)
 			a.comments = commentState{track: 1, loaded: true, total: 1, latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
-			a.nowPlaying, a.npPane = true, pane.id
+			a.playbackState.Open, a.playbackState.Pane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
 			if pane.id == paneLyrics {
 				a.pl.Hold(lines[150].At)

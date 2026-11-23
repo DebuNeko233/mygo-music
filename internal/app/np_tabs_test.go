@@ -24,7 +24,7 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 	for _, left = range []float32{0, 50, 360} {
 		for _, count := range []int{0, 32000, 12345678} {
 			a.comments.total = count
-			a.npPane = paneLyrics
+			a.playbackState.Pane = paneLyrics
 			tt.Frame()
 			tt.Advance(time.Second)
 			tt.Frame()
@@ -44,7 +44,7 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 			if err := tt.Click(a.commentsTab()); err != nil {
 				t.Fatal(err)
 			}
-			if a.npPane != paneComments {
+			if a.playbackState.Pane != paneComments {
 				t.Fatal("the comment button stopped taking clicks near the edge")
 			}
 		}
@@ -70,7 +70,7 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			out.Play()
 			defer out.Close()
 			a.pl.Attach(out)
-			a.nowPlaying, a.npPane = true, tc.pane
+			a.playbackState.Open, a.playbackState.Pane = true, tc.pane
 			tt := ui.NewTesterWith(a.view, 1120, 720, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			const scale = 0.5
 			tt.SetScale(scale)
@@ -132,7 +132,7 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			check(shown)
 
 			a.pl.TogglePlay()
-			a.npPane = paneQueue
+			a.playbackState.Pane = paneQueue
 			tt.Frame()
 			queueShown := tt.Image()
 			tt.Advance(3 * time.Second)

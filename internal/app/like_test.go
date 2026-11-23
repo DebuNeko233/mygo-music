@@ -410,7 +410,7 @@ func stageFrames(style, path string) {
 		`[13010,4780](13010,660,0)从(13670,670,0)不(14340,30,0) (14370,480,0)主(14850,610,0)动(15460,30,0) (15490,330,0)示(15820,1070,0)弱
 [17790,1770](17790,170,0)我(17960,450,0)们(18410,290,0)的(18700,470,0)过(19170,390,0)去
 [30560,6580](30560,220,0)曾(30780,430,0)经(31210,340,0)的(31550,350,0)那(31900,470,0)些(32370,400,0)发(32770,320,0)生(33090,470,0)过(33560,30,0) (33590,210,0)的(33800,550,0)开(34350,250,0)心(34600,360,0)和(34960,640,0)难(35600,1500,0)过`))
-	a.nowPlaying, a.npPane = true, paneStage
+	a.playbackState.Open, a.playbackState.Pane = true, paneStage
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.SetDark(true)
 	tt.Advance(time.Second)
@@ -469,7 +469,7 @@ func TestBackdropFrame(t *testing.T) {
 	a.pl.SetLyrics(lyrics.Build("[00:00.00]作词: 織田あすか\n[00:01.00]作曲: 藤田淳平(Elements Garden)\n[00:02.00]编曲: 藤田淳平(Elements Garden)\n[00:15.00]悴んだ心 ふるえる眼差し\n[00:20.00]世界で 僕は ひとりぼっちだった\n[00:25.00]散ることしか知らない春は\n[00:30.00]毎年 冷たくあしらう",
 		"[00:15.00]内心满是憔悴 眼神颤抖不止\n[00:20.00]我在这世界孤独一人\n[00:25.00]在不断凋零的春季中\n[00:30.00]每年都只感受到冰冷", ""))
 	a.pl.Seek(2500 * time.Millisecond)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1000, 680)
 	tt.SetDark(true)
 	tt.Advance(2 * time.Second)
@@ -535,9 +535,9 @@ func TestSmokeFrames(t *testing.T) {
 		png.Encode(f, strip)
 		f.Close()
 	}
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	shots("smoke-np", true)
-	a.nowPlaying = false
+	a.playbackState.Open = false
 	shots("smoke-bar", false)
 }
 
@@ -585,7 +585,7 @@ func TestVolumePopoverFrames(t *testing.T) {
 		a.settings = defaultSettings()
 		tr := netease.Track{ID: 7, Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 199000}
 		a.pl.Cue([]netease.Track{tr})
-		a.volume = 0.63
+		a.playbackState.Volume = 0.63
 		tt := ui.NewTester(a.view, 1000, 600)
 		tt.SetDark(dark)
 		tt.Frame()

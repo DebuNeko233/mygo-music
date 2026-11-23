@@ -53,7 +53,7 @@ func TestExitHeartMode(t *testing.T) {
 	}
 
 	a.pl.AttachRadio(heartRadio, func(got func([]netease.Track)) {})
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt.Advance(time.Second)
 	tt.Frame()
 	if err := tt.Click("退出心动模式"); err != nil {

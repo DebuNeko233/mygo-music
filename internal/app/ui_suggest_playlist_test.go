@@ -103,7 +103,7 @@ func TestPlaylistSuggestionPlaysAndLocates(t *testing.T) {
 			if a.pl.Current().ID != target.ID || !a.pl.Playing() || !slices.EqualFunc(a.pl.Queue(), pl.Tracks, func(a, b netease.Track) bool { return a.ID == b.ID }) {
 				t.Fatal("selection did not play the chosen song with the whole playlist as queue")
 			}
-			if a.nav.Current != (route{Page: pagePlaylist, ID: 7}) || a.nowPlaying {
+			if a.nav.Current != (route{Page: pagePlaylist, ID: 7}) || a.playbackState.Open {
 				t.Fatal("selection left the displayed playlist")
 			}
 			locatedRow(t, tt, target.Name, 760)
@@ -389,7 +389,7 @@ func TestPlaylistSuggestionRevalidatesSelection(t *testing.T) {
 			case "other page":
 				a.nav.Current.Page = pageAlbum
 			case "now playing":
-				a.nowPlaying = true
+				a.playbackState.Open = true
 			case "new query":
 				q = "other"
 			}

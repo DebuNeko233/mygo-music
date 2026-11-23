@@ -41,7 +41,7 @@ func TestLyricViewsShareSelectedSource(t *testing.T) {
 // choosing 流光 goes back to the classic.
 func TestStageStyleMenu(t *testing.T) {
 	a, tt, _ := playingApp()
-	a.nowPlaying, a.npPane = true, paneStage
+	a.playbackState.Open, a.playbackState.Pane = true, paneStage
 	a.pl.Seek(2 * time.Second)
 	tt.Frame()
 	for _, c := range []struct{ item, want string }{{"云阶", "partita"}, {"倾诉", "tilt"}, {"流光", ""}} {
@@ -62,7 +62,7 @@ func TestStageStyleMenu(t *testing.T) {
 // the style.
 func TestStageSparksMenu(t *testing.T) {
 	a, tt, _ := playingApp()
-	a.nowPlaying, a.npPane = true, paneStage
+	a.playbackState.Open, a.playbackState.Pane = true, paneStage
 	a.settings.StageStyle = "tilt"
 	tt.Frame()
 	for _, want := range []bool{true, false} {

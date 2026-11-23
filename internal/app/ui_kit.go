@@ -166,7 +166,7 @@ func (a *app) cover(c *ui.Context, url string, px int, size, radius float32) ui.
 func (a *app) coverImage(c *ui.Context, size, radius float32, load func(ui.Element) *artwork) ui.Element {
 	p := a.pal
 	bg, fg := p.hover, p.faint
-	if a.nowPlaying {
+	if a.playbackState.Open {
 		bg, fg = white.Alpha(0.08), white.Alpha(0.35)
 	}
 	box := ui.Box(c).Size(size, size).Radius(radius).Center()

@@ -26,7 +26,7 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 		Songs:  []netease.Track{{ID: 2, Name: "起风了", Artists: []netease.Artist{{ID: 13, Name: "丙"}}, Duration: 200000}},
 	}})
 	tt := ui.NewTester(a.view, 1200, 800)
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	tt.Frame()
 	tt.Advance(time.Second)
 	tt.Frame()
@@ -36,8 +36,8 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.nowPlaying || a.nav.Current != (route{Page: pageArtist, ID: 12}) {
-		t.Fatalf("after the click: Now Playing open %v, page %+v", a.nowPlaying, a.nav.Current)
+	if a.playbackState.Open || a.nav.Current != (route{Page: pageArtist, ID: 12}) {
+		t.Fatalf("after the click: Now Playing open %v, page %+v", a.playbackState.Open, a.nav.Current)
 	}
 
 	tt.Advance(time.Second)

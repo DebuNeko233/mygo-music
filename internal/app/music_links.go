@@ -15,7 +15,7 @@ var (
 )
 
 func (a *app) linkServices() viewmodel.LinkServices {
-	return viewmodel.LinkServices{Ready: a.pl != nil, Player: a.pl, Post: a.detailPost(), Closed: func() bool { return a.quitting }, Show: a.showMain, NowPlaying: func() { a.nowPlaying = true }, DismissSuggestions: a.dismissSuggestions, Navigate: a.open, Notify: func(msg string) { a.toast = msg }, Resolve: resolveMusicLink, Fetch: musicLinkTrack}
+	return viewmodel.LinkServices{Ready: a.pl != nil, Player: a.pl, Post: a.detailPost(), Closed: func() bool { return a.quitting }, Show: a.showMain, NowPlaying: func() { a.playbackState.Open = true }, DismissSuggestions: a.dismissSuggestions, Navigate: a.open, Notify: func(msg string) { a.toast = msg }, Resolve: resolveMusicLink, Fetch: musicLinkTrack}
 }
 func (a *app) cancelMusicLink()                     { a.links.Cancel() }
 func (a *app) openMusicInput(text string) bool      { return a.links.Input(text, a.linkServices()) }

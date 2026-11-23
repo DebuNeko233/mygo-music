@@ -22,11 +22,11 @@ func (a *app) searchTracks() viewmodel.TrackSearchList {
 }
 
 func (a *app) trackSuggestions(q string) []viewmodel.TrackSuggestion {
-	return a.searches.TrackSuggestions(q, a.nav.Current, a.listenerID(), a.nowPlaying, a.searchTracks(), a.local.Missing)
+	return a.searches.TrackSuggestions(q, a.nav.Current, a.listenerID(), a.playbackState.Open, a.searchTracks(), a.local.Missing)
 }
 func (a *app) chooseTrackSuggestion(key, q string) bool {
 	list := a.searchTracks()
-	i, handled := a.searches.ResolveTrackSuggestion(key, q, a.nav.Current, a.listenerID(), a.nowPlaying, list, a.local.Missing)
+	i, handled := a.searches.ResolveTrackSuggestion(key, q, a.nav.Current, a.listenerID(), a.playbackState.Open, list, a.local.Missing)
 	if i >= 0 {
 		a.rememberSearch(q)
 		a.dismissSuggestions()

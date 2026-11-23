@@ -44,7 +44,7 @@ func (a *app) setMenu() {
 			mygo.Separator(),
 			{Label: "新建歌单…", Accelerator: "CmdOrCtrl+N", Click: run(func() {
 				a.showMain()
-				a.nowPlaying = false
+				a.playbackState.Open = false
 				a.newPlaylist(nil)
 			})},
 		}},
@@ -69,7 +69,7 @@ func (a *app) setMenu() {
 			mygo.Separator(),
 			{Label: "正在播放", Accelerator: "CmdOrCtrl+L", Click: run(func() {
 				a.showMain()
-				a.nowPlaying = !a.nowPlaying && a.pl.Current() != nil
+				a.playbackState.Open = !a.playbackState.Open && a.pl.Current() != nil
 			})},
 			mygo.Separator(),
 			{Label: "桌面歌词", Accelerator: "CmdOrCtrl+Shift+L", Click: run(a.toggleDeskLyrics)},

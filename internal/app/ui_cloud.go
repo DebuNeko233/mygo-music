@@ -16,7 +16,7 @@ func (a *app) resolveCloudLocate() {
 		return
 	}
 	current := a.pl.Current()
-	if a.nav.Current.Page != pageCloud || a.nowPlaying || current == nil || current.Key() != d.Locate {
+	if a.nav.Current.Page != pageCloud || a.playbackState.Open || current == nil || current.Key() != d.Locate {
 		d.Locate = 0
 		return
 	}

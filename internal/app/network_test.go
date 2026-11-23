@@ -161,9 +161,9 @@ func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	if err := tt.Click("刷新内容"); err != nil {
 		t.Fatal(err)
 	}
-	a.nowPlaying = true
+	a.playbackState.Open = true
 	for _, pane := range []int{paneLyrics, paneStage, paneQueue} {
-		a.npPane = pane
+		a.playbackState.Pane = pane
 		tt.Frame()
 		if _, found := tt.Find("离线"); found {
 			t.Fatal("player retained the offline symbol")
@@ -181,7 +181,7 @@ func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	if err := tt.Click("刷新内容"); err == nil || a.network.offline || a.pl.Playing() {
 		t.Fatal("reconnect exposed page controls or altered playback")
 	}
-	a.nowPlaying = false
+	a.playbackState.Open = false
 	tt.Frame()
 	if err := tt.Click("刷新内容"); err == nil {
 		t.Fatal("page controls appeared over the closing player")
@@ -230,7 +230,7 @@ func TestNetworkChangesUpdateVisibleComponentStates(t *testing.T) {
 	for a.pl.MetadataLoading() {
 		refreshPost(t, posts)
 	}
-	a.nowPlaying, a.npPane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
 	tt.Frame()
 	tt.Advance(time.Second)
 	tt.Frame()
@@ -257,7 +257,7 @@ func TestNetworkLyricsRetryAction(t *testing.T) {
 		a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
 		a.networkChanged(mygo.NetworkStatus{})
 		a.networkChanged(mygo.NetworkStatus{Online: true})
-		a.nowPlaying, a.npPane = true, pane
+		a.playbackState.Open, a.playbackState.Pane = true, pane
 		tt := ui.NewTester(a.view, 1100, 800)
 		tt.Frame()
 		for a.pl.MetadataLoading() {

@@ -110,11 +110,11 @@ func (a *app) shortcuts(c *ui.Context) {
 	c.OnShortcut(ui.Cmd, ui.KeyBracketLeft, a.back)
 	c.OnShortcut(ui.Cmd, ui.KeyBracketRight, a.goForward)
 	c.OnShortcut(ui.Cmd, ui.KeyF, func() {
-		a.nowPlaying = false
+		a.playbackState.Open = false
 		a.searchBox.Focus(c)
 	})
-	if a.nowPlaying {
-		c.OnShortcut(0, ui.KeyEscape, func() { a.nowPlaying = false })
+	if a.playbackState.Open {
+		c.OnShortcut(0, ui.KeyEscape, func() { a.playbackState.Open = false })
 		// ⌘ and a number choose Now Playing's tab of that place.
 		if a.pl.Current() != nil {
 			for i, t := range a.npTabs() {
@@ -128,7 +128,7 @@ func (a *app) shortcuts(c *ui.Context) {
 // closes Now Playing over it, though it is the page open.
 func (a *app) open(r route) {
 	a.cancelMusicLink()
-	a.nowPlaying = false
+	a.playbackState.Open = false
 	a.leavingPage(r)
 	if !a.nav.Open(r) {
 		a.load(r)
@@ -191,8 +191,8 @@ func (a *app) load(r route) {
 // closes Now Playing, which covers the pages.
 func (a *app) back() {
 	a.cancelMusicLink()
-	if a.nowPlaying {
-		a.nowPlaying = false
+	if a.playbackState.Open {
+		a.playbackState.Open = false
 		return
 	}
 	if r, ok := a.nav.Previous(); ok {
@@ -205,7 +205,7 @@ func (a *app) back() {
 func (a *app) goForward() {
 	a.cancelMusicLink()
 	if r, ok := a.nav.Next(); ok {
-		a.nowPlaying = false
+		a.playbackState.Open = false
 		a.show(r)
 	}
 }
@@ -245,7 +245,7 @@ func (a *app) sidebar(c *ui.Context) {
 
 func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	p := a.pal
-	selected := a.nav.Current.Page == r.Page && !a.nowPlaying
+	selected := a.nav.Current.Page == r.Page && !a.playbackState.Open
 	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	bg := ui.Transparent
 	switch {

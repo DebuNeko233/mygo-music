@@ -45,7 +45,7 @@ func TestOfflineLyricsStopAnimating(t *testing.T) {
 		a, _ := offlineFixture(t)
 		a.pl.Cue([]netease.Track{{ID: 1, Name: "Offline"}})
 		a.networkChanged(mygo.NetworkStatus{})
-		a.nowPlaying, a.npPane = true, pane
+		a.playbackState.Open, a.playbackState.Pane = true, pane
 		tt := ui.NewTester(a.view, 1100, 800)
 		tt.Frame()
 		tt.Advance(time.Second)

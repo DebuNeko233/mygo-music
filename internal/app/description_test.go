@@ -160,17 +160,17 @@ func TestDescriptionMoreInNowPlaying(t *testing.T) {
 	tr := netease.Track{ID: 1, ProgramID: 2, Name: "节目名称", Description: desc}
 	a.pl.Cue([]netease.Track{tr})
 	a.comments.track = tr.ID
-	a.npPane, a.nowPlaying = paneProgram, true
+	a.playbackState.Pane, a.playbackState.Open = paneProgram, true
 	view := ui.NewTester(a.view, 1180, 780)
 	view.Advance(time.Second)
 	if err := view.Click("更多：节目名称 · 简介"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.nowPlaying || !a.intro.open || a.intro.text != desc {
+	if !a.playbackState.Open || !a.intro.open || a.intro.text != desc {
 		t.Fatal("the full episode introduction did not open over Now Playing")
 	}
 	view.Key(0, ui.KeyEscape)
-	if a.intro.open || !a.nowPlaying {
+	if a.intro.open || !a.playbackState.Open {
 		t.Fatal("Escape should close the description and keep Now Playing open")
 	}
 }
