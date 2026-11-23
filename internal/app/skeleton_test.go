@@ -36,11 +36,11 @@ var skeletonScenes = []struct {
 	{"login", func(a *app) { a.account.Login = viewmodel.LoginState{Open: true} }},
 	{"comments", func(a *app) {
 		a.playbackState.Open, a.playbackState.Pane = true, paneComments
-		a.comments = commentState{track: 1, loading: true}
+		a.comments = viewmodel.Comments{Track: 1, Loading: true}
 	}},
 	{"more-comments", func(a *app) {
 		a.playbackState.Open, a.playbackState.Pane = true, paneComments
-		a.comments = commentState{track: 1, loading: true, loaded: true, total: 1, latest: []netease.Comment{{ID: 1, Content: "好听"}}}
+		a.comments = viewmodel.Comments{Track: 1, Loading: true, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "好听"}}}
 	}},
 	{"lyrics", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics }},
 	{"stage", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, paneStage }},

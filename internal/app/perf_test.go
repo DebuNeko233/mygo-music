@@ -164,17 +164,17 @@ func TestLyricsScrollFrameBudget(t *testing.T) {
 func TestLongCaptionMeasurementBudget(t *testing.T) {
 	a := captionsTestApp(t, true)
 	cs := &a.captions
-	cs.program = a.pl.Current().ProgramID
-	cs.tr = &transcript{Spans: []span{{0, a.pl.Duration()}}}
+	cs.Program = a.pl.Current().ProgramID
+	cs.Transcript = &transcript{Spans: []span{{0, a.pl.Duration()}}}
 	const count = 2000
 	for i := range count {
-		cs.lines = append(cs.lines, lyrics.Line{
+		cs.Lines = append(cs.Lines, lyrics.Line{
 			At:   time.Duration(i) * 250 * time.Millisecond,
 			Text: fmt.Sprintf("第 %04d 句，%s", i, strings.Repeat("这段播客字幕会换行", 4)),
 		})
 	}
 	const active = count / 2
-	a.pl.Seek(cs.lines[active].At)
+	a.pl.Seek(cs.Lines[active].At)
 	tt := ui.NewTester(func(c *ui.Context) {
 		_, h := c.Size()
 		a.captionsPane(c, a.pl.Current(), h)
@@ -183,7 +183,7 @@ func TestLongCaptionMeasurementBudget(t *testing.T) {
 	for _, width := range []int{640, 485, 340} {
 		tt.SetSize(width, 460)
 		tt.Advance(time.Second)
-		row, ok := tt.AccessByRole(ui.RoleButton, cs.lines[active].Text)
+		row, ok := tt.AccessByRole(ui.RoleButton, cs.Lines[active].Text)
 		if !ok || row.Offscreen || math.Abs(float64(row.Bounds.Y-460*0.3)) > 2 {
 			t.Fatalf("width %d: active caption lost its reading position: %+v", width, row.Bounds)
 		}

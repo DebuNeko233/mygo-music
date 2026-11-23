@@ -10,7 +10,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/navigation"
 	"netease-music-mygo/internal/player"
@@ -110,24 +109,20 @@ type app struct {
 	npChangedAt                    time.Time // when it last opened or closed
 	npPointer                      ui.Point
 	npPointerUntil                 time.Time
+	lyricReading                   viewmodel.LyricReading
 	lyricScroll                    ui.ScrollState
 	lyricGlide                     lyricGlide
-	lyricBrowseUntil               time.Time
 	lyricResizeAnchor              lyricReadingAnchor
 	lyricBlurPass                  *ui.Canvas
 	paintedLyric                   paintedLyric
 	playbackFont                   lyricFontSelection
 	timedList                      timedListLayout
-	lyricAt                        int
-	lyricTrack                     int64
-	lyricSeekRevision              uint64
-	lyricClickSeekRevision         uint64
-	lyricFirst                     *lyrics.Line
 	lyricViewportW, lyricViewportH float32 // last viewport followed; resize can reflow lines
 	lyricWindowW, lyricWindowH     float32 // window size whose reflow has been scheduled
 	queueList                      ui.ListState
 	queueAt                        int // the row of the queue pane last scrolled to, -1 while it is hidden
-	comments                       commentState
+	comments                       viewmodel.Comments
+	commentScroll                  ui.ScrollState
 	tabCount                       rollState // the count on the comments' tab, as it rolls
 	stageWords                     stageWordLayout
 
@@ -160,13 +155,13 @@ type app struct {
 	barCover              coverFadeState
 	stageCover, wallCover coverFadeState
 	npScrub               scrubState
-	backdropCache         backdropCache // the backdrop of Now Playing, as last painted
-	npSpectrum            lyricSpectrum // the filled frequency spectrum behind the lyrics
-	npArt                 *artwork      // the cover whose colors Now Playing shows
-	npCoverState          coverState    // the cover of Now Playing, as it is tilted and flicked
-	wallState             wallState     // the wall of the queue's covers, as it is dragged
-	quiet                 quietState    // the quiet parts of the song playing, for its hot comments
-	captions              captionState  // the episode playing's captions, and the model that writes them
+	backdropCache         backdropCache      // the backdrop of Now Playing, as last painted
+	npSpectrum            lyricSpectrum      // the filled frequency spectrum behind the lyrics
+	npArt                 *artwork           // the cover whose colors Now Playing shows
+	npCoverState          coverState         // the cover of Now Playing, as it is tilted and flicked
+	wallState             wallState          // the wall of the queue's covers, as it is dragged
+	quiet                 quietState         // the quiet parts of the song playing, for its hot comments
+	captions              viewmodel.Captions // the episode playing's captions, and the model that writes them
 	sig                   playerSig
 	quitting              bool
 
@@ -275,7 +270,7 @@ func Run() error {
 		return nil
 	}
 	a := &app{
-		lyricAt:       -1,
+		lyricReading:  viewmodel.LyricReading{At: -1},
 		queueAt:       -1,
 		cacheSettings: viewmodel.CacheSettings{Used: -1},
 	}

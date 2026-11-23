@@ -26,7 +26,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "原歌单", Tracks: []netease.Track{tr}}
 			a.library.Playlists[43] = &netease.Playlist{ID: 43, Name: "其他歌单"}
 			a.pl.Cue([]netease.Track{{ID: 2, Name: "正在播放的歌曲"}})
-			a.comments.track = 2
+			a.comments.Track = 2
 			a.pl.SetLyrics(nil)
 			now := time.Unix(1e9, 0)
 			a.art.now, a.art.limit = func() time.Time { return now }, 300

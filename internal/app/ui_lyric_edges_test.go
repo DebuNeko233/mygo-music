@@ -432,7 +432,7 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			save("manual")
 			manual := a.lyricScroll.Y
 			tt.Advance(lyricBrowseDelay + 100*time.Millisecond)
-			if a.lyricBrowseUntil.IsZero() || a.lyricScroll.Y != manual {
+			if a.lyricReading.BrowseUntil.IsZero() || a.lyricScroll.Y != manual {
 				t.Fatal("paused playback did not preserve the reading position")
 			}
 			tt.Scroll(180, 180, 0, 24)
@@ -440,24 +440,24 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			a.pl.Hold(lines[count/2+1].At)
 			tt.Frame()
 			tt.Advance(3 * time.Second)
-			if a.lyricBrowseUntil.IsZero() || a.lyricScroll.Y != manual {
+			if a.lyricReading.BrowseUntil.IsZero() || a.lyricScroll.Y != manual {
 				t.Fatalf("a new active line interrupted manual browsing: %v -> %v", manual, a.lyricScroll.Y)
 			}
 			tt.Scroll(180, 180, 0, 30)
 			tt.Advance(3 * time.Second)
-			if a.lyricBrowseUntil.IsZero() {
+			if a.lyricReading.BrowseUntil.IsZero() {
 				t.Fatal("a second scroll did not extend browsing")
 			}
 			line := lines[count/2+1]
 			if err := tt.Click(line.Text); err != nil || a.pl.Position() != line.At {
 				t.Fatalf("visible lyric could not seek: %v, position %v", err, a.pl.Position())
 			}
-			if !a.lyricBrowseUntil.IsZero() {
+			if !a.lyricReading.BrowseUntil.IsZero() {
 				t.Fatal("clicking the current line did not restore following")
 			}
 			tt.Scroll(180, 180, 0, 30)
 			tt.Advance(lyricBrowseDelay + 100*time.Millisecond)
-			if !a.lyricBrowseUntil.IsZero() {
+			if !a.lyricReading.BrowseUntil.IsZero() {
 				t.Fatal("following did not resume after scrolling stopped")
 			}
 			if dir != "" {
@@ -520,7 +520,7 @@ func TestLyricManualResizeKeepsReadingPosition(t *testing.T) {
 		return 0
 	}
 	before := firstVisible()
-	if a.lyricBrowseUntil.IsZero() || before == 0 {
+	if a.lyricReading.BrowseUntil.IsZero() || before == 0 {
 		t.Fatal("manual browsing did not start")
 	}
 	tt.SetSize(260, 400)
@@ -551,7 +551,7 @@ func TestImmersiveLyricsFollowPlayerSeekWhileBrowsing(t *testing.T) {
 				a.pl.Seek(lines[6].At)
 				tt.Frame()
 				tt.Scroll(120, 120, 0, 80)
-				if a.lyricBrowseUntil.IsZero() {
+				if a.lyricReading.BrowseUntil.IsZero() {
 					t.Fatal("manual scroll did not enter browsing mode")
 				}
 				// System media controls call this same player entry point.
@@ -559,8 +559,8 @@ func TestImmersiveLyricsFollowPlayerSeekWhileBrowsing(t *testing.T) {
 				a.pl.Seek(lines[target].At)
 				tt.Frame()
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[target].Text)
-				if !a.lyricBrowseUntil.IsZero() || a.lyricAt != target || !ok || row.Offscreen {
-					t.Fatalf("seek did not restore following: row=%+v, active=%d", row, a.lyricAt)
+				if !a.lyricReading.BrowseUntil.IsZero() || a.lyricReading.At != target || !ok || row.Offscreen {
+					t.Fatalf("seek did not restore following: row=%+v, active=%d", row, a.lyricReading.At)
 				}
 			})
 		}

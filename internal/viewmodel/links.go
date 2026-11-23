@@ -86,6 +86,7 @@ func (m *Links) Open(link netease.MusicLink, s LinkServices) {
 	if link.Kind == "short" {
 		ctx, generation := m.request()
 		resolve := s.Resolve
+		current, playing := s.Player.Current(), s.Player.Playing()
 		go func() {
 			resolved, err := resolve(ctx, link)
 			s.Post(func() {
@@ -93,6 +94,9 @@ func (m *Links) Open(link netease.MusicLink, s LinkServices) {
 					return
 				}
 				m.Cancel()
+				if s.Player.Current() != current || s.Player.Playing() != playing {
+					return
+				}
 				if err != nil {
 					s.Notify(LinkError(err))
 					return

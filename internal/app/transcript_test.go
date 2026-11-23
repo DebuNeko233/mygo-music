@@ -16,15 +16,15 @@ import (
 func TestTranscriptKeepsTheLatestWrite(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
-	a.captions.program = 7
-	a.captions.tr = &transcript{
+	a.captions.Program = 7
+	a.captions.Transcript = &transcript{
 		Model:    speech.ModelName,
 		Spans:    []span{{0, time.Minute}},
 		Segments: []speech.Segment{{Start: 0, End: time.Second, Text: "一"}},
 	}
 	first := a.transcriptWrite()
 	// The episode goes on being written down before the first write lands.
-	a.captions.tr.Segments = append(a.captions.tr.Segments, speech.Segment{Start: time.Second, End: 2 * time.Second, Text: "二"})
+	a.captions.Transcript.Segments = append(a.captions.Transcript.Segments, speech.Segment{Start: time.Second, End: 2 * time.Second, Text: "二"})
 	second := a.transcriptWrite()
 	if first == nil || second == nil {
 		t.Fatal("nothing to write")

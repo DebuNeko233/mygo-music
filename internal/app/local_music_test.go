@@ -13,6 +13,7 @@ import (
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // A local song's queue menu removes its entry instead of offering to add it again.
@@ -26,7 +27,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	a.pl.Cue([]netease.Track{current})
 	a.pl.Hold(17 * time.Second)
 	a.pl.SetLyrics(nil)
-	a.comments = commentState{track: current.Key(), loaded: true}
+	a.comments = viewmodel.Comments{Track: current.Key(), Loaded: true}
 	a.nav.Current = route{Page: pageLocal}
 	tt := ui.NewTester(a.view, 1200, 800)
 

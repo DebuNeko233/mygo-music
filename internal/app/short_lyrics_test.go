@@ -42,10 +42,10 @@ func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.
 	// to check the layout, including when font metrics make a row taller.
 	top, bottom := first.Y, last.Y+last.H
 	const unscale = (1/inactiveTimedLyricScale - 1) / 2
-	if a.lyricAt != 0 {
+	if a.lyricReading.At != 0 {
 		top -= first.H * unscale
 	}
-	if a.lyricAt != len(lines)-1 {
+	if a.lyricReading.At != len(lines)-1 {
 		bottom += last.H * unscale
 	}
 	if center := (top + bottom) / 2; math.Abs(float64(center-float32(h)/2)) > 2 {
@@ -272,7 +272,7 @@ func TestImmersiveLyricsFollowAfterRefresh(t *testing.T) {
 	a.pl.Hold(8 * time.Second)
 	tt.Frame()
 	tt.Scroll(160, 100, 0, 240)
-	if a.lyricBrowseUntil.IsZero() {
+	if a.lyricReading.BrowseUntil.IsZero() {
 		t.Fatal("manual scrolling did not enter browsing mode")
 	}
 	for i := range lines {
@@ -281,7 +281,7 @@ func TestImmersiveLyricsFollowAfterRefresh(t *testing.T) {
 	a.pl.SetLyrics(lines)
 	tt.Frame()
 	row, ok := tt.AccessByRole(ui.RoleButton, lines[8].Text)
-	if !ok || row.Offscreen || !a.lyricBrowseUntil.IsZero() || a.lyricAt != 8 {
-		t.Fatalf("refreshed lyrics did not follow the current line: row=%+v, index=%d", row, a.lyricAt)
+	if !ok || row.Offscreen || !a.lyricReading.BrowseUntil.IsZero() || a.lyricReading.At != 8 {
+		t.Fatalf("refreshed lyrics did not follow the current line: row=%+v, index=%d", row, a.lyricReading.At)
 	}
 }

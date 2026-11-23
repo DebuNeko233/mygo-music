@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // These load a page of a thread's comments, and like a comment or unlike
@@ -16,74 +17,21 @@ var (
 	likeComment    = netease.LikeComment
 )
 
-// commentState is the comments of the song or episode Now Playing shows:
-// the hot ones, and the latest, loaded a page at a time as they scroll.
-type commentState struct {
-	track    int64
-	thread   string // whose comments they are, as NetEase names it
-	hot      []netease.Comment
-	quietHot []*netease.Comment
-	latest   []netease.Comment
-	total    int
-	more     bool
-	loaded   bool
-	loading  bool
-	err      string
-	scroll   ui.ScrollState
+func (a *app) commentServices() viewmodel.CommentServices {
+	return viewmodel.CommentServices{Post: a.detailPost(), Fetch: threadComments, Like: likeComment, Notify: func(message string) { a.toast = message }}
 }
-
-// commentPage is how many comments a page loads.
-const commentPage = 30
-
-// commentsFor makes the comments those of tr, loading their first page
-// once it changed: Now Playing does it as it shows, for the count on the
-// pane's tab.
-func (a *app) commentsFor(tr *netease.Track) *commentState {
-	cs := &a.comments
-	if cs.track != tr.ID {
-		*cs = commentState{track: tr.ID, thread: tr.Thread()}
-		a.loadComments()
+func (a *app) resetComments() { a.comments.Reset(); a.commentScroll = ui.ScrollState{} }
+func (a *app) commentsFor(tr *netease.Track) *viewmodel.Comments {
+	if a.comments.Track != tr.Key() {
+		a.commentScroll = ui.ScrollState{}
+		a.comments.For(tr, a.commentServices())
 	}
-	return cs
+	return &a.comments
 }
-
-// loadComments loads the next page of comments.
 func (a *app) loadComments() {
-	cs := &a.comments
-	if cs.loading {
-		return
+	if !a.comments.Loading {
+		a.comments.Load(a.commentServices())
 	}
-	thread, offset := cs.thread, len(cs.latest)
-	cs.loading, cs.err = true, ""
-	fetch := threadComments
-	go func() {
-		page, err := fetch(thread, offset, commentPage)
-		a.post(func() {
-			if cs.thread != thread {
-				return
-			}
-			cs.loading = false
-			if err != nil {
-				cs.err = "评论加载失败"
-				return
-			}
-			cs.loaded = true
-			if offset == 0 {
-				cs.setHot(page.Hot)
-			}
-			// New comments shift the pages: those already shown come again.
-			seen := make(map[int64]bool, len(cs.latest))
-			for _, cm := range cs.latest {
-				seen[cm.ID] = true
-			}
-			for _, cm := range page.Latest {
-				if !seen[cm.ID] {
-					cs.latest = append(cs.latest, cm)
-				}
-			}
-			cs.total, cs.more = page.Total, page.More && len(page.Latest) > 0
-		})
-	}()
 }
 
 // commentsTab names the comments' pane, with how many there are.
@@ -98,9 +46,9 @@ func (a *app) commentsTab() string {
 // while the next one's loads, so that it rolls from one to the other.
 func (a *app) commentCount() int {
 	switch cs := &a.comments; {
-	case cs.loaded:
-		return cs.total
-	case cs.err != "":
+	case cs.Loaded:
+		return cs.Total
+	case cs.Error != "":
 		return 0
 	}
 	return a.tabCount.n
@@ -186,8 +134,8 @@ type commentKey struct {
 // which load on as they scroll into view.
 func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 	cs := a.commentsFor(tr)
-	if len(cs.hot) == 0 && len(cs.latest) == 0 {
-		if cs.loading || !cs.loaded && cs.err == "" {
+	if len(cs.Hot) == 0 && len(cs.Latest) == 0 {
+		if cs.Loading || !cs.Loaded && cs.Error == "" {
 			ui.Column(c).Grow(1).Padding(4, 8, 0, 0).Gap(2).Children(func() {
 				s := npShimmer(c)
 				s.text(c, 13, 1.3).Width(56).Margin(18, 12, 6, 12)
@@ -197,8 +145,8 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 		}
 		ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
 			switch {
-			case cs.err != "":
-				ui.Text(c, cs.err).FontSize(15).TextColor(white.Alpha(0.5))
+			case cs.Error != "":
+				ui.Text(c, cs.Error).FontSize(15).TextColor(white.Alpha(0.5))
 				if pillButton(c.Key("retry"), iconComment, "重试", white.Alpha(0.14), white).Clicked() {
 					a.loadComments()
 				}
@@ -210,27 +158,27 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 		return
 	}
 	now := c.Now()
-	scroll := ui.Scroll(c.Key("comments")).Grow(1).TrackScroll(&cs.scroll).Padding(4, 8, 48, 0)
+	scroll := ui.Scroll(c.Key("comments")).Grow(1).TrackScroll(&a.commentScroll).Padding(4, 8, 48, 0)
 	var end ui.Rect
 	scroll.Children(func() {
 		ui.Column(c).Gap(2).Children(func() {
-			if len(cs.hot) > 0 {
+			if len(cs.Hot) > 0 {
 				commentHeading(c, "精彩评论")
-				for i := range cs.hot {
-					a.commentRow(c.Key(commentKey{true, cs.hot[i].ID}), &cs.hot[i], now)
+				for i := range cs.Hot {
+					a.commentRow(c.Key(commentKey{true, cs.Hot[i].ID}), &cs.Hot[i], now)
 				}
 			}
-			commentHeading(c, "最新评论 "+count(cs.total))
-			for i := range cs.latest {
-				a.commentRow(c.Key(commentKey{false, cs.latest[i].ID}), &cs.latest[i], now)
+			commentHeading(c, "最新评论 "+count(cs.Total))
+			for i := range cs.Latest {
+				a.commentRow(c.Key(commentKey{false, cs.Latest[i].ID}), &cs.Latest[i], now)
 			}
-			if cs.loading {
+			if cs.Loading {
 				commentSkeleton(c.Key("more"), npShimmer(c), 2)
 			}
 			ui.Row(c.Key("foot")).Height(56).Center().Children(func() {
 				switch {
-				case cs.loading:
-				case cs.err != "":
+				case cs.Loading:
+				case cs.Error != "":
 					retry := ui.ButtonBase(c.Key("retry")).Padding(6, 14).Radius(999).Background(white.Alpha(0.1)).Label("重试")
 					retry.Children(func() {
 						ui.Text(c, "加载失败，点按重试").FontSize(12.5).TextColor(white.Alpha(0.7))
@@ -238,7 +186,7 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 					if retry.Clicked() {
 						a.loadComments()
 					}
-				case !cs.more:
+				case !cs.More:
 					ui.Text(c, "没有更多评论了").FontSize(12).TextColor(white.Alpha(0.35))
 				}
 			})
@@ -246,7 +194,7 @@ func (a *app) commentsPane(c *ui.Context, tr *netease.Track) {
 		})
 	})
 	// The next page, once the foot is within a screen of coming into view.
-	if box := scroll.Bounds(); cs.more && !cs.loading && cs.err == "" && end.W > 0 && end.Y < box.Y+box.H*2 {
+	if box := scroll.Bounds(); cs.More && !cs.Loading && cs.Error == "" && end.W > 0 && end.Y < box.Y+box.H*2 {
 		a.loadComments()
 	}
 }
@@ -320,50 +268,7 @@ func (a *app) toggleCommentLike(id int64) {
 		a.openLogin()
 		return
 	}
-	cs := &a.comments
-	thread, like := cs.thread, true
-	if cm := cs.find(id); cm != nil {
-		like = !cm.Liked
-	}
-	cs.setLiked(id, like)
-	go func() {
-		err := likeComment(thread, id, like)
-		a.post(func() {
-			if err != nil && cs.thread == thread {
-				cs.setLiked(id, !like)
-				a.toast = "操作失败，请稍后再试"
-			}
-		})
-	}()
-}
-
-// find returns the comment id, hot or latest, or nil.
-func (cs *commentState) find(id int64) *netease.Comment {
-	for _, list := range [][]netease.Comment{cs.hot, cs.latest} {
-		for i := range list {
-			if list[i].ID == id {
-				return &list[i]
-			}
-		}
-	}
-	return nil
-}
-
-// setLiked marks the comment id liked, or not, counting the listener in or
-// out, both where it is hot and where it is latest.
-func (cs *commentState) setLiked(id int64, like bool) {
-	for _, list := range [][]netease.Comment{cs.hot, cs.latest} {
-		for i := range list {
-			if cm := &list[i]; cm.ID == id && cm.Liked != like {
-				cm.Liked = like
-				if like {
-					cm.LikedCount++
-				} else {
-					cm.LikedCount = max(cm.LikedCount-1, 0)
-				}
-			}
-		}
-	}
+	a.comments.ToggleLike(id, a.commentServices())
 }
 
 // avatar shows a listener's picture, round, over empty while it loads.

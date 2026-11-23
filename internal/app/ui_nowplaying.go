@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 var white = ui.RGB(255, 255, 255)
@@ -595,21 +596,16 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 	if len(lines) > 0 {
 		first = &lines[0]
 	}
-	if a.lyricTrack != tr.Key() || a.lyricFirst != first {
-		a.lyricTrack, a.lyricFirst = tr.Key(), first
+	if a.lyricReading.Select(tr.Key(), first) {
 		a.lyricScroll = ui.ScrollState{}
 		a.seekLyricFollow()
 	}
-	if revision := pl.SeekRevision(); revision != a.lyricSeekRevision {
-		a.lyricSeekRevision = revision
-		if revision == a.lyricClickSeekRevision && a.lyricAt != lyricInitialFollow {
-			// A clicked row is already in view. Follow it from the visible
-			// position, including when the listener had scrolled manually.
-			a.lyricGlide.offset = a.lyricScroll.Y
-			a.resumeLyricFollow()
-		} else if a.settings.LyricEdgeFade {
-			a.seekLyricFollow()
-		}
+	switch a.lyricReading.FollowSeek(pl.SeekRevision(), a.settings.LyricEdgeFade) {
+	case viewmodel.LyricResumeFollow:
+		a.lyricGlide.offset = a.lyricScroll.Y
+		a.resumeLyricFollow()
+	case viewmodel.LyricInitialFollow:
+		a.seekLyricFollow()
 	}
 	hasSinging := display.HasSinging()
 	if !hasSinging {
@@ -717,7 +713,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 		style.closeBounds = closeBounds
 		scroll.HandleInput(func(ev ui.InputEvent) bool {
 			if ev.Kind == ui.InputScroll && ev.DY != 0 && ev.Mods&ui.Shift == 0 && a.lyricScroll.MaxY > 0 {
-				a.lyricBrowseUntil = ev.Time.Add(lyricBrowseDelay)
+				a.lyricReading.Browse(ev.Time)
 			}
 			return false
 		})
@@ -737,50 +733,38 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, height float32, close
 			c.After(gap.from - pos)
 		}
 	} else {
-		a.lyricBrowseUntil = time.Time{}
+		a.lyricReading.BrowseUntil = time.Time{}
 		a.lyricResizeAnchor = lyricReadingAnchor{}
 	}
 	a.timedLines(c, scroll, lines, cur, style, nil)
 }
 
-const lyricBrowseDelay = 4 * time.Second
+const lyricBrowseDelay = viewmodel.LyricBrowseDelay
+const lyricInitialFollow = viewmodel.LyricInitialFollow
+const lyricResumeFollow = viewmodel.LyricResumeFollow
 
-// The scroll state's offset differs from the one we applied when the
-// listener moves the wheel, touchpad, or scrollbar.
+// Layout owns the scroll/glide; the ViewModel decides when manual browsing ends.
 func (a *app) lyricBrowsing(c *ui.Context) bool {
 	if a.lyricGlide.posed && a.lyricScroll.Y != a.lyricGlide.offset {
-		a.lyricBrowseUntil = c.Now().Add(lyricBrowseDelay)
+		a.lyricReading.Browse(c.Now())
 	}
-	if a.lyricBrowseUntil.IsZero() {
-		return false
+	browsing, after, resumed := a.lyricReading.Browsing(c.Now(), a.pl.Playing())
+	if after > 0 {
+		c.After(after)
 	}
-	if !a.pl.Playing() {
-		return true
+	if resumed {
+		a.resumeLyricFollow()
 	}
-	if left := a.lyricBrowseUntil.Sub(c.Now()); left > 0 {
-		c.After(left)
-		return true
-	}
-	a.resumeLyricFollow()
-	return false
+	return browsing
 }
-
-const lyricInitialFollow = -2
-
-// Resume following even if playback is still on the same line.
-const lyricResumeFollow = -3
-
 func (a *app) resumeLyricFollow() {
-	a.lyricBrowseUntil = time.Time{}
+	a.lyricReading.Resume()
 	a.lyricResizeAnchor = lyricReadingAnchor{}
-	a.lyricAt = lyricResumeFollow
 }
-
 func (a *app) seekLyricFollow() {
-	a.lyricBrowseUntil = time.Time{}
+	a.lyricReading.Seek()
 	a.lyricResizeAnchor = lyricReadingAnchor{}
 	a.lyricGlide = lyricGlide{}
-	a.lyricAt = lyricInitialFollow
 }
 
 type lyricReadingAnchor struct {
@@ -825,7 +809,7 @@ type linesStyle struct {
 // viewport changes; cur -1 precedes the first line. Clicking a line seeks
 // to it. foot, if set, follows the lines.
 func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, cur int, st linesStyle, foot func()) {
-	initialFollow := st.centerShort && a.lyricAt == lyricInitialFollow
+	initialFollow := st.centerShort && a.lyricReading.At == lyricInitialFollow
 	// Bounds below belong to the last layout. A width-only window resize
 	// may leave the cover and pane top unchanged: schedule a pass after the
 	// new text wrapping is laid out, even if this pass sees the old viewport.
@@ -914,9 +898,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 		}
 		if textH <= box.H {
 			a.lyricBlurPass = nil
-			a.lyricAt = cur
+			a.lyricReading.At = cur
 			a.lyricViewportW, a.lyricViewportH = box.W, box.H
-			a.lyricScroll.Y, a.lyricGlide, a.lyricBrowseUntil = 0, lyricGlide{}, time.Time{}
+			a.lyricScroll.Y, a.lyricGlide, a.lyricReading.BrowseUntil = 0, lyricGlide{}, time.Time{}
 			a.lyricResizeAnchor = lyricReadingAnchor{}
 			return
 		}
@@ -931,7 +915,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	heightChanged := st.centerShort && box.H != a.lyricViewportH && a.lyricViewportH > 0
 	// A settled line should move with the viewport. Leave active glides
 	// and manual scrolling alone while the text is remeasured.
-	snapResize := heightChanged && cur == a.lyricAt && !st.browsing &&
+	snapResize := heightChanged && cur == a.lyricReading.At && !st.browsing &&
 		(!a.lyricGlide.posed || a.lyricScroll.Y == a.lyricGlide.offset) &&
 		!a.lyricGlide.pending && !moving.Transitioning()
 	if st.immersive {
@@ -975,7 +959,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
 	resized := box.W > 0 && box.H > 0 && (box.W != a.lyricViewportW || box.H != a.lyricViewportH)
-	if st.shouldFollow(cur != a.lyricAt, resized, intro.gap.intro) {
+	if st.shouldFollow(cur != a.lyricReading.At, resized, intro.gap.intro) {
 		target := float32(0)
 		followRow := active
 		if st.followRow(cur, intro.gap.intro) != cur {
@@ -997,8 +981,8 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 			}
 		}
 		snap := st.immersive && (intro.gap.intro || !a.lyricGlide.posed ||
-			lyricShouldSnap(c, target, a.lyricScroll.Y, box.H, a.lyricAt == lyricResumeFollow))
-		a.lyricAt = cur
+			lyricShouldSnap(c, target, a.lyricScroll.Y, box.H, a.lyricReading.At == lyricResumeFollow))
+		a.lyricReading.At = cur
 		a.lyricViewportW, a.lyricViewportH = box.W, box.H
 		target = min(max(0, target), maxY)
 		if initialFollow || snapResize {

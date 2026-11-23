@@ -14,6 +14,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/speech"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 const sec = time.Second
@@ -33,8 +34,8 @@ func TestTranscriptSavesOutOfOrder(t *testing.T) {
 	isolateTranscripts(t)
 	a := &app{}
 	snapshot := func(program int64, end time.Duration) func() {
-		a.captions.program = program
-		a.captions.tr = &transcript{Model: speech.ModelName, Spans: []span{{0, end}}}
+		a.captions.Program = program
+		a.captions.Transcript = &transcript{Model: speech.ModelName, Spans: []span{{0, end}}}
 		write := a.transcriptWrite()
 		if write == nil {
 			t.Fatal("no transcript write")
@@ -73,104 +74,41 @@ func TestTranscriptReloadWhileSavePending(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.pl.Cue([]netease.Track{{ID: 5, ProgramID: 42}})
-	a.captions.program = 42
+	a.captions.Program = 42
 	latest := &transcript{Model: speech.ModelName, Spans: []span{{0, sec}}}
-	a.captions.tr = latest
+	a.captions.Transcript = latest
 	write := a.transcriptWrite()
 	if write == nil {
 		t.Fatal("no transcript write")
 	}
 	defer write()
 
-	a.captions.tr = nil
-	a.loadTranscript(42)
+	a.captions.Transcript = nil
+	a.captions.Load(42, a.captionServices())
 	refreshPost(t, posts)
-	if got := a.captions.tr; got == nil || !slices.Equal(got.Spans, latest.Spans) {
+	if got := a.captions.Transcript; got == nil || !slices.Equal(got.Spans, latest.Spans) {
 		t.Fatalf("loaded %+v, want pending coverage %v", got, latest.Spans)
-	}
-}
-
-// Transcribing starts where the listener is, or past what is written down
-// there already, and stops where what was written down before begins.
-// With all from there on written down, it goes back for what is not:
-// an episode played to its end, then given the model, wrote down nothing
-// and said it had no speech.
-func TestCaptionStart(t *testing.T) {
-	spans := []span{{30 * sec, 60 * sec}, {300 * sec, 400 * sec}}
-	for _, c := range []struct {
-		pos, from, until time.Duration
-		ok               bool
-	}{
-		{10 * sec, 10 * sec, 30 * sec, true},
-		{40 * sec, 60 * sec, 300 * sec, true},
-		{100 * sec, 100 * sec, 300 * sec, true},
-		{350 * sec, 400 * sec, 0, true},
-		{500 * sec, 500 * sec, 0, true},
-		{599500 * time.Millisecond, 0, 30 * sec, true},
-		{600 * sec, 0, 30 * sec, true},
-	} {
-		from, until, ok := captionStart(spans, c.pos, 600*sec)
-		if from != c.from || until != c.until || ok != c.ok {
-			t.Errorf("at %v: %v to %v, %v; want %v to %v, %v", c.pos, from, until, ok, c.from, c.until, c.ok)
-		}
-	}
-	if from, until, ok := captionStart([]span{{0, 60 * sec}}, 600*sec, 600*sec); from != 60*sec || until != 0 || !ok {
-		t.Errorf("at the end with the start written down: %v to %v, %v", from, until, ok)
-	}
-	for _, pos := range []time.Duration{0, 300 * sec, 600 * sec} {
-		if _, _, ok := captionStart([]span{{0, 600 * sec}}, pos, 600*sec); ok {
-			t.Errorf("at %v: an episode written down whole starts again", pos)
-		}
-	}
-}
-
-// Stretches written down merge where they meet, in order.
-func TestAddSpan(t *testing.T) {
-	spans := addSpan(nil, span{100 * sec, 200 * sec})
-	spans = addSpan(spans, span{0, 50 * sec})
-	spans = addSpan(spans, span{150 * sec, 250 * sec})
-	if want := []span{{0, 50 * sec}, {100 * sec, 250 * sec}}; !slices.Equal(spans, want) {
-		t.Fatalf("%v, want %v", spans, want)
-	}
-	if spans = addSpan(spans, span{50 * sec, 100 * sec}); !slices.Equal(spans, []span{{0, 250 * sec}}) {
-		t.Errorf("%v: the gap filled should leave one span", spans)
-	}
-}
-
-// A transcription started again where one was stopped writes down again
-// what that one did last: the transcript keeps it once.
-func TestAddSegmentOnce(t *testing.T) {
-	segs := addSegment(nil, speech.Segment{Start: 10 * sec, End: 20 * sec, Text: "一"})
-	segs = addSegment(segs, speech.Segment{Start: 30 * sec, End: 40 * sec, Text: "三"})
-	segs = addSegment(segs, speech.Segment{Start: 21 * sec, End: 29 * sec, Text: "二"})
-	segs = addSegment(segs, speech.Segment{Start: 10500 * time.Millisecond, End: 20 * sec, Text: "一"})
-	var got []string
-	for _, s := range segs {
-		got = append(got, s.Text)
-	}
-	if !slices.Equal(got, []string{"一", "二", "三"}) {
-		t.Errorf("%q", got)
 	}
 }
 
 // A cancelled transcription's queued callbacks must not write into its
 // replacement for the same episode.
 func TestCancelledCaptionWorkIsIgnored(t *testing.T) {
-	old := &captionWork{program: 42}
-	current := &captionWork{program: 42, from: 10 * sec}
+	old := &viewmodel.CaptionWork{Program: 42}
+	current := &viewmodel.CaptionWork{Program: 42, From: 10 * sec}
 	a := newTestApp()
-	a.captions.program = 42
-	a.captions.tr = &transcript{}
-	a.captions.work = current
-	a.captionSaid(old, speech.Segment{Start: 0, End: sec, Text: "旧"})
-	a.captionHeard(old, sec)
-	if len(a.captions.tr.Segments) != 0 || len(a.captions.tr.Spans) != 0 {
-		t.Fatalf("cancelled work changed the transcript: %+v", a.captions.tr)
+	a.captions.Program = 42
+	a.captions.Transcript = &transcript{}
+	a.captions.Work = current
+	a.captions.Said(old, speech.Segment{Start: 0, End: sec, Text: "旧"})
+	a.captions.Heard(old, sec, a.captionServices())
+	if len(a.captions.Transcript.Segments) != 0 || len(a.captions.Transcript.Spans) != 0 {
+		t.Fatalf("cancelled work changed the transcript: %+v", a.captions.Transcript)
 	}
-	a.captionSaid(current, speech.Segment{Start: 10 * sec, End: 11 * sec, Text: "新"})
-	a.captionHeard(current, 11*sec)
-	if len(a.captions.tr.Segments) != 1 || len(a.captions.tr.Spans) != 1 {
-		t.Fatalf("current work did not write: %+v", a.captions.tr)
+	a.captions.Said(current, speech.Segment{Start: 10 * sec, End: 11 * sec, Text: "新"})
+	a.captions.Heard(current, 11*sec, a.captionServices())
+	if len(a.captions.Transcript.Segments) != 1 || len(a.captions.Transcript.Spans) != 1 {
+		t.Fatalf("current work did not write: %+v", a.captions.Transcript)
 	}
 }
 
@@ -185,7 +123,7 @@ func captionsTestApp(t *testing.T, installed bool) *app {
 	a := newTestApp()
 	// The look for the model runs on a goroutine of its own; these tests
 	// have its answer already.
-	a.captions.model.checked, a.captions.model.installed = true, installed
+	a.captions.Model.Checked, a.captions.Model.Installed = true, installed
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "510 泰国侨批沉浮录", ProgramID: 42, Duration: 600000, Description: "下南洋"}})
 	a.playbackState.Open = true
@@ -223,7 +161,7 @@ func TestDownloadModelFromCaptions(t *testing.T) {
 		t.Fatal("the download did not start")
 	}
 	tt.Frame()
-	if !a.captions.model.downloading {
+	if !a.captions.Model.Downloading {
 		t.Fatal("not downloading")
 	}
 	if err := tt.Click("取消"); err != nil {
@@ -239,9 +177,9 @@ func TestCaptionClickSeeks(t *testing.T) {
 		{Start: 12 * sec, End: 16 * sec, Text: "有些话题是绕不开的。"},
 		{Start: 17 * sec, End: 20 * sec, Text: "比如说，我的婚姻结束了。"},
 	}
-	a.captions.program = 42
-	a.captions.tr = &transcript{Model: speech.ModelName, Segments: segs, Spans: []span{{0, 20 * sec}}}
-	a.captions.lines = speech.Lines(segs)
+	a.captions.Program = 42
+	a.captions.Transcript = &transcript{Model: speech.ModelName, Segments: segs, Spans: []span{{0, 20 * sec}}}
+	a.captions.Lines = speech.Lines(segs)
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
@@ -266,14 +204,14 @@ func TestCaptionsOnTheirWay(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	for _, c := range []struct {
 		name  string
-		state captionState
+		state viewmodel.Captions
 	}{
-		{"after a song", captionState{}},
-		{"after another episode", captionState{program: 41, tr: &transcript{Spans: []span{{0, 600 * sec}}}, lines: speech.Lines([]speech.Segment{{Start: 0, End: sec, Text: "上一期"}})}},
-		{"loaded, the audio not yet", captionState{program: 42, tr: &transcript{Model: speech.ModelName}}},
+		{"after a song", viewmodel.Captions{}},
+		{"after another episode", viewmodel.Captions{Program: 41, Transcript: &transcript{Spans: []span{{0, 600 * sec}}}, Lines: speech.Lines([]speech.Segment{{Start: 0, End: sec, Text: "上一期"}})}},
+		{"loaded, the audio not yet", viewmodel.Captions{Program: 42, Transcript: &transcript{Model: speech.ModelName}}},
 	} {
 		a.captions = c.state
-		a.captions.model = modelState{checked: true, installed: true}
+		a.captions.Model = viewmodel.CaptionModel{Checked: true, Installed: true}
 		tt.Frame()
 		tt.Frame()
 		if !tt.HasText("正在识别…") || tt.HasText("上一期") || tt.HasText("这期节目没有识别到语音") || tt.HasText("字幕生成失败") {
@@ -281,7 +219,7 @@ func TestCaptionsOnTheirWay(t *testing.T) {
 		}
 	}
 	// Written down whole, with nothing said, there is no speech.
-	a.captions = captionState{program: 42, tr: &transcript{Spans: []span{{0, 600 * sec}}}, model: modelState{checked: true, installed: true}}
+	a.captions = viewmodel.Captions{Program: 42, Transcript: &transcript{Spans: []span{{0, 600 * sec}}}, Model: viewmodel.CaptionModel{Checked: true, Installed: true}}
 	tt.Frame()
 	if !tt.HasText("这期节目没有识别到语音") {
 		t.Errorf("written down whole: %q", tt.Texts())

@@ -124,14 +124,14 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 	}
 	m, s, g := &a.timedList, &a.lyricScroll, &a.lyricGlide
 	resized := box.W != a.lyricViewportW || box.H != a.lyricViewportH
-	revision := a.captions.revision
+	revision := a.captions.Revision
 	replaced := m.revision != revision
 	if st.centerShort {
 		revision = 0
 		replaced = m.first != &lines[0]
 	}
-	changedLine := cur != a.lyricAt
-	initialFollow := st.centerShort && a.lyricAt == lyricInitialFollow
+	changedLine := cur != a.lyricReading.At
+	initialFollow := st.centerShort && a.lyricReading.At == lyricInitialFollow
 	userMoved := g.posed && s.Y != g.offset
 	if replaced || changedLine {
 		m.manual = false
@@ -222,7 +222,7 @@ func (a *app) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Li
 		}
 	}
 	if !st.browsing {
-		a.lyricAt = cur
+		a.lyricReading.At = cur
 	}
 	heightChanged := st.centerShort && box.H != a.lyricViewportH
 	a.lyricViewportW, a.lyricViewportH = box.W, box.H

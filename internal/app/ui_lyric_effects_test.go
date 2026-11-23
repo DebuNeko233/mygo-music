@@ -305,7 +305,7 @@ func TestLyricClickGlidesToReadingPosition(t *testing.T) {
 						tt.Scroll(120, 120, 0, 70)
 						target = lines[9]
 					}
-					if immersive && browse && a.lyricBrowseUntil.IsZero() {
+					if immersive && browse && a.lyricReading.BrowseUntil.IsZero() {
 						t.Fatal("manual scrolling did not enter browsing mode")
 					}
 					tt.SetPreferences(ui.Preferences{})
@@ -321,7 +321,7 @@ func TestLyricClickGlidesToReadingPosition(t *testing.T) {
 					if err := tt.Click(target.Text); err != nil {
 						t.Fatal(err)
 					}
-					if a.pl.Position() != target.At || !a.lyricBrowseUntil.IsZero() {
+					if a.pl.Position() != target.At || !a.lyricReading.BrowseUntil.IsZero() {
 						t.Fatalf("click did not seek and resume following: position %v", a.pl.Position())
 					}
 					start := rowY()

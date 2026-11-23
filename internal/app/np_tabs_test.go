@@ -15,7 +15,7 @@ import (
 func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.comments.loaded = true
+	a.comments.Loaded = true
 	var left float32
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		anchor := ui.Box(c).Absolute().Left(left).Top(20).Size(280, npTabsHeight)
@@ -23,7 +23,7 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 	}, 640, 120, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for _, left = range []float32{0, 50, 360} {
 		for _, count := range []int{0, 32000, 12345678} {
-			a.comments.total = count
+			a.comments.Total = count
 			a.playbackState.Pane = paneLyrics
 			tt.Frame()
 			tt.Advance(time.Second)

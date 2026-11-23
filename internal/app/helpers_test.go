@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // isolateUserData keeps settings, sessions and transcripts in the test directory.
@@ -18,7 +19,7 @@ func isolateUserData(t *testing.T) {
 
 func newTestApp() *app {
 	a := &app{
-		lyricAt: -1, queueAt: -1,
+		lyricReading: viewmodel.LyricReading{At: -1}, queueAt: -1,
 	}
 	a.library.Reset()
 	a.artists.Reset()

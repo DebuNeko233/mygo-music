@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // The player's bubble opens the current song or episode's comments, not its lyrics or description.
@@ -34,7 +35,7 @@ func TestPlayerBarOpensComments(t *testing.T) {
 			a.settings = defaultSettings()
 			a.settings.LyricsStage = true
 			a.playbackState.Pane = tc.pane
-			a.comments = commentState{track: 2, thread: "R_SO_4_2", loaded: true}
+			a.comments = viewmodel.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true}
 			a.pl.Cue([]netease.Track{tc.track})
 			a.pl.SetLyrics(nil)
 			a.pl.Hold(30 * time.Second)
@@ -50,7 +51,7 @@ func TestPlayerBarOpensComments(t *testing.T) {
 			}
 			refreshPost(t, posts)
 			tt.Frame()
-			if !a.playbackState.Open || a.playbackState.Pane != paneComments || !a.comments.loaded || a.comments.track != tc.track.ID {
+			if !a.playbackState.Open || a.playbackState.Pane != paneComments || !a.comments.Loaded || a.comments.Track != tc.track.ID {
 				t.Fatalf("Now Playing open %v on pane %d, comments %+v", a.playbackState.Open, a.playbackState.Pane, a.comments)
 			}
 			if !tt.HasText("好听") {
@@ -73,7 +74,7 @@ func TestPlayerBarCommentsWithoutTrack(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.playbackState.Open || a.playbackState.Pane != paneQueue || a.comments.loading {
+	if a.playbackState.Open || a.playbackState.Pane != paneQueue || a.comments.Loading {
 		t.Fatal("opened or loaded comments without a track")
 	}
 }

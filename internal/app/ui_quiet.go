@@ -2,12 +2,12 @@ package app
 
 import (
 	"time"
-	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // Through the quiet parts of a song, its intro, an interlude or its outro,
@@ -18,11 +18,11 @@ import (
 // listener turns them on (settings.HotComments).
 
 const (
-	quietLeast = 8 * time.Second         // the shortest quiet a comment shows in
-	quietLead  = 1200 * time.Millisecond // into the quiet before it shows
-	quietTail  = 1000 * time.Millisecond // before the singing, it is gone
-	quietSlot  = 10 * time.Second        // about how long each shows in a long quiet
-	quietRunes = 140                     // the longest comment shown
+	quietLeast = 8 * time.Second             // the shortest quiet a comment shows in
+	quietLead  = 1200 * time.Millisecond     // into the quiet before it shows
+	quietTail  = 1000 * time.Millisecond     // before the singing, it is gone
+	quietSlot  = 10 * time.Second            // about how long each shows in a long quiet
+	quietRunes = viewmodel.QuietCommentRunes // the longest comment shown
 )
 
 // quietState is the quiet parts of the song Now Playing shows, and the
@@ -37,19 +37,6 @@ type quietState struct {
 	cm     *netease.Comment
 }
 
-// setHot picks comments short enough to read in the gaps between lyrics.
-// Keep pointers to the originals so the card reflects likes made in the list.
-func (cs *commentState) setHot(hot []netease.Comment) {
-	clear(cs.quietHot)
-	cs.quietHot = cs.quietHot[:0]
-	cs.hot = hot
-	for i := range hot {
-		if n := utf8.RuneCountInString(hot[i].Content); n > 0 && n <= quietRunes {
-			cs.quietHot = append(cs.quietHot, &hot[i])
-		}
-	}
-}
-
 // quietComment returns the hot comment to show at pos, nil for none, and
 // how long until that changes, 0 for never.
 func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, pos time.Duration) (*netease.Comment, time.Duration) {
@@ -57,7 +44,7 @@ func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, 
 		return nil, 0
 	}
 	cs := &a.comments
-	if cs.track != tr.Key() || len(cs.quietHot) == 0 {
+	if cs.Track != tr.Key() || len(cs.QuietHot) == 0 {
 		return nil, 0
 	}
 	qs := &a.quiet
@@ -89,7 +76,7 @@ func (a *app) quietComment(tr *netease.Track, lines []lyrics.Line, loaded bool, 
 			if slot+1 < slots {
 				next = from + time.Duration(slot+1)*each
 			}
-			return cs.quietHot[(shown+slot)%len(cs.quietHot)], next - pos
+			return cs.QuietHot[(shown+slot)%len(cs.QuietHot)], next - pos
 		}
 		shown += slots
 	}

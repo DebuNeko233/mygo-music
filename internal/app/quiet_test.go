@@ -11,6 +11,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // quietApp is Now Playing a song sung from 20 s to 30 s, quiet before and
@@ -33,8 +34,8 @@ func quietApp(pos time.Duration) (*app, netease.Track, []lyrics.Line) {
 		{ID: 2, Content: "从前从前，有个人爱你很久", LikedCount: 31000},
 	}
 	hot[0].User.Nickname, hot[1].User.Nickname = "听众甲", "听众乙"
-	a.comments = commentState{track: tr.ID, loaded: true}
-	a.comments.setHot(hot)
+	a.comments = viewmodel.Comments{Track: tr.ID, Loaded: true}
+	a.comments.SetHot(hot)
 	return a, tr, lines
 }
 
@@ -74,7 +75,7 @@ func TestQuietComment(t *testing.T) {
 	}
 	a.settings.HotComments = true
 	// No hot comments, nothing shows.
-	a.comments.setHot(nil)
+	a.comments.SetHot(nil)
 	if cm, _ := a.quietComment(&tr, lines, true, 5*s); cm != nil {
 		t.Errorf("showed %q without hot comments", cm.Content)
 	}
@@ -114,12 +115,12 @@ func TestQuietCommentAfterHotListReplacement(t *testing.T) {
 	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil || cm.ID != 1 {
 		t.Fatal("expected the original hot comment")
 	}
-	a.comments.setHot([]netease.Comment{
+	a.comments.SetHot([]netease.Comment{
 		{ID: 3},
 		{ID: 4, Content: strings.Repeat("好", quietRunes+1)},
 		{ID: 5, Content: strings.Repeat("好", quietRunes)},
 	})
-	a.comments.hot[2].LikedCount++
+	a.comments.Hot[2].LikedCount++
 	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil || cm.ID != 5 || cm.LikedCount != 1 {
 		t.Fatalf("wrong replacement hot comment: %+v", cm)
 	}
@@ -162,7 +163,7 @@ func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
 				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
 			}, 320, 360)
 			tt.SetScale(0.25)
-			credit, comment := lines[0].Text, a.comments.quietHot[0].Content
+			credit, comment := lines[0].Text, a.comments.QuietHot[0].Content
 			check := func(phase string, wantCredit, wantComment bool) {
 				t.Helper()
 				if tt.HasText(credit) != wantCredit || tt.HasText(comment) != wantComment {

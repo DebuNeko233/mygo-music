@@ -246,7 +246,7 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 	}
 	for _, pane := range []int{paneStage, paneLyrics} {
 		a.playbackState.Pane = pane
-		a.comments.loaded, a.comments.total = true, 0
+		a.comments.Loaded, a.comments.Total = true, 0
 		settle()
 		start, startOK := tt.Find("歌词")
 		end, endOK := tt.Find("评论")
@@ -254,7 +254,7 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 			t.Fatalf("missing navigation tabs in pane %d", pane)
 		}
 		axis := (start.X + end.X + end.W) / 2
-		a.comments.total = 12345678
+		a.comments.Total = 12345678
 		settle()
 		start, startOK = tt.Find("歌词")
 		end, endOK = tt.Find(a.commentsTab())

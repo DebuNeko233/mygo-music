@@ -89,7 +89,7 @@ func (a *app) timedLine(c *ui.Context, l *lyrics.Line, relative int, width float
 	if line.Clicked() && !nearClose {
 		a.pl.Seek(l.At)
 		if st.centerShort {
-			a.lyricClickSeekRevision = a.pl.SeekRevision()
+			a.lyricReading.ClickSeekRevision = a.pl.SeekRevision()
 			c.AnimationFrame()
 		}
 	}

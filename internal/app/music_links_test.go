@@ -335,3 +335,21 @@ func TestMusicLinkBackCancelsPending(t *testing.T) {
 		t.Fatalf("pending link replaced back navigation: %+v", a.nav.Current)
 	}
 }
+
+// A short link also preserves playback selected manually while its redirect is resolving.
+func TestMusicLinkShortKeepsManualPlayback(t *testing.T) {
+	a := musicLinkApp(t)
+	posts := testPosts(a)
+	old := resolveMusicLink
+	t.Cleanup(func() { resolveMusicLink = old })
+	resolveMusicLink = func(context.Context, netease.MusicLink) (netease.MusicLink, error) {
+		return netease.MusicLink{Kind: "playlist", ID: 12}, nil
+	}
+	a.openMusicInput("https://163cn.tv/abc")
+	update := wait(t, posts, "short link")
+	a.pl.Cue([]netease.Track{{ID: 99}})
+	update()
+	if a.nav.Current.Page != pageHome || a.pl.Current() == nil || a.pl.Current().ID != 99 {
+		t.Fatal("short link overrode manual playback")
+	}
+}

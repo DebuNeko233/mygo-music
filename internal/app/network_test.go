@@ -174,7 +174,7 @@ func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	}
 	status.Online = true
 	a.networkChanged(status)
-	for a.pl.MetadataLoading() || a.comments.loading {
+	for a.pl.MetadataLoading() || a.comments.Loading {
 		refreshPost(t, posts)
 	}
 	tt.Frame()

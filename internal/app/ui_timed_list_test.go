@@ -11,6 +11,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/speech"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // A long translated song builds only nearby controls after a distant seek and resize.
@@ -122,10 +123,10 @@ func TestTimedListMeasuresOnlyRenderedWordText(t *testing.T) {
 func TestLongCaptionsWindow(t *testing.T) {
 	a := captionsTestApp(t, true)
 	cs := &a.captions
-	cs.program = 42
-	cs.tr = &transcript{Spans: []span{{0, 600 * sec}}}
+	cs.Program = 42
+	cs.Transcript = &transcript{Spans: []span{{0, 600 * sec}}}
 	for i := range 300 {
-		cs.lines = append(cs.lines, lyrics.Line{At: time.Duration(i) * sec, Text: fmt.Sprintf("第 %d 句字幕", i)})
+		cs.Lines = append(cs.Lines, lyrics.Line{At: time.Duration(i) * sec, Text: fmt.Sprintf("第 %d 句字幕", i)})
 	}
 	tt := ui.NewTester(func(c *ui.Context) { a.captionsPane(c, a.pl.Current(), 520) }, 440, 520)
 	a.pl.Seek(250 * sec)
@@ -146,10 +147,10 @@ func TestLongCaptionsWindow(t *testing.T) {
 func TestCaptionResizeKeepsManualPosition(t *testing.T) {
 	a := captionsTestApp(t, true)
 	cs := &a.captions
-	cs.program = 42
-	cs.tr = &transcript{Spans: []span{{0, 600 * sec}}}
+	cs.Program = 42
+	cs.Transcript = &transcript{Spans: []span{{0, 600 * sec}}}
 	for i := range 600 {
-		cs.lines = append(cs.lines, lyrics.Line{
+		cs.Lines = append(cs.Lines, lyrics.Line{
 			At:   time.Duration(i) * sec,
 			Text: fmt.Sprintf("第 %d 句字幕，缩窄窗口后应该可以继续阅读这段需要换行的内容", i),
 		})
@@ -169,7 +170,7 @@ func TestCaptionResizeKeepsManualPosition(t *testing.T) {
 			break
 		}
 	}
-	if anchor.Name == "" || anchor.Name == cs.lines[250].Text {
+	if anchor.Name == "" || anchor.Name == cs.Lines[250].Text {
 		t.Fatalf("no manually scrolled anchor: %+v", anchor)
 	}
 	for _, width := range []int{470, 420, 350, 285} {
@@ -188,12 +189,12 @@ func TestCaptionAppendKeepsManualPosition(t *testing.T) {
 	for _, count := range []int{timedListThreshold - 1, 300} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			a := captionsTestApp(t, true)
-			work := &captionWork{program: 42}
+			work := &viewmodel.CaptionWork{Program: 42}
 			cs := &a.captions
-			cs.program, cs.tr, cs.work = 42, &transcript{}, work
+			cs.Program, cs.Transcript, cs.Work = 42, &transcript{}, work
 			add := func(i int) {
 				at := time.Duration(i) * time.Second
-				a.captionSaid(work, speech.Segment{Start: at, End: at + 500*time.Millisecond, Text: fmt.Sprintf("Caption %03d", i)})
+				a.captions.Said(work, speech.Segment{Start: at, End: at + 500*time.Millisecond, Text: fmt.Sprintf("Caption %03d", i)})
 			}
 			for i := range count {
 				add(i)
@@ -232,21 +233,21 @@ func TestCaptionAppendKeepsManualPosition(t *testing.T) {
 // Caption language follows new text and out-of-order segments while duplicate segments leave the list alone.
 func TestCaptionLanguageAfterAppendAndInsert(t *testing.T) {
 	a := newTestApp()
-	work := &captionWork{program: 42}
-	a.captions = captionState{program: 42, tr: &transcript{}, work: work}
+	work := &viewmodel.CaptionWork{Program: 42}
+	a.captions = viewmodel.Captions{Program: 42, Transcript: &transcript{}, Work: work}
 	english := speech.Segment{Start: 5 * sec, End: 7 * sec, Text: "First caption"}
 	japanese := speech.Segment{Start: 8 * sec, End: 10 * sec, Text: "次のことば"}
-	a.captionSaid(work, english)
-	if a.captions.language != "" || len(a.captions.lines) != 1 {
+	a.captions.Said(work, english)
+	if a.captions.Language != "" || len(a.captions.Lines) != 1 {
 		t.Fatal("first caption did not keep the default language")
 	}
-	a.captionSaid(work, japanese)
-	a.captionSaid(work, japanese)
-	if got := a.captions; got.language != "ja" || len(got.lines) != 2 {
-		t.Fatalf("append or duplicate corrupted transcript: %q, %v", got.language, got.lines)
+	a.captions.Said(work, japanese)
+	a.captions.Said(work, japanese)
+	if got := a.captions; got.Language != "ja" || len(got.Lines) != 2 {
+		t.Fatalf("append or duplicate corrupted transcript: %q, %v", got.Language, got.Lines)
 	}
-	a.captionSaid(work, speech.Segment{Start: sec, End: 3 * sec, Text: "Earlier"})
-	if got := a.captions.lines; len(got) != 3 || got[0].Text != "Earlier" || a.captions.language != "ja" {
+	a.captions.Said(work, speech.Segment{Start: sec, End: 3 * sec, Text: "Earlier"})
+	if got := a.captions.Lines; len(got) != 3 || got[0].Text != "Earlier" || a.captions.Language != "ja" {
 		t.Fatalf("out-of-order insert corrupted transcript: %v", got)
 	}
 }

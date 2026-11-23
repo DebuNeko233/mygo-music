@@ -18,7 +18,7 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 	pl := a.pl
 	cs := &a.captions
 	if !a.modelReady() {
-		if a.captions.model.checking {
+		if a.captions.Model.Checking {
 			a.captionsNote(c, "正在检查模型…", "", nil)
 			return
 		}
@@ -36,15 +36,15 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 	// Until the player says the episode changed, what the app has is the
 	// last one's: none of it shows.
 	var lines []lyrics.Line
-	if cs.program == tr.ProgramID {
-		lines = cs.lines
+	if cs.Program == tr.ProgramID {
+		lines = cs.Lines
 	}
 	pos := pl.Position()
 	if len(lines) == 0 {
 		switch {
-		case cs.program != tr.ProgramID:
+		case cs.Program != tr.ProgramID:
 			a.captionsNote(c, "正在识别…", "", nil)
-		case cs.failed == cs.program:
+		case cs.Failed == cs.Program:
 			a.captionsNote(c, "字幕生成失败", "", nil)
 		case a.captionsWritten():
 			a.captionsNote(c, "这期节目没有识别到语音", "", nil)
@@ -62,13 +62,13 @@ func (a *app) captionsPane(c *ui.Context, tr *netease.Track, h float32) {
 	if cur >= 0 && pos >= lines[cur].End && a.captionsWriting(pos) {
 		cur = -1
 	}
-	if a.lyricTrack != tr.Key() {
-		a.lyricTrack, a.lyricAt = tr.Key(), -2
+	if a.lyricReading.Track != tr.Key() {
+		a.lyricReading.Track, a.lyricReading.At = tr.Key(), -2
 		a.lyricScroll, a.lyricGlide = ui.ScrollState{}, lyricGlide{}
 	}
 	scroll := ui.Scroll(c.Key("captions")).Grow(1).TrackScroll(&a.lyricScroll).Padding(0, 8, h*0.5, 0)
-	a.timedLines(c, scroll, lines, cur, linesStyle{size: 24, weight: 700, lineHeight: 1.4, lang: cs.language}, func() {
-		if cs.work != nil {
+	a.timedLines(c, scroll, lines, cur, linesStyle{size: 24, weight: 700, lineHeight: 1.4, lang: cs.Language}, func() {
+		if cs.Work != nil {
 			ui.Text(c, "正在识别…").FontSize(14).FontWeight(600).TextColor(white.Alpha(0.35)).Padding(16, 12)
 		}
 	})
@@ -88,21 +88,21 @@ func (a *app) captionsNote(c *ui.Context, text, button string, act func()) {
 // modelCard offers to download the model that writes captions, and shows
 // how far its download is.
 func (a *app) modelCard(c *ui.Context) {
-	m := &a.captions.model
+	m := &a.captions.Model
 	ui.Column(c).Grow(1).Justify(ui.Center).Gap(14).Padding(0, 12, 48, 12).MaxWidth(440).Children(func() {
 		ui.Text(c, "为播客生成字幕").FontSize(24).FontWeight(800).LetterSpacing(-0.3)
 		ui.Text(c, fmt.Sprintf("下载语音识别模型（约 %s）后，节目会在本机边播边转写成字幕，像歌词一样随播放滚动，点一句即可跳到那里。音频不会上传。", megabytes(speech.ModelSize()))).
 			FontSize(14).LineHeight(1.6).TextColor(white.Alpha(0.6))
-		if m.downloading {
+		if m.Downloading {
 			share := float32(0)
-			if m.total > 0 {
-				share = float32(m.done) / float32(m.total)
+			if m.Total > 0 {
+				share = float32(m.Done) / float32(m.Total)
 			}
 			ui.Box(c).Height(6).Radius(3).Background(white.Alpha(0.14)).Margin(6, 0, 0, 0).Children(func() {
 				ui.Box(c).Height(6).Radius(3).WidthPercent(share * 100).Background(white.Alpha(0.85))
 			})
 			ui.Row(c).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, fmt.Sprintf("正在下载 %s / %s", megabytes(m.done), megabytes(m.total))).FontSize(12.5).FontFeatures("tnum").TextColor(white.Alpha(0.5))
+				ui.Text(c, fmt.Sprintf("正在下载 %s / %s", megabytes(m.Done), megabytes(m.Total))).FontSize(12.5).FontFeatures("tnum").TextColor(white.Alpha(0.5))
 				ui.Spacer(c)
 				if pillButton(c.Key("cancel"), nil, "取消", white.Alpha(0.14), white).Clicked() {
 					a.cancelModelDownload()
@@ -110,11 +110,11 @@ func (a *app) modelCard(c *ui.Context) {
 			})
 			return
 		}
-		if m.err != "" {
-			ui.Text(c, m.err).FontSize(13).TextColor(ui.Hex("#ff8a80"))
+		if m.Error != "" {
+			ui.Text(c, m.Error).FontSize(13).TextColor(ui.Hex("#ff8a80"))
 		}
 		label := "下载模型"
-		if m.err != "" {
+		if m.Error != "" {
 			label = "重试"
 		}
 		ui.Row(c).Margin(6, 0, 0, 0).Children(func() {
@@ -135,7 +135,7 @@ func megabytes(n int64) string {
 
 // captionSettings are the settings' rows for captions.
 func (a *app) captionSettings(row func(label, desc string, control func()), c *ui.Context) {
-	m := &a.captions.model
+	m := &a.captions.Model
 	s := &a.settings
 	row("播客字幕", "播放节目时在本机转写语音，生成可滚动的字幕；转写时会多用一些电量", func() {
 		ready := a.modelReady()
@@ -149,8 +149,8 @@ func (a *app) captionSettings(row func(label, desc string, control func()), c *u
 	})
 	var desc string
 	switch {
-	case m.downloading:
-		desc = fmt.Sprintf("正在下载 %s / %s", megabytes(m.done), megabytes(m.total))
+	case m.Downloading:
+		desc = fmt.Sprintf("正在下载 %s / %s", megabytes(m.Done), megabytes(m.Total))
 	case a.modelReady():
 		desc = "Qwen3-ASR，已下载，占用 " + megabytes(speech.ModelSize())
 	default:
@@ -158,7 +158,7 @@ func (a *app) captionSettings(row func(label, desc string, control func()), c *u
 	}
 	row("语音识别模型", desc, func() {
 		switch {
-		case m.downloading:
+		case m.Downloading:
 			if ui.Button(c.Key("model"), "取消").Clicked() {
 				a.cancelModelDownload()
 			}

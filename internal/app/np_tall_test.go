@@ -15,6 +15,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func tallLyricsApp(t *testing.T) *app {
@@ -32,7 +33,7 @@ func tallLyricsApp(t *testing.T) *app {
 	a.pl.SetLyrics(lines)
 	a.pl.Hold(77 * time.Second)
 	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
-	a.comments = commentState{track: 1, loaded: true}
+	a.comments = viewmodel.Comments{Track: 1, Loaded: true}
 	return a
 }
 
@@ -167,9 +168,9 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 				visibleY := func(line lyrics.Line) float32 {
 					t.Helper()
 					row, ok := tt.AccessByRole(ui.RoleButton, line.Text)
-					if !ok || row.Offscreen || !a.lyricBrowseUntil.IsZero() {
+					if !ok || row.Offscreen || !a.lyricReading.BrowseUntil.IsZero() {
 						t.Fatalf("playback lost %q after opening: visible=%t offset=%.1f browsing=%t",
-							line.Text, ok && !row.Offscreen, a.lyricScroll.Y, !a.lyricBrowseUntil.IsZero())
+							line.Text, ok && !row.Offscreen, a.lyricScroll.Y, !a.lyricReading.BrowseUntil.IsZero())
 					}
 					return row.Bounds.Y
 				}
@@ -218,7 +219,7 @@ func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
 				tt.Frame()
 				if immersive {
 					a.settings.LyricEdgeFade = true
-					a.lyricBrowseUntil = tt.Now().Add(lyricBrowseDelay)
+					a.lyricReading.BrowseUntil = tt.Now().Add(lyricBrowseDelay)
 					tt.Frame()
 					if a.lyricBlurPass != nil {
 						t.Fatal("manual scrolling ran the automatic blur pass")

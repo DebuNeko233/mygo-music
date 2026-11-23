@@ -21,7 +21,11 @@ var personalFM = netease.PersonalFM
 var fmTrash = netease.FMTrash
 
 func (a *app) radioServices() viewmodel.RadioServices {
-	return viewmodel.RadioServices{Player: a.pl, Library: &a.library, Post: a.detailPost(), Notify: func(message string) { a.toast = message }, NowPlaying: func() { a.playbackState.Open = true }, PersonalFM: personalFM, Heart: netease.HeartMode, Playlist: netease.PlaylistDetail, Dislike: fmTrash}
+	return viewmodel.RadioServices{
+		Player: a.pl, Library: &a.library, Post: a.detailPost(),
+		Notify: func(message string) { a.toast = message }, NowPlaying: func() { a.playbackState.Open = true },
+		PersonalFM: personalFM, Heart: netease.HeartMode, Playlist: netease.PlaylistDetail, Dislike: fmTrash,
+	}
 }
 func (a *app) radioFeed(name string) func(func([]netease.Track)) {
 	return a.radio.Feed(name, a.radioServices())

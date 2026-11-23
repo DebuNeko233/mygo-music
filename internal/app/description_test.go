@@ -159,7 +159,7 @@ func TestDescriptionMoreInNowPlaying(t *testing.T) {
 	desc := strings.Repeat("这是本期节目的详细介绍。\n\n", 30) + "最后一段。"
 	tr := netease.Track{ID: 1, ProgramID: 2, Name: "节目名称", Description: desc}
 	a.pl.Cue([]netease.Track{tr})
-	a.comments.track = tr.ID
+	a.comments.Track = tr.ID
 	a.playbackState.Pane, a.playbackState.Open = paneProgram, true
 	view := ui.NewTester(a.view, 1180, 780)
 	view.Advance(time.Second)

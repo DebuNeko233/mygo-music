@@ -18,7 +18,7 @@ func captionSettingsApp(t *testing.T) (*app, *ui.Tester, chan func()) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
-	a.captions.model.checked = true
+	a.captions.Model.Checked = true
 	posts := testPosts(a)
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	showSettingsPage(t, tt, "播客")
@@ -44,7 +44,7 @@ func TestCaptionSettingsRequireModel(t *testing.T) {
 		if a.settings.Captions != preference {
 			t.Fatal("a disabled switch changed the saved preference")
 		}
-		a.captions.model.installed = true
+		a.captions.Model.Installed = true
 		tt.Frame()
 		checkCaptionSwitch(t, tt, preference, false)
 		clickSettingsSwitch(t, tt, "播客字幕")
@@ -52,7 +52,7 @@ func TestCaptionSettingsRequireModel(t *testing.T) {
 		if a.settings.Captions != !preference || readCacheSettings(t, a.settings.Path).Captions != !preference {
 			t.Fatal("toggling captions with a model did not apply and save")
 		}
-		a.captions.model.installed = false
+		a.captions.Model.Installed = false
 		tt.Frame()
 		checkCaptionSwitch(t, tt, false, true)
 	}

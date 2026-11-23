@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // Windows lays out a minimized window at zero size. The cover divided its
@@ -27,7 +28,7 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 				lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Lyric %03d", i)}
 			}
 			a.pl.SetLyrics(lines)
-			a.comments = commentState{track: 1, loaded: true, total: 1, latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
+			a.comments = viewmodel.Comments{Track: 1, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
 			a.playbackState.Open, a.playbackState.Pane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
 			if pane.id == paneLyrics {
@@ -40,7 +41,7 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			tt.Frame()
 			if pane.id == paneLyrics {
 				if a.lyricScroll.Y == 0 {
-					t.Fatalf("lyrics did not follow before minimize: at=%d viewport=%vx%v", a.lyricAt, a.lyricViewportW, a.lyricViewportH)
+					t.Fatalf("lyrics did not follow before minimize: at=%d viewport=%vx%v", a.lyricReading.At, a.lyricViewportW, a.lyricViewportH)
 				}
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[150].Text)
 				if !ok || row.Offscreen {
