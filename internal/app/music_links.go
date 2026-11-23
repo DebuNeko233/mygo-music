@@ -91,7 +91,7 @@ func (a *app) openMusicLink(link netease.MusicLink) {
 	}
 	pages := map[string]pageKind{"playlist": pagePlaylist, "album": pageAlbum, "artist": pageArtist, "user": pageUser, "djradio": pagePodcast}
 	if page, ok := pages[link.Kind]; ok {
-		a.open(route{page: page, id: link.ID})
+		a.open(route{Page: page, ID: link.ID})
 		return
 	}
 	if link.Kind != "song" && link.Kind != "program" {

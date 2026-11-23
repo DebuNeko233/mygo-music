@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/pagecache"
 	"netease-music-mygo/internal/viewmodel"
 )
 
@@ -86,7 +85,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.albums.Reset()
 	a.users.Reset()
 	a.podcasts.Reset()
-	a.searches = pagecache.New[route, *searchData](searchBusy)
+	a.searches.Reset()
 	a.load(a.route)
 	a.loadHome()
 	a.openPendingMusicLink()

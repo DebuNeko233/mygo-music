@@ -27,7 +27,7 @@ func albumTestApp(t *testing.T) *app {
 			{ID: 901, Name: "蓝天白云", Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, Duration: 220000},
 		},
 	}})
-	a.route = route{page: pageAlbum, id: 77}
+	a.route = route{Page: pageAlbum, ID: 77}
 	// The saved albums were just loaded, so the page does not ask again.
 	a.library.Refresh.Albums.At = time.Now()
 	return a
@@ -128,7 +128,7 @@ func TestSavedAlbumsOnOwnPage(t *testing.T) {
 	a.users.Pages.Set(1, &viewmodel.UserPage{User: &user})
 	a.library.SubAlbums, a.library.SubsShown = []netease.AlbumProfile{{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}}}, true
 	posts := testPosts(a)
-	a.open(route{page: pageUser, id: 1})
+	a.open(route{Page: pageUser, ID: 1})
 	for a.users.Pages.Get(1).SubsLoading > 0 {
 		refreshPost(t, posts)
 	}
@@ -137,7 +137,7 @@ func TestSavedAlbumsOnOwnPage(t *testing.T) {
 	if err := tt.Click("神的游戏"); err != nil {
 		t.Fatal(err)
 	}
-	if a.route.page != pageAlbum || a.route.id != 77 {
+	if a.route.Page != pageAlbum || a.route.ID != 77 {
 		t.Fatalf("route = %+v, want the page of album 77", a.route)
 	}
 }

@@ -18,7 +18,7 @@ import (
 func localPerfApp(count int) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.route = route{page: pageLocal}
+	a.route = route{Page: pageLocal}
 	songs := make([]localcatalog.Song, count)
 	for i := range songs {
 		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), Name: fmt.Sprintf("本地歌曲 %05d", i), Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 180000}, Path: "/music/song.flac"}

@@ -36,7 +36,7 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.nowPlaying || a.route != (route{page: pageArtist, id: 12}) {
+	if a.nowPlaying || a.route != (route{Page: pageArtist, ID: 12}) {
 		t.Fatalf("after the click: Now Playing open %v, page %+v", a.nowPlaying, a.route)
 	}
 
@@ -48,7 +48,7 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{page: pageArtist, id: 13}) {
+	if a.route != (route{Page: pageArtist, ID: 13}) {
 		t.Fatalf("a row's artist opened %+v", a.route)
 	}
 	if cur := a.pl.Current(); cur == nil || cur.ID != duet.ID {
@@ -58,7 +58,7 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 	// Back goes to the artist before.
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
-	if a.route.id != 12 {
+	if a.route.ID != 12 {
 		t.Errorf("back went to %+v", a.route)
 	}
 }
@@ -76,7 +76,7 @@ func TestArtistSongsByLatest(t *testing.T) {
 	}
 	d := &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}, Songs: []netease.Track{song(1, "老歌")}}}
 	a.artists.Pages.Set(12, d)
-	a.open(route{page: pageArtist, id: 12})
+	a.open(route{Page: pageArtist, ID: 12})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 

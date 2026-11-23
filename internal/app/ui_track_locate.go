@@ -42,7 +42,7 @@ func (a *app) syncTrackViewport(c *ui.Context, header trackHeaderKey, at int) {
 	}
 	next := trackViewport{
 		y: a.pageScroll.Y, width: w, height: h,
-		playlist: a.route.id, page: a.route.page, song: song, index: at,
+		playlist: a.route.ID, page: a.route.Page, song: song, index: at,
 		header: header,
 	}
 	if next != a.locateViewport {

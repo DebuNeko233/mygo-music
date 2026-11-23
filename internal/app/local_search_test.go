@@ -56,7 +56,7 @@ func TestLocalSidebarSearchPlaysAndLocates(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if cur := a.pl.Current(); cur == nil || cur.LocalID != 150 || cur.ID != 0 || !a.pl.Playing() || len(a.pl.Queue()) != len(songs) || a.route.page != pageLocal {
+			if cur := a.pl.Current(); cur == nil || cur.LocalID != 150 || cur.ID != 0 || !a.pl.Playing() || len(a.pl.Queue()) != len(songs) || a.route.Page != pageLocal {
 				t.Fatal("sidebar did not play the selected local file with the library queue")
 			}
 			for i, tr := range a.pl.Queue() {
@@ -78,12 +78,12 @@ func TestLocalSearchRevalidatesMissingFiles(t *testing.T) {
 	}
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	a.pl.Cue([]netease.Track{{ID: 999, Name: "正在播放"}})
-	old := a.trackSuggestions("匹配")[0].key
+	old := a.trackSuggestions("匹配")[0].Key
 	for _, id := range []int64{1, 2, 3} {
 		a.local.MarkMissing(id)
 	}
 	got := a.trackSuggestions("匹配")
-	if len(got) != trackSuggestLimit || got[0].song != -4 || !got[0].playable {
+	if len(got) != 3 || got[0].Song != -4 || !got[0].Playable {
 		t.Fatalf("available local match hidden: %+v", got)
 	}
 	a.chooseTrackSuggestion(old, "匹配")
@@ -91,7 +91,7 @@ func TestLocalSearchRevalidatesMissingFiles(t *testing.T) {
 		t.Fatal("a stale missing-file choice changed playback")
 	}
 	a.local.SetMissing(map[int64]bool{})
-	if got := a.trackSuggestions("匹配"); len(got) == 0 || got[0].song != -1 || !got[0].playable {
+	if got := a.trackSuggestions("匹配"); len(got) == 0 || got[0].Song != -1 || !got[0].Playable {
 		t.Fatal("restored files stayed disabled in the cached query")
 	}
 }
@@ -101,7 +101,7 @@ func TestLocalSearchRevalidatesCatalogChanges(t *testing.T) {
 	for _, removed := range []bool{false, true} {
 		t.Run(fmt.Sprint(removed), func(t *testing.T) {
 			a, songs, _ := localSearchFixture(t)
-			key := a.trackSuggestions("珍藏")[0].key
+			key := a.trackSuggestions("珍藏")[0].Key
 			target := songs[149]
 			reordered := append([]localcatalog.Song{target}, append(append([]localcatalog.Song(nil), songs[:149]...), songs[150:]...)...)
 			if removed {

@@ -186,7 +186,7 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route.page != pageUser || a.route.id != 42 {
+	if a.route.Page != pageUser || a.route.ID != 42 {
 		t.Fatalf("route = %+v, want the page of user 42", a.route)
 	}
 	if a.accountOpen {
@@ -242,14 +242,14 @@ func TestOwnPageFollows(t *testing.T) {
 	}
 	a := ownPageApp()
 	posts := testPosts(a)
-	a.open(route{page: pageUser, id: 9})
+	a.open(route{Page: pageUser, ID: 9})
 	wait(t, asked, "the artists followed")
 	tt := ui.NewTester(a.view, 1200, 1200)
 	tt.Frame()
 	if err := tt.Click("Ave Mujica"); err != nil {
 		t.Fatal(err)
 	}
-	if a.route.page != pageArtist || a.route.id != 10 {
+	if a.route.Page != pageArtist || a.route.ID != 10 {
 		t.Fatalf("route = %+v, want the page of artist 10", a.route)
 	}
 	for a.users.Pages.Get(9).SubsLoading > 0 || a.podcasts.Home.SubscriptionLoading || a.artists.Pages.Get(10).Loading {
@@ -268,7 +268,7 @@ func TestOthersPageHidesFollows(t *testing.T) {
 	asked := fakeSubscriptions(t)
 	a := ownPageApp()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.open(route{page: pageUser, id: 9})
+	a.open(route{Page: pageUser, ID: 9})
 	tt := ui.NewTester(a.view, 1200, 1200)
 	tt.Frame()
 	if len(asked) > 0 {
@@ -284,7 +284,7 @@ func TestOwnPageFrameBudget(t *testing.T) {
 	fakeSubscriptions(t)
 	a := ownPageApp()
 	posts := testPosts(a)
-	a.open(route{page: pageUser, id: 9})
+	a.open(route{Page: pageUser, ID: 9})
 	for a.users.Pages.Get(9).SubsLoading > 0 || a.podcasts.Home.SubscriptionLoading {
 		refreshPost(t, posts)
 	}
@@ -316,7 +316,7 @@ func TestOwnPageFrames(t *testing.T) {
 		}
 		a.library.SubsShown = true
 		a.library.Refresh.Albums.At = time.Now()
-		a.open(route{page: pageUser, id: 9})
+		a.open(route{Page: pageUser, ID: 9})
 		tt := ui.NewTester(a.view, 1200, 1200)
 		tt.SetDark(dark)
 		tt.Advance(time.Second)

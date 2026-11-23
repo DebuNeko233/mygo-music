@@ -1,95 +1,14 @@
 package app
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
-
-// suggestDelay is how long typing pauses before suggestions are asked for.
-const suggestDelay = 220 * time.Millisecond
-
-// suggestState is what a search may be after, as its query is typed.
-type suggestState struct {
-	query  string // what they are for
-	items  []suggestion
-	tracks trackSuggestState
-	timer  *time.Timer // waiting for typing to pause
-	gen    uint64      // which request the query is waiting for
-}
-
-// suggestion is a page a query may be after: a song's search, or an
-// artist's, album's or playlist's page.
-type suggestion struct {
-	key          string // its option in the popup
-	name, detail string
-	kind         string
-	route        route
-}
-
-// suggest asks for suggestions for q, once typing pauses.
-func (a *app) suggest(q string) {
-	s := &a.suggestions
-	if q == s.query {
-		return
-	}
-	a.dismissSuggestions()
-	s.query = q
-	gen := s.gen
-	fetch := searchSuggest
-	s.timer = time.AfterFunc(suggestDelay, func() {
-		res, _ := fetch(q)
-		a.post(func() {
-			// Typed on, or searched since.
-			if q != s.query || gen != s.gen {
-				return
-			}
-			s.timer = nil
-			s.items = suggestionList(res)
-		})
-	})
-}
-
-func (a *app) dismissSuggestions() {
-	s := &a.suggestions
-	if s.timer != nil {
-		s.timer.Stop()
-	}
-	*s = suggestState{gen: s.gen + 1}
-}
-
-// suggestionList is the first ten suggestions, the kinds in the order
-// NetEase ranks them.
-func suggestionList(res netease.Suggestions) []suggestion {
-	byKind := map[string][]suggestion{}
-	for _, t := range res.Songs {
-		byKind["songs"] = append(byKind["songs"], suggestion{fmt.Sprint("song:", t.ID), t.Name, t.ArtistNames(), "单曲",
-			route{page: pageSearch, query: t.Name, kind: netease.SearchSongs}})
-	}
-	for _, ar := range res.Artists {
-		byKind["artists"] = append(byKind["artists"], suggestion{fmt.Sprint("artist:", ar.ID), ar.Name, "", "歌手",
-			route{page: pageArtist, id: ar.ID}})
-	}
-	for _, al := range res.Albums {
-		byKind["albums"] = append(byKind["albums"], suggestion{fmt.Sprint("album:", al.ID), al.Name, al.ArtistNames(), "专辑",
-			route{page: pageAlbum, id: al.ID}})
-	}
-	for _, pl := range res.Playlists {
-		byKind["playlists"] = append(byKind["playlists"], suggestion{fmt.Sprint("playlist:", pl.ID), pl.Name, pl.Creator.Nickname, "歌单",
-			route{page: pagePlaylist, id: pl.ID}})
-	}
-	var out []suggestion
-	for _, kind := range append(res.Order, "songs", "artists", "albums", "playlists") {
-		out = append(out, byKind[kind]...)
-		delete(byKind, kind) // listed once, if also in the order
-	}
-	return out[:min(len(out), 10)]
-}
 
 // searchField is the search field atop the sidebar, which suggests what
 // its query may be after as it is typed, and, empty, lists the searches
@@ -104,10 +23,10 @@ func (a *app) searchField(c *ui.Context) {
 	}
 	field.Children(func() {
 		ui.Icon(c, iconSearch).Size(14, 14).TextColor(p.muted)
-		cb := ui.ComboboxBase(c.Key("search"), &a.query)
+		cb := ui.ComboboxBase(c.Key("search"), &a.searches.Query)
 		in := cb.Input.Bind(&a.searchBox).Grow(1).MinWidth(0).
 			Placeholder("搜索/链接").FontSize(13).Label("搜索")
-		if a.query != "" {
+		if a.searches.Query != "" {
 			clear := ui.ButtonBase(c.Key("clear-query")).Size(20, 20).Shrink(0).Margin(0, -4, 0, 0).
 				Radius(999).Center().KeepFocus().Material(glass.Glass{Interactive: true}).
 				Label("清空搜索").Tooltip("清空搜索")
@@ -117,14 +36,14 @@ func (a *app) searchField(c *ui.Context) {
 			}
 			clear.Children(func() { ui.Icon(c, iconX).Size(10, 10).TextColor(color) })
 			if clear.Clicked() {
-				a.query = ""
+				a.searches.Query = ""
 				a.dismissSuggestions()
 				cb.SetOpen(false)
 				a.searchBox.Focus(c)
 			}
 		}
-		q := strings.TrimSpace(a.query)
-		s := &a.suggestions
+		q := strings.TrimSpace(a.searches.Query)
+		s := &a.searches.Suggestions
 		_, link, _ := netease.ParseMusicLink(q)
 		if link {
 			cb.SetOpen(false)
@@ -149,8 +68,8 @@ func (a *app) searchField(c *ui.Context) {
 					}
 					return row
 				}
-				showSuggestion := func(sg suggestion, local, playable bool) {
-					row := option(sg.key, sg.kind+"："+sg.name)
+				showSuggestion := func(sg viewmodel.Suggestion, local, playable bool) {
+					row := option(sg.Key, sg.Kind+"："+sg.Name)
 					if !playable {
 						row.Disabled(true).Opacity(0.42)
 					}
@@ -159,12 +78,12 @@ func (a *app) searchField(c *ui.Context) {
 							ui.Icon(c, iconPlay).Size(13, 13).Shrink(0).TextColor(p.muted)
 						}
 						ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
-							ui.Text(c, sg.name).FontSize(13).SingleLine()
-							if sg.detail != "" {
-								ui.Text(c, sg.detail).FontSize(11.5).TextColor(p.muted).SingleLine()
+							ui.Text(c, sg.Name).FontSize(13).SingleLine()
+							if sg.Detail != "" {
+								ui.Text(c, sg.Detail).FontSize(11.5).TextColor(p.muted).SingleLine()
 							}
 						})
-						tag := ui.Text(c, sg.kind).FontSize(11.5).SingleLine().Shrink(0)
+						tag := ui.Text(c, sg.Kind).FontSize(11.5).SingleLine().Shrink(0)
 						if local {
 							tag.TextColor(p.accent).Padding(2, 6).Radius(999).Background(p.accent.Alpha(0.1))
 						} else {
@@ -194,11 +113,11 @@ func (a *app) searchField(c *ui.Context) {
 					ui.Text(c, "搜索“"+q+"”").FontSize(13).FontWeight(500).SingleLine().Shrink(1).MinWidth(0)
 				})
 				for _, sg := range a.trackSuggestions(q) {
-					showSuggestion(sg.suggestion, true, sg.playable)
+					showSuggestion(sg.Suggestion, true, sg.Playable)
 				}
 
-				if s.query == q {
-					for _, sg := range s.items {
+				if s.Query == q {
+					for _, sg := range s.Items {
 						showSuggestion(sg, false, true)
 					}
 				}
@@ -213,7 +132,7 @@ func (a *app) searchField(c *ui.Context) {
 		}
 		// Keyboard selection closes the popup before Chosen is handled.
 		// Keep its data until then, just as for a pointer selection.
-		if s.query != "" && (!cb.Open() || q == "" || link || !in.Focused()) {
+		if s.Query != "" && (!cb.Open() || q == "" || link || !in.Focused()) {
 			a.dismissSuggestions()
 		}
 	})
@@ -225,7 +144,7 @@ func (a *app) choose(key, q string) {
 		return
 	}
 	if h, ok := strings.CutPrefix(key, "history:"); ok {
-		a.query = h
+		a.searches.Query = h
 		a.search(h)
 		return
 	}
@@ -233,18 +152,18 @@ func (a *app) choose(key, q string) {
 		a.search(q)
 		return
 	}
-	for _, sg := range a.suggestions.items {
-		if sg.key != key {
+	for _, sg := range a.searches.Suggestions.Items {
+		if sg.Key != key {
 			continue
 		}
-		if sg.route.page == pageSearch {
-			a.query = sg.route.query
-			a.searchFor(sg.route)
+		if sg.Route.Page == pageSearch {
+			a.searches.Query = sg.Route.Query
+			a.searchFor(sg.Route)
 			return
 		}
 		a.rememberSearch(q)
 		a.dismissSuggestions()
-		a.open(sg.route)
+		a.open(sg.Route)
 		return
 	}
 }

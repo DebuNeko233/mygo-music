@@ -35,7 +35,7 @@ func TestPlaylistCacheWaitsForPendingOfflineSnapshot(t *testing.T) {
 			t.Fatal("test playlist was not evicted")
 		}
 		playlistDetail = func(int64) (*netease.Playlist, error) { return nil, netease.ErrOffline }
-		a.show(route{page: pagePlaylist, id: 1})
+		a.show(route{Page: pagePlaylist, ID: 1})
 		synctest.Wait()
 		if len(posts) != 0 {
 			t.Fatal("load finished before the accepted snapshot was written")
@@ -62,7 +62,7 @@ func TestPlaylistCacheKeepsOfflineSnapshots(t *testing.T) {
 		return pl, nil
 	}
 	for id := int64(1); id <= 3; id++ {
-		a.show(route{page: pagePlaylist, id: id})
+		a.show(route{Page: pagePlaylist, ID: id})
 		refreshPost(t, posts)
 	}
 	if a.library.Playlists[1] != nil || a.library.Playlists[2] == nil || a.library.Playlists[3] == nil {
@@ -71,7 +71,7 @@ func TestPlaylistCacheKeepsOfflineSnapshots(t *testing.T) {
 	a.browseCache.Close() // drain accepted snapshots before simulating an offline return
 	a.browseCache = diskcache.New(dir, 64<<20)
 	playlistDetail = func(int64) (*netease.Playlist, error) { return nil, errors.New("offline") }
-	a.show(route{page: pagePlaylist, id: 1})
+	a.show(route{Page: pagePlaylist, ID: 1})
 	refreshPost(t, posts)
 	refreshPost(t, posts)
 	if pl := a.library.Playlists[1]; pl == nil || len(pl.Tracks) != 8000 || pl.Tracks[0].ID != 10 {
@@ -86,7 +86,7 @@ func TestPlaylistCacheKeepsOfflineSnapshots(t *testing.T) {
 // with a pending reply, or a modified list whose snapshot is not yet saved.
 func TestPlaylistCacheProtectsActiveEntries(t *testing.T) {
 	a := newTestApp()
-	a.route = route{page: pagePlaylist, id: 1}
+	a.route = route{Page: pagePlaylist, ID: 1}
 	for id := int64(1); id <= playlistCachePages+1; id++ {
 		a.library.Playlists[id] = &netease.Playlist{ID: id}
 		a.usePlaylist(id)

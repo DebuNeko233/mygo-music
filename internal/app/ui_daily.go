@@ -132,7 +132,7 @@ func (a *app) dailyCard(c *ui.Context, now time.Time) {
 		})
 	})
 	if card.Clicked() {
-		a.open(route{page: pageDaily})
+		a.open(route{Page: pageDaily})
 	}
 }
 

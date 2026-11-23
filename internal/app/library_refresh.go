@@ -22,8 +22,8 @@ func (a *app) listenerID() int64 {
 }
 
 func (a *app) visiblePlaylist() int64 {
-	if a.route.page == pagePlaylist {
-		return a.route.id
+	if a.route.Page == pagePlaylist {
+		return a.route.ID
 	}
 	return 0
 }

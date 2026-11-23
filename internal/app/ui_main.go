@@ -139,13 +139,13 @@ func (a *app) open(r route) {
 
 // show shows the page of r.
 func (a *app) show(r route) {
-	if a.route.page == pageCloud && r.page != pageCloud {
+	if a.route.Page == pageCloud && r.Page != pageCloud {
 		a.cloud.Locate = 0
 	}
 	a.intro.open = false
 	a.route = r
-	if r.page == pageSearch {
-		a.query, a.searched = r.query, r
+	if r.Page == pageSearch {
+		a.searches.Activate(r)
 	}
 	a.load(r)
 	a.trimPlaylistCache()
@@ -153,22 +153,22 @@ func (a *app) show(r route) {
 
 // load loads what the page of r shows, unless it has.
 func (a *app) load(r route) {
-	switch r.page {
+	switch r.Page {
 	case pageHome:
 		a.freshenHome()
 	case pagePlaylist:
-		a.loadPlaylist(r.id, false)
+		a.loadPlaylist(r.ID, false)
 		a.freshenLikes()
 	case pageSearch:
 		a.loadSearch(r, false)
 	case pageArtist:
-		a.loadArtist(r.id)
+		a.loadArtist(r.ID)
 	case pageAlbum:
-		a.loadAlbum(r.id)
+		a.loadAlbum(r.ID)
 	case pageUser:
-		a.loadUser(r.id)
+		a.loadUser(r.ID)
 	case pagePodcast:
-		a.loadPodcast(r.id)
+		a.loadPodcast(r.ID)
 	case pagePodcasts:
 		a.loadPodcastTab()
 	case pageCloud:
@@ -222,16 +222,16 @@ func (a *app) sidebar(c *ui.Context) {
 		a.searchField(c)
 
 		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
-			a.navItem(c, iconHome, "为你推荐", route{page: pageHome})
-			a.navItem(c, iconDaily, "每日推荐", route{page: pageDaily})
-			a.navItem(c, iconHistory, "最近播放", route{page: pageRecent})
-			a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
-			a.navItem(c, iconCharts, "排行榜", route{page: pageCharts})
-			a.navItem(c, iconPodcast, "播客", route{page: pagePodcasts})
-			a.navItem(c, iconNote, "本地歌曲", route{page: pageLocal})
-			a.navItem(c, iconCloud, "音乐网盘", route{page: pageCloud})
-			if a.searched.query != "" {
-				a.navItem(c, iconSearch, "搜索结果", a.searched)
+			a.navItem(c, iconHome, "为你推荐", route{Page: pageHome})
+			a.navItem(c, iconDaily, "每日推荐", route{Page: pageDaily})
+			a.navItem(c, iconHistory, "最近播放", route{Page: pageRecent})
+			a.navItem(c, iconRadio, "私人 FM", route{Page: pageFM})
+			a.navItem(c, iconCharts, "排行榜", route{Page: pageCharts})
+			a.navItem(c, iconPodcast, "播客", route{Page: pagePodcasts})
+			a.navItem(c, iconNote, "本地歌曲", route{Page: pageLocal})
+			a.navItem(c, iconCloud, "音乐网盘", route{Page: pageCloud})
+			if a.searches.Last.Query != "" {
+				a.navItem(c, iconSearch, "搜索结果", a.searches.Last)
 			}
 			a.myPlaylists(c, "我的歌单", a.library.Mine, true, &a.mineCollapsed)
 			a.myPlaylists(c, "收藏的歌单", a.library.Saved, false, &a.savedCollapsed)
@@ -244,7 +244,7 @@ func (a *app) sidebar(c *ui.Context) {
 
 func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	p := a.pal
-	selected := a.route.page == r.page && !a.nowPlaying
+	selected := a.route.Page == r.Page && !a.nowPlaying
 	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	bg := ui.Transparent
 	switch {
@@ -371,7 +371,7 @@ func (a *app) content(c *ui.Context) {
 	}
 	// Pages mark where their content is, as they scroll.
 	a.underTop, a.underBottom = false, false
-	switch a.route.page {
+	switch a.route.Page {
 	case pageHome:
 		a.homePage(c)
 	case pageDaily:

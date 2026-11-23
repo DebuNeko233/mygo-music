@@ -18,7 +18,7 @@ import (
 func TestFMKeepsTheModeChosenWhileItStarts(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.route = route{page: pageFM}
+	a.route = route{Page: pageFM}
 	a.pl.AttachRadio(fmRadio(netease.FMDefault), func(got func([]netease.Track)) {})
 
 	asked := make(chan string, 4)

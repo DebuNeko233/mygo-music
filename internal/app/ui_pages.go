@@ -132,7 +132,7 @@ func (a *app) chartsPage(c *ui.Context) {
 // under the pointer, where a play button shows on it.
 func (a *app) playlistCard(c *ui.Context, pl *netease.Playlist) {
 	if a.coverCard(c, pl.Name, pl.Cover(), pl.PlayCount, pl.UpdateFreq, func() { a.loadPlaylist(pl.ID, true) }) {
-		a.open(route{page: pagePlaylist, id: pl.ID})
+		a.open(route{Page: pagePlaylist, ID: pl.ID})
 	}
 }
 
@@ -238,12 +238,12 @@ func (a *app) chartCard(c *ui.Context, pl *netease.Playlist) {
 		})
 	})
 	if card.Clicked() {
-		a.open(route{page: pagePlaylist, id: pl.ID})
+		a.open(route{Page: pagePlaylist, ID: pl.ID})
 	}
 }
 
 func (a *app) playlistPage(c *ui.Context) {
-	id := a.route.id
+	id := a.route.ID
 	pl := a.library.Playlists[id]
 	if pl == nil {
 		if !a.library.Loading[id] || a.library.Errors[id] != "" {
@@ -357,19 +357,19 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 	cur := a.pl.Current()
 	// A song's menu can take it out of the playlist it is listed in.
 	var pid int64
-	if a.route.page == pagePlaylist {
-		pid = a.route.id
+	if a.route.Page == pagePlaylist {
+		pid = a.route.ID
 	}
 	w, _ := c.Size()
 	// An album's page has no column of the album its songs are on.
-	wide := w-sidebarWidth > 820 && a.route.page != pageAlbum
+	wide := w-sidebarWidth > 820 && a.route.Page != pageAlbum
 	top, bottom := a.insets(c)
 	// Rows out of view are not built, their marks with them: a list
 	// scrolled away from its start or end has content under the bars.
 	a.underTop, a.underBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
 	list := ui.List(c.Key(a.route), &a.trackList, rows)
-	if pid != 0 || a.route.page == pageCloud || a.route.page == pageLocal {
+	if pid != 0 || a.route.Page == pageCloud || a.route.Page == pageLocal {
 		list.ItemKey(a.trackRowKeys(tracks))
 	}
 	list.Rows(func(item ui.ListRow) {
@@ -394,7 +394,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		playable := tr.Playable()
 		playing := cur != nil && cur.Key() == tr.Key()
 		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
-		if a.route.page == pageLocal {
+		if a.route.Page == pageLocal {
 			row.ContextMenu(a.localSongItems(tr, true))
 		} else {
 			row.ContextMenu(a.songItems(tr, pid))
@@ -461,7 +461,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 					if tr.Album.ID == 0 {
 						ui.Text(c, tr.Album.Name)
 					} else {
-						a.link(c.Key("album"), tr.Album.Name, p.muted, p.text, route{page: pageAlbum, id: tr.Album.ID})
+						a.link(c.Key("album"), tr.Album.Name, p.muted, p.text, route{Page: pageAlbum, ID: tr.Album.ID})
 					}
 				})
 			}
@@ -489,7 +489,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			}
 		}
 	}).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0)
-	if a.route.page == pagePlaylist || a.route.page == pageCloud || a.route.page == pageLocal {
+	if a.route.Page == pagePlaylist || a.route.Page == pageCloud || a.route.Page == pageLocal {
 		list.TrackScroll(&a.pageScroll)
 	}
 	return playingVisible

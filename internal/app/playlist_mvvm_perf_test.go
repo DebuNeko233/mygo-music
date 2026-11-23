@@ -13,7 +13,7 @@ import (
 func playlistPerfApp() *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	pl := &netease.Playlist{ID: 7, Name: "大型歌单", Tracks: make([]netease.Track, 8000)}
 	for i := range pl.Tracks {
 		pl.Tracks[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌曲 %04d", i+1), Duration: 180000}

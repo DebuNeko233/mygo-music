@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/egoist/mygo"
+
 	"netease-music-mygo/internal/netease"
 )
 
@@ -59,7 +60,7 @@ func (a *app) refreshConnection() {
 	// failure-only home request first and prevent the full refresh below.
 	a.updateNetwork(readNetworkStatus(), false)
 	a.recovery.attempts = 0
-	if !a.network.offline && (a.route.page == pageHome || a.route.page == pageCharts) {
+	if !a.network.offline && (a.route.Page == pageHome || a.route.Page == pageCharts) {
 		a.loadHome()
 	}
 	a.retryLoads(true) // explicit refresh also retries permanent failures

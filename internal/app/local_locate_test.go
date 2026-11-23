@@ -25,7 +25,7 @@ func localLocateFixture(t *testing.T, playing bool) (*app, []localcatalog.Song, 
 		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), ID: int64(i + 1), Name: fmt.Sprintf("本地歌曲 %03d", i+1), Duration: 180000}, Path: "../player/testdata/seek.flac"}
 	}
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
-	a.route = route{page: pageLocal}
+	a.route = route{Page: pageLocal}
 	a.pl.SuspendCache()
 	a.pl.Cue([]netease.Track{songs[149].Track, {ID: 999, Name: "另一首在线歌曲"}})
 	if playing {
@@ -55,7 +55,7 @@ func TestLocalLocateKeepsPlayback(t *testing.T) {
 			}
 			clickLocate(t, tt)
 			locatedRow(t, tt, songs[149].Track.Name, 800)
-			if a.pl.Current().LocalID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.page != pageLocal || len(a.local.Tracks) != 250 {
+			if a.pl.Current().LocalID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.Page != pageLocal || len(a.local.Tracks) != 250 {
 				t.Fatal("local locate changed playback, queue or library")
 			}
 			tt.Scroll(750, 400, 0, -100000)

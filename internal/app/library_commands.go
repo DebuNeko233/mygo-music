@@ -22,10 +22,10 @@ func (a *app) libraryServices() viewmodel.LibraryServices {
 		LikeSong: likeSong, LikeProgram: likeProgram, ProgramsLiked: programsLiked,
 		SavePlaylist: savePlaylist, SaveAlbum: subscribeAlbum, Create: createPlaylist, Rename: renamePlaylist, Add: addToPlaylist, Remove: removeFromPlaylist, Delete: deletePlaylist,
 		Persist: a.persistLibraryChanges, ForgetSnapshot: a.forgetPlaylistSnapshot,
-		Open: func(id int64) { a.open(route{page: pagePlaylist, id: id}) }, LeaveDeleted: a.leaveDeletedPlaylist, Notify: func(message string) { a.toast = message },
+		Open: func(id int64) { a.open(route{Page: pagePlaylist, ID: id}) }, LeaveDeleted: a.leaveDeletedPlaylist, Notify: func(message string) { a.toast = message },
 		VisibleLikedPlaylist: func() int64 {
-			if a.route.page == pagePlaylist {
-				if pl := a.library.Playlists[a.route.id]; pl != nil && pl.SpecialType == 5 {
+			if a.route.Page == pagePlaylist {
+				if pl := a.library.Playlists[a.route.ID]; pl != nil && pl.SpecialType == 5 {
 					return pl.ID
 				}
 			}
@@ -81,11 +81,11 @@ func (a *app) removeFrom(pid int64, tr *netease.Track) {
 	a.library.RemoveFrom(pid, tr, a.libraryServices())
 }
 func (a *app) leaveDeletedPlaylist(id int64) {
-	gone := func(r route) bool { return r.page == pagePlaylist && r.id == id }
+	gone := func(r route) bool { return r.Page == pagePlaylist && r.ID == id }
 	a.history = slices.DeleteFunc(a.history, gone)
 	a.forward = slices.DeleteFunc(a.forward, gone)
 	if gone(a.route) {
-		r := route{page: pageHome}
+		r := route{Page: pageHome}
 		if n := len(a.history); n > 0 {
 			r, a.history = a.history[n-1], a.history[:n-1]
 		}

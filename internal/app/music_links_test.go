@@ -39,10 +39,10 @@ func TestMusicLinkSearchEnter(t *testing.T) {
 		input string
 		want  route
 	}{
-		{"https://music.163.com/playlist?id=12", route{page: pagePlaylist, id: 12}},
-		{"https://music.163.com/#/album?id=34", route{page: pageAlbum, id: 34}},
-		{"分享歌单：https://music.163.com/playlist?id=12（来自网易云音乐）", route{page: pagePlaylist, id: 12}},
-		{"orpheus://album/34", route{page: pageAlbum, id: 34}},
+		{"https://music.163.com/playlist?id=12", route{Page: pagePlaylist, ID: 12}},
+		{"https://music.163.com/#/album?id=34", route{Page: pageAlbum, ID: 34}},
+		{"分享歌单：https://music.163.com/playlist?id=12（来自网易云音乐）", route{Page: pagePlaylist, ID: 12}},
+		{"orpheus://album/34", route{Page: pageAlbum, ID: 34}},
 	} {
 		t.Run(tc.input, func(t *testing.T) {
 			a := musicLinkApp(t)
@@ -143,7 +143,7 @@ func TestMusicLinkFailureAndNavigation(t *testing.T) {
 	}
 	a.openMusicInput("orpheus://song/1")
 	ctx := wait(t, entered, "link request")
-	a.open(route{page: pageAlbum, id: 34})
+	a.open(route{Page: pageAlbum, ID: 34})
 	if ctx.Err() == nil {
 		t.Fatal("navigation did not cancel lookup")
 	}
@@ -161,11 +161,11 @@ func TestMusicLinkColdStart(t *testing.T) {
 	a.links.starting = true
 	a.openMusicInput("orpheus://playlist/12")
 	a.openMusicInput("orpheus://album/34")
-	if a.route.page != pageHome || a.links.pending == nil {
+	if a.route.Page != pageHome || a.links.pending == nil {
 		t.Fatal("link ran before restoration")
 	}
 	a.openPendingMusicLink()
-	if a.links.starting || a.links.pending != nil || a.route != (route{page: pageAlbum, id: 34}) {
+	if a.links.starting || a.links.pending != nil || a.route != (route{Page: pageAlbum, ID: 34}) {
 		t.Fatalf("pending link lost: %+v", a.route)
 	}
 }
@@ -267,7 +267,7 @@ func TestMusicLinkShortShareOpensPage(t *testing.T) {
 	posts := testPosts(a)
 	a.search("https://163cn.tv/abc")
 	wait(t, posts, "resolved share")()
-	if a.route != (route{page: pageAlbum, id: 34}) {
+	if a.route != (route{Page: pageAlbum, ID: 34}) {
 		t.Fatalf("short link opened %+v", a.route)
 	}
 }

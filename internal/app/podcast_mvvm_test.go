@@ -19,7 +19,7 @@ func TestPodcastMVVMSubscriptionUpdatesPersonalPage(t *testing.T) {
 	pod.SubCount = 10
 	d := &viewmodel.PodcastPage{Podcast: &pod, Page: viewmodel.Page{Loaded: true}}
 	a.podcasts.Pages.Set(pod.ID, d)
-	a.route = route{page: pagePodcast, id: pod.ID}
+	a.route = route{Page: pagePodcast, ID: pod.ID}
 	old := subscribePodcast
 	t.Cleanup(func() { subscribePodcast = old })
 	subscribePodcast = func(int64, bool) error { return nil }
@@ -40,7 +40,7 @@ func TestPodcastMVVMSubscriptionUpdatesPersonalPage(t *testing.T) {
 		t.Fatal("detail kept a separate subscription list")
 	}
 	personal = true
-	a.route = route{page: pageUser, id: 9}
+	a.route = route{Page: pageUser, ID: 9}
 	tt.Frame()
 	if tt.HasText(pod.Name) {
 		t.Fatal("personal page still displayed the removed subscription")

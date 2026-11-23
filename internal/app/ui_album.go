@@ -16,7 +16,7 @@ var (
 )
 
 func (a *app) albumPage(c *ui.Context) {
-	id := a.route.id
+	id := a.route.ID
 	// Whether the listener saved this album is whether the albums they saved
 	// list it: load that once, as the page may be the first thing opened.
 	a.freshenAlbums()
@@ -48,7 +48,7 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 					if i > 0 {
 						ui.Text(c, ", ")
 					}
-					a.link(c.Key(i), ar.Name, p.muted, p.text, route{page: pageArtist, id: ar.ID})
+					a.link(c.Key(i), ar.Name, p.muted, p.text, route{Page: pageArtist, ID: ar.ID})
 				}
 				meta := fmt.Sprintf(" · %d 首", len(al.Songs))
 				if al.PublishTime > 0 {
@@ -109,7 +109,7 @@ func (a *app) albumCard(c *ui.Context, al *netease.AlbumProfile) {
 		art.Children(func() { a.coverFill(c, al.PicURL, 400, 10) })
 		ui.Text(c, al.Name).FontSize(13).FontWeight(500).MaxLines(2).LineHeight(1.35)
 		var meta []string
-		if a.route.page != pageArtist {
+		if a.route.Page != pageArtist {
 			meta = append(meta, al.ArtistNames())
 		}
 		if al.PublishTime > 0 {
@@ -118,6 +118,6 @@ func (a *app) albumCard(c *ui.Context, al *netease.AlbumProfile) {
 		ui.Text(c, strings.Join(meta, " · ")).FontSize(12).TextColor(p.muted).SingleLine().Margin(-6, 0, 0, 0)
 	})
 	if card.Clicked() {
-		a.open(route{page: pageAlbum, id: al.ID})
+		a.open(route{Page: pageAlbum, ID: al.ID})
 	}
 }

@@ -20,7 +20,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
-			page := route{page: pagePlaylist, id: 42}
+			page := route{Page: pagePlaylist, ID: 42}
 			a.route = page
 			tr := netease.Track{ID: 1, Name: "测试封面", Album: netease.Album{PicURL: "https://p1.music.126.net/test/row.jpg"}}
 			a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "原歌单", Tracks: []netease.Track{tr}}
@@ -51,7 +51,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			if mode == "now playing" {
 				a.nowPlaying = true
 			} else {
-				a.route = route{page: pagePlaylist, id: 43}
+				a.route = route{Page: pagePlaylist, ID: 43}
 			}
 			view.Frame()
 			view.Advance(time.Second)
@@ -90,11 +90,11 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 9999, Name: "一张相片"}})
 	tt := ui.NewTester(a.view, 1200, 800)
 
-	for _, r := range []route{{page: pagePlaylist, id: 42}, {page: pageCharts}} {
+	for _, r := range []route{{Page: pagePlaylist, ID: 42}, {Page: pageCharts}} {
 		a.open(r)
 		tt.Frame()
 		var names []string
-		if r.page == pagePlaylist {
+		if r.Page == pagePlaylist {
 			for _, tr := range tracks {
 				names = append(names, tr.Name)
 			}

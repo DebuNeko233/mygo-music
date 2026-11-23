@@ -19,19 +19,19 @@ var skeletonScenes = []struct {
 	set  func(a *app)
 }{
 	{"home", func(a *app) {}},
-	{"charts", func(a *app) { a.route = route{page: pageCharts} }},
-	{"daily", func(a *app) { a.route = route{page: pageDaily} }},
+	{"charts", func(a *app) { a.route = route{Page: pageCharts} }},
+	{"daily", func(a *app) { a.route = route{Page: pageDaily} }},
 	{"playlist", func(a *app) {
-		a.route = route{page: pagePlaylist, id: 7}
+		a.route = route{Page: pagePlaylist, ID: 7}
 		a.library.Loading[7] = true
 	}},
 	{"search", func(a *app) {
-		a.route = route{page: pageSearch, query: "春日影", kind: netease.SearchSongs}
-		a.searches.Set(a.route, &searchData{page: viewmodel.Page{Loading: true}})
+		a.route = route{Page: pageSearch, Query: "春日影", Kind: netease.SearchSongs}
+		a.searches.Pages.Set(a.route, &viewmodel.SearchPage{Page: viewmodel.Page{Loading: true}})
 	}},
 	{"artists", func(a *app) {
-		a.route = route{page: pageSearch, query: "春日影", kind: netease.SearchArtists}
-		a.searches.Set(a.route, &searchData{page: viewmodel.Page{Loading: true}})
+		a.route = route{Page: pageSearch, Query: "春日影", Kind: netease.SearchArtists}
+		a.searches.Pages.Set(a.route, &viewmodel.SearchPage{Page: viewmodel.Page{Loading: true}})
 	}},
 	{"login", func(a *app) { a.account.Login = viewmodel.LoginState{Open: true} }},
 	{"comments", func(a *app) {

@@ -20,7 +20,7 @@ var (
 
 func (a *app) userPage(c *ui.Context) {
 	p := a.pal
-	id := a.route.id
+	id := a.route.ID
 	d := a.users.Pages.Get(id)
 	if d.User == nil {
 		if d.Loading == 0 {
@@ -105,6 +105,6 @@ func (a *app) userRow(c *ui.Context, u *netease.User) {
 		})
 	})
 	if row.Clicked() {
-		a.open(route{page: pageUser, id: u.UserID})
+		a.open(route{Page: pageUser, ID: u.UserID})
 	}
 }

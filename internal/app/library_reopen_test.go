@@ -21,7 +21,7 @@ func TestReopenedPlaylistRefreshes(t *testing.T) {
 	old := &netease.Playlist{ID: 7, Name: "Old", Tracks: []netease.Track{{ID: 1}}}
 	a.library.Playlists[7] = old
 	a.pl.Cue([]netease.Track{{ID: 9}})
-	a.open(route{page: pagePlaylist, id: 7})
+	a.open(route{Page: pagePlaylist, ID: 7})
 	if a.library.Playlists[7] != old {
 		t.Fatal("blanked the page while refreshing")
 	}

@@ -18,7 +18,7 @@ func recentPerfApp(count int) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 7, Nickname: "小明"}
-	a.route = route{page: pageRecent}
+	a.route = route{Page: pageRecent}
 	for i := range a.recent.Tabs {
 		a.recent.Tabs[i] = viewmodel.RecentTab{Shown: true, At: time.Now().Add(time.Hour)}
 	}

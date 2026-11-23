@@ -17,7 +17,7 @@ import (
 // credited by name alone, is plain text. An episode's host and podcast,
 // in its artists' and album's place, link to the podcast's page.
 func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Color, album ...bool) ui.Element {
-	podcast := route{page: pagePodcast, id: tr.PodcastID}
+	podcast := route{Page: pagePodcast, ID: tr.PodcastID}
 	return ui.RichText(c).TextColor(color).Children(func() {
 		for i, ar := range tr.Artists {
 			if i > 0 {
@@ -27,7 +27,7 @@ func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Colo
 			case tr.PodcastID != 0:
 				a.link(c.Key(i), ar.Name, color, hover, podcast)
 			case ar.ID != 0:
-				a.link(c.Key(i), ar.Name, color, hover, route{page: pageArtist, id: ar.ID})
+				a.link(c.Key(i), ar.Name, color, hover, route{Page: pageArtist, ID: ar.ID})
 			default:
 				ui.Text(c, ar.Name)
 			}
@@ -38,7 +38,7 @@ func (a *app) artistLinks(c *ui.Context, tr *netease.Track, color, hover ui.Colo
 			case tr.PodcastID != 0:
 				a.link(c.Key("album"), tr.Album.Name, color, hover, podcast)
 			case tr.Album.ID != 0:
-				a.link(c.Key("album"), tr.Album.Name, color, hover, route{page: pageAlbum, id: tr.Album.ID})
+				a.link(c.Key("album"), tr.Album.Name, color, hover, route{Page: pageAlbum, ID: tr.Album.ID})
 			default:
 				ui.Text(c, tr.Album.Name)
 			}
@@ -65,7 +65,7 @@ func (a *app) openPage(r route) {
 }
 
 // openArtist opens an artist's page in the main window.
-func (a *app) openArtist(id int64) { a.openPage(route{page: pageArtist, id: id}) }
+func (a *app) openArtist(id int64) { a.openPage(route{Page: pageArtist, ID: id}) }
 
 // These load an artist, their songs, albums and events from NetEase, and
 // follow them; tests replace them.
@@ -80,7 +80,7 @@ var (
 // artistPage shows who an artist is over their songs, the most popular or
 // the newest, their albums or their events.
 func (a *app) artistPage(c *ui.Context) {
-	id := a.route.id
+	id := a.route.ID
 	d := a.artist(id)
 	if d.Profile == nil {
 		if !d.Loading || d.Error != "" {

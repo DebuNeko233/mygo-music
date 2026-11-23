@@ -150,7 +150,7 @@ func (a *app) accountMenu(c *ui.Context, row ui.Element) {
 		}
 		if a.menuItem(c, iconUser, "我的主页", "").AutoFocus().Clicked() {
 			a.accountOpen = false
-			a.open(route{page: pageUser, id: a.account.Profile.UserID})
+			a.open(route{Page: pageUser, ID: a.account.Profile.UserID})
 		}
 		if a.menuItem(c, iconSettings, "设置…", shortcut).Clicked() {
 			a.accountOpen = false
@@ -234,7 +234,7 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 	}
 	for i := range lists {
 		pl := &lists[i]
-		selected := a.route.page == pagePlaylist && a.route.id == pl.ID && !a.nowPlaying
+		selected := a.route.Page == pagePlaylist && a.route.ID == pl.ID && !a.nowPlaying
 		b := ui.ButtonBase(c.Key(pl.ID)).Height(34).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pl.Name)
 		switch {
 		case selected:
@@ -265,7 +265,7 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 			})
 		}
 		if b.Clicked() {
-			a.open(route{page: pagePlaylist, id: pl.ID})
+			a.open(route{Page: pagePlaylist, ID: pl.ID})
 		}
 	}
 }
@@ -282,7 +282,7 @@ func (a *app) myAlbums(c *ui.Context, albums []netease.AlbumProfile, collapsed *
 	}
 	for i := range albums {
 		al := &albums[i]
-		selected := a.route.page == pageAlbum && a.route.id == al.ID && !a.nowPlaying
+		selected := a.route.Page == pageAlbum && a.route.ID == al.ID && !a.nowPlaying
 		b := ui.ButtonBase(c.Key(fmt.Sprintf("album/%d", al.ID))).Height(34).PaddingX(8).Gap(10).Radius(8).
 			AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(al.Name)
 		switch {
@@ -301,7 +301,7 @@ func (a *app) myAlbums(c *ui.Context, albums []netease.AlbumProfile, collapsed *
 			}
 		})
 		if b.Clicked() {
-			a.open(route{page: pageAlbum, id: al.ID})
+			a.open(route{Page: pageAlbum, ID: al.ID})
 		}
 	}
 }

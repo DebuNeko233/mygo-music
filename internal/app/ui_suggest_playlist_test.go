@@ -58,13 +58,13 @@ func TestSearchClearKeepsFocus(t *testing.T) {
 					t.Fatal(err)
 				}
 				tt.Frame()
-				if a.query != "" || !tt.Focused("搜索") || a.suggestions.query != "" {
-					t.Fatalf("cleared query %q, focused %v, suggestions %q", a.query, tt.Focused("搜索"), a.suggestions.query)
+				if a.searches.Query != "" || !tt.Focused("搜索") || a.searches.Suggestions.Query != "" {
+					t.Fatalf("cleared query %q, focused %v, suggestions %q", a.searches.Query, tt.Focused("搜索"), a.searches.Suggestions.Query)
 				}
 				if _, shown := tt.Find("清空搜索"); shown {
 					t.Fatal("clear button remained after clearing")
 				}
-				if a.route != (route{page: pagePlaylist, id: 7}) || a.pl.Current().ID != 1 || a.pl.Playing() || !slices.Equal(a.settings.SearchHistory, []string{"之前的搜索"}) {
+				if a.route != (route{Page: pagePlaylist, ID: 7}) || a.pl.Current().ID != 1 || a.pl.Playing() || !slices.Equal(a.settings.SearchHistory, []string{"之前的搜索"}) {
 					t.Fatal("clearing changed navigation, playback or saved history")
 				}
 				tt.Type("251")
@@ -91,7 +91,7 @@ func TestPlaylistSuggestionPlaysAndLocates(t *testing.T) {
 			target := pl.Tracks[249]
 			typePlaylistSearch(t, tt, "250")
 			// Online suggestions may arrive later, but cannot take first place.
-			a.suggestions.items = suggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 900, Name: "250 elsewhere"}}})
+			a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 900, Name: "250 elsewhere"}}})
 			tt.Frame()
 			if keyboard {
 				tt.Key(0, ui.KeyDown)
@@ -103,7 +103,7 @@ func TestPlaylistSuggestionPlaysAndLocates(t *testing.T) {
 			if a.pl.Current().ID != target.ID || !a.pl.Playing() || !slices.EqualFunc(a.pl.Queue(), pl.Tracks, func(a, b netease.Track) bool { return a.ID == b.ID }) {
 				t.Fatal("selection did not play the chosen song with the whole playlist as queue")
 			}
-			if a.route != (route{page: pagePlaylist, id: 7}) || a.nowPlaying {
+			if a.route != (route{Page: pagePlaylist, ID: 7}) || a.nowPlaying {
 				t.Fatal("selection left the displayed playlist")
 			}
 			locatedRow(t, tt, target.Name, 760)
@@ -117,13 +117,13 @@ func TestPlaylistSuggestionRemoteKeyboard(t *testing.T) {
 	a, _, tt := playlistSearchFixture(t)
 	a.library.Playlists[8] = &netease.Playlist{ID: 8, Name: "另一张歌单"}
 	typePlaylistSearch(t, tt, "250")
-	a.suggestions.items = suggestionList(netease.Suggestions{Playlists: []netease.Playlist{{ID: 8, Name: "另一张歌单"}}})
+	a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Playlists: []netease.Playlist{{ID: 8, Name: "另一张歌单"}}})
 	tt.Frame()
 	tt.Key(0, ui.KeyDown) // Current-playlist match.
 	tt.Key(0, ui.KeyDown) // Remote playlist.
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if a.route != (route{page: pagePlaylist, id: 8}) || a.pl.Current().ID != 1 || a.pl.Playing() {
+	if a.route != (route{Page: pagePlaylist, ID: 8}) || a.pl.Current().ID != 1 || a.pl.Playing() {
 		t.Fatalf("remote choice opened %+v and plays %+v", a.route, a.pl.Current())
 	}
 }
@@ -141,9 +141,9 @@ func TestPlaylistSuggestionSmallWindow(t *testing.T) {
 		a.library.Playlists[pl.ID] = &pl
 		remote = append(remote, pl)
 	}
-	a.suggestions.items = suggestionList(netease.Suggestions{Playlists: remote})
+	a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Playlists: remote})
 	tt.Frame()
-	for range trackSuggestLimit + len(remote) {
+	for range 3 + len(remote) {
 		tt.Key(0, ui.KeyDown)
 	}
 	tt.Frame()
@@ -156,7 +156,7 @@ func TestPlaylistSuggestionSmallWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{page: pagePlaylist, id: 29}) || a.pl.Current().ID != 1 {
+	if a.route != (route{Page: pagePlaylist, ID: 29}) || a.pl.Current().ID != 1 {
 		t.Fatal("online choice failed or changed playback")
 	}
 }
@@ -171,7 +171,7 @@ func TestPlaylistSuggestionKeepsGlobalSearch(t *testing.T) {
 			typePlaylistSearch(t, tt, q)
 			tt.Key(0, ui.KeyEnter)
 			tt.Frame()
-			if got := wait(t, asked, "global search"); got.query != q || a.route.page != pageSearch {
+			if got := wait(t, asked, "global search"); got.query != q || a.route.Page != pageSearch {
 				t.Fatalf("searched %+v on %+v", got, a.route)
 			}
 			if a.pl.Current().ID != 1 || a.pl.Playing() {
@@ -187,7 +187,7 @@ func TestPlaylistSuggestionMatches(t *testing.T) {
 	a := newTestApp()
 	track := netease.Track{ID: 1, Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Album: netease.Album{Name: "迷跡波"}, Alias: []string{"Haruhikage"}}
 	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{track}}
-	a.library.Playlists[7], a.route = pl, route{page: pagePlaylist, id: 7}
+	a.library.Playlists[7], a.route = pl, route{Page: pagePlaylist, ID: 7}
 	for _, tc := range []struct {
 		query string
 		want  bool
@@ -205,11 +205,11 @@ func TestPlaylistSuggestionMatches(t *testing.T) {
 		pl.Tracks = append(pl.Tracks, tr)
 	}
 	got := a.trackSuggestions("春日")
-	if len(got) != trackSuggestLimit {
+	if len(got) != 3 {
 		t.Fatalf("got %d local suggestions", len(got))
 	}
 	for i, sg := range got {
-		if sg.song != int64(i+1) {
+		if sg.Song != int64(i+1) {
 			t.Fatal("local suggestions changed playlist order")
 		}
 	}
@@ -219,26 +219,26 @@ func TestPlaylistSuggestionMatches(t *testing.T) {
 // changes, including replacing tracks on the same playlist object after edits.
 func TestPlaylistSuggestionRefreshes(t *testing.T) {
 	a := newTestApp()
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	a.library.Playlists[7] = &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "old"}}}
 	a.trackSuggestions("old")
 	a.library.Playlists[7] = &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 2, Name: "new"}}}
 	if len(a.trackSuggestions("old")) != 0 {
 		t.Fatal("refresh kept a removed match")
 	}
-	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].song != 2 {
+	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].Song != 2 {
 		t.Fatal("new query missed refreshed tracks")
 	}
 	a.library.Playlists[7].Tracks = []netease.Track{{ID: 3, Name: "new"}}
-	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].song != 3 {
+	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].Song != 3 {
 		t.Fatal("track replacement reused old results")
 	}
 	a.library.Playlists[8] = &netease.Playlist{ID: 8, Tracks: []netease.Track{{ID: 4, Name: "new"}}}
-	a.route.id = 8
-	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].song != 4 {
+	a.route.ID = 8
+	if got := a.trackSuggestions("new"); len(got) != 1 || got[0].Song != 4 {
 		t.Fatal("page change searched the previous playlist")
 	}
-	a.route.page = pageAlbum
+	a.route.Page = pageAlbum
 	if len(a.trackSuggestions("new")) != 0 {
 		t.Fatal("album page searched a playlist with the same ID")
 	}
@@ -259,7 +259,7 @@ func TestPlaylistSuggestionPrioritizesPlayable(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
-			a.route = route{page: pagePlaylist, id: 7}
+			a.route = route{Page: pagePlaylist, ID: 7}
 			pl := &netease.Playlist{ID: 7}
 			for i, fee := range tc.fees {
 				pl.Tracks = append(pl.Tracks, netease.Track{ID: int64(i + 1), Name: "match", Fee: fee})
@@ -270,7 +270,7 @@ func TestPlaylistSuggestionPrioritizesPlayable(t *testing.T) {
 				t.Fatalf("got %d suggestions, want %d", len(got), len(tc.want))
 			}
 			for i, sg := range got {
-				if sg.song != tc.want[i] || sg.playable != pl.Tracks[sg.song-1].Playable() {
+				if sg.Song != tc.want[i] || sg.Playable != pl.Tracks[sg.Song-1].Playable() {
 					t.Fatalf("suggestion %d: %+v, want song %d", i, sg, tc.want[i])
 				}
 			}
@@ -309,10 +309,10 @@ func TestPlaylistSuggestionPlaysPastUnavailable(t *testing.T) {
 // must all invalidate suggestions for the same query.
 func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}, {ID: 2, Name: "other"}}}
 	a.library.Playlists[7] = pl
-	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != 1 {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].Song != 1 {
 		t.Fatal("initial match missing")
 	}
 	before := removeFromPlaylist
@@ -323,7 +323,7 @@ func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
 		t.Fatal("removed song remained in suggestions")
 	}
 	refreshPost(t, posts)
-	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != 1 {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].Song != 1 {
 		t.Fatal("failed removal did not restore its suggestion")
 	}
 	playlistDetail = func(id int64) (*netease.Playlist, error) {
@@ -331,7 +331,7 @@ func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
 	}
 	a.loadPlaylist(7, false)
 	refreshPost(t, posts)
-	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != 3 {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].Song != 3 {
 		t.Fatal("network refresh reused the old suggestion")
 	}
 	a.forgetPlaylist(7)
@@ -344,7 +344,7 @@ func TestPlaylistSuggestionFollowsLibraryUpdates(t *testing.T) {
 // track changes, including restoring an old value when an edit rolls back.
 func TestPlaylistSuggestionFollowsInPlaceEdit(t *testing.T) {
 	a := newTestApp()
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}}}
 	a.library.Playlists[7] = pl
 	original := pl.Tracks[0]
@@ -358,7 +358,7 @@ func TestPlaylistSuggestionFollowsInPlaceEdit(t *testing.T) {
 	}
 	pl.Tracks[0] = original
 	finishEdit()
-	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].song != original.ID {
+	if got := a.trackSuggestions("match"); len(got) != 1 || got[0].Song != original.ID {
 		t.Fatal("edit rollback kept stale results")
 	}
 }
@@ -372,7 +372,7 @@ func TestPlaylistSuggestionRevalidatesSelection(t *testing.T) {
 			a := newTestApp()
 			a.pl.SuspendCache()
 			a.pl.Cue([]netease.Track{{ID: 99, Name: "before"}})
-			a.route = route{page: pagePlaylist, id: 7}
+			a.route = route{Page: pagePlaylist, ID: 7}
 			pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}, {ID: 2, Name: "other"}}}
 			a.library.Playlists[7] = pl
 			sg := a.trackSuggestions("match")[0]
@@ -385,15 +385,15 @@ func TestPlaylistSuggestionRevalidatesSelection(t *testing.T) {
 			case "unavailable":
 				pl.Tracks[0].Fee = 1
 			case "other playlist":
-				a.route.id = 8
+				a.route.ID = 8
 			case "other page":
-				a.route.page = pageAlbum
+				a.route.Page = pageAlbum
 			case "now playing":
 				a.nowPlaying = true
 			case "new query":
 				q = "other"
 			}
-			a.choose(sg.key, q)
+			a.choose(sg.Key, q)
 			want := int64(99)
 			if change == "reorder" {
 				want = 1
@@ -435,7 +435,7 @@ func TestPlaylistSuggestionFrames(t *testing.T) {
 		}
 		tt.SetDark(dark)
 		typePlaylistSearch(t, tt, "春日影")
-		a.suggestions.items = suggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 901, Name: "春日影", Artists: []netease.Artist{{Name: "CRYCHIC"}}}}, Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 902, Name: "迷跡波"}}}})
+		a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 901, Name: "春日影", Artists: []netease.Artist{{Name: "CRYCHIC"}}}}, Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 902, Name: "迷跡波"}}}})
 		theme := "light"
 		if dark {
 			theme = "dark"
@@ -466,7 +466,7 @@ func TestPlaylistSuggestionFrames(t *testing.T) {
 // rebuilding the same popup during animations should not scan or allocate.
 func BenchmarkPlaylistSuggestions(b *testing.B) {
 	a := newTestApp()
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	pl := &netease.Playlist{ID: 7, Tracks: make([]netease.Track, 20000)}
 	for i := range pl.Tracks {
 		pl.Tracks[i] = netease.Track{ID: int64(i + 1), Name: "歌曲", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Album: netease.Album{Name: "迷跡波"}}

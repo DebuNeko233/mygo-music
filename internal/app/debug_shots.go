@@ -65,9 +65,9 @@ func init() {
 				if os.Getenv("NM_DAILY") != "" {
 					// The home page, its daily card's record turning, for a
 					// while; then another page, without it, loaded first.
-					step(0, func() { a.open(route{page: pageCharts}) })
+					step(0, func() { a.open(route{Page: pageCharts}) })
 					time.Sleep(6 * time.Second)
-					step(0, func() { a.open(route{page: pageHome}) })
+					step(0, func() { a.open(route{Page: pageHome}) })
 					time.Sleep(2 * time.Second)
 					if f, err := os.Create(filepath.Join(dir, "daily.pprof")); err == nil {
 						pprof.StartCPUProfile(f)
@@ -80,7 +80,7 @@ func init() {
 					mark("home")
 					time.Sleep(10 * time.Second)
 					mark("charts")
-					step(0, func() { a.open(route{page: pageCharts}) })
+					step(0, func() { a.open(route{Page: pageCharts}) })
 					time.Sleep(10 * time.Second)
 					mark("end")
 					mygo.RunOnMain(mygo.App.Quit)
@@ -149,7 +149,7 @@ func init() {
 			if os.Getenv("NM_SCENE") == "np" {
 				time.Sleep(5 * time.Second)
 				shot("q-home", a.win)
-				step(0, func() { a.open(route{page: pageDaily}) })
+				step(0, func() { a.open(route{Page: pageDaily}) })
 				time.Sleep(2 * time.Second)
 				shot("q-daily", a.win)
 				step(0, func() { a.pl.PlayQueue(a.home.Daily, 0); a.setVolume(0.15) })
@@ -165,7 +165,7 @@ func init() {
 				// first podcast's newest episode, as its card's button plays
 				// it, muted.
 				time.Sleep(3 * time.Second)
-				step(0, func() { a.open(route{page: pagePodcasts}) })
+				step(0, func() { a.open(route{Page: pagePodcasts}) })
 				time.Sleep(150 * time.Millisecond)
 				shot("p-loading", a.win)
 				time.Sleep(4 * time.Second)
@@ -196,7 +196,7 @@ func init() {
 				shot("a-loading", a.win)
 				time.Sleep(4 * time.Second)
 				shot("a-artist", a.win)
-				step(0, func() { a.artists.Tab = viewmodel.ArtistLatest; a.loadLatest(a.route.id) })
+				step(0, func() { a.artists.Tab = viewmodel.ArtistLatest; a.loadLatest(a.route.ID) })
 				time.Sleep(3 * time.Second)
 				shot("a-latest", a.win)
 				mygo.RunOnMain(mygo.App.Quit)
@@ -206,7 +206,7 @@ func init() {
 				// The listener's own page, and at its foot the podcasts they
 				// subscribe to and the artists they follow.
 				time.Sleep(4 * time.Second)
-				step(0, func() { a.open(route{page: pageUser, id: a.account.Profile.UserID}) })
+				step(0, func() { a.open(route{Page: pageUser, ID: a.account.Profile.UserID}) })
 				time.Sleep(4 * time.Second)
 				shot("p-profile", a.win)
 				step(0, func() { a.pageScroll.ScrollTo(0, 100000, ui.Smooth) })
@@ -222,10 +222,10 @@ func init() {
 			})
 			shot("1-home", a.win)
 			shot("1-notch-idle", a.notch.win)
-			step(0, func() { a.open(route{page: pageCharts}) })
+			step(0, func() { a.open(route{Page: pageCharts}) })
 			time.Sleep(time.Second)
 			shot("2-charts", a.win)
-			step(0, func() { a.open(route{page: pagePlaylist, id: a.home.Charts[1].ID}) })
+			step(0, func() { a.open(route{Page: pagePlaylist, ID: a.home.Charts[1].ID}) })
 			time.Sleep(4 * time.Second)
 			shot("3-playlist", a.win)
 			step(0, func() {

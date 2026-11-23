@@ -8,13 +8,9 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/player"
-
-	// isolateUserData keeps what the app writes, the settings, the session and
-	// the transcripts, in a directory of the test's: it wrote them to the real
-	// one, which fails on a machine where that cannot be written.
-	"netease-music-mygo/internal/pagecache"
 )
 
+// isolateUserData keeps settings, sessions and transcripts in the test directory.
 func isolateUserData(t *testing.T) {
 	t.Helper()
 	mygo.App.SetPath(mygo.PathUserData, t.TempDir())
@@ -22,14 +18,14 @@ func isolateUserData(t *testing.T) {
 
 func newTestApp() *app {
 	a := &app{
-		searches: pagecache.New[route, *searchData](searchBusy),
-		lyricAt:  -1, queueAt: -1,
+		lyricAt: -1, queueAt: -1,
 	}
 	a.library.Reset()
 	a.artists.Reset()
 	a.albums.Reset()
 	a.users.Reset()
 	a.podcasts.Reset()
+	a.searches.Reset()
 	a.art = newArtCache(func(func()) {})
 	a.pl = player.New(func(func()) {})
 	a.pl.SetVolume(0.5)

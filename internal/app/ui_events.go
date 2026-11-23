@@ -59,13 +59,13 @@ func (a *app) event(c *ui.Context, e *netease.Event) {
 		case ct.Song != nil:
 			// A song has no page: its album's shows it.
 			s := ct.Song
-			a.shared(c, s.Name, "单曲 · "+s.ArtistNames(), s.Album.PicURL, route{page: pageAlbum, id: s.Album.ID})
+			a.shared(c, s.Name, "单曲 · "+s.ArtistNames(), s.Album.PicURL, route{Page: pageAlbum, ID: s.Album.ID})
 		case ct.Album != nil:
-			a.shared(c, ct.Album.Name, "专辑 · "+ct.Album.ArtistNames(), ct.Album.PicURL, route{page: pageAlbum, id: ct.Album.ID})
+			a.shared(c, ct.Album.Name, "专辑 · "+ct.Album.ArtistNames(), ct.Album.PicURL, route{Page: pageAlbum, ID: ct.Album.ID})
 		case ct.Playlist != nil:
-			a.shared(c, ct.Playlist.Name, "歌单 · "+ct.Playlist.Creator.Nickname, ct.Playlist.Cover(), route{page: pagePlaylist, id: ct.Playlist.ID})
+			a.shared(c, ct.Playlist.Name, "歌单 · "+ct.Playlist.Creator.Nickname, ct.Playlist.Cover(), route{Page: pagePlaylist, ID: ct.Playlist.ID})
 		case ct.Artist != nil:
-			a.shared(c, ct.Artist.Name, "歌手", ct.Artist.Avatar, route{page: pageArtist, id: ct.Artist.ID})
+			a.shared(c, ct.Artist.Name, "歌手", ct.Artist.Avatar, route{Page: pageArtist, ID: ct.Artist.ID})
 		case ct.Video:
 			ui.Text(c, "分享了视频，暂不支持在应用内观看").FontSize(12.5).TextColor(p.muted)
 		}
@@ -79,7 +79,7 @@ func (a *app) event(c *ui.Context, e *netease.Event) {
 func (a *app) shared(c *ui.Context, name, sub, pic string, r route) {
 	p := a.pal
 	card := ui.ButtonBase(c.Key("shared")).Gap(12).Padding(8).Radius(10).AlignItems(ui.Center).Background(p.hover).
-		FocusRing(false).Label(name).Disabled(r.id == 0).MaxWidth(480)
+		FocusRing(false).Label(name).Disabled(r.ID == 0).MaxWidth(480)
 	if card.Hovered() {
 		card.Background(p.press)
 	}

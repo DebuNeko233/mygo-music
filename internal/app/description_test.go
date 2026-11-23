@@ -29,7 +29,7 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
-			a.route = route{page: tc.page, id: 77}
+			a.route = route{Page: tc.page, ID: 77}
 			a.artists.Pages.Set(77, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
 			a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
 			a.library.Playlists[77] = &netease.Playlist{ID: 77, Name: "歌单名称", Description: text}
@@ -75,7 +75,7 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 func TestDetailDescriptionMoreFollowsAvailableWidth(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.route = route{page: pageAlbum, id: 77}
+	a.route = route{Page: pageAlbum, ID: 77}
 	a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{
 		Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: strings.Repeat("这是一段专辑介绍。", 10),
 	}})
@@ -108,15 +108,15 @@ func TestDescriptionMoreInSearchResults(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
-			r := route{page: pageSearch, query: "测试", kind: tc.kind}
+			r := route{Page: pageSearch, Query: "测试", Kind: tc.kind}
 			a.route = r
-			d := &searchData{page: viewmodel.Page{Loaded: true}}
+			d := &viewmodel.SearchPage{Page: viewmodel.Page{Loaded: true}}
 			if tc.kind == netease.SearchPodcasts {
-				d.res.Podcasts = []netease.Podcast{{ID: 1, Name: "甲", Description: short}, {ID: 2, Name: "乙", Description: long}}
+				d.Res.Podcasts = []netease.Podcast{{ID: 1, Name: "甲", Description: short}, {ID: 2, Name: "乙", Description: long}}
 			} else {
-				d.res.Users = []netease.User{{UserID: 1, Nickname: "甲", Signature: short}, {UserID: 2, Nickname: "乙", Signature: long}}
+				d.Res.Users = []netease.User{{UserID: 1, Nickname: "甲", Signature: short}, {UserID: 2, Nickname: "乙", Signature: long}}
 			}
-			a.searches.Set(r, d)
+			a.searches.Pages.Set(r, d)
 			view := ui.NewTester(a.view, 1180, 780)
 			if _, ok := view.Find("更多：甲 · " + tc.description); ok {
 				t.Fatal("the short description already fits")
@@ -136,7 +136,7 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route, a.recent.Selected = route{page: pageRecent}, viewmodel.RecentPodcasts
+	a.route, a.recent.Selected = route{Page: pageRecent}, viewmodel.RecentPodcasts
 	for i := range a.recent.Tabs {
 		a.recent.Tabs[i].At = a.listsNow()
 	}
@@ -147,7 +147,7 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	if err := view.Click("更多：播客名称 · 简介"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.intro.open || a.intro.text != desc || a.route.page != pageRecent {
+	if !a.intro.open || a.intro.text != desc || a.route.Page != pageRecent {
 		t.Fatal("More did not open the description over the podcast grid")
 	}
 }

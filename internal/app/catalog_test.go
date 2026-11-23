@@ -81,7 +81,7 @@ func TestSearchKinds(t *testing.T) {
 
 	tt.Key(0, ui.KeyBack)
 	tt.Key(0, ui.KeyBack)
-	if a.route.page != pageHome {
+	if a.route.Page != pageHome {
 		t.Errorf("back went to %+v", a.route)
 	}
 }
@@ -91,14 +91,14 @@ func TestSearchKinds(t *testing.T) {
 func TestSearchKindFromSongs(t *testing.T) {
 	asked := fakeSearch(t)
 	a := catalogApp()
-	a.open(route{page: pageSearch, query: "MyGO", kind: netease.SearchSongs})
+	a.open(route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchSongs})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.Click("歌手"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route.kind != netease.SearchArtists {
+	if a.route.Kind != netease.SearchArtists {
 		t.Fatalf("on %+v", a.route)
 	}
 	if len(asked) > 0 {
@@ -110,7 +110,7 @@ func TestSearchKindFromSongs(t *testing.T) {
 func TestSearchPlaylists(t *testing.T) {
 	asked := fakeSearch(t)
 	a := catalogApp()
-	a.open(route{page: pageSearch, query: "MyGO", kind: netease.SearchSongs})
+	a.open(route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchSongs})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.Click("歌单"); err != nil {
@@ -121,9 +121,9 @@ func TestSearchPlaylists(t *testing.T) {
 		t.Fatalf("searched %+v", got)
 	}
 
-	a.searches.Set(a.route, &searchData{
-		res:  netease.SearchResult{Playlists: []netease.Playlist{{ID: 42, Name: "迷途人偶", TrackCount: 52}}, Total: 1},
-		page: viewmodel.Page{Loaded: true},
+	a.searches.Pages.Set(a.route, &viewmodel.SearchPage{
+		Res:  netease.SearchResult{Playlists: []netease.Playlist{{ID: 42, Name: "迷途人偶", TrackCount: 52}}, Total: 1},
+		Page: viewmodel.Page{Loaded: true},
 	})
 	a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "迷途人偶"} // so its page loads nothing
 	tt.Frame()
@@ -131,7 +131,7 @@ func TestSearchPlaylists(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{page: pagePlaylist, id: 42}) {
+	if a.route != (route{Page: pagePlaylist, ID: 42}) {
 		t.Errorf("clicked through to %+v", a.route)
 	}
 }
@@ -142,10 +142,10 @@ func TestSearchLoadsMore(t *testing.T) {
 	asked := fakeSearch(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	r := route{page: pageSearch, query: "春日影", kind: netease.SearchUsers}
-	a.searches.Set(r, &searchData{
-		res:  netease.SearchResult{Users: []netease.User{{UserID: 1, Nickname: "甲"}, {UserID: 2, Nickname: "乙"}}, Total: 5},
-		page: viewmodel.Page{Loaded: true, More: true},
+	r := route{Page: pageSearch, Query: "春日影", Kind: netease.SearchUsers}
+	a.searches.Pages.Set(r, &viewmodel.SearchPage{
+		Res:  netease.SearchResult{Users: []netease.User{{UserID: 1, Nickname: "甲"}, {UserID: 2, Nickname: "乙"}}, Total: 5},
+		Page: viewmodel.Page{Loaded: true, More: true},
 	})
 	a.open(r)
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -183,8 +183,8 @@ func TestSearchHistoryChoice(t *testing.T) {
 			t.Fatal(err)
 		}
 		tt.Frame()
-		if got := wait(t, asked, "the search"); got.query != "迷星叫" || a.query != "迷星叫" {
-			t.Fatalf("keys %v: searched %+v, field %q", keys, got, a.query)
+		if got := wait(t, asked, "the search"); got.query != "迷星叫" || a.searches.Query != "迷星叫" {
+			t.Fatalf("keys %v: searched %+v, field %q", keys, got, a.searches.Query)
 		}
 		if !slices.Equal(a.settings.SearchHistory, []string{"迷星叫", "春日影"}) {
 			t.Errorf("keys %v: history %q", keys, a.settings.SearchHistory)
@@ -209,7 +209,7 @@ func TestSuggestionOpensPage(t *testing.T) {
 		t.Fatalf("suggestions for %q", q)
 	}
 	// As they land, which post drops without a window.
-	a.suggestions.items = suggestionList(netease.Suggestions{
+	a.searches.Suggestions.Items = suggestionList(netease.Suggestions{
 		Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 8, Name: "迷跡波"}, Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}},
 		Order:  []string{"albums"},
 	})
@@ -218,7 +218,7 @@ func TestSuggestionOpensPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{page: pageAlbum, id: 8}) || !slices.Equal(a.settings.SearchHistory, []string{"迷跡"}) {
+	if a.route != (route{Page: pageAlbum, ID: 8}) || !slices.Equal(a.settings.SearchHistory, []string{"迷跡"}) {
 		t.Fatalf("opened %+v, history %q", a.route, a.settings.SearchHistory)
 	}
 }
@@ -264,8 +264,8 @@ func TestSuggestionIgnoresSupersededResponse(t *testing.T) {
 	refreshPost(t, posts)
 	middle.reply <- netease.Suggestions{}
 	refreshPost(t, posts)
-	if len(a.suggestions.items) != 1 || a.suggestions.items[0].name != "new result" {
-		t.Fatalf("stale response replaced new suggestions: %+v", a.suggestions.items)
+	if len(a.searches.Suggestions.Items) != 1 || a.searches.Suggestions.Items[0].Name != "new result" {
+		t.Fatalf("stale response replaced new suggestions: %+v", a.searches.Suggestions.Items)
 	}
 }
 
@@ -289,7 +289,7 @@ func TestArtistAlbumsAndEvents(t *testing.T) {
 	a.settings = defaultSettings()
 	d := &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}, AccountID: 99}}
 	a.artists.Pages.Set(12, d)
-	a.open(route{page: pageArtist, id: 12})
+	a.open(route{Page: pageArtist, ID: 12})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 
@@ -306,7 +306,7 @@ func TestArtistAlbumsAndEvents(t *testing.T) {
 	if err := tt.Click("迷跡波"); err != nil {
 		t.Fatal(err)
 	}
-	if a.route != (route{page: pageAlbum, id: 8}) {
+	if a.route != (route{Page: pageAlbum, ID: 8}) {
 		t.Fatalf("the album opened %+v", a.route)
 	}
 
@@ -334,7 +334,7 @@ func TestFollowArtist(t *testing.T) {
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
 	a.artists.Pages.Set(12, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}}})
-	a.open(route{page: pageArtist, id: 12})
+	a.open(route{Page: pageArtist, ID: 12})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.Click("关注"); err != nil {
@@ -364,7 +364,7 @@ func TestPlayEpisode(t *testing.T) {
 		return p
 	}
 	a.podcasts.Pages.Set(5, &viewmodel.PodcastPage{Podcast: pod, Programs: []netease.Program{ep(1, 11, "第三期"), ep(2, 0, "第二期"), ep(3, 13, "第一期")}, Page: viewmodel.Page{Loaded: true}})
-	a.open(route{page: pagePodcast, id: 5})
+	a.open(route{Page: pagePodcast, ID: 5})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.Click("第一期"); err != nil {
@@ -392,7 +392,7 @@ func TestPlayEpisode(t *testing.T) {
 // was open.
 func TestEpisodeOpensPodcast(t *testing.T) {
 	a := catalogApp()
-	a.open(route{page: pagePodcast, id: 5})
+	a.open(route{Page: pagePodcast, ID: 5})
 	d := a.podcasts.Pages.Get(5)
 	a.playProgram(d, 0)
 	a.pl.SetLyrics(nil)
@@ -405,7 +405,7 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.nowPlaying || a.route != (route{page: pagePodcast, id: 5}) {
+	if a.nowPlaying || a.route != (route{Page: pagePodcast, ID: 5}) {
 		t.Fatalf("Now Playing open %v over %+v", a.nowPlaying, a.route)
 	}
 }
@@ -428,7 +428,7 @@ func TestPodcastsTabLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route.page != pagePodcasts {
+	if a.route.Page != pagePodcasts {
 		t.Fatalf("opened %+v", a.route)
 	}
 	if got := wait(t, asked, "the popular podcasts"); got != 0 {
@@ -440,7 +440,7 @@ func TestPodcastsTabLoads(t *testing.T) {
 // its newest episode instead, and leaves the tab open.
 func TestPodcastCard(t *testing.T) {
 	a := catalogApp()
-	a.open(route{page: pagePodcasts})
+	a.open(route{Page: pagePodcasts})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	r, ok := tt.Find("夜航电台")
@@ -455,12 +455,12 @@ func TestPodcastCard(t *testing.T) {
 	tt.Frame()
 	tt.ClickAt(x, y)
 	tt.Frame()
-	if cur := a.pl.Current(); cur == nil || cur.ProgramID != 40 || a.route.page != pagePodcasts {
+	if cur := a.pl.Current(); cur == nil || cur.ProgramID != 40 || a.route.Page != pagePodcasts {
 		t.Fatalf("playing %+v on %+v", cur, a.route)
 	}
 	tt.ClickAt(r.X+r.W/2, r.Y+r.W/2)
 	tt.Frame()
-	if a.route != (route{page: pagePodcast, id: 5}) {
+	if a.route != (route{Page: pagePodcast, ID: 5}) {
 		t.Fatalf("opened %+v", a.route)
 	}
 }
@@ -497,7 +497,7 @@ func TestAlbumLinkInRow(t *testing.T) {
 	a.settings = defaultSettings()
 	song := netease.Track{ID: 2, Name: "起风了", Artists: []netease.Artist{{ID: 13, Name: "丙"}}, Album: netease.Album{ID: 8, Name: "迷跡波"}, Duration: 200000}
 	a.artists.Pages.Set(13, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 13, Name: "丙"}, Songs: []netease.Track{song}}})
-	a.open(route{page: pageArtist, id: 13})
+	a.open(route{Page: pageArtist, ID: 13})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	// Its name, at the start of the column it fills.
@@ -507,7 +507,7 @@ func TestAlbumLinkInRow(t *testing.T) {
 	}
 	tt.ClickAt(r.X+8, r.Y+r.H/2)
 	tt.Frame()
-	if a.route != (route{page: pageAlbum, id: 8}) || a.pl.Current() != nil {
+	if a.route != (route{Page: pageAlbum, ID: 8}) || a.pl.Current() != nil {
 		t.Fatalf("opened %+v, playing %+v", a.route, a.pl.Current())
 	}
 }
@@ -565,7 +565,7 @@ func catalogApp() *app {
 		{netease.SearchUsers, netease.SearchResult{Users: []netease.User{user, {UserID: 10, Nickname: "夏日来信"}}, Total: 2}},
 		{netease.SearchPodcasts, netease.SearchResult{Podcasts: []netease.Podcast{*pod}, Total: 1}},
 	} {
-		a.searches.Set(route{page: pageSearch, query: "MyGO", kind: res.kind}, &searchData{res: res.res, page: viewmodel.Page{Loaded: true}})
+		a.searches.Pages.Set(route{Page: pageSearch, Query: "MyGO", Kind: res.kind}, &viewmodel.SearchPage{Res: res.res, Page: viewmodel.Page{Loaded: true}})
 	}
 	return a
 }
@@ -576,18 +576,18 @@ var catalogScenes = []struct {
 	r    route
 	tab  int
 }{
-	{"search-songs", route{page: pageSearch, query: "MyGO", kind: netease.SearchSongs}, 0},
-	{"search-artists", route{page: pageSearch, query: "MyGO", kind: netease.SearchArtists}, 0},
-	{"search-albums", route{page: pageSearch, query: "MyGO", kind: netease.SearchAlbums}, 0},
-	{"search-users", route{page: pageSearch, query: "MyGO", kind: netease.SearchUsers}, 0},
-	{"search-podcasts", route{page: pageSearch, query: "MyGO", kind: netease.SearchPodcasts}, 0},
-	{"artist", route{page: pageArtist, id: 7}, viewmodel.ArtistHot},
-	{"artist-albums", route{page: pageArtist, id: 7}, viewmodel.ArtistAlbums},
-	{"artist-events", route{page: pageArtist, id: 7}, viewmodel.ArtistEvents},
-	{"album", route{page: pageAlbum, id: 8}, 0},
-	{"user", route{page: pageUser, id: 9}, 0},
-	{"podcast", route{page: pagePodcast, id: 5}, 0},
-	{"podcasts", route{page: pagePodcasts}, 0},
+	{"search-songs", route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchSongs}, 0},
+	{"search-artists", route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchArtists}, 0},
+	{"search-albums", route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchAlbums}, 0},
+	{"search-users", route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchUsers}, 0},
+	{"search-podcasts", route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchPodcasts}, 0},
+	{"artist", route{Page: pageArtist, ID: 7}, viewmodel.ArtistHot},
+	{"artist-albums", route{Page: pageArtist, ID: 7}, viewmodel.ArtistAlbums},
+	{"artist-events", route{Page: pageArtist, ID: 7}, viewmodel.ArtistEvents},
+	{"album", route{Page: pageAlbum, ID: 8}, 0},
+	{"user", route{Page: pageUser, ID: 9}, 0},
+	{"podcast", route{Page: pagePodcast, ID: 5}, 0},
+	{"podcasts", route{Page: pagePodcasts}, 0},
 }
 
 // With NM_FRAMES set, saves the pages of searches, artists, albums, users

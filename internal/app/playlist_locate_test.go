@@ -25,7 +25,7 @@ func locateFixture(t *testing.T, current int, playing bool) (*app, *netease.Play
 	for i := range pl.Tracks {
 		pl.Tracks[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("测试歌曲 %03d", i+1), Duration: 200000, Artists: []netease.Artist{{Name: "测试歌手"}}, Album: netease.Album{Name: "测试专辑"}}
 	}
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	a.library.Playlists[7] = pl
 	// The current song is queue index zero but is far down the displayed list.
 	// Suspend loading so a broken locate action cannot launch network/audio jobs.
@@ -318,7 +318,7 @@ func TestPlaylistLocateOnlyForMatchingPlaylist(t *testing.T) {
 				delete(a.library.Playlists, 7)
 				a.library.Loading[7] = true
 			case "daily":
-				a.route = route{page: pageDaily}
+				a.route = route{Page: pageDaily}
 				a.home.Daily = pl.Tracks
 			}
 			tt.Frame()

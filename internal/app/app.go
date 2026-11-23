@@ -12,39 +12,30 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/mixvol"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/pagecache"
+	"netease-music-mygo/internal/navigation"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 )
 
-type pageKind int
+type pageKind = navigation.Page
+type route = navigation.Route
 
 const (
-	pageHome pageKind = iota
-	pageDaily
-	pageRecent
-	pageCharts
-	pagePlaylist
-	pageSearch
-	pageFM
-	pageArtist
-	pageAlbum
-	pageUser
-	pagePodcast
-	pagePodcasts
-	pageLocal
-	pageCloud
+	pageHome     = navigation.Home
+	pageDaily    = navigation.Daily
+	pageRecent   = navigation.Recent
+	pageCharts   = navigation.Charts
+	pagePlaylist = navigation.Playlist
+	pageSearch   = navigation.Search
+	pageFM       = navigation.FM
+	pageArtist   = navigation.Artist
+	pageAlbum    = navigation.Album
+	pageUser     = navigation.User
+	pagePodcast  = navigation.Podcast
+	pagePodcasts = navigation.Podcasts
+	pageLocal    = navigation.Local
+	pageCloud    = navigation.Cloud
 )
-
-type route struct {
-	page pageKind
-	// id is the playlist, artist, album, user or podcast the page shows.
-	id int64
-	// query and kind are what a search page searched for.
-	query string
-	kind  netease.SearchType
-}
 
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
@@ -111,13 +102,9 @@ type app struct {
 	locateViewport trackViewport
 
 	mineCollapsed, savedCollapsed, albumsCollapsed bool
-
-	query       string
-	searchBox   ui.Handle
-	searches    pagecache.Cache[route, *searchData] // the results of each search, by its page
-	searched    route                               // the search last shown, which the sidebar goes back to
-	links       musicLinkState
-	suggestions suggestState // what the search field's query may be after
+	searchBox                                      ui.Handle
+	searches                                       viewmodel.Search // the results of each search, by its page
+	links                                          musicLinkState
 
 	nowPlaying                     bool
 	npOpen                         bool      // Now Playing as it last showed: open or not
@@ -306,7 +293,6 @@ func Run() error {
 		return nil
 	}
 	a := &app{
-		searches:  pagecache.New[route, *searchData](searchBusy),
 		lyricAt:   -1,
 		queueAt:   -1,
 		cacheUsed: -1,
@@ -316,6 +302,7 @@ func Run() error {
 	a.albums.Reset()
 	a.users.Reset()
 	a.podcasts.Reset()
+	a.searches.Reset()
 	a.links.starting = true
 	offURL := mygo.App.OnOpenURL(func(raw string) {
 		a.showMain()
@@ -424,7 +411,7 @@ func Run() error {
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(a.freshenHome)
 		a.win.OnFocus(func() {
-			if a.route.page == pageLocal {
+			if a.route.Page == pageLocal {
 				a.refreshLocalSongs()
 			}
 		})

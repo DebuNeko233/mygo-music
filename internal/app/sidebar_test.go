@@ -48,7 +48,7 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 				t.Fatalf("the restored playlist cannot be opened: %v", err)
 			}
 			tt.Frame()
-			if a.route != (route{page: pagePlaylist, id: tc.playlist}) {
+			if a.route != (route{Page: pagePlaylist, ID: tc.playlist}) {
 				t.Errorf("opened %+v, want playlist %d", a.route, tc.playlist)
 			}
 		})
@@ -76,7 +76,7 @@ func TestSidebarSavedAlbums(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{page: pageAlbum, id: 77}) {
+	if a.route != (route{Page: pageAlbum, ID: 77}) {
 		t.Fatalf("opened %+v, want album 77", a.route)
 	}
 	if err := tt.Click("收藏的专辑"); err != nil {

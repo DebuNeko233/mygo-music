@@ -14,7 +14,7 @@ func TestBackAndForward(t *testing.T) {
 	a.settings = defaultSettings()
 	a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: []netease.Track{{ID: 1, Name: "一张相片"}}}
 	tt := ui.NewTester(a.view, 1200, 800)
-	charts, list := route{page: pageCharts}, route{page: pagePlaylist, id: 42}
+	charts, list := route{Page: pageCharts}, route{Page: pagePlaylist, ID: 42}
 	a.open(charts)
 	a.open(list)
 	tt.Frame()
@@ -43,10 +43,10 @@ func TestBackAndForward(t *testing.T) {
 	// A new page leaves nothing to go forward to.
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
-	a.open(route{page: pageHome})
+	a.open(route{Page: pageHome})
 	tt.Key(0, ui.KeyForward)
 	tt.Frame()
-	if a.route != (route{page: pageHome}) {
+	if a.route != (route{Page: pageHome}) {
 		t.Fatalf("forward after a new page went to %+v", a.route)
 	}
 }

@@ -28,7 +28,7 @@ func cloudFixture(t *testing.T) (*app, chan func()) {
 	t.Cleanup(a.dismissSuggestions)
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route = route{page: pageCloud}
+	a.route = route{Page: pageCloud}
 	return a, testPosts(a)
 }
 func cloudTrack(id int64, name string) netease.Track {
@@ -86,7 +86,7 @@ func TestCloudPaginationFilterAndQueue(t *testing.T) {
 	if len(a.cloud.Tracks) != 3 || a.cloud.More {
 		t.Fatalf("duplicate page or wrong end: %+v", a.cloud)
 	}
-	if got := a.trackSuggestions("MYGO 壱雫空"); len(got) != 1 || got[0].song != 3 {
+	if got := a.trackSuggestions("MYGO 壱雫空"); len(got) != 1 || got[0].Song != 3 {
 		t.Fatalf("bar matching %+v", got)
 	}
 	a.pl.Cue([]netease.Track{cloudTrack(99, "当前歌曲")})
@@ -205,7 +205,7 @@ func TestCloudFrames(t *testing.T) {
 		{"cloud-search-narrow.png", 800, true, true, false},
 		{"cloud-loading-narrow.png", 800, false, false, true},
 	} {
-		a.query = ""
+		a.searches.Query = ""
 		a.dismissSuggestions()
 		a.cloud.Stop()
 		if variant.loading {
@@ -305,7 +305,7 @@ func TestCloudLoadAllRetriesAndFindsLaterSongs(t *testing.T) {
 	results <- reply{page: &netease.CloudPage{Tracks: []netease.Track{cloudTrack(3, "最后一页的歌曲")}, Count: 3, NextOffset: 3}}
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.More || a.cloud.Failure != nil || len(a.trackSuggestions("最后一页")) != 1 || a.trackSuggestions("最后一页")[0].song != 3 {
+	if a.cloud.More || a.cloud.Failure != nil || len(a.trackSuggestions("最后一页")) != 1 || a.trackSuggestions("最后一页")[0].Song != 3 {
 		t.Fatalf("completed search: %+v", a.cloud)
 	}
 	if a.pl.Current().ID != 99 || len(a.pl.Queue()) != 1 {
@@ -426,7 +426,7 @@ func TestCloudRefreshPreservesFullSearchScope(t *testing.T) {
 	if first, next := wait(t, calls, "refresh first page"), wait(t, calls, "refresh next page"); first != 0 || next != 1 {
 		t.Fatalf("refresh offsets %d,%d", first, next)
 	}
-	if a.cloud.More || len(a.trackSuggestions("新版本")) != 1 || a.trackSuggestions("新版本")[0].song != 3 {
+	if a.cloud.More || len(a.trackSuggestions("新版本")) != 1 || a.trackSuggestions("新版本")[0].Song != 3 {
 		t.Fatalf("refresh search %+v", a.cloud)
 	}
 }
@@ -458,7 +458,7 @@ func TestCloudSidebarSearchPlaysAndLocates(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if tr := a.pl.Current(); tr == nil || tr.ID != 70 || !tr.Cloud || len(a.pl.Queue()) != 80 || a.route.page != pageCloud {
+			if tr := a.pl.Current(); tr == nil || tr.ID != 70 || !tr.Cloud || len(a.pl.Queue()) != 80 || a.route.Page != pageCloud {
 				t.Fatal("sidebar suggestion did not reuse the cloud queue")
 			}
 			for a.pl.Loading() || a.pl.MetadataLoading() {
@@ -491,13 +491,13 @@ func TestCloudSidebarSearchLoadsEntireLibrary(t *testing.T) {
 	if _, found := tt.Find("网盘：后页歌曲"); !found {
 		t.Fatal("new page did not appear in the existing search popup")
 	}
-	if a.query != "后页" || a.route.page != pageCloud {
+	if a.searches.Query != "后页" || a.route.Page != pageCloud {
 		t.Fatal("whole-cloud search lost query or navigated away")
 	}
 	if err := tt.Click("清空搜索"); err != nil {
 		t.Fatal(err)
 	}
-	if a.query != "" || !tt.Focused("搜索") || len(a.cloud.Tracks) != 2 {
+	if a.searches.Query != "" || !tt.Focused("搜索") || len(a.cloud.Tracks) != 2 {
 		t.Fatal("clearing the shared bar changed the cloud data or lost focus")
 	}
 }
@@ -510,7 +510,7 @@ func TestCloudSuggestionRevalidatesSource(t *testing.T) {
 			a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: []netease.Track{cloudTrack(1, "匹配"), cloudTrack(2, "其他")}}, Loaded: true}
 			a.pl.Cue([]netease.Track{cloudTrack(99, "当前")})
 			suggestions := a.trackSuggestions("匹配")
-			key := suggestions[0].key
+			key := suggestions[0].Key
 			switch change {
 			case "reorder":
 				a.cloud.Tracks = []netease.Track{cloudTrack(2, "其他"), cloudTrack(1, "匹配")}
@@ -519,7 +519,7 @@ func TestCloudSuggestionRevalidatesSource(t *testing.T) {
 			case "account":
 				a.account.Profile = &netease.Profile{UserID: 2}
 			case "page":
-				a.route = route{page: pageHome}
+				a.route = route{Page: pageHome}
 			}
 			// Resolve only the reorder case; suppress I/O while observing its queue decision.
 			if change == "reorder" {
@@ -712,7 +712,7 @@ func TestCloudLocateKeepsPlayback(t *testing.T) {
 			}
 			clickLocate(t, tt)
 			locatedRow(t, tt, tracks[149].Name, 800)
-			if a.pl.Current().ID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.page != pageCloud {
+			if a.pl.Current().ID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.Page != pageCloud {
 				t.Fatal("cloud locator changed playback or queue")
 			}
 			tt.Scroll(750, 400, 0, -100000)
@@ -843,12 +843,12 @@ func TestCloudLocateDoesNotScrollAnotherPage(t *testing.T) {
 		other[i] = netease.Track{ID: int64(10000 + i), Name: fmt.Sprintf("其他歌曲 %03d", i+1)}
 	}
 	a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "另一张歌单", Tracks: other}
-	a.route = route{page: pagePlaylist, id: 7}
+	a.route = route{Page: pagePlaylist, ID: 7}
 	tt.Frame()
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.route != (route{page: pagePlaylist, id: 7}) {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.route != (route{Page: pagePlaylist, ID: 7}) {
 		t.Fatal("old cloud locate affected the new page")
 	}
 }
@@ -877,7 +877,7 @@ func TestCloudLocateStaysCancelledAfterReturning(t *testing.T) {
 		t.Fatal(err)
 	}
 	wait(t, started, "pending cloud locate")
-	a.open(route{page: pageLocal})
+	a.open(route{Page: pageLocal})
 	a.back()
 	if a.cloud.Locate != 0 {
 		t.Fatal("leaving the page retained its pending target")
@@ -885,7 +885,7 @@ func TestCloudLocateStaysCancelledAfterReturning(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.route.page != pageCloud {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.route.Page != pageCloud {
 		t.Fatal("returning revived the old locate action")
 	}
 }

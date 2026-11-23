@@ -42,14 +42,14 @@ func (a *app) loadPodcastTab() {
 func (a *app) loadHotPodcasts() { a.podcasts.LoadHot(a.podcastServices()) }
 
 func (a *app) podcastRecoveryScope() (id int64, home, subscriptions bool) {
-	switch a.route.page {
+	switch a.route.Page {
 	case pagePodcast:
-		id = a.route.id
+		id = a.route.ID
 	case pagePodcasts:
 		home = true
 		subscriptions = a.account.Profile != nil
 	case pageUser:
-		subscriptions = a.account.Profile != nil && a.listenerID() == a.route.id
+		subscriptions = a.account.Profile != nil && a.listenerID() == a.route.ID
 	}
 	return
 }

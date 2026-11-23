@@ -19,7 +19,7 @@ func featurePerfApp(cloud, jobs int) *app {
 	a.settings = defaultSettings()
 	a.settingsPage = "download"
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route = route{page: pageCloud}
+	a.route = route{Page: pageCloud}
 	a.cloud.Loaded = true
 	a.cloud.Count = cloud
 	for i := range cloud {

@@ -38,7 +38,7 @@ func TestSavePlaylist(t *testing.T) {
 	pl := &netease.Playlist{ID: 30, Name: "华语经典", Tracks: a.library.Playlists[10].Tracks}
 	pl.Creator.UserID = 2
 	a.library.Playlists[30] = pl
-	a.route = route{page: pagePlaylist, id: 30}
+	a.route = route{Page: pagePlaylist, ID: 30}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.Click("收藏"); err != nil {
