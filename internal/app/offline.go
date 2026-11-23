@@ -157,7 +157,7 @@ func (a *app) failedLoads(manual bool) bool {
 	if a.home.NeedsRetry(manual) {
 		return true
 	}
-	if a.library.Refresh.Mine.Failed && retry(a.library.Refresh.Mine.Failure) || a.library.Refresh.Likes.Failed && retry(a.library.Refresh.Likes.Failure) {
+	if a.library.NeedsRecovery(a.visiblePlaylist(), manual) {
 		return true
 	}
 	switch a.route.page {
@@ -167,10 +167,6 @@ func (a *app) failedLoads(manual bool) bool {
 		}
 	case pageRecent:
 		if tab := &a.recent.Tabs[a.recent.Selected]; !tab.Loading && tab.Failure != nil && retry(tab.Failure) {
-			return true
-		}
-	case pagePlaylist:
-		if r := a.library.Refresh.Playlists[a.route.id]; r != nil && !r.Busy && r.Failed && retry(r.Failure) {
 			return true
 		}
 	case pageAlbum:
@@ -219,13 +215,8 @@ func (a *app) retryLoads(manual bool) {
 		a.confirmAccount()
 	}
 	a.home.Retry(manual, a.homeServices())
-	if a.account.Profile != nil && a.library.Refresh.Edits == 0 {
-		if a.library.Refresh.Mine.Failed && retry(a.library.Refresh.Mine.Failure) {
-			a.loadMine(a.account.Profile.UserID)
-		}
-		if a.library.Refresh.Likes.Failed && retry(a.library.Refresh.Likes.Failure) {
-			a.loadLiked(a.account.Profile.UserID)
-		}
+	if a.library.NeedsRecovery(a.visiblePlaylist(), manual) {
+		a.library.RetryFailed(a.listenerID(), a.visiblePlaylist(), manual, a.libraryServices())
 	}
 	switch a.route.page {
 	case pageCloud:
@@ -235,11 +226,6 @@ func (a *app) retryLoads(manual bool) {
 	case pageRecent:
 		if tab := &a.recent.Tabs[a.recent.Selected]; tab.Failure != nil && retry(tab.Failure) {
 			a.loadRecentTab(a.recent.Selected)
-		}
-	case pagePlaylist:
-		if r := a.library.Refresh.Playlists[a.route.id]; r != nil && !r.Busy && r.Failed && retry(r.Failure) {
-			r.At = time.Time{}
-			a.loadPlaylist(a.route.id, false)
 		}
 	case pageAlbum:
 		if d := a.albums.get(a.route.id); d != nil && !d.loading && d.err != "" && retry(d.failure) {

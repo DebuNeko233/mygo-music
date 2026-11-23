@@ -10,6 +10,7 @@ import (
 func (a *app) libraryServices() viewmodel.LibraryServices {
 	uid, generation := a.listenerID(), a.account.Generation
 	return viewmodel.LibraryServices{
+		UserID: uid, Playlist: a.playlistServices(),
 		Post: func(update func()) {
 			a.post(func() {
 				if a.listenerID() == uid && a.account.Generation == generation {
@@ -20,7 +21,7 @@ func (a *app) libraryServices() viewmodel.LibraryServices {
 		Cache: a.cacheRequest, Mine: userPlaylists, Likes: likedIDs, Albums: subscribedAlbums,
 		LikeSong: likeSong, LikeProgram: likeProgram, ProgramsLiked: programsLiked,
 		SavePlaylist: savePlaylist, SaveAlbum: subscribeAlbum, Create: createPlaylist, Rename: renamePlaylist, Add: addToPlaylist, Remove: removeFromPlaylist, Delete: deletePlaylist,
-		Persist: a.persistLibraryChanges, Revalidate: a.revalidatePlaylist, PlaylistChanged: a.playlistChanged, Forget: a.forgetPlaylist, Touch: a.touchPlaylist,
+		Persist: a.persistLibraryChanges, ForgetSnapshot: a.forgetPlaylistSnapshot,
 		Open: func(id int64) { a.open(route{page: pagePlaylist, id: id}) }, LeaveDeleted: a.leaveDeletedPlaylist, Notify: func(message string) { a.toast = message },
 		VisibleLikedPlaylist: func() int64 {
 			if a.route.page == pagePlaylist {
@@ -94,16 +95,6 @@ func (a *app) leaveDeletedPlaylist(id int64) {
 
 func (a *app) savable(pl *netease.Playlist) bool {
 	return a.account.Profile == nil || pl.Creator.UserID != a.account.Profile.UserID
-}
-
-func (a *app) playlistChanged(id int64) {
-	if a.library.Playlists[id] == nil && a.editable(id) == nil {
-		return // the playlist was deleted while the edit was pending
-	}
-	a.revalidatePlaylist(id)
-	if a.account.Profile != nil {
-		a.loadMine(a.account.Profile.UserID)
-	}
 }
 
 func (a *app) newPlaylist(tr *netease.Track) {

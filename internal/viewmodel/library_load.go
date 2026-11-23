@@ -49,7 +49,7 @@ func (m *Library) LoadMine(uid int64, s LibraryServices) {
 			if m.Refresh.FindLiked {
 				if id := m.LikedPlaylist(); id != 0 {
 					m.Refresh.FindLiked = false
-					s.Revalidate(id)
+					m.RevalidatePlaylist(id, s.Playlist)
 				}
 			}
 		})

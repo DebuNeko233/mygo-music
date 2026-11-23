@@ -97,7 +97,7 @@ func (m *Library) SubmitName(s LibraryServices) {
 			m.Mine = slices.Insert(m.Mine, at, *pl)
 			pl.Tracks = nil
 			m.Playlists[pl.ID] = pl
-			s.Touch(pl.ID)
+			m.TouchPlaylist(pl.ID)
 			s.Open(pl.ID)
 			if add != nil {
 				m.AddTo(pl.ID, add, s)
@@ -128,7 +128,8 @@ func (m *Library) DeleteChosen(s LibraryServices) {
 				s.Notify("删除失败，请稍后再试")
 				return
 			}
-			s.Forget(id)
+			m.ForgetPlaylist(id)
+			s.ForgetSnapshot(id)
 			s.Notify("已删除歌单")
 		})
 	}()
@@ -151,7 +152,7 @@ func (m *Library) AddTo(pid int64, tr *netease.Track, s LibraryServices) {
 				s.Notify("添加失败，请稍后再试")
 			default:
 				s.Notify("已添加到歌单")
-				s.PlaylistChanged(pid)
+				m.playlistChanged(pid, s)
 			}
 		})
 	}()
@@ -200,7 +201,7 @@ func (m *Library) RemoveFrom(pid int64, tr *netease.Track, s LibraryServices) {
 				s.Notify("移除失败，请稍后再试")
 				return
 			}
-			s.PlaylistChanged(pid)
+			m.playlistChanged(pid, s)
 		})
 	}()
 }
@@ -309,7 +310,7 @@ func (m *Library) updateLikedPlaylist(song int64, like bool, s LibraryServices) 
 			changed = pid
 		}
 	}
-	s.Revalidate(pid)
+	m.RevalidatePlaylist(pid, s.Playlist)
 	return changed
 }
 
@@ -346,15 +347,6 @@ func (m *Library) ToggleAlbumSaved(al netease.AlbumProfile, s LibraryServices) {
 func (m *Library) persist(s LibraryServices, ids ...int64) {
 	s.Persist(SnapshotLists|SnapshotAlbums|SnapshotLikes, ids...)
 }
-func (m *Library) playlistRequest(id int64) *ListRequest {
-	if m.Refresh.Playlists == nil {
-		m.Refresh.Playlists = map[int64]*ListRequest{}
-	}
-	if m.Refresh.Playlists[id] == nil {
-		m.Refresh.Playlists[id] = &ListRequest{}
-	}
-	return m.Refresh.Playlists[id]
-}
 func (m *Library) NeedsProgramLikes(ids []int64) bool {
 	for _, id := range ids {
 		if _, known := m.LikedPrograms[id]; !known && !m.AskedPrograms[id] {
@@ -362,4 +354,14 @@ func (m *Library) NeedsProgramLikes(ids []int64) bool {
 		}
 	}
 	return false
+}
+
+func (m *Library) playlistChanged(id int64, s LibraryServices) {
+	if m.Playlists[id] == nil && m.Editable(id) == nil {
+		return
+	}
+	m.RevalidatePlaylist(id, s.Playlist)
+	if s.UserID != 0 {
+		m.LoadMine(s.UserID, s)
+	}
 }

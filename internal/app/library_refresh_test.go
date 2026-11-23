@@ -531,3 +531,36 @@ func (a *app) resetLibraryFreshness() {
 	a.library.Loading = map[int64]bool{}
 	a.library.PlayWhenLoaded = map[int64]bool{}
 }
+
+func (a *app) playlistRequest(id int64) *viewmodel.ListRequest {
+	if a.library.Refresh.Playlists == nil {
+		a.library.Refresh.Playlists = map[int64]*viewmodel.ListRequest{}
+	}
+	if a.library.Refresh.Playlists[id] == nil {
+		a.library.Refresh.Playlists[id] = &viewmodel.ListRequest{}
+	}
+	return a.library.Refresh.Playlists[id]
+}
+func (a *app) usePlaylist(id int64) { a.library.UsePlaylist(id) }
+
+const playlistCachePages = viewmodel.PlaylistCachePages
+
+func (a *app) forgetPlaylist(id int64) {
+	a.library.ForgetPlaylist(id)
+	a.forgetPlaylistSnapshot(id)
+}
+
+func (a *app) touchPlaylist(id int64) { a.library.TouchPlaylist(id) }
+
+// beginLibraryEdit makes refreshes respect edits that are already pending,
+// not only edits made after their snapshot. The ending revision rejects a
+// server reply fetched before a rename/delete/like had finished committing.
+func (a *app) beginLibraryEdit() func() {
+	generation := a.account.Generation
+	finish := a.library.BeginEdit()
+	return func() {
+		if a.account.Generation == generation {
+			finish()
+		}
+	}
+}

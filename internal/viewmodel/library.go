@@ -93,22 +93,24 @@ func (m *Library) Now() time.Time {
 // LibraryServices reuses existing API, cache and app-level navigation/playback.
 // Post must discard callbacks from a retired account generation.
 type LibraryServices struct {
-	Post                                                           func(func())
-	Cache                                                          func(string) diskcache.Snapshot
-	Mine                                                           func(int64) ([]netease.Playlist, []netease.Playlist, error)
-	Likes                                                          func(int64) ([]int64, error)
-	Albums                                                         func() ([]netease.AlbumProfile, error)
-	LikeSong, LikeProgram                                          func(int64, bool) error
-	ProgramsLiked                                                  func([]int64) (map[int64]bool, error)
-	SavePlaylist, SaveAlbum                                        func(int64, bool) error
-	Create                                                         func(string) (*netease.Playlist, error)
-	Rename                                                         func(int64, string) error
-	Add, Remove                                                    func(int64, ...int64) error
-	Delete                                                         func(int64) error
-	Persist                                                        func(LibrarySnapshots, ...int64)
-	Revalidate, PlaylistChanged, Forget, Touch, Open, LeaveDeleted func(int64)
-	Notify                                                         func(string)
-	VisibleLikedPlaylist                                           func() int64
+	UserID                             int64
+	Playlist                           PlaylistServices
+	Post                               func(func())
+	Cache                              func(string) diskcache.Snapshot
+	Mine                               func(int64) ([]netease.Playlist, []netease.Playlist, error)
+	Likes                              func(int64) ([]int64, error)
+	Albums                             func() ([]netease.AlbumProfile, error)
+	LikeSong, LikeProgram              func(int64, bool) error
+	ProgramsLiked                      func([]int64) (map[int64]bool, error)
+	SavePlaylist, SaveAlbum            func(int64, bool) error
+	Create                             func(string) (*netease.Playlist, error)
+	Rename                             func(int64, string) error
+	Add, Remove                        func(int64, ...int64) error
+	Delete                             func(int64) error
+	Persist                            func(LibrarySnapshots, ...int64)
+	ForgetSnapshot, Open, LeaveDeleted func(int64)
+	Notify                             func(string)
+	VisibleLikedPlaylist               func() int64
 }
 
 // withinLifetime rejects results after Reset even when the caller uses a plain
