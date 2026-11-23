@@ -1,6 +1,7 @@
 package netease
 
 import (
+	"context"
 	"net/url"
 	"strconv"
 )
@@ -79,6 +80,7 @@ type AlbumProfile struct {
 	PublishTime int64    `json:"publishTime"` // Unix milliseconds
 	Size        int      `json:"size"`        // how many songs it has
 	Description string   `json:"description"`
+	Company     string   `json:"company"`
 	Songs       []Track  `json:"-"`
 }
 
@@ -89,16 +91,25 @@ func (al *AlbumProfile) ArtistNames() string {
 
 // AlbumDetail returns an album with its songs.
 func AlbumDetail(id int64) (*AlbumProfile, error) {
+	al, err := AlbumDetailContext(context.Background(), id)
+	if err == nil {
+		detailPrivileges(al.Songs)
+	}
+	return al, err
+}
+
+// AlbumDetailContext loads album metadata and its true disc/track ordering.
+// Exporters do not need the extra playback-privilege lookup of the UI.
+func AlbumDetailContext(ctx context.Context, id int64) (*AlbumProfile, error) {
 	var res struct {
 		Album AlbumProfile `json:"album"`
 		Songs []Track      `json:"songs"`
 	}
-	if err := get("/api/v1/album/"+strconv.FormatInt(id, 10), nil, &res); err != nil {
+	if err := getContext(ctx, "/api/v1/album/"+strconv.FormatInt(id, 10), nil, &res); err != nil {
 		return nil, err
 	}
 	al := &res.Album
 	al.Songs = res.Songs
-	detailPrivileges(al.Songs)
 	return al, nil
 }
 

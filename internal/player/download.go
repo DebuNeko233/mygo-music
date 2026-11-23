@@ -453,11 +453,7 @@ func (d *download) hand() error {
 		return nil
 	}
 	if d.format == "" {
-		var header [12]byte
-		n, _ := d.readAt(header[:10], 0)
-		off := audioformat.ID3Size(header[:n])
-		n, _ = d.readAt(header[:], off)
-		d.format = audioformat.Detect(header[:n])
+		d.format = audioformat.Probe(d.file)
 	}
 	if err := d.file.Close(); err != nil {
 		d.file, d.spans, d.n = nil, nil, 0

@@ -303,18 +303,6 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 						a.toggleSaved(*pl)
 					}
 				}
-				if mine := a.editable(pl.ID); mine != nil {
-					more := iconButton(c.Key("more"), iconMore, 18, p.muted, "更多")
-					more.Menu(func(m *ui.Menu) {
-						if m.Item("重命名…").Chosen() {
-							a.startRename(mine)
-						}
-						m.Separator()
-						if m.Item("删除歌单…").Chosen() {
-							a.confirmDelete(mine)
-						}
-					})
-				}
 				switch {
 				case pl.SpecialType != 5:
 				case a.pl.Radio() == heartRadio:
@@ -329,6 +317,26 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 					if pillButton(c.Key("heart"), iconHeartFill, label, p.hover.Over(p.bg), p.text).Clicked() {
 						a.startHeartMode()
 					}
+				}
+				{
+					mine := a.editable(pl.ID)
+					more := iconButton(c.Key("more"), iconMore, 18, p.muted, "更多")
+					more.Menu(func(m *ui.Menu) {
+						if m.Item("下载全部").Disabled(len(pl.Tracks) == 0).Chosen() {
+							a.enqueueDownloads(pl.Tracks)
+						}
+						if mine == nil {
+							return
+						}
+						m.Separator()
+						if m.Item("重命名…").Chosen() {
+							a.startRename(mine)
+						}
+						m.Separator()
+						if m.Item("删除歌单…").Chosen() {
+							a.confirmDelete(mine)
+						}
+					})
 				}
 			})
 		})

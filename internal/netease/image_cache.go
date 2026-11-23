@@ -2,6 +2,7 @@ package netease
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -84,20 +85,38 @@ func imageIdentity(req *http.Request) string {
 }
 
 func (c *imageCache) fetch(req *http.Request) ([]byte, error) {
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
 	key := imageIdentity(req)
 	c.mu.Lock()
 	f := c.flights[key]
 	if f == nil {
 		f = &imageFlight{done: make(chan struct{}), ready: make(chan struct{}), epoch: c.store.Epoch()}
 		c.flights[key] = f
-		go c.lookup(req, key, f)
+		// A coalesced transfer belongs to the cache, not its first consumer.
+		go c.lookup(req.Clone(context.WithoutCancel(req.Context())), key, f)
 	}
 	c.mu.Unlock()
-	<-f.ready
+	select {
+	case <-req.Context().Done():
+		return nil, req.Context().Err()
+	case <-f.ready:
+	}
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
 	if f.cached != nil {
 		return f.cached, nil
 	}
-	<-f.done
+	select {
+	case <-req.Context().Done():
+		return nil, req.Context().Err()
+	case <-f.done:
+	}
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
 	return f.body, f.err
 }
 

@@ -28,7 +28,11 @@ type settings struct {
 	NotchGreeted bool `json:"notchGreeted"`
 	// Quality is the level of the streams: standard, higher, exhigh,
 	// lossless or hires.
-	Quality string `json:"quality"`
+	Quality            string `json:"quality"`
+	DownloadQuality    string `json:"downloadQuality"`
+	DownloadNameFormat string `json:"downloadNameFormat,omitempty"`
+	DownloadDirectory  string `json:"downloadDirectory,omitempty"`
+	DownloadSidecar    bool   `json:"downloadSidecar"`
 	// Appearance is light, dark, or system to follow the system.
 	Appearance string `json:"appearance"`
 	// UIFont overrides the default typeface for the app's interface.
@@ -172,7 +176,7 @@ func (k shortcutKeys) filled() shortcutKeys {
 
 func defaultSettings() settings {
 	return settings{
-		NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
+		NotchActivity: true, Quality: "exhigh", DownloadQuality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true,
 		AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true,
 		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",

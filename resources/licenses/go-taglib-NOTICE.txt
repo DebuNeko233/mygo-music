@@ -1,0 +1,13 @@
+Audio metadata writing uses go-taglib v0.15.0, including its unmodified
+TagLib 2.1.1 WebAssembly binary. No external ffmpeg or TagLib installation is
+required. The library is licensed under LGPL 2.1; see the accompanying text.
+
+Source and corresponding build instructions:
+https://github.com/sentriz/go-taglib/tree/v0.15.0
+https://github.com/sentriz/go-taglib/tree/v0.15.0/build
+https://github.com/taglib/taglib/tree/v2.1.1
+
+To use a rebuilt TagLib binary when building this application, add:
+  -ldflags="-X 'go.senan.xyz/taglib.binaryPath=/absolute/path/taglib.wasm'"
+For `go tool mygo build`, pass those flags in MYGO_LDFLAGS.
+The application source is available under its existing AGPL v3 license.

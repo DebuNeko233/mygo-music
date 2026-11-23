@@ -133,6 +133,11 @@ func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
 				if pillButton(c.Key("save"), icon, label, p.hover.Over(p.bg), p.text).Clicked() {
 					a.toggleAlbumSaved(*al)
 				}
+				iconButton(c.Key("more"), iconMore, 18, p.muted, "更多").Menu(func(m *ui.Menu) {
+					if m.Item("下载全部").Disabled(len(al.Songs) == 0).Chosen() {
+						a.enqueueDownloads(al.Songs)
+					}
+				})
 			})
 		})
 	})
