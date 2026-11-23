@@ -29,14 +29,14 @@ func (a *app) openTemporaryAudio(path string) {
 	if a.quitting {
 		return
 	}
-	if !a.restored {
-		a.localView.pendingFile = path
+	a.cancelMusicLink()
+	if a.startup.waiting || !a.restored {
+		a.startup.queue(openingIntent{file: path})
 		return
 	}
 	a.showMain()
-	a.cancelMusicLink()
 	a.local.OpenTemporary(path, viewmodel.LocalOpenServices{
-		Post: a.post, Stopped: func() bool { return a.quitting }, Prepare: localcatalog.PrepareTemporary,
+		Post: a.post, PostResource: a.postResource, Stopped: func() bool { return a.quitting }, Prepare: localcatalog.PrepareTemporary,
 		Release: func(audio *player.LocalAudio) { audio.Close() },
 		Play: func(previous, song localcatalog.Song, audio *player.LocalAudio) {
 			delete(a.trackArt.known, localArtworkKey(previous, true))

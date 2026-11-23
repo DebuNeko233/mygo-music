@@ -75,6 +75,9 @@ type Player struct {
 	retrying                              bool
 	lyricsErr                             string
 	post                                  func(func())
+	postResource                          func(func(), func())
+	offMedia                              func()
+	closed                                bool
 	// Quality returns the stream level to load, as the settings say.
 	Quality func() string
 	// Normalize reports whether to even out the loudness of tracks, as
@@ -188,13 +191,20 @@ const (
 	aheadCanceled
 )
 
-func New(post func(func())) *Player {
-	p := &Player{post: post, at: -1, volume: 0.8, gain: 1}
+func New(post func(func()), resources ...func(func(), func())) *Player {
+	resource := func(fn, _ func()) { post(fn) }
+	if len(resources) != 0 {
+		resource = resources[0]
+	}
+	p := &Player{post: post, postResource: resource, at: -1, volume: 0.8, gain: 1}
 	// Music, mixed far enough ahead to play on while macOS keeps the app
 	// waiting, as it does while its appearance changes.
 	audio.SetLatency(audio.LatencyPlayback)
 	// The media keys, and the controls of Control Center.
-	mygo.NowPlaying.OnCommand(func(cmd mygo.MediaCommand, pos time.Duration) {
+	p.offMedia = mygo.NowPlaying.OnCommand(func(cmd mygo.MediaCommand, pos time.Duration) {
+		if p.closed {
+			return
+		}
 		switch cmd {
 		case mygo.MediaPlay, mygo.MediaPause:
 			if (cmd == mygo.MediaPlay) != p.playing {
@@ -210,6 +220,31 @@ func New(post func(func())) *Player {
 		p.post(func() {})
 	})
 	return p
+}
+
+// Close releases the audio output and system controls on the owner thread.
+// Pending loads use postResource to close their decoder if dispatch has ended.
+func (p *Player) Close() {
+	if p.closed {
+		return
+	}
+	p.closed = true
+	if p.offMedia != nil {
+		p.offMedia()
+		p.offMedia = nil
+	}
+	p.pause()
+	p.dropAhead()
+	p.gen++
+	p.seekGen++
+	p.playing, p.loading = false, false
+	if p.out != nil {
+		p.out.Pause()
+		p.out.Close()
+	}
+	p.out, p.stream, p.info = nil, nil, nil
+	p.fade.attach(nil, 1)
+	p.Changed, p.Playback = nil, nil
 }
 
 // sync shows the system, and Changed, where playback is.
@@ -1201,8 +1236,8 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 				})
 			})
 		}
-		p.post(func() {
-			if gen != p.gen {
+		p.postResource(func() {
+			if p.closed || gen != p.gen {
 				if s != nil {
 					s.Close()
 				}
@@ -1251,6 +1286,10 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 			// it starts at once when this one ends.
 			p.prefetch(p.at + 1)
 			p.sync()
+		}, func() {
+			if s != nil {
+				s.Close()
+			}
 		})
 	}()
 }

@@ -2,6 +2,7 @@ package speech
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -10,6 +11,32 @@ import (
 type engineTranscriber struct {
 	started, release chan struct{}
 	events           chan string
+}
+
+// Final release closes the active recognizer and cannot reopen it for a late queued job.
+func TestCaptionEngineCloseIsTerminal(t *testing.T) {
+	e := new(Engine)
+	recognizer := &engineTranscriber{make(chan struct{}), make(chan struct{}), make(chan string, 4)}
+	done := make(chan error, 1)
+	go func() {
+		done <- e.Transcribe(context.Background(), "model", nil, 0, 0, func(string) (Transcriber, error) { return recognizer, nil }, nil, nil)
+	}()
+	<-recognizer.started
+	closed := make(chan struct{})
+	go func() { e.Close(); close(closed) }()
+	close(recognizer.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	<-closed
+	e.Close()
+	err := e.Transcribe(context.Background(), "model", nil, 0, 0, func(string) (Transcriber, error) { t.Error("reopened after close"); return recognizer, nil }, nil, nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("late job accepted: %v", err)
+	}
+	if first, second := <-recognizer.events, <-recognizer.events; first != "finished" || second != "closed" || len(recognizer.events) != 0 {
+		t.Fatalf("unsafe recognizer release: %s, %s", first, second)
+	}
 }
 
 func (t *engineTranscriber) Transcribe(context.Context, Source, time.Duration, time.Duration, func(Segment), func(time.Duration)) error {

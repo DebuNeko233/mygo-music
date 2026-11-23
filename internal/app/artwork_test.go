@@ -17,6 +17,30 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+// Closing dispatch releases posted cover byte budgets and slots even if their UI callback never runs.
+func TestArtShutdownReleasesPostedResults(t *testing.T) {
+	a := newApp()
+	posts := testPosts(a)
+	c := newArtCache(a.post, a.postResource)
+	old := loadArt
+	t.Cleanup(func() { loadArt = old; c.close() })
+	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+		img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+		return ui.NewBitmap(img), img, 512, nil
+	}
+	c.get("pending-cover", false)
+	fn := wait(t, posts, "cover result")
+	c.close()
+	a.closePosts()
+	fn()
+	c.results.L.Lock()
+	bytes := c.resultBytes
+	c.results.L.Unlock()
+	if bytes != 0 || len(c.sem) != 0 || len(c.art) != 0 {
+		t.Fatalf("retained cover resources: bytes=%d, jobs=%d", bytes, len(c.sem))
+	}
+}
+
 // Slow UI callbacks must keep their slots: scrolling past more covers
 // cannot leave an unbounded number of decoded results waiting for the UI.
 func TestArtJobsBoundPendingResults(t *testing.T) {

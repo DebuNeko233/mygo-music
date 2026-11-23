@@ -198,6 +198,7 @@ func TestLocalTemporaryOpenAfterRestore(t *testing.T) {
 		t.Fatal("opened before session restore")
 	}
 	a.restoreSession()
+	a.finishStartup()
 	for a.pl.Current() == nil || !a.pl.Current().Temporary || !a.pl.Ready() || a.pl.MetadataLoading() {
 		wait(t, posts, "temporary audio and lyrics")()
 	}

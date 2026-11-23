@@ -21,11 +21,9 @@ var (
 
 type transcriber = speech.Transcriber
 
-var captionEngine speech.Engine
-
 func (a *app) captionServices() viewmodel.CaptionServices {
 	return viewmodel.CaptionServices{
-		Player: a.pl, Engine: &captionEngine, Post: a.post,
+		Player: a.pl, Engine: &a.captionEngine, Post: a.post,
 		Available: captionsAvailable, Enabled: func() bool { return a.settings.Captions },
 		Enable: func() { a.settings.Captions = true; a.settings.saveSoon() },
 		Changed: func() {

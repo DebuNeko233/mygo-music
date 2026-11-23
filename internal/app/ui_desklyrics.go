@@ -24,8 +24,9 @@ import (
 // except over its padlock, which is in this window too: the lock opens
 // without another window. Where it was left and how large, it opens again.
 type deskLyrics struct {
-	a   *app
-	win *mygo.Window
+	lifetime nativeLifetime
+	a        *app
+	win      *mygo.Window
 
 	shaped string // what the window is laid out as, as the settings last made it
 	shown  bool   // whether the window was shown at its last update
@@ -217,25 +218,32 @@ func newDeskLyrics(a *app) *deskLyrics {
 	})
 	// A move or a size change comes from the window, not from polling it.
 	d.win.OnMove(func() {
-		if !s.LyricLocked {
+		if !a.quitting && !s.LyricLocked {
 			d.remember()
 		}
 	})
 	d.win.OnResize(func() {
-		if !s.LyricLocked {
+		if !a.quitting && !s.LyricLocked {
 			d.remember()
 		}
 	})
 	// A screen gone, or another one added, may leave the window off them.
-	mygo.Screen.OnDisplaysChanged(d.apply)
+	d.lifetime.listen(d.win.OnClosed(d.close))
+	d.lifetime.listen(mygo.Screen.OnDisplaysChanged(d.apply))
 	d.apply()
 	return d
+}
+
+func (d *deskLyrics) close() {
+	d.lifetime.close()
+	d.win = nil
+	d.shown, d.hot = false, false
 }
 
 // apply makes the window as the settings say it stands: as large as they ask
 // or as it was left, where it was left, locked or not, and showing or not.
 func (d *deskLyrics) apply() {
-	if d.win == nil {
+	if d.lifetime.closed || d.win == nil {
 		return // as in tests
 	}
 	s := &d.a.settings

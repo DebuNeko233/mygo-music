@@ -11,24 +11,35 @@ import (
 
 // LocalOpenServices transfers a prepared decoder to the existing player, or releases it.
 type LocalOpenServices struct {
-	Post    func(func())
-	Stopped func() bool
-	Prepare func(string) (localcatalog.Song, *player.LocalAudio)
-	Release func(*player.LocalAudio)
-	Play    func(previous, song localcatalog.Song, audio *player.LocalAudio)
-	Notify  func(string)
+	Post         func(func())
+	PostResource func(func(), func())
+	Stopped      func() bool
+	Prepare      func(string) (localcatalog.Song, *player.LocalAudio)
+	Release      func(*player.LocalAudio)
+	Play         func(previous, song localcatalog.Song, audio *player.LocalAudio)
+	Notify       func(string)
 }
+
+// CancelOpen retires a decoder being prepared for an older opening intent.
+func (m *LocalLibrary) CancelOpen() { m.openRequest++ }
 
 func (m *LocalLibrary) OpenTemporary(path string, s LocalOpenServices) {
 	m.openRequest++
 	request := m.openRequest
+	post := s.PostResource
+	if post == nil {
+		post = func(fn, _ func()) { s.Post(fn) }
+	}
 	go func() {
 		song, audio := s.Prepare(path)
-		s.Post(func() {
+		release := func() {
+			if audio != nil {
+				s.Release(audio)
+			}
+		}
+		post(func() {
 			if s.Stopped() || m.openRequest != request {
-				if audio != nil {
-					s.Release(audio)
-				}
+				release()
 				return
 			}
 			if audio == nil {
@@ -48,6 +59,6 @@ func (m *LocalLibrary) OpenTemporary(path string, s LocalOpenServices) {
 			previous := m.Temporary
 			m.Temporary, m.TemporaryLyrics = song, lyrics.Text{}
 			s.Play(previous, song, audio)
-		})
+		}, release)
 	}()
 }

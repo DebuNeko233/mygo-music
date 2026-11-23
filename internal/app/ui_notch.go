@@ -16,8 +16,10 @@ import (
 // player under the pointer. On a display without a notch it hangs from the
 // top of the screen all the same.
 type notch struct {
-	a   *app
-	win *mygo.Window
+	lifetime                            nativeLifetime
+	pollTimer, greetingTimer, hideTimer *time.Timer
+	a                                   *app
+	win                                 *mygo.Window
 
 	w0, h0     float32 // the housing's size
 	real       bool    // the display has one: else the notch hides until wanted
@@ -77,25 +79,55 @@ func newNotch(a *app) *notch {
 		n.win.ShowInactive()
 		pinToTop(n.win.NativeHandle(), float64(n.winW), float64(n.winH))
 	}
-	mygo.Screen.OnDisplaysChanged(func() {
+	n.lifetime.listen(n.win.OnClosed(n.close))
+	n.lifetime.listen(mygo.Screen.OnDisplaysChanged(func() {
+		if n.lifetime.closed {
+			return
+		}
 		n.measure()
 		n.place()
 		pinToTop(n.win.NativeHandle(), float64(n.winW), float64(n.winH))
-	})
+	}))
 	// The pointer's moves wake the notch: it polls only while one may
 	// soon open or close it, and costs nothing at rest.
 	n.active = true
-	mygo.App.OnDidBecomeActive(func() { n.active = true; n.poll() })
-	mygo.App.OnDidResignActive(func() { n.active = false })
+	n.lifetime.listen(mygo.App.OnDidBecomeActive(func() {
+		if !n.lifetime.closed {
+			n.active = true
+			n.poll()
+		}
+	}))
+	n.lifetime.listen(mygo.App.OnDidResignActive(func() { n.active = false }))
 	n.watch()
 	n.poll()
 	return n
+}
+
+func (n *notch) close() {
+	if n.lifetime.closed {
+		return
+	}
+	n.lifetime.close()
+	for _, timer := range []*time.Timer{n.pollTimer, n.greetingTimer, n.hideTimer} {
+		if timer != nil {
+			timer.Stop()
+		}
+	}
+	if n.unwatch != nil {
+		n.unwatch()
+		n.unwatch = nil
+	}
+	n.polling, n.watched = false, false
+	n.win = nil
 }
 
 // watch follows the pointer's moves while the notch shows, turned on or
 // greeting. Otherwise it lets them be: each, anywhere on the screen, would
 // wake the app for nothing.
 func (n *notch) watch() {
+	if n.lifetime.closed {
+		return
+	}
 	on := n.a.settings.Notch || n.hello
 	switch {
 	case on && n.unwatch == nil:
@@ -175,8 +207,14 @@ func (n *notch) greet() {
 
 // byeSoon ends the greeting after d, unless the pointer is on it then.
 func (n *notch) byeSoon(d time.Duration) {
-	time.AfterFunc(d, func() {
-		mygo.RunOnMain(func() {
+	if n.greetingTimer != nil {
+		n.greetingTimer.Stop()
+	}
+	n.greetingTimer = time.AfterFunc(d, func() {
+		n.a.dispatch(func() {
+			if n.lifetime.closed {
+				return
+			}
 			switch {
 			case !n.hello:
 			case n.open || !n.passing:
@@ -184,7 +222,7 @@ func (n *notch) byeSoon(d time.Duration) {
 			default:
 				n.bye()
 			}
-		})
+		}, false)
 	})
 }
 
@@ -199,13 +237,19 @@ func (n *notch) bye() {
 	n.open = false
 	n.passing = true
 	n.win.SetIgnoreMouseEvents(true)
-	time.AfterFunc(time.Second, func() {
-		mygo.RunOnMain(func() {
+	if n.hideTimer != nil {
+		n.hideTimer.Stop()
+	}
+	n.hideTimer = time.AfterFunc(time.Second, func() {
+		n.a.dispatch(func() {
+			if n.lifetime.closed {
+				return
+			}
 			if !n.hello && !n.a.settings.Notch {
 				n.win.Hide()
 				n.watch()
 			}
-		})
+		}, false)
 	})
 }
 
@@ -247,6 +291,9 @@ var cursorPoint = func() mygo.Point { return mygo.Screen.CursorScreenPoint() }
 // poll follows the pointer, which the window cannot always see: it lets
 // clicks through where it draws nothing, and opens while over it.
 func (n *notch) poll() {
+	if n.lifetime.closed {
+		return
+	}
 	if !n.a.settings.Notch && !n.hello {
 		return
 	}
@@ -309,11 +356,14 @@ func (n *notch) pollAgain(inside bool) {
 		return
 	}
 	n.polling = true
-	time.AfterFunc(d, func() {
-		mygo.RunOnMain(func() {
+	n.pollTimer = time.AfterFunc(d, func() {
+		n.a.dispatch(func() {
+			if n.lifetime.closed {
+				return
+			}
 			n.polling = false
 			n.poll()
-		})
+		}, false)
 	})
 }
 

@@ -89,6 +89,7 @@ func init() {
 			a.win.OnMinimize(func() { m.pause(true) }),
 			a.win.OnShow(func() { m.pause(false) }), a.win.OnRestore(func() { m.pause(false) }),
 		}
+		a.native.listen(m.close)
 	}
 	nativeRowBars = func(a *app, c *ui.Context, background ui.Color) bool {
 		m := nativeApps[a]

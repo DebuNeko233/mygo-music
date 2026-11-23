@@ -66,7 +66,8 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.radio.CancelPending()
 	// Startup links belong to the account being restored; open them after
 	// restoring its queue. Later account changes retire in-flight lookups.
-	if !a.links.Starting {
+	if !a.startup.waiting {
+		a.local.CancelOpen()
 		a.cancelMusicLink()
 	}
 	a.account.Accept(prof)
@@ -95,7 +96,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.searches.Reset()
 	a.load(a.nav.Current)
 	a.loadHome()
-	a.openPendingMusicLink()
+	a.finishStartup()
 	if prof == nil {
 		return
 	}

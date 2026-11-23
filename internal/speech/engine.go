@@ -16,11 +16,15 @@ type Transcriber interface {
 type Engine struct {
 	mu         sync.Mutex
 	recognizer Transcriber
+	closed     bool
 }
 
 func (e *Engine) Transcribe(ctx context.Context, dir string, src Source, from, until time.Duration, newRecognizer func(string) (Transcriber, error), said func(Segment), heard func(time.Duration)) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.closed {
+		return context.Canceled
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -46,3 +50,12 @@ func (e *Engine) close() {
 	}
 }
 func (e *Engine) Release() { go func() { e.mu.Lock(); defer e.mu.Unlock(); e.close() }() }
+
+// Close waits for a canceled transcription to leave the native recognizer.
+// Unlike Release, it also prevents queued work from reopening the model.
+func (e *Engine) Close() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.closed = true
+	e.close()
+}

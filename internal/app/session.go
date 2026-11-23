@@ -154,12 +154,16 @@ const sessionEvery = 30 * time.Second
 // keepSession saves the session a while after playback changed, and every
 // while again as it plays. Paused, nothing is due, and the app sleeps.
 func (a *app) keepSession() {
-	if a.sessionDue {
+	if a.sessionDue || a.quitting {
 		return
 	}
 	a.sessionDue = true
-	sessionAfter(sessionEvery, func() {
+	a.sessionCancel = sessionAfter(sessionEvery, func() {
 		a.sessionDue = false
+		a.sessionCancel = nil
+		if a.quitting {
+			return
+		}
 		a.saveSession()
 		if a.pl.Playing() {
 			a.keepSession()
@@ -169,8 +173,9 @@ func (a *app) keepSession() {
 
 // sessionAfter runs fn on the main thread after d, without redrawing a
 // window as Update would.
-var sessionAfter = func(d time.Duration, fn func()) {
-	time.AfterFunc(d, func() { mygo.RunOnMain(fn) })
+var sessionAfter = func(d time.Duration, fn func()) func() {
+	timer := time.AfterFunc(d, func() { mygo.RunOnMain(fn) })
+	return func() { timer.Stop() }
 }
 
 // restoreSession picks up playback where it was left, paused, once the
@@ -180,12 +185,6 @@ func (a *app) restoreSession() {
 		return
 	}
 	a.restored = true
-	defer func() {
-		if file := a.localView.pendingFile; file != "" {
-			a.localView.pendingFile = ""
-			a.openTemporaryAudio(file)
-		}
-	}()
 	path, err := sessionPath()
 	if err != nil {
 		return

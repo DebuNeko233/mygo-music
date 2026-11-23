@@ -12,7 +12,6 @@ import (
 type localViewState struct {
 	window          *mygo.Window
 	picking         bool
-	pendingFile     string
 	lyricScroll     ui.ScrollState
 	embeddedArtwork embeddedArtworkCache
 }
@@ -20,6 +19,9 @@ type localViewState struct {
 var openLocalDialog = mygo.Dialog.Open
 
 func (a *app) openLocalFolders() {
+	if a.quitting {
+		return
+	}
 	if a.localView.window != nil {
 		a.localView.window.Show()
 		a.localView.window.Focus()
@@ -42,7 +44,14 @@ func (a *app) openLocalFolders() {
 		Content:           ui.View(a.localFoldersView),
 	})
 	a.localView.window = w
-	w.OnClosed(func() { a.localView.window = nil })
+	w.OnClosed(func() {
+		if a.localView.window != w {
+			return
+		}
+		a.localView.window = nil
+		a.syncDock()
+	})
+	a.syncDock()
 }
 
 func (a *app) redrawLocalFolders() {

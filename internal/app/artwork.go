@@ -50,19 +50,20 @@ type artCache struct {
 	// gone are the covers dropped, for as long as something else holds
 	// them: Now Playing keeps the cover it shows, which comes back as it
 	// was rather than loading again.
-	gone        map[string]weak.Pointer[artwork]
-	busy        map[string]uint64
-	sem         chan struct{}
-	post        func(func())
-	now         func() time.Time
-	size        int // the bytes the covers in art keep
-	limit       int
-	serial      uint64
-	seen        map[string]struct{} // covers the most recent view asked to paint
-	rejected    map[string]int      // decoded sizes that did not fit beside visible covers
-	results     *sync.Cond
-	resultBytes int
-	closed      bool // guarded by results.L
+	gone         map[string]weak.Pointer[artwork]
+	busy         map[string]uint64
+	sem          chan struct{}
+	post         func(func())
+	postResource func(func(), func())
+	now          func() time.Time
+	size         int // the bytes the covers in art keep
+	limit        int
+	serial       uint64
+	seen         map[string]struct{} // covers the most recent view asked to paint
+	rejected     map[string]int      // decoded sizes that did not fit beside visible covers
+	results      *sync.Cond
+	resultBytes  int
+	closed       bool // guarded by results.L
 }
 
 type artPage struct {
@@ -79,11 +80,16 @@ const artScrollGrace = time.Second
 // artLimit bounds encoded data and estimated decoded pixels in the cache.
 const artLimit = 64 << 20
 
-func newArtCache(post func(func())) *artCache {
-	return &artCache{art: map[string]*artwork{}, variants: map[string]map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{},
+func newArtCache(post func(func()), resources ...func(func(), func())) *artCache {
+	c := &artCache{art: map[string]*artwork{}, variants: map[string]map[string]*artwork{}, gone: map[string]weak.Pointer[artwork]{}, busy: map[string]uint64{},
 		sem: make(chan struct{}, artJobs), post: post, now: time.Now, limit: artLimit,
 		seen: map[string]struct{}{}, rejected: map[string]int{},
 		results: sync.NewCond(&sync.Mutex{})}
+	c.postResource = func(fn, _ func()) { c.post(fn) }
+	if len(resources) != 0 {
+		c.postResource = resources[0]
+	}
+	return c
 }
 
 // Bound bytes already posted to the UI. A single large result may exceed
@@ -323,7 +329,7 @@ func (c *artCache) requestCover(url string, backdrop, visible bool, load func(st
 			<-c.sem
 			return
 		}
-		c.post(func() {
+		c.postResource(func() {
 			defer c.finishResult(size)
 			if c.busy[key] != request {
 				return
@@ -361,7 +367,7 @@ func (c *artCache) requestCover(url string, backdrop, visible bool, load func(st
 					}
 				})
 			})
-		})
+		}, func() { c.finishResult(size) })
 	}()
 	return current
 }

@@ -15,6 +15,9 @@ import (
 
 // openSettings shows the settings window, opening it the first time.
 func (a *app) openSettings() {
+	if a.quitting {
+		return
+	}
 	a.refreshMusicLinkHandler()
 	// A key the settings were recording before they closed is not being
 	// recorded now.
@@ -48,16 +51,9 @@ func (a *app) openSettings() {
 		BackgroundColor: "light-dark(#f4f4f6, #1c1c1f)",
 		Content:         ui.View(a.settingsView),
 	})
-	a.settingsWin.OnFocus(a.refreshMusicLinkHandler)
-	a.settingsWin.OnClosed(func() {
-		a.settingsWin = nil
-		// The dialog asking about the folder goes with the window.
-		a.cacheSettings.Confirm.Open = false
-		// So does a key the settings were recording: one left recording
-		// would keep the app's own keys from working.
-		a.recording, a.recordingNote = "", ""
-		a.syncDock()
-	})
+	w := a.settingsWin
+	w.OnFocus(a.refreshMusicLinkHandler)
+	w.OnClosed(func() { a.settingsClosed(w) })
 	a.syncDock()
 }
 

@@ -19,7 +19,6 @@ type LinkPlayer interface {
 	PlayQueue([]netease.Track, int)
 }
 type LinkServices struct {
-	Ready                                bool
 	Player                               LinkPlayer
 	Post                                 func(func())
 	Closed                               func() bool
@@ -30,11 +29,8 @@ type LinkServices struct {
 	Fetch                                func(context.Context, netease.MusicLink) (netease.Track, error)
 }
 
-// musicLinkState holds at most one cold-start request. A newer link or
-// navigation cancels old work before its result can replace the queue.
+// Links owns link resolution; application startup owns opening intent ordering.
 type Links struct {
-	Starting          bool
-	Pending           *netease.MusicLink
 	generation        uint64
 	cancel            context.CancelFunc
 	Registered        bool
@@ -46,38 +42,6 @@ func (m *Links) Cancel() {
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
-	}
-	m.Pending = nil
-}
-
-// openMusicInput is shared by the search box and the system URL event.
-// False leaves ordinary text to the existing search path.
-func (m *Links) Input(text string, s LinkServices) bool {
-	link, ok, err := netease.ParseMusicLink(text)
-	if !ok {
-		return false
-	}
-	m.Cancel()
-	s.DismissSuggestions()
-	if err != nil {
-		s.Notify(LinkError(err))
-		return true
-	}
-	if m.Starting || !s.Ready {
-		m.Pending = &link
-	} else {
-		m.Open(link, s)
-	}
-	return true
-}
-
-// openPendingMusicLink runs after account and playback restoration, so
-// restoring the saved queue cannot overwrite the song just opened.
-func (m *Links) OpenPending(s LinkServices) {
-	m.Starting = false
-	if link := m.Pending; link != nil {
-		m.Pending = nil
-		m.Open(*link, s)
 	}
 }
 

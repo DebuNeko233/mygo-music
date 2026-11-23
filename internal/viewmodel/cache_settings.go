@@ -33,6 +33,7 @@ type CacheChange struct {
 }
 type CacheServices struct {
 	Post                   func(func())
+	PostResource           func(func(), func())
 	Player                 *player.Player
 	Browse, Images         *diskcache.Store
 	Commit                 func(string) error
@@ -55,6 +56,10 @@ func (m *CacheSettings) Change(plan CacheChange, s CacheServices) error {
 	cache := s.Player.Cache
 	browse, images := s.Browse, s.Images
 	resume := s.Player.SuspendCache()
+	postCommit := s.PostResource
+	if postCommit == nil {
+		postCommit = func(fn, _ func()) { s.Post(fn) }
+	}
 	go func() {
 		defer cancel()
 		unblock := cache.Quiesce()
@@ -85,7 +90,9 @@ func (m *CacheSettings) Change(plan CacheChange, s CacheServices) error {
 				// Merge on the main thread so settings changed during the
 				// copy are preserved. The move rolls back if saving fails.
 				saved := make(chan error, 1)
-				s.Post(func() {
+				// Shutdown must resolve this acknowledgement even if its
+				// queued main-thread callback will never be applied.
+				postCommit(func() {
 					if err := ctx.Err(); err != nil {
 						saved <- err
 						return
@@ -97,7 +104,7 @@ func (m *CacheSettings) Change(plan CacheChange, s CacheServices) error {
 					}
 
 					saved <- err
-				})
+				}, func() { saved <- context.Canceled })
 				if err := <-saved; err != nil {
 					return err
 				}

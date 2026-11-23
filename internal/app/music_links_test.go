@@ -160,14 +160,15 @@ func TestMusicLinkFailureAndNavigation(t *testing.T) {
 // destination; restoring the previous queue must happen before opening it.
 func TestMusicLinkColdStart(t *testing.T) {
 	a := musicLinkApp(t)
-	a.links.Starting = true
+	a.startup.waiting = true
 	a.openMusicInput("orpheus://playlist/12")
 	a.openMusicInput("orpheus://album/34")
-	if a.nav.Current.Page != pageHome || a.links.Pending == nil {
+	if a.nav.Current.Page != pageHome || a.startup.pending == nil {
 		t.Fatal("link ran before restoration")
 	}
-	a.openPendingMusicLink()
-	if a.links.Starting || a.links.Pending != nil || a.nav.Current != (route{Page: pageAlbum, ID: 34}) {
+	a.restoreSession()
+	a.finishStartup()
+	if a.startup.waiting || a.startup.pending != nil || a.nav.Current != (route{Page: pageAlbum, ID: 34}) {
 		t.Fatalf("pending link lost: %+v", a.nav.Current)
 	}
 }
@@ -373,13 +374,13 @@ func TestMusicLinkColdStartSurvivesAccountRestore(t *testing.T) {
 	if err := writeUserData(path, data); err != nil {
 		t.Fatal(err)
 	}
-	a.links.Starting = true
+	a.startup.waiting = true
 	a.openMusicInput("orpheus://song/2")
 	a.signedIn(nil)
 	for a.home.Loading {
 		refreshPost(t, posts)
 	}
-	if a.links.Starting || a.links.Pending != nil || !a.restored || a.pl.Current() == nil || a.pl.Current().ID != 2 || len(a.pl.Queue()) != 2 || !a.playbackState.Open {
+	if a.startup.waiting || a.startup.pending != nil || !a.restored || a.pl.Current() == nil || a.pl.Current().ID != 2 || len(a.pl.Queue()) != 2 || !a.playbackState.Open {
 		t.Fatalf("cold-start link lost across restoration: links=%+v, current=%+v", a.links, a.pl.Current())
 	}
 }

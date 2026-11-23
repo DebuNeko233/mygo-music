@@ -191,7 +191,7 @@ func (a *app) deferCacheQuit() bool {
 }
 func (a *app) cacheMoveLabel() string { return a.cacheSettings.Label() }
 func (a *app) cacheServices() viewmodel.CacheServices {
-	return viewmodel.CacheServices{Post: a.post, Player: a.pl, Browse: a.browseCache, Images: a.imageCache,
+	return viewmodel.CacheServices{Post: a.post, PostResource: a.postResource, Player: a.pl, Browse: a.browseCache, Images: a.imageCache,
 		Commit: func(directory string) error {
 			next := a.settings
 			next.CacheDir = directory

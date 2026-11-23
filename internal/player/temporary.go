@@ -11,6 +11,12 @@ import (
 // PlayTemporary plays a prepared local file after the current track. A file
 // already in the queue reuses its entry. It takes ownership of the decoder.
 func (p *Player) PlayTemporary(track netease.Track, local *LocalAudio) {
+	if p.closed {
+		if local != nil {
+			local.Close()
+		}
+		return
+	}
 	p.finish(MovedOn)
 	track.Temporary = true
 	at := p.at

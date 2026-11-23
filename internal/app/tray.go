@@ -52,7 +52,7 @@ func activationPolicy(s settings, windowOpen bool) mygo.ActivationPolicy {
 // windowOpen tells whether the main window or the settings window is
 // open: shown or minimized, as the notch player doesn't count.
 func (a *app) windowOpen() bool {
-	if a.settingsWin != nil {
+	if a.settingsWin != nil || a.localView.window != nil {
 		return true
 	}
 	return a.win != nil && (a.win.IsVisible() || a.win.IsMinimized())

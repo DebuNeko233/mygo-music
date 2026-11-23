@@ -17,8 +17,8 @@ import (
 func TestSessionRestsWhilePaused(t *testing.T) {
 	isolateUserData(t)
 	var due []func()
-	defer func(after func(time.Duration, func())) { sessionAfter = after }(sessionAfter)
-	sessionAfter = func(_ time.Duration, fn func()) { due = append(due, fn) }
+	defer func(after func(time.Duration, func()) func()) { sessionAfter = after }(sessionAfter)
+	sessionAfter = func(_ time.Duration, fn func()) func() { due = append(due, fn); return func() {} }
 
 	a := newTestApp()
 	defer a.sessionSave.wait()

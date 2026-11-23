@@ -16,15 +16,35 @@ var (
 
 func (a *app) linkServices() viewmodel.LinkServices {
 	return viewmodel.LinkServices{
-		Ready: a.pl != nil, Player: a.pl, Post: a.detailPost(), Closed: func() bool { return a.quitting },
+		Player: a.pl, Post: a.detailPost(), Closed: func() bool { return a.quitting },
 		Show: a.showMain, NowPlaying: func() { a.playbackState.Open = true },
 		DismissSuggestions: a.dismissSuggestions, Navigate: a.open, Notify: func(message string) { a.toast = message },
 		Resolve: resolveMusicLink, Fetch: musicLinkTrack,
 	}
 }
-func (a *app) cancelMusicLink()                     { a.links.Cancel() }
-func (a *app) openMusicInput(text string) bool      { return a.links.Input(text, a.linkServices()) }
-func (a *app) openPendingMusicLink()                { a.links.OpenPending(a.linkServices()) }
+func (a *app) cancelMusicLink() { a.links.Cancel(); a.startup.pending = nil }
+func (a *app) openMusicInput(text string) bool {
+	link, ok, err := netease.ParseMusicLink(text)
+	if !ok {
+		return false
+	}
+	if a.quitting {
+		return true
+	}
+	a.local.CancelOpen()
+	a.cancelMusicLink()
+	a.dismissSuggestions()
+	if err != nil {
+		a.toast = viewmodel.LinkError(err)
+		return true
+	}
+	if a.startup.waiting || a.pl == nil {
+		a.startup.queue(openingIntent{link: link})
+	} else {
+		a.openMusicLink(link)
+	}
+	return true
+}
 func (a *app) openMusicLink(link netease.MusicLink) { a.links.Open(link, a.linkServices()) }
 
 func (a *app) refreshMusicLinkHandler() {
