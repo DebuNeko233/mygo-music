@@ -160,6 +160,9 @@ func (a *app) failedLoads(manual bool) bool {
 	if a.library.NeedsRecovery(a.visiblePlaylist(), manual) {
 		return true
 	}
+	if id, home, subs := a.podcastRecoveryScope(); a.podcasts.NeedsRecovery(id, home, subs, manual) {
+		return true
+	}
 	switch a.route.page {
 	case pageCloud:
 		if !a.cloud.Loading() && a.cloud.Failure != nil && retry(a.cloud.Failure) {
@@ -197,11 +200,7 @@ func (a *app) failedLoads(manual bool) bool {
 		if d := a.searches.Get(a.route); d != nil && !d.page.Loading && d.page.Error != "" && retry(d.page.Failure) {
 			return true
 		}
-	case pagePodcasts:
-		d := a.podcastTab
-		if !d.loading && (d.err != "" && retry(d.failure) || !d.hotPage.Loading && d.hotPage.Error != "" && retry(d.hotPage.Failure)) {
-			return true
-		}
+
 	}
 	return a.art.hasFailed(manual) || a.pl.MetadataPending()
 }
@@ -215,6 +214,9 @@ func (a *app) retryLoads(manual bool) {
 		a.confirmAccount()
 	}
 	a.home.Retry(manual, a.homeServices())
+	if id, home, subs := a.podcastRecoveryScope(); a.podcasts.NeedsRecovery(id, home, subs, manual) {
+		a.podcasts.Retry(id, home, subs, manual, a.podcastServices())
+	}
 	if a.library.NeedsRecovery(a.visiblePlaylist(), manual) {
 		a.library.RetryFailed(a.listenerID(), a.visiblePlaylist(), manual, a.libraryServices())
 	}
@@ -250,14 +252,7 @@ func (a *app) retryLoads(manual bool) {
 		if d := a.searches.Get(a.route); d != nil && !d.page.Loading && d.page.Error != "" && retry(d.page.Failure) {
 			a.moreResults(a.route, d)
 		}
-	case pagePodcasts:
-		d := a.podcastTab
-		if !d.loading && d.err != "" && retry(d.failure) {
-			d.hotPage.Loaded = false
-			a.loadPodcastTab()
-		} else if !d.hotPage.Loading && d.hotPage.Error != "" && retry(d.hotPage.Failure) {
-			a.loadHotPodcasts()
-		}
+
 	}
 	a.retryTrackArtwork(manual)
 	a.art.retryFailed(manual)
@@ -382,6 +377,9 @@ func (a *app) persistLibraryChanges(changed viewmodel.LibrarySnapshots, ids ...i
 
 // An in-flight recovery preserves its backoff, but needs no extra timer.
 func (a *app) recoveryBusy() bool {
+	if id, home, subs := a.podcastRecoveryScope(); a.podcasts.Busy(id, home, subs) {
+		return true
+	}
 	if a.account.Busy || a.home.Loading || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy || a.pl.MetadataLoading() {
 		return true
 	}
@@ -405,9 +403,7 @@ func (a *app) recoveryBusy() bool {
 	case pageSearch:
 		d := a.searches.Get(a.route)
 		return d != nil && d.page.Loading
-	case pagePodcasts:
-		d := a.podcastTab
-		return d.loading || d.hotPage.Loading
+
 	}
 	return false
 }

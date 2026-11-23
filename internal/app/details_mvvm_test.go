@@ -37,7 +37,7 @@ func TestDetailUserRepliesRespectAccountGeneration(t *testing.T) {
 		reply()
 	}
 	d := a.users.Pages.Peek(7)
-	if d.Loading != 2 || d.SubsLoading != 2 || d.User != nil || d.ArtistsShown || d.PodcastsShown || len(d.Playlists) != 0 {
+	if d.Loading != 2 || d.SubsLoading != 1 || d.User != nil || d.ArtistsShown || a.podcasts.Home.SubscriptionsShown || len(d.Playlists) != 0 {
 		t.Fatal("previous login's private data reached the new session")
 	}
 }

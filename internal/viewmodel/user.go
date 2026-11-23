@@ -6,17 +6,16 @@ import (
 )
 
 type UserPage struct {
-	User                        *netease.User
-	Playlists                   []netease.Playlist
-	Loading                     int
-	Error                       string
-	Artists                     []netease.ArtistProfile
-	Podcasts                    []netease.Podcast
-	ArtistsShown, PodcastsShown bool
-	SubsLoading                 int
+	User         *netease.User
+	Playlists    []netease.Playlist
+	Loading      int
+	Error        string
+	Artists      []netease.ArtistProfile
+	ArtistsShown bool
+	SubsLoading  int
 }
 
-// Users owns public profiles and the current listener's private subscriptions.
+// Users owns public profiles and the current listener's followed artists.
 type Users struct {
 	Pages pagecache.Cache[int64, *UserPage]
 }
@@ -30,7 +29,6 @@ type UserServices struct {
 	Detail    func(int64) (*netease.User, error)
 	Playlists func(int64) ([]netease.Playlist, []netease.Playlist, error)
 	Artists   func() ([]netease.ArtistProfile, error)
-	Podcasts  func() ([]netease.Podcast, error)
 }
 
 func (m *Users) Load(id, listener int64, s UserServices) {
@@ -83,8 +81,8 @@ func (m *Users) loadSubscriptions(id int64, d *UserPage, s UserServices) {
 	if d.SubsLoading > 0 {
 		return
 	}
-	d.SubsLoading = 2
-	artists, podcasts := s.Artists, s.Podcasts
+	d.SubsLoading = 1
+	artists := s.Artists
 	go func() {
 		ars, err := artists()
 		s.Post(func() {
@@ -94,18 +92,6 @@ func (m *Users) loadSubscriptions(id int64, d *UserPage, s UserServices) {
 			d.SubsLoading--
 			if err == nil {
 				d.Artists, d.ArtistsShown = ars, true
-			}
-		})
-	}()
-	go func() {
-		pods, err := podcasts()
-		s.Post(func() {
-			if m.Pages.Peek(id) != d {
-				return
-			}
-			d.SubsLoading--
-			if err == nil {
-				d.Podcasts, d.PodcastsShown = pods, true
 			}
 		})
 	}()

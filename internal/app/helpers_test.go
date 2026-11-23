@@ -22,7 +22,6 @@ func isolateUserData(t *testing.T) {
 
 func newTestApp() *app {
 	a := &app{
-		podcasts: pagecache.New[int64, *podcastData](podcastBusy), podcastTab: &podcastTab{},
 		searches: pagecache.New[route, *searchData](searchBusy),
 		lyricAt:  -1, queueAt: -1,
 	}
@@ -30,6 +29,7 @@ func newTestApp() *app {
 	a.artists.Reset()
 	a.albums.Reset()
 	a.users.Reset()
+	a.podcasts.Reset()
 	a.art = newArtCache(func(func()) {})
 	a.pl = player.New(func(func()) {})
 	a.pl.SetVolume(0.5)

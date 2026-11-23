@@ -24,7 +24,6 @@ func userFixture() (*Users, UserServices, chan func()) {
 		Artists: func() ([]netease.ArtistProfile, error) {
 			return []netease.ArtistProfile{{Artist: netease.Artist{ID: 10}}}, nil
 		},
-		Podcasts: func() ([]netease.Podcast, error) { return []netease.Podcast{{ID: 11}}, nil },
 	}
 	return m, s, posts
 }
@@ -35,14 +34,13 @@ func TestUserDetailsSeparatePublicAndOwnerData(t *testing.T) {
 		t.Run(map[bool]string{false: "public", true: "owner"}[own], func(t *testing.T) {
 			m, s, posts := userFixture()
 			var calls atomic.Int32
-			artists, podcasts := s.Artists, s.Podcasts
+			artists := s.Artists
 			s.Artists = func() ([]netease.ArtistProfile, error) { calls.Add(1); return artists() }
-			s.Podcasts = func() ([]netease.Podcast, error) { calls.Add(1); return podcasts() }
 			listener := int64(8)
 			count := 2
 			if own {
 				listener = 7
-				count = 4
+				count = 3
 			}
 			m.Load(7, listener, s)
 			m.Load(7, listener, s)
@@ -51,7 +49,7 @@ func TestUserDetailsSeparatePublicAndOwnerData(t *testing.T) {
 				completions[i] = wait(t, posts, "user result")
 			}
 			d := m.Pages.Peek(7)
-			if d.User != nil || d.Loading != 2 || d.ArtistsShown || d.PodcastsShown {
+			if d.User != nil || d.Loading != 2 || d.ArtistsShown {
 				t.Fatal("worker modified user state before dispatch")
 			}
 			for _, done := range completions {
@@ -60,19 +58,19 @@ func TestUserDetailsSeparatePublicAndOwnerData(t *testing.T) {
 			if d.User == nil || d.Loading != 0 || len(d.Playlists) != 1 || d.Playlists[0].ID != 1 {
 				t.Fatal("public page lost its profile or exposed another/private playlist")
 			}
-			if own && (calls.Load() != 2 || !d.ArtistsShown || !d.PodcastsShown || d.SubsLoading != 0) || !own && calls.Load() != 0 {
+			if own && (calls.Load() != 1 || !d.ArtistsShown || d.SubsLoading != 0) || !own && calls.Load() != 0 {
 				t.Fatal("subscriptions leaked into another user's page or failed to coalesce")
 			}
 		})
 	}
 }
 
-// Reset rejects all four old requests even when a new page has reused the same user ID and pending counters.
+// Reset rejects all three old requests even when a new page has reused the same user ID and pending counters.
 func TestUserDetailsResetRejectsParallelCompletions(t *testing.T) {
 	m, s, posts := userFixture()
 	m.Load(7, 7, s)
 	var completions []func()
-	for range 4 {
+	for range 3 {
 		completions = append(completions, wait(t, posts, "old user result"))
 	}
 	m.Reset()
@@ -81,29 +79,26 @@ func TestUserDetailsResetRejectsParallelCompletions(t *testing.T) {
 	for _, done := range completions {
 		done()
 	}
-	if fresh.Loading != 2 || fresh.SubsLoading != 2 || fresh.User != nil || fresh.ArtistsShown || fresh.PodcastsShown || len(fresh.Playlists) != 0 {
+	if fresh.Loading != 2 || fresh.SubsLoading != 2 || fresh.User != nil || fresh.ArtistsShown || len(fresh.Playlists) != 0 {
 		t.Fatal("old user result changed the new lifetime")
 	}
 }
 
-// Refreshing private subscriptions retains each old collection independently when its request fails.
-func TestUserDetailsSubscriptionRefreshKeepsPartialSuccess(t *testing.T) {
+// Refreshing followed artists retains the previously published collection when its request fails.
+func TestUserDetailsArtistRefreshKeepsOldData(t *testing.T) {
 	m, s, posts := userFixture()
 	m.Load(7, 7, s)
-	for range 4 {
+	for range 3 {
 		wait(t, posts, "initial user result")()
 	}
 	d := m.Pages.Peek(7)
 	s.Artists = func() ([]netease.ArtistProfile, error) { return nil, errors.New("offline") }
-	s.Podcasts = func() ([]netease.Podcast, error) { return []netease.Podcast{{ID: 12}}, nil }
 	m.Load(7, 7, s)
-	if len(d.Artists) != 1 || d.Podcasts[0].ID != 11 {
+	if len(d.Artists) != 1 {
 		t.Fatal("refresh blanked displayed subscriptions")
 	}
-	for range 2 {
-		wait(t, posts, "subscription refresh")()
-	}
-	if d.SubsLoading != 0 || len(d.Artists) != 1 || d.Artists[0].ID != 10 || d.Podcasts[0].ID != 12 || !d.ArtistsShown || !d.PodcastsShown {
+	wait(t, posts, "subscription refresh")()
+	if d.SubsLoading != 0 || len(d.Artists) != 1 || d.Artists[0].ID != 10 || !d.ArtistsShown {
 		t.Fatal("partial failure erased successful or previously displayed data")
 	}
 }

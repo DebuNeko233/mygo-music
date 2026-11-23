@@ -172,8 +172,8 @@ func init() {
 				shot("p-podcasts", a.win)
 				step(0, func() {
 					a.setVolume(0)
-					t := a.podcastTab
-					if pods := append(t.subs, append(t.picks, t.hot...)...); len(pods) > 0 {
+					t := a.podcasts.Home
+					if pods := append(t.Subs, append(t.Picks, t.Hot...)...); len(pods) > 0 {
 						a.playPodcast(pods[0].ID)
 					}
 				})

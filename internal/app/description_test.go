@@ -33,7 +33,7 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 			a.artists.Pages.Set(77, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
 			a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
 			a.library.Playlists[77] = &netease.Playlist{ID: 77, Name: "歌单名称", Description: text}
-			a.podcasts.Set(77, &podcastData{podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
+			a.podcasts.Pages.Set(77, &viewmodel.PodcastPage{Podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
 			a.users.Pages.Set(77, &viewmodel.UserPage{User: &netease.User{UserID: 77, Nickname: "用户名称", Signature: text}})
 			view := ui.NewTester(a.view, 1180, 780)
 			more := "更多：" + tc.title

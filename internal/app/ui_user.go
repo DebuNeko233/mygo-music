@@ -68,12 +68,12 @@ func (a *app) userPage(c *ui.Context) {
 			}
 			a.albumGrid(c, a.library.SubAlbums)
 		}
-		if own && d.PodcastsShown {
+		if own && a.podcasts.Home.SubscriptionsShown {
 			a.section(c, "订阅的播客")
-			if len(d.Podcasts) == 0 {
+			if len(a.podcasts.Home.Subs) == 0 {
 				a.empty(c, "还没有订阅播客")
 			}
-			a.podcastGrid(c, len(d.Podcasts), func(i int) *netease.Podcast { return &d.Podcasts[i] })
+			a.podcastGrid(c, len(a.podcasts.Home.Subs), func(i int) *netease.Podcast { return &a.podcasts.Home.Subs[i] })
 		}
 		if own && d.ArtistsShown {
 			a.section(c, "关注的歌手")

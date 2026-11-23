@@ -85,8 +85,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.artists.Reset()
 	a.albums.Reset()
 	a.users.Reset()
-	a.podcasts = pagecache.New[int64, *podcastData](podcastBusy)
-	a.podcastTab = &podcastTab{}
+	a.podcasts.Reset()
 	a.searches = pagecache.New[route, *searchData](searchBusy)
 	a.load(a.route)
 	a.loadHome()

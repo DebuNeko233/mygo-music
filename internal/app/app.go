@@ -96,8 +96,7 @@ type app struct {
 	artists        viewmodel.Artists
 	albums         viewmodel.Albums
 	users          viewmodel.Users
-	podcasts       pagecache.Cache[int64, *podcastData]
-	podcastTab     *podcastTab // the podcasts tab's lists
+	podcasts       viewmodel.Podcasts
 	trackList      ui.ListState
 	trackRowsCache trackRowsCache
 	local          viewmodel.LocalLibrary
@@ -307,17 +306,16 @@ func Run() error {
 		return nil
 	}
 	a := &app{
-		podcasts:   pagecache.New[int64, *podcastData](podcastBusy),
-		podcastTab: &podcastTab{},
-		searches:   pagecache.New[route, *searchData](searchBusy),
-		lyricAt:    -1,
-		queueAt:    -1,
-		cacheUsed:  -1,
+		searches:  pagecache.New[route, *searchData](searchBusy),
+		lyricAt:   -1,
+		queueAt:   -1,
+		cacheUsed: -1,
 	}
 	a.library.Reset()
 	a.artists.Reset()
 	a.albums.Reset()
 	a.users.Reset()
+	a.podcasts.Reset()
 	a.links.starting = true
 	offURL := mygo.App.OnOpenURL(func(raw string) {
 		a.showMain()

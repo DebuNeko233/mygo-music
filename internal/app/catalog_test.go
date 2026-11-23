@@ -363,7 +363,7 @@ func TestPlayEpisode(t *testing.T) {
 		p.MainSong.ID = audio
 		return p
 	}
-	a.podcasts.Set(5, &podcastData{podcast: pod, programs: []netease.Program{ep(1, 11, "第三期"), ep(2, 0, "第二期"), ep(3, 13, "第一期")}, page: viewmodel.Page{Loaded: true}})
+	a.podcasts.Pages.Set(5, &viewmodel.PodcastPage{Podcast: pod, Programs: []netease.Program{ep(1, 11, "第三期"), ep(2, 0, "第二期"), ep(3, 13, "第一期")}, Page: viewmodel.Page{Loaded: true}})
 	a.open(route{page: pagePodcast, id: 5})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -393,7 +393,7 @@ func TestPlayEpisode(t *testing.T) {
 func TestEpisodeOpensPodcast(t *testing.T) {
 	a := catalogApp()
 	a.open(route{page: pagePodcast, id: 5})
-	d := a.podcasts.Get(5)
+	d := a.podcasts.Pages.Get(5)
 	a.playProgram(d, 0)
 	a.pl.SetLyrics(nil)
 	a.nowPlaying, a.npPane = true, paneProgram
@@ -401,7 +401,7 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 	tt.Advance(time.Second)
 	tt.Frame()
 	// The host, as Now Playing credits them, not the podcast's.
-	if err := tt.Click("查看：" + d.podcast.DJ.Nickname); err != nil {
+	if err := tt.Click("查看：" + d.Podcast.DJ.Nickname); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -476,15 +476,15 @@ func TestHotPodcastsOverlap(t *testing.T) {
 		}
 		return out
 	}
-	var tab podcastTab
-	tab.addHot(pods(1, 2, 3))
-	tab.addHot(pods(4, 2, 5))
+	var tab viewmodel.PodcastHome
+	tab.AddHot(pods(1, 2, 3))
+	tab.AddHot(pods(4, 2, 5))
 	var ids []int64
-	for _, p := range tab.hot {
+	for _, p := range tab.Hot {
 		ids = append(ids, p.ID)
 	}
-	if !slices.Equal(ids, []int64{1, 2, 3, 4, 5}) || tab.hotAt != 6 {
-		t.Fatalf("listed %v, next from %d", ids, tab.hotAt)
+	if !slices.Equal(ids, []int64{1, 2, 3, 4, 5}) || tab.HotAt != 6 {
+		t.Fatalf("listed %v, next from %d", ids, tab.HotAt)
 	}
 }
 
@@ -547,14 +547,14 @@ func catalogApp() *app {
 		p.MainSong.ID = int64(50 + i)
 		programs = append(programs, p)
 	}
-	a.podcasts.Set(5, &podcastData{podcast: pod, programs: programs, page: viewmodel.Page{Loaded: true}})
+	a.podcasts.Pages.Set(5, &viewmodel.PodcastPage{Podcast: pod, Programs: programs, Page: viewmodel.Page{Loaded: true}})
 	var hot []netease.Podcast
 	for i, name := range []string{"深夜书店", "城市漫游", "慢慢说", "周末早餐", "通勤十分钟", "老唱片"} {
 		hot = append(hot, netease.Podcast{ID: int64(60 + i), Name: name, DJ: netease.User{Nickname: "主播"}, RcmdText: "陪你度过每个夜晚", PlayCount: float64(1e6 * (i + 1))})
 	}
 	subbed := *pod
 	subbed.LastProgram = programs[0].Name
-	a.podcastTab = &podcastTab{subs: []netease.Podcast{subbed}, picks: hot[:3], hot: hot, hotPage: viewmodel.Page{Loaded: true}}
+	a.podcasts.Home = &viewmodel.PodcastHome{Subs: []netease.Podcast{subbed}, Picks: hot[:3], Hot: hot, HotPage: viewmodel.Page{Loaded: true}}
 	for _, res := range []struct {
 		kind netease.SearchType
 		res  netease.SearchResult

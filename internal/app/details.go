@@ -62,10 +62,11 @@ func (a *app) loadUser(id int64) {
 	uid := a.listenerID()
 	if uid != 0 && uid == id {
 		a.freshenAlbums()
+		a.podcasts.LoadSubscriptions(a.podcastServices())
 	}
 	if !a.users.NeedsLoad(id, uid) {
 		a.users.Pages.Get(id)
 		return
 	}
-	a.users.Load(id, uid, viewmodel.UserServices{Post: a.detailPost(), Detail: userDetail, Playlists: userPlaylists, Artists: followedArtists, Podcasts: subscribedPodcasts})
+	a.users.Load(id, uid, viewmodel.UserServices{Post: a.detailPost(), Detail: userDetail, Playlists: userPlaylists, Artists: followedArtists})
 }

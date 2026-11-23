@@ -71,7 +71,7 @@ func TestPodcastTabRecoversWithConnection(t *testing.T) {
 		t.Run(map[bool]string{false: "reconnect", true: "manual"}[manual], func(t *testing.T) {
 			a, posts := offlineFixture(t)
 			a.route = route{page: pagePodcasts}
-			a.podcastTab.hotPage.Error, a.podcastTab.hotPage.Failure = "热门播客加载失败", netease.ErrOffline
+			a.podcasts.Home.HotPage.Error, a.podcasts.Home.HotPage.Failure = "热门播客加载失败", netease.ErrOffline
 			calls := 0
 			hotPodcasts = func(_, _ int) ([]netease.Podcast, bool, error) {
 				calls++
@@ -83,8 +83,8 @@ func TestPodcastTabRecoversWithConnection(t *testing.T) {
 				a.recoverLoads()
 			}
 			refreshPost(t, posts)
-			if calls != 1 || a.podcastTab.hotPage.Error != "" || len(a.podcastTab.hot) != 1 {
-				t.Fatalf("podcast list did not recover: calls %d, tab %+v", calls, a.podcastTab.hotPage)
+			if calls != 1 || a.podcasts.Home.HotPage.Error != "" || len(a.podcasts.Home.Hot) != 1 {
+				t.Fatalf("podcast list did not recover: calls %d, tab %+v", calls, a.podcasts.Home.HotPage)
 			}
 		})
 	}
