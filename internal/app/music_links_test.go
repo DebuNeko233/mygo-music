@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 )
 
@@ -351,5 +353,60 @@ func TestMusicLinkShortKeepsManualPlayback(t *testing.T) {
 	update()
 	if a.nav.Current.Page != pageHome || a.pl.Current() == nil || a.pl.Current().ID != 99 {
 		t.Fatal("short link overrode manual playback")
+	}
+}
+
+// Accepting the restored account must keep a cold-start link until its saved queue is available.
+func TestMusicLinkColdStartSurvivesAccountRestore(t *testing.T) {
+	a := musicLinkApp(t)
+	posts := testPosts(a)
+	fakeOfflineHome(t)
+	saved := sessionFile{Session: player.Session{Queue: []netease.Track{{ID: 1}, {ID: 2}}, Order: []int{0, 1}, At: 0}}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := sessionPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeUserData(path, data); err != nil {
+		t.Fatal(err)
+	}
+	a.links.Starting = true
+	a.openMusicInput("orpheus://song/2")
+	a.signedIn(nil)
+	for a.home.Loading {
+		refreshPost(t, posts)
+	}
+	if a.links.Starting || a.links.Pending != nil || !a.restored || a.pl.Current() == nil || a.pl.Current().ID != 2 || len(a.pl.Queue()) != 2 || !a.playbackState.Open {
+		t.Fatalf("cold-start link lost across restoration: links=%+v, current=%+v", a.links, a.pl.Current())
+	}
+}
+
+// A later account change cancels an active lookup instead of replaying it as a startup link.
+func TestMusicLinkAccountRestoreCancelsLookup(t *testing.T) {
+	a := musicLinkApp(t)
+	posts := testPosts(a)
+	fakeOfflineHome(t)
+	a.restored = true
+	a.pl.Cue([]netease.Track{{ID: 99}})
+	old := musicLinkTrack
+	t.Cleanup(func() { musicLinkTrack = old })
+	contexts := make(chan context.Context, 1)
+	musicLinkTrack = func(ctx context.Context, _ netease.MusicLink) (netease.Track, error) {
+		contexts <- ctx
+		return netease.Track{ID: 7}, nil
+	}
+	a.openMusicInput("orpheus://song/7")
+	ctx := wait(t, contexts, "link context")
+	update := wait(t, posts, "link result")
+	a.signedIn(nil)
+	update()
+	for a.home.Loading {
+		refreshPost(t, posts)
+	}
+	if ctx.Err() == nil || a.pl.Current() == nil || a.pl.Current().ID != 99 || a.playbackState.Open {
+		t.Fatal("account change kept old lookup")
 	}
 }

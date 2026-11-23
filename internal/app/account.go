@@ -64,7 +64,11 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.resetComments()
 	a.radio.CancelPending()
-	a.cancelMusicLink()
+	// Startup links belong to the account being restored; open them after
+	// restoring its queue. Later account changes retire in-flight lookups.
+	if !a.links.Starting {
+		a.cancelMusicLink()
+	}
 	a.account.Accept(prof)
 	a.library.Reset()
 	a.bindOfflineLyrics()
