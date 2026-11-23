@@ -57,7 +57,7 @@ func (a *app) searchTracks() trackSearchList {
 			return trackSearchList{tracks: a.cloud.Tracks, revision: a.library.Refresh.Revision, label: "网盘", owner: a.listenerID()}
 		}
 	case pageLocal:
-		return trackSearchList{tracks: a.local.tracks, revision: a.local.revision, label: "本地"}
+		return trackSearchList{tracks: a.local.Tracks, revision: a.local.Revision, label: "本地"}
 	}
 	return trackSearchList{}
 }
@@ -147,5 +147,5 @@ func (a *app) chooseTrackSuggestion(key, q string) bool {
 
 // Use the existing availability snapshot; never stat files while typing.
 func (a *app) suggestionPlayable(tr *netease.Track) bool {
-	return tr.Playable() && (!tr.IsLocal() || !a.local.missing[tr.LocalID])
+	return tr.Playable() && (!tr.IsLocal() || !a.local.Missing[tr.LocalID])
 }

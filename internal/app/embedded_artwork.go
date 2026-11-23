@@ -3,6 +3,8 @@ package app
 import (
 	"container/list"
 	"sync"
+
+	"netease-music-mygo/internal/localcatalog"
 )
 
 const embeddedArtworkLimit = 8 << 20
@@ -12,7 +14,7 @@ type embeddedArtworkKey struct {
 	stamp, size int64
 }
 
-func (s localSong) embeddedArtworkKey() embeddedArtworkKey {
+func localEmbeddedArtworkKey(s localcatalog.Song) embeddedArtworkKey {
 	return embeddedArtworkKey{s.Path, s.Stamp, s.Size}
 }
 

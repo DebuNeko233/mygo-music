@@ -114,7 +114,8 @@ type app struct {
 	podcastTab     *podcastTab // the podcasts tab's lists
 	trackList      ui.ListState
 	trackRowsCache trackRowsCache
-	local          localMusic
+	local          viewmodel.LocalLibrary
+	localView      localViewState
 	trackArt       trackArtworkState
 	// Where the page and the sidebar are scrolled, kept while Now Playing
 	// covers them, unbuilt.

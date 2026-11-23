@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
+	"netease-music-mygo/internal/userdata"
 )
 
 // settings are the listener's choices, kept in settings.json in the user
@@ -346,34 +348,8 @@ func (w *settingsSaver) wait() {
 	}
 }
 
-// writeUserData atomically replaces a file in the app's user data.
-func writeUserData(path string, b []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	// Stage beside the destination so the rename stays on the same volume.
-	f, err := os.CreateTemp(filepath.Dir(path), ".data-*.part")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	defer os.Remove(tmp)
-	if _, err := f.Write(b); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
+// writeUserData uses the shared atomic user-data writer.
+func writeUserData(path string, b []byte) error { return userdata.Write(path, b) }
 
 // takeAccent takes the accent the listener chose, which the pages paint
 // with.

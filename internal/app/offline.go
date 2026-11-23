@@ -39,7 +39,7 @@ func (a *app) initOffline() {
 
 var lyricsRequest = netease.Lyrics
 
-type keptLyrics struct{ Original, Translation, Words string }
+type keptLyrics = lyrics.Text
 
 func (a *app) cachedLyricsFor(scope string) func(int64, func([]lyrics.Line, lyrics.Display)) (string, string, string, error) {
 	store := a.browseCache
@@ -56,7 +56,7 @@ func (a *app) cachedLyricsFor(scope string) func(int64, func([]lyrics.Line, lyri
 					if err != nil {
 						return
 					}
-					store.Put(scope, key, cacheBytes(keptLyrics{l, t, w}), epoch)
+					store.Put(scope, key, cacheBytes(keptLyrics{Original: l, Translation: t, Words: w}), epoch)
 					lines, display := lyrics.BuildDisplay(l, t, w)
 					a.post(func() {
 						if fmt.Sprint(a.listenerID()) == scope && store.Epoch() == epoch {
@@ -69,7 +69,7 @@ func (a *app) cachedLyricsFor(scope string) func(int64, func([]lyrics.Line, lyri
 		}
 		l, t, w, err := fetch(id)
 		if err == nil {
-			store.Put(scope, key, cacheBytes(keptLyrics{l, t, w}), epoch)
+			store.Put(scope, key, cacheBytes(keptLyrics{Original: l, Translation: t, Words: w}), epoch)
 			return l, t, w, nil
 		}
 		return "", "", "", err

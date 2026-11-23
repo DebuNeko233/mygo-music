@@ -11,6 +11,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
 )
@@ -26,7 +27,7 @@ type trackArtworkKey struct {
 	tags            string
 }
 
-func (s localSong) artworkKey(temporary bool) trackArtworkKey {
+func localArtworkKey(s localcatalog.Song, temporary bool) trackArtworkKey {
 	return trackArtworkKey{id: s.Track.LocalID, stamp: s.Stamp, size: s.Size, temporary: temporary}
 }
 
@@ -68,7 +69,7 @@ type trackArtworkState struct {
 
 func (a *app) artworkKey(t *netease.Track) trackArtworkKey {
 	if t.IsLocal() {
-		return a.playbackLocalSong(t).artworkKey(t.Temporary)
+		return localArtworkKey(a.playbackLocalSong(t), t.Temporary)
 	}
 	return a.remoteArtworkKey(t)
 }
@@ -135,11 +136,11 @@ func (a *app) announceTrackArtwork(t *netease.Track, load func() ([]byte, error)
 	}()
 }
 
-func (a *app) localArtworkURL(t *netease.Track, song localSong) string {
+func (a *app) localArtworkURL(t *netease.Track, song localcatalog.Song) string {
 	if song.Cover {
 		return ""
 	}
-	return netease.CoverURL(a.trackArt.known[song.artworkKey(t.Temporary)].url)
+	return netease.CoverURL(a.trackArt.known[localArtworkKey(song, t.Temporary)].url)
 }
 
 // Search only for what plays. Quick skips don't queue a search for every song.
@@ -156,8 +157,8 @@ func (a *app) syncTrackArtwork() {
 			return
 		}
 		if song.Cover {
-			embedded := song.embeddedArtworkKey()
-			a.announceTrackArtwork(t, func() ([]byte, error) { return a.local.embeddedArtwork.get(embedded, localmedia.Cover), nil })
+			embedded := localEmbeddedArtworkKey(song)
+			a.announceTrackArtwork(t, func() ([]byte, error) { return a.localView.embeddedArtwork.get(embedded, localmedia.Cover), nil })
 			return
 		}
 		if track.Name == strings.TrimSuffix(filepath.Base(song.Path), filepath.Ext(song.Path)) {

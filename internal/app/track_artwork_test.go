@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -46,7 +47,7 @@ func TestLocalArtworkSearchAndOfflineReuse(t *testing.T) {
 	const url = "https://p1.music.126.net/test/1.jpg"
 	store := diskcache.New(t.TempDir(), 1<<20)
 	t.Cleanup(store.Close)
-	song := localSong{Track: netease.Track{LocalID: 4, Name: "Band - Song", Duration: 180000}, Path: "Band - Song.mp3"}
+	song := localcatalog.Song{Track: netease.Track{LocalID: 4, Name: "Band - Song", Duration: 180000}, Path: "Band - Song.mp3"}
 	queries, images := make(chan string, 4), make(chan string, 4)
 	oldSearch, oldFetch := searchTrackArtwork, fetchTrackArtwork
 	searchTrackArtwork = func(q string, _ int) ([]netease.Track, error) {
@@ -58,10 +59,10 @@ func TestLocalArtworkSearchAndOfflineReuse(t *testing.T) {
 	cover := artworkTestPNG(t)
 	fetchTrackArtwork = func(url string) ([]byte, error) { images <- url; return cover, nil }
 	t.Cleanup(func() { searchTrackArtwork, fetchTrackArtwork = oldSearch, oldFetch })
-	makeApp := func(song localSong) (*app, chan func()) {
+	makeApp := func(song localcatalog.Song) (*app, chan func()) {
 		a := newTestApp()
 		a.browseCache, a.network.offline = store, true
-		a.local.replace(localCatalog{Songs: []localSong{song}})
+		a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{song}})
 		a.pl.Cue([]netease.Track{song.Track})
 		return a, testPosts(a)
 	}
@@ -181,7 +182,7 @@ func artworkRecoveryFixture(t *testing.T, local bool) (*app, chan func()) {
 	tr := netease.Track{ID: 700, Cloud: true, Name: "Song", Duration: 180000, Artists: []netease.Artist{{Name: "Band"}}}
 	if local {
 		tr.ID, tr.Cloud, tr.LocalID = 0, false, 4
-		a.local.replace(localCatalog{Songs: []localSong{{Track: tr, Path: "Song.mp3"}}})
+		a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: tr, Path: "Song.mp3"}}})
 	}
 	a.pl.Cue([]netease.Track{tr})
 	a.pl.SetLyrics(nil)

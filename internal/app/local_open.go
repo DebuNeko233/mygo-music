@@ -1,13 +1,11 @@
 package app
 
 import (
-	"math"
-	"os"
-	"slices"
-
 	"github.com/egoist/mygo"
 
+	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func (a *app) chooseTemporaryAudio() {
@@ -32,60 +30,19 @@ func (a *app) openTemporaryAudio(path string) {
 		return
 	}
 	if !a.restored {
-		a.local.pendingFile = path
+		a.localView.pendingFile = path
 		return
 	}
 	a.showMain()
 	a.cancelMusicLink()
-	a.local.openRequest++
-	request := a.local.openRequest
-	go func() {
-		song, audio := prepareTemporaryAudio(path)
-		a.post(func() {
-			if a.quitting || a.local.openRequest != request {
-				if audio != nil {
-					audio.Close()
-				}
-				return
-			}
-			if audio == nil {
-				a.toast = "无法播放所选音频，请选择支持的音频文件"
-				return
-			}
-			if i := slices.IndexFunc(a.local.catalog.Songs, func(known localSong) bool { return known.Path == song.Path }); i >= 0 {
-				song.Track.LocalID = a.local.catalog.Songs[i].Track.LocalID
-			} else {
-				// Library IDs ascend from 1. Temporary IDs descend from MaxInt64.
-				if a.local.temporaryID == 0 {
-					a.local.temporaryID = math.MaxInt64
-				}
-				song.Track.LocalID = a.local.temporaryID
-				a.local.temporaryID--
-			}
-			delete(a.trackArt.known, a.local.temporary.artworkKey(true))
-			a.local.temporary = song
-			a.local.temporaryLyrics = keptLyrics{}
+	a.local.OpenTemporary(path, viewmodel.LocalOpenServices{
+		Post: a.post, Stopped: func() bool { return a.quitting }, Prepare: localcatalog.PrepareTemporary,
+		Release: func(audio *player.LocalAudio) { audio.Close() },
+		Play: func(previous, song localcatalog.Song, audio *player.LocalAudio) {
+			delete(a.trackArt.known, localArtworkKey(previous, true))
 			a.pl.PlayTemporary(song.Track, audio)
 			a.nowPlaying = true
-		})
-	}()
-}
-
-func prepareTemporaryAudio(path string) (localSong, *player.LocalAudio) {
-	if !localAudioPath(path) {
-		return localSong{}, nil
-	}
-	path, err := localFilePath(path)
-	if err != nil {
-		return localSong{}, nil
-	}
-	st, err := os.Stat(path)
-	if err != nil || !st.Mode().IsRegular() {
-		return localSong{}, nil
-	}
-	audio, err := player.PrepareLocalAudio(path)
-	if err != nil {
-		return localSong{}, nil
-	}
-	return readLocalSong(path, st, audio.Duration), audio
+		},
+		Notify: func(message string) { a.toast = message },
+	})
 }

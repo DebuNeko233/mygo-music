@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 )
 
-func localSearchFixture(t *testing.T) (*app, []localSong, *ui.Tester) {
+func localSearchFixture(t *testing.T) (*app, []localcatalog.Song, *ui.Tester) {
 	t.Helper()
 	before := searchSuggest
 	searchSuggest = func(string) (netease.Suggestions, error) { return netease.Suggestions{}, netease.ErrOffline }
@@ -24,7 +26,7 @@ func localSearchFixture(t *testing.T) (*app, []localSong, *ui.Tester) {
 		songs[i].Track.Album.Name = "迷跡波"
 	}
 	songs[149].Track.Alias = []string{"珍藏现场"}
-	a.local.replace(localCatalog{Songs: songs})
+	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	a.pl.Cue([]netease.Track{songs[0].Track, {ID: 999, Name: "在线歌曲"}})
 	tt.Frame()
 	return a, songs, tt
@@ -70,15 +72,15 @@ func TestLocalSidebarSearchPlaysAndLocates(t *testing.T) {
 // Missing files invalidate cached suggestions, cannot be chosen from an old popup, and do not hide available matches.
 func TestLocalSearchRevalidatesMissingFiles(t *testing.T) {
 	a, _, _ := localSearchFixture(t)
-	songs := make([]localSong, 4)
+	songs := make([]localcatalog.Song, 4)
 	for i := range songs {
-		songs[i] = localSong{Track: netease.Track{LocalID: int64(i + 1), Name: "匹配歌曲"}, Path: "../player/testdata/seek.flac"}
+		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), Name: "匹配歌曲"}, Path: "../player/testdata/seek.flac"}
 	}
-	a.local.replace(localCatalog{Songs: songs})
+	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	a.pl.Cue([]netease.Track{{ID: 999, Name: "正在播放"}})
 	old := a.trackSuggestions("匹配")[0].key
 	for _, id := range []int64{1, 2, 3} {
-		a.local.markMissing(id)
+		a.local.MarkMissing(id)
 	}
 	got := a.trackSuggestions("匹配")
 	if len(got) != trackSuggestLimit || got[0].song != -4 || !got[0].playable {
@@ -88,7 +90,7 @@ func TestLocalSearchRevalidatesMissingFiles(t *testing.T) {
 	if a.pl.Current().ID != 999 || len(a.pl.Queue()) != 1 {
 		t.Fatal("a stale missing-file choice changed playback")
 	}
-	a.local.setMissing(map[int64]bool{})
+	a.local.SetMissing(map[int64]bool{})
 	if got := a.trackSuggestions("匹配"); len(got) == 0 || got[0].song != -1 || !got[0].playable {
 		t.Fatal("restored files stayed disabled in the cached query")
 	}
@@ -101,11 +103,11 @@ func TestLocalSearchRevalidatesCatalogChanges(t *testing.T) {
 			a, songs, _ := localSearchFixture(t)
 			key := a.trackSuggestions("珍藏")[0].key
 			target := songs[149]
-			reordered := append([]localSong{target}, append(append([]localSong(nil), songs[:149]...), songs[150:]...)...)
+			reordered := append([]localcatalog.Song{target}, append(append([]localcatalog.Song(nil), songs[:149]...), songs[150:]...)...)
 			if removed {
 				reordered = reordered[1:]
 			}
-			a.local.replace(localCatalog{Songs: reordered})
+			a.local.Replace(localcatalog.Catalog{Songs: reordered})
 			a.chooseTrackSuggestion(key, "珍藏")
 			if removed {
 				if a.pl.Current().LocalID != 1 || len(a.pl.Queue()) != 2 {

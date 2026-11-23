@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -21,7 +22,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	current := netease.Track{ID: 31, Name: "正在播放的歌"}
 	local := netease.Track{LocalID: 1, Name: "本地待播歌曲"}
 	const path = "../player/testdata/seek.flac"
-	a.local.replace(localCatalog{Songs: []localSong{{Track: local, Path: path}}})
+	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: local, Path: path}}})
 	a.pl.Cue([]netease.Track{current})
 	a.pl.Hold(17 * time.Second)
 	a.pl.SetLyrics(nil)
@@ -48,7 +49,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	if q := a.pl.Queue(); len(q) != 1 || q[0].ID != current.ID || a.pl.Current().ID != current.ID ||
-		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.song(local.LocalID).Path != path {
+		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.Song(local.LocalID).Path != path {
 		t.Fatalf("removal changed playback or the library: %+v", q)
 	}
 }
@@ -60,7 +61,7 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 	current := netease.Track{LocalID: 1, Name: "当前本地歌曲"}
 	local := netease.Track{LocalID: 2, Name: "另一首本地歌曲"}
 	const path = "../player/testdata/seek.flac"
-	a.local.replace(localCatalog{Songs: []localSong{{Track: current, Path: path}, {Track: local, Path: path}}})
+	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: current, Path: path}, {Track: local, Path: path}}})
 	a.pl.Cue([]netease.Track{current, {ID: 2, Name: "在线歌曲"}})
 	a.route = route{page: pageLocal}
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -104,7 +105,7 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 		t.Fatal(err)
 	}
 	if next, _ := a.pl.AdjacentTracks(); len(a.pl.Queue()) != 2 || next == nil || next.ID != 2 ||
-		a.pl.Current().LocalID != current.LocalID || a.local.song(local.LocalID).Path != path {
+		a.pl.Current().LocalID != current.LocalID || a.local.Song(local.LocalID).Path != path {
 		t.Fatalf("removing the queued song changed playback or the library: %+v", a.pl.Queue())
 	}
 	open(local.Name)
@@ -125,7 +126,7 @@ func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
 	current := netease.Track{ID: 1, Name: "当前在线歌曲"}
 	next := netease.Track{ID: 2, Name: "下一首在线歌曲"}
 	const path = "../player/testdata/seek.flac"
-	a.local.replace(localCatalog{Songs: []localSong{{Track: played, Path: path}}})
+	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: played, Path: path}}})
 	a.pl.SuspendCache()
 	a.pl.Restore(player.Session{
 		Queue: []netease.Track{current, next, played}, Order: []int{2, 0, 1}, At: 1, Shuffle: true,
@@ -140,7 +141,7 @@ func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
 	}
 	order, at := a.pl.PlayOrder()
 	if !slices.Equal(order, []int{0, 1}) || at != 0 || a.pl.Current().Key() != current.Key() ||
-		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.song(played.LocalID).Path != path {
+		!a.pl.Playing() || a.pl.Position() != 17*time.Second || a.local.Song(played.LocalID).Path != path {
 		t.Fatalf("removal changed playback or the library: order %v, current %d at %v", order, at, a.pl.Position())
 	}
 }
@@ -160,12 +161,12 @@ func TestLocalTemporaryOpenAfterRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	song, ok := inspectLocalSong(original)
+	song, ok := localcatalog.Inspect(original)
 	if !ok {
 		t.Fatal("cannot open the original audio fixture")
 	}
 	song.Track.LocalID = 1
-	a.local.replace(localCatalog{Songs: []localSong{song}})
+	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{song}})
 	path, err := sessionPath()
 	if err != nil || !writeSessionJSON(path, player.Session{Queue: []netease.Track{song.Track}, Order: []int{0}}) {
 		t.Fatal("cannot save the original queue", err)
@@ -202,15 +203,15 @@ func TestLocalTemporaryOpenAfterRestore(t *testing.T) {
 	cur := a.pl.Current()
 	words, loaded := a.pl.Lyrics()
 	if !loaded || len(words) != 1 || words[0].Text != "试听歌词" || cur.LocalID == song.Track.LocalID ||
-		len(a.pl.Queue()) != 2 || len(a.local.catalog.Songs) != 1 || len(a.local.catalog.Folders) != 0 {
-		t.Fatalf("unexpected temporary playback or catalog: %+v, %+v", cur, a.local.catalog)
+		len(a.pl.Queue()) != 2 || len(a.local.Catalog.Songs) != 1 || len(a.local.Catalog.Folders) != 0 {
+		t.Fatalf("unexpected temporary playback or catalog: %+v, %+v", cur, a.local.Catalog)
 	}
 	a.saveSession()
 	a.sessionSave.wait()
 	if s, ok := readSession(path); !ok || len(s.Queue) != 1 || s.Queue[0].LocalID != song.Track.LocalID {
 		t.Fatalf("temporary file leaked into the saved queue: %+v", s)
 	}
-	if _, err := os.Stat(a.local.path); !os.IsNotExist(err) {
+	if _, err := os.Stat(a.local.Path); !os.IsNotExist(err) {
 		t.Fatalf("temporary playback wrote to the library: %v", err)
 	}
 
@@ -274,13 +275,13 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	if err := manager.Click("添加文件夹"); err != nil {
 		t.Fatal(err)
 	}
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "local import")()
 	}
-	if len(a.local.catalog.Songs) != 5 || len(a.local.catalog.Folders) != 2 {
-		t.Fatal(a.local.status)
+	if len(a.local.Catalog.Songs) != 5 || len(a.local.Catalog.Folders) != 2 {
+		t.Fatal(a.local.Status)
 	}
-	entry := a.local.catalog.Songs[0]
+	entry := a.local.Catalog.Songs[0]
 	id, name := entry.Track.LocalID, entry.Track.Name
 	tt.Frame()
 	if err := tt.RightClick(name); err != nil {
@@ -296,55 +297,55 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	if err := tt.Click("刷新曲库"); err != nil {
 		t.Fatal(err)
 	}
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "folder refresh")()
 	}
-	if len(a.local.catalog.Songs) != 6 || a.local.song(id).Track.LocalID != id {
+	if len(a.local.Catalog.Songs) != 6 || a.local.Song(id).Track.LocalID != id {
 		t.Fatal("refresh did not discover the new file or changed an existing ID")
 	}
 	if err := os.Rename(mp3, moved); err != nil {
 		t.Fatal(err)
 	}
 	a.refreshLocalSongs()
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "missing file after refresh")()
 	}
-	if !a.local.missing[id] {
+	if !a.local.Missing[id] {
 		t.Fatal("refresh did not flag the removed file")
 	}
 	tt.Frame()
 	if err := tt.Click("重新定位"); err != nil {
 		t.Fatal(err)
 	}
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "local relink")()
 	}
-	if song := a.local.song(id); filepath.Base(song.Path) != filepath.Base(moved) || a.pl.Queue()[1].LocalID != id {
+	if song := a.local.Song(id); filepath.Base(song.Path) != filepath.Base(moved) || a.pl.Queue()[1].LocalID != id {
 		t.Fatal("relink lost the track or its queue identity")
 	}
 	other := newTestApp()
 	other.initLocalMusic()
-	if other.local.song(id).Path != a.local.song(id).Path || len(other.local.catalog.Folders) != 2 {
+	if other.local.Song(id).Path != a.local.Song(id).Path || len(other.local.Catalog.Folders) != 2 {
 		t.Fatal("relink was not persisted")
 	}
 	manager.Frame()
-	if err := manager.Click("移除 " + a.local.catalog.Folders[0]); err != nil {
+	if err := manager.Click("移除 " + a.local.Catalog.Folders[0]); err != nil {
 		t.Fatal(err)
 	}
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "folder removal")()
 	}
-	if len(a.local.catalog.Folders) != 1 || len(a.local.catalog.Songs) != 6 {
+	if len(a.local.Catalog.Folders) != 1 || len(a.local.Catalog.Songs) != 6 {
 		t.Fatal("removing a parent folder lost overlapping or independently kept songs")
 	}
 	manager.Frame()
-	if err := manager.Click("移除 " + a.local.catalog.Folders[0]); err != nil {
+	if err := manager.Click("移除 " + a.local.Catalog.Folders[0]); err != nil {
 		t.Fatal(err)
 	}
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "subfolder removal")()
 	}
-	if len(a.local.catalog.Songs) != 1 || a.local.song(id).Path == "" {
+	if len(a.local.Catalog.Songs) != 1 || a.local.Song(id).Path == "" {
 		t.Fatal("removing the last folder left its songs or lost the relinked track")
 	}
 	if _, err := os.Stat(flac); err != nil {
@@ -353,7 +354,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	tt.Frame()
 	// Suspend audio loading to exercise the row's queue selection alone.
 	a.pl.SuspendCache()
-	if err := tt.Click(a.local.song(id).Track.Name); err != nil {
+	if err := tt.Click(a.local.Song(id).Track.Name); err != nil {
 		t.Fatal(err)
 	}
 	if cur := a.pl.Current(); cur == nil || cur.LocalID != id || len(a.pl.Queue()) != 1 {
@@ -361,16 +362,16 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	}
 	a.pl.Cue([]netease.Track{{ID: 31, Name: "Cloud song"}})
 	tt.Frame()
-	if err := tt.RightClick(a.local.song(id).Track.Name); err != nil {
+	if err := tt.RightClick(a.local.Song(id).Track.Name); err != nil {
 		t.Fatal(err)
 	}
 	if err := tt.ChooseMenuItem("从曲库移除"); err != nil {
 		t.Fatal(err)
 	}
-	for a.local.busy {
+	for a.local.Busy {
 		wait(t, posts, "local removal")()
 	}
-	if a.local.song(id).Path != "" {
+	if a.local.Song(id).Path != "" {
 		t.Fatal("local song remained in the library")
 	}
 	if _, err := os.Stat(moved); err != nil {

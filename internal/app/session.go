@@ -13,6 +13,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/userdata"
 )
 
 // session.json is an atomic full snapshot, also readable by older builds.
@@ -144,17 +145,7 @@ func (w *sessionSaver) write(job sessionWrite) {
 	w.written = job
 }
 
-func writeSessionJSON(path string, value any) bool {
-	b, err := json.Marshal(value)
-	if err != nil || os.WriteFile(path+".part", b, 0o600) != nil {
-		return false
-	}
-	if os.Rename(path+".part", path) != nil {
-		_ = os.Remove(path + ".part")
-		return false
-	}
-	return true
-}
+func writeSessionJSON(path string, value any) bool { return userdata.WriteJSON(path, value) }
 
 // sessionEvery is how long after playback changed, and how often as it
 // plays, the session is kept.
@@ -190,8 +181,8 @@ func (a *app) restoreSession() {
 	}
 	a.restored = true
 	defer func() {
-		if file := a.local.pendingFile; file != "" {
-			a.local.pendingFile = ""
+		if file := a.localView.pendingFile; file != "" {
+			a.localView.pendingFile = ""
 			a.openTemporaryAudio(file)
 		}
 	}()
@@ -204,7 +195,7 @@ func (a *app) restoreSession() {
 		return
 	}
 	for i, track := range s.Queue {
-		if song := a.local.song(track.LocalID); track.IsLocal() && song.Track.IsLocal() {
+		if song := a.local.Song(track.LocalID); track.IsLocal() && song.Track.IsLocal() {
 			s.Queue[i] = song.Track
 		}
 	}

@@ -9,12 +9,20 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
+type localViewState struct {
+	window          *mygo.Window
+	picking         bool
+	pendingFile     string
+	lyricScroll     ui.ScrollState
+	embeddedArtwork embeddedArtworkCache
+}
+
 var openLocalDialog = mygo.Dialog.Open
 
 func (a *app) openLocalFolders() {
-	if a.local.window != nil {
-		a.local.window.Show()
-		a.local.window.Focus()
+	if a.localView.window != nil {
+		a.localView.window.Show()
+		a.localView.window.Focus()
 		return
 	}
 	w := mygo.NewWindow(mygo.WindowOptions{
@@ -33,21 +41,21 @@ func (a *app) openLocalFolders() {
 		BackgroundColor:   "light-dark(#f4f4f6, #1c1c1f)",
 		Content:           ui.View(a.localFoldersView),
 	})
-	a.local.window = w
-	w.OnClosed(func() { a.local.window = nil })
+	a.localView.window = w
+	w.OnClosed(func() { a.localView.window = nil })
 }
 
 func (a *app) redrawLocalFolders() {
-	if w := a.local.window; w != nil {
+	if w := a.localView.window; w != nil {
 		w.Invalidate()
 	}
 }
 
 func (a *app) chooseLocalFile(id int64) {
-	if a.local.busy || a.local.path == "" {
+	if a.local.Busy || a.local.Path == "" {
 		return
 	}
-	a.local.picking = true
+	a.localView.picking = true
 	paths, err := openLocalDialog(mygo.OpenDialogOptions{
 		Parent: a.win, Title: "重新定位音频文件",
 		Filters: []mygo.FileFilter{{
@@ -55,21 +63,21 @@ func (a *app) chooseLocalFile(id int64) {
 			MIMETypes: []string{"audio/aac", "audio/aacp", "audio/3gpp", "audio/3gpp2", "audio/mp4", "audio/mp4a-latm", "audio/mpeg4-generic"},
 		}},
 	})
-	a.local.picking = false
+	a.localView.picking = false
 	if err == nil && len(paths) != 0 {
 		a.relinkLocalSong(id, paths[0])
 	}
 }
 
 func (a *app) chooseLocalFolders() {
-	if a.local.busy || a.local.path == "" {
+	if a.local.Busy || a.local.Path == "" {
 		return
 	}
-	a.local.picking = true
+	a.localView.picking = true
 	paths, err := openLocalDialog(mygo.OpenDialogOptions{
-		Parent: a.local.window, Title: "选择音乐文件夹", Directory: true, Multiple: true,
+		Parent: a.localView.window, Title: "选择音乐文件夹", Directory: true, Multiple: true,
 	})
-	a.local.picking = false
+	a.localView.picking = false
 	if err == nil {
 		a.addLocalFolders(paths)
 	}
@@ -77,9 +85,9 @@ func (a *app) chooseLocalFolders() {
 
 func (a *app) localPage(c *ui.Context) {
 	p := a.pal
-	tracks := a.local.tracks
+	tracks := a.local.Tracks
 	at := a.currentTrackIndex(tracks)
-	a.syncTrackViewport(c, trackHeaderKey{name: "本地歌曲", description: a.local.status, tracks: len(tracks)}, at)
+	a.syncTrackViewport(c, trackHeaderKey{name: "本地歌曲", description: a.local.Status, tracks: len(tracks)}, at)
 	visible := false
 	pane := ui.Column(c.Key("local-music")).Grow(1).MinHeight(0)
 	if files := pane.DroppedFiles(); len(files) != 0 {
@@ -94,15 +102,15 @@ func (a *app) localPage(c *ui.Context) {
 						ui.Text(c, fmt.Sprintf("%d 首歌曲", len(tracks))).FontSize(12).TextColor(p.muted)
 					})
 					ui.Row(c.Key("local-actions")).Gap(12).AlignItems(ui.Stretch).Children(func() {
-						if len(a.local.catalog.Folders) != 0 {
-							ui.Button(c.Key("refresh-local"), "刷新曲库").Disabled(a.local.busy).OnClick(a.refreshLocalSongs)
+						if len(a.local.Catalog.Folders) != 0 {
+							ui.Button(c.Key("refresh-local"), "刷新曲库").Disabled(a.local.Busy).OnClick(a.refreshLocalSongs)
 						}
 						animateButtonPress(ui.PrimaryButton(c.Key("manage-local"), "管理文件夹"), 0.96).
-							Disabled(a.local.path == "").OnClick(a.openLocalFolders)
+							Disabled(a.local.Path == "").OnClick(a.openLocalFolders)
 					})
 				})
-				if a.local.status != "" {
-					ui.Text(c, a.local.status).FontSize(12).TextColor(p.muted)
+				if a.local.Status != "" {
+					ui.Text(c, a.local.Status).FontSize(12).TextColor(p.muted)
 				}
 			})
 		}
@@ -127,16 +135,16 @@ func (a *app) localFoldersView(c *ui.Context) {
 	c.SetTheme(&theme)
 	c.Root().Background(p.bg)
 	c.OnShortcut(ui.Cmd, ui.KeyW, func() {
-		if w := a.local.window; w != nil {
+		if w := a.localView.window; w != nil {
 			w.Close()
 		}
 	})
 	ui.Column(c.Key("local-folders")).Fill().Padding(16, 18, 16, 18).Gap(12).Children(func() {
 		ui.Row(c).Justify(ui.End).Children(func() {
 			animateButtonPress(ui.PrimaryButton(c.Key("add-local-folder"), "添加"), 0.96).
-				Label("添加文件夹").Disabled(a.local.busy).OnClick(a.chooseLocalFolders)
+				Label("添加文件夹").Disabled(a.local.Busy).OnClick(a.chooseLocalFolders)
 		})
-		folders := a.local.catalog.Folders
+		folders := a.local.Catalog.Folders
 		if len(folders) == 0 {
 			ui.Column(c).Grow(1).Center().Children(func() {
 				ui.Text(c, "还没有添加音乐文件夹").FontSize(13).TextColor(p.muted)
@@ -146,15 +154,15 @@ func (a *app) localFoldersView(c *ui.Context) {
 				for _, folder := range folders {
 					ui.Row(c.Key(folder)).MinHeight(38).Radius(7).Background(p.hover).PaddingX(9).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, folder).SingleLine().MinWidth(0).Grow(1).FontSize(12).TextColor(p.text).Tooltip(folder)
-						ui.Button(c.Key("remove-folder"), "移除").Label("移除 " + folder).Disabled(a.local.busy).OnClick(func() {
+						ui.Button(c.Key("remove-folder"), "移除").Label("移除 " + folder).Disabled(a.local.Busy).OnClick(func() {
 							a.removeLocalFolder(folder)
 						})
 					})
 				}
 			})
 		}
-		if a.local.status != "" {
-			ui.Text(c, a.local.status).FontSize(12).TextColor(p.muted)
+		if a.local.Status != "" {
+			ui.Text(c, a.local.Status).FontSize(12).TextColor(p.muted)
 		}
 	})
 }
@@ -170,11 +178,11 @@ func (a *app) localSongItems(tr *netease.Track, fromLibrary bool) func(*ui.Menu)
 	}
 	track := *tr
 	return func(m *ui.Menu) {
-		song := a.local.song(track.LocalID)
+		song := a.local.Song(track.LocalID)
 		if song.Path == "" {
 			return
 		}
-		missing := a.local.missing[track.LocalID]
+		missing := a.local.Missing[track.LocalID]
 		queued := a.queueItems(m, track, !missing, fromLibrary)
 		if !song.Scanned || missing {
 			if queued {

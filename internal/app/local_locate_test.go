@@ -10,19 +10,21 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 )
 
-func localLocateFixture(t *testing.T, playing bool) (*app, []localSong, *ui.Tester) {
+func localLocateFixture(t *testing.T, playing bool) (*app, []localcatalog.Song, *ui.Tester) {
 	t.Helper()
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	songs := make([]localSong, 250)
+	songs := make([]localcatalog.Song, 250)
 	for i := range songs {
-		songs[i] = localSong{Track: netease.Track{LocalID: int64(i + 1), ID: int64(i + 1), Name: fmt.Sprintf("本地歌曲 %03d", i+1), Duration: 180000}, Path: "../player/testdata/seek.flac"}
+		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), ID: int64(i + 1), Name: fmt.Sprintf("本地歌曲 %03d", i+1), Duration: 180000}, Path: "../player/testdata/seek.flac"}
 	}
-	a.local.replace(localCatalog{Songs: songs})
+	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	a.route = route{page: pageLocal}
 	a.pl.SuspendCache()
 	a.pl.Cue([]netease.Track{songs[149].Track, {ID: 999, Name: "另一首在线歌曲"}})
@@ -53,12 +55,12 @@ func TestLocalLocateKeepsPlayback(t *testing.T) {
 			}
 			clickLocate(t, tt)
 			locatedRow(t, tt, songs[149].Track.Name, 800)
-			if a.pl.Current().LocalID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.page != pageLocal || len(a.local.tracks) != 250 {
+			if a.pl.Current().LocalID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.page != pageLocal || len(a.local.Tracks) != 250 {
 				t.Fatal("local locate changed playback, queue or library")
 			}
 			tt.Scroll(750, 400, 0, -100000)
 			tt.Frame()
-			a.local.status = strings.Repeat("正在扫描本地音乐文件夹 ", 8)
+			a.local.Status = strings.Repeat("正在扫描本地音乐文件夹 ", 8)
 			tt.SetSize(1000, 640)
 			tt.Frame()
 			for i := 0; i < 200 && !tt.Focused("定位正在播放的歌曲"); i++ {

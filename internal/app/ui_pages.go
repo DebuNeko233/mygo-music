@@ -390,7 +390,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		}
 		i--
 		tr := &tracks[i]
-		missing := tr.IsLocal() && a.local.missing[tr.LocalID]
+		missing := tr.IsLocal() && a.local.Missing[tr.LocalID]
 		playable := tr.Playable()
 		playing := cur != nil && cur.Key() == tr.Key()
 		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
@@ -467,7 +467,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			}
 			// A liked song's heart shows; the others' as the pointer is on them.
 			if missing {
-				ui.Button(c.Key("relink"), "重新定位").Disabled(a.local.busy).OnClick(func() { a.chooseLocalFile(tr.LocalID) })
+				ui.Button(c.Key("relink"), "重新定位").Disabled(a.local.Busy).OnClick(func() { a.chooseLocalFile(tr.LocalID) })
 			} else {
 				ui.Box(c).Size(32, 32).Center().Children(func() {
 					if !tr.IsLocal() && (a.library.Liked[tr.ID] || hovered) {
