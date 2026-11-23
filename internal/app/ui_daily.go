@@ -16,8 +16,8 @@ import (
 // with the date set large over it.
 func (a *app) dailyArt(c *ui.Context, now time.Time, size float32) {
 	var art *artwork
-	if len(a.daily) > 0 {
-		art = a.art.get(netease.Sized(a.daily[0].Album.PicURL, 600), true)
+	if len(a.home.Daily) > 0 {
+		art = a.art.get(netease.Sized(a.home.Daily[0].Album.PicURL, 600), true)
 	}
 	radius := size * 0.07
 	box := ui.Box(c).Size(size, size).Radius(radius).Background(ui.Hex("#3a3a40")).
@@ -44,7 +44,7 @@ func (a *app) dailyArt(c *ui.Context, now time.Time, size float32) {
 // covers fan and the record slides out, turning; while the day's songs
 // play it turns on, and grooves ripple out from it across the card.
 func (a *app) dailyCard(c *ui.Context, now time.Time) {
-	songs := a.daily
+	songs := a.home.Daily
 	if len(songs) == 0 {
 		return
 	}
@@ -162,7 +162,7 @@ func recordOut(out float32) float32 { return 30 + 46*out }
 // they play now rather than paused.
 func (a *app) dailyPlaying() (ours, playing bool) {
 	q, cur := a.pl.Queue(), a.pl.Current()
-	if cur == nil || len(q) != len(a.daily) || len(q) == 0 || q[0].ID != a.daily[0].ID || q[len(q)-1].ID != a.daily[len(q)-1].ID {
+	if cur == nil || len(q) != len(a.home.Daily) || len(q) == 0 || q[0].ID != a.home.Daily[0].ID || q[len(q)-1].ID != a.home.Daily[len(q)-1].ID {
 		return false, false
 	}
 	return true, a.pl.Playing()
@@ -473,13 +473,13 @@ func (a *app) dailyBlurb() string {
 }
 
 func (a *app) dailyPage(c *ui.Context) {
-	loading := len(a.daily) == 0
-	if loading && !a.homeLoading {
+	loading := len(a.home.Daily) == 0
+	if loading && !a.home.Loading {
 		a.centered(c, "暂时没有推荐", a.loadHome)
 		return
 	}
 	now := c.Now()
-	songs := a.daily
+	songs := a.home.Daily
 	s := a.pageShimmer(c)
 	header := func(c *ui.Context) {
 		p := a.pal

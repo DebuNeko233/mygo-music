@@ -48,16 +48,15 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
-	account      viewmodel.Account
-	library      viewmodel.Library
-	network      networkState
-	homeFailures map[string]error
+	account viewmodel.Account
+	library viewmodel.Library
+	home    viewmodel.Home
+	network networkState
 
 	playlistWrites                         sync.Map // cacheRequest to the latest accepted write's done channel
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState
 	browseUsed, imagesUsed                 int64
-	homePending                            int
 
 	wasBehind bool
 
@@ -73,8 +72,6 @@ type app struct {
 	route   route
 	history []route
 	forward []route // the pages gone back from, the last first to go to
-
-	recPlaylists []netease.Playlist // the day's playlists picked for the listener
 
 	accountOpen bool // the dropdown of the account row shows
 	intro       descriptionDialog
@@ -94,18 +91,8 @@ type app struct {
 	reportDone      chan struct{}
 	newPlayReporter func() playReporter
 
-	daily       []netease.Track
-	dailySpin   spinState // the record on the daily card
-	dailyBars   barState  // the bars on its play button
-	featured    []netease.Playlist
-	charts      []netease.Playlist
-	homeErr     string
-	homeLoading bool
-	homeAt      time.Time // when what the home page shows was asked for
-	// generation counter to discard stale responses
-
-	// playlists asked to play once they are in
-
+	dailySpin      spinState // the record on the daily card
+	dailyBars      barState  // the bars on its play button
 	artists        pageCache[int64, *artistData]
 	artistTab      int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
 	albums         pageCache[int64, *albumData]

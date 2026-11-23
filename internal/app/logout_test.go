@@ -27,7 +27,7 @@ func TestLogoutReportsCredentialDeletionFailure(t *testing.T) {
 	}
 	initial := a.toast
 	wait(t, started, "remote logout")
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
 	close(release)
@@ -52,7 +52,7 @@ func TestLogoutCompletionBelongsToItsLogin(t *testing.T) {
 	}
 	a.signOut()
 	wait(t, started, "remote logout")
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
 	a.account.Login.Generation++

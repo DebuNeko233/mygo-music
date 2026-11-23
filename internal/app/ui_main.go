@@ -422,25 +422,7 @@ func (a *app) centered(c *ui.Context, err string, retry func()) {
 
 // freshenHome loads the home page again once NetEase has picked the day's
 // songs anew since it last did: the app may stay open overnight.
-func (a *app) freshenHome() {
-	if !a.homeLoading && (a.homeAt.IsZero() || dailyRenewed(a.homeAt, time.Now())) {
-		a.loadHome()
-	}
-}
-
-// beijing is NetEase's time, without daylight saving.
-var beijing = time.FixedZone("CST", 8*60*60)
-
-// dailyRenewed reports whether NetEase has picked new daily songs between
-// loaded and now. It does at 6:00, Beijing time.
-func dailyRenewed(loaded, now time.Time) bool {
-	b := now.In(beijing)
-	six := time.Date(b.Year(), b.Month(), b.Day(), 6, 0, 0, 0, beijing)
-	if b.Before(six) {
-		six = six.AddDate(0, 0, -1)
-	}
-	return loaded.Before(six)
-}
+func (a *app) freshenHome() { a.home.Freshen(a.homeServices()) }
 
 // playlistDetail is what a playlist is asked of NetEase with.
 var playlistDetail func(id int64) (*netease.Playlist, error) = netease.PlaylistDetail

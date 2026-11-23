@@ -52,13 +52,13 @@ func init() {
 				})
 				for range 40 {
 					var n int
-					mygo.RunOnMain(func() { n = len(a.daily) })
+					mygo.RunOnMain(func() { n = len(a.home.Daily) })
 					if n > 0 {
 						break
 					}
 					time.Sleep(250 * time.Millisecond)
 				}
-				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.daily, 0) })
+				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
 				time.Sleep(4 * time.Second)
 				if os.Getenv("NM_DAILY") != "" {
 					// The home page, its daily card's record turning, for a
@@ -150,7 +150,7 @@ func init() {
 				step(0, func() { a.open(route{page: pageDaily}) })
 				time.Sleep(2 * time.Second)
 				shot("q-daily", a.win)
-				step(0, func() { a.pl.PlayQueue(a.daily, 0); a.setVolume(0.15) })
+				step(0, func() { a.pl.PlayQueue(a.home.Daily, 0); a.setVolume(0.15) })
 				time.Sleep(4 * time.Second)
 				step(0, func() { a.nowPlaying = true })
 				time.Sleep(4 * time.Second)
@@ -184,7 +184,7 @@ func init() {
 				// Now Playing, then the page of the artist it credits first,
 				// as their name opens it, its songs the most popular and the newest.
 				time.Sleep(5 * time.Second)
-				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.daily, 0) })
+				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
 				time.Sleep(3 * time.Second)
 				step(0, func() { a.nowPlaying, a.npPane = true, paneLyrics })
 				time.Sleep(3 * time.Second)
@@ -223,11 +223,11 @@ func init() {
 			step(0, func() { a.open(route{page: pageCharts}) })
 			time.Sleep(time.Second)
 			shot("2-charts", a.win)
-			step(0, func() { a.open(route{page: pagePlaylist, id: a.charts[1].ID}) })
+			step(0, func() { a.open(route{page: pagePlaylist, id: a.home.Charts[1].ID}) })
 			time.Sleep(4 * time.Second)
 			shot("3-playlist", a.win)
 			step(0, func() {
-				pl := a.library.Playlists[a.charts[1].ID]
+				pl := a.library.Playlists[a.home.Charts[1].ID]
 				a.setVolume(0.15)
 				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
 			})

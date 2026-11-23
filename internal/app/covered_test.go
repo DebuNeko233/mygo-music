@@ -85,7 +85,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 	}
 	a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: tracks}
 	for i := range 40 {
-		a.charts = append(a.charts, netease.Playlist{ID: int64(100 + i), Name: fmt.Sprintf("榜单%d", i+1)})
+		a.home.Charts = append(a.home.Charts, netease.Playlist{ID: int64(100 + i), Name: fmt.Sprintf("榜单%d", i+1)})
 	}
 	a.pl.Cue([]netease.Track{{ID: 9999, Name: "一张相片"}})
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -99,7 +99,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 				names = append(names, tr.Name)
 			}
 		} else {
-			for _, chart := range a.charts {
+			for _, chart := range a.home.Charts {
 				names = append(names, chart.Name)
 			}
 		}

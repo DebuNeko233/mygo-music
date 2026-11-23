@@ -101,28 +101,28 @@ func TestOfflineHomePartialFailure(t *testing.T) {
 	t.Cleanup(func() {
 		featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists = oldFeatured, oldCharts, oldDaily, oldRec
 	})
-	a.featured = []netease.Playlist{{ID: 1, Name: "Keep"}}
-	a.daily = []netease.Track{{ID: 2}}
+	a.home.Featured = []netease.Playlist{{ID: 1, Name: "Keep"}}
+	a.home.Daily = []netease.Track{{ID: 2}}
 	chartsCalls, recCalls := 0, 0
 	featuredPlaylists = func() ([]netease.Playlist, error) { return nil, netease.ErrOffline }
 	dailySongs = func() ([]netease.Track, error) { return nil, netease.ErrOffline }
 	homeCharts = func() ([]netease.Playlist, error) { chartsCalls++; return []netease.Playlist{{ID: 3}}, nil }
 	recommendedPlaylists = func() ([]netease.Playlist, error) { recCalls++; return []netease.Playlist{}, nil }
-	a.recPlaylists = []netease.Playlist{{ID: 4}}
+	a.home.Recommended = []netease.Playlist{{ID: 4}}
 	a.loadHome()
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
-	if len(a.featured) != 1 || len(a.daily) != 1 || a.charts[0].ID != 3 || len(a.recPlaylists) != 0 || len(a.homeFailures) == 0 {
+	if len(a.home.Featured) != 1 || len(a.home.Daily) != 1 || a.home.Charts[0].ID != 3 || len(a.home.Recommended) != 0 || len(a.home.Failures) == 0 {
 		t.Fatal("partial response cleared old content or hid a successful empty result")
 	}
 	featuredPlaylists = func() ([]netease.Playlist, error) { return []netease.Playlist{{ID: 5}}, nil }
 	dailySongs = func() ([]netease.Track, error) { return []netease.Track{{ID: 6}}, nil }
 	a.recoverLoads()
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
-	if len(a.homeFailures) > 0 || chartsCalls != 1 || recCalls != 1 || a.daily[0].ID != 6 {
+	if len(a.home.Failures) > 0 || chartsCalls != 1 || recCalls != 1 || a.home.Daily[0].ID != 6 {
 		t.Fatal("recovery retried healthy modules or failed to restore missing ones")
 	}
 }
@@ -310,7 +310,7 @@ func TestOfflineBootUsesBoundIdentity(t *testing.T) {
 				t.Fatal("restored an unrelated or malformed offline profile")
 			}
 			close(release)
-			for a.homeLoading || a.account.Busy || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy {
+			for a.home.Loading || a.account.Busy || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy {
 				refreshPost(t, posts)
 			}
 			if !a.account.Pending {
@@ -341,7 +341,7 @@ func TestOfflineExpiredAccountRequiresLogin(t *testing.T) {
 	if !cleared || a.account.Profile != nil || a.library.Mine != nil || len(a.library.Playlists) != 0 || a.account.Pending {
 		t.Fatal("expired identity remained visible")
 	}
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
 }

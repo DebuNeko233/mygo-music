@@ -25,7 +25,7 @@ func TestWholeListShuffleStartsRandomly(t *testing.T) {
 				pl := &netease.Playlist{ID: 7, Name: "Fixture", Tracks: tracks}
 				view = func(c *ui.Context) { a.playlistHeader(c, pl) }
 			} else {
-				a.daily = tracks
+				a.home.Daily = tracks
 				view = a.dailyPage
 			}
 			tt := ui.NewTester(view, 1100, 800)

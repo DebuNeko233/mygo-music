@@ -98,23 +98,23 @@ func TestRecoverySeparatesHomeFailures(t *testing.T) {
 	featuredPlaylists = func() ([]netease.Playlist, error) { featuredCalls++; return nil, netease.ErrNotLoggedIn }
 	homeCharts = func() ([]netease.Playlist, error) { chartCalls++; return nil, netease.ErrOffline }
 	a.loadHome()
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
 	homeCharts = func() ([]netease.Playlist, error) { chartCalls++; return []netease.Playlist{{ID: 1}}, nil }
 	a.recoverLoads()
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
-	if featuredCalls != 1 || chartCalls != 2 || a.needsRecovery() || len(a.homeFailures) == 0 {
+	if featuredCalls != 1 || chartCalls != 2 || a.needsRecovery() || len(a.home.Failures) == 0 {
 		t.Fatal("recovery repeated a permanent module or discarded its failure")
 	}
 	featuredPlaylists = func() ([]netease.Playlist, error) { featuredCalls++; return []netease.Playlist{{ID: 2}}, nil }
 	a.retryLoads(true)
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
-	if featuredCalls != 2 || chartCalls != 2 || len(a.homeFailures) > 0 {
+	if featuredCalls != 2 || chartCalls != 2 || len(a.home.Failures) > 0 {
 		t.Fatal("manual retry lost a failed module or retried healthy data")
 	}
 }
@@ -189,15 +189,15 @@ func TestHomeFailureDoesNotReloadHealthyModulesOnFocus(t *testing.T) {
 	featuredPlaylists = func() ([]netease.Playlist, error) { return nil, netease.ErrNotLoggedIn }
 	homeCharts = func() ([]netease.Playlist, error) { chartCalls++; return []netease.Playlist{{ID: 1}}, nil }
 	a.loadHome()
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
 	// Avoid the daily boundary while keeping a missing attempt stale.
-	if !a.homeAt.IsZero() {
-		a.homeAt = time.Now().Add(time.Hour)
+	if !a.home.At.IsZero() {
+		a.home.At = time.Now().Add(time.Hour)
 	}
 	a.freshenHome()
-	for a.homeLoading {
+	for a.home.Loading {
 		refreshPost(t, posts)
 	}
 	if chartCalls != 1 {

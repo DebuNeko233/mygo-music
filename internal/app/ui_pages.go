@@ -40,9 +40,9 @@ func (a *app) section(c *ui.Context, title string) ui.Element {
 }
 
 func (a *app) homePage(c *ui.Context) {
-	loading := len(a.featured) == 0 && len(a.charts) == 0
-	if loading && (!a.homeLoading || a.homeErr != "") {
-		a.centered(c, a.homeErr, a.loadHome)
+	loading := len(a.home.Featured) == 0 && len(a.home.Charts) == 0
+	if loading && (!a.home.Loading || a.home.Error != "") {
+		a.centered(c, a.home.Error, a.loadHome)
 		return
 	}
 	now := c.Now()
@@ -61,11 +61,11 @@ func (a *app) homePage(c *ui.Context) {
 		}
 		a.dailyCard(c, now)
 
-		if len(a.recPlaylists) > 0 {
+		if len(a.home.Recommended) > 0 {
 			a.section(c, "今日为你推荐")
 			ui.Grid(c).Columns(a.columns(c, 168)).GapX(20).GapY(28).Children(func() {
-				for i := range a.recPlaylists[:min(len(a.recPlaylists), a.columns(c, 168)*2)] {
-					a.playlistCard(c.Key(a.recPlaylists[i].ID), &a.recPlaylists[i])
+				for i := range a.home.Recommended[:min(len(a.home.Recommended), a.columns(c, 168)*2)] {
+					a.playlistCard(c.Key(a.home.Recommended[i].ID), &a.home.Recommended[i])
 				}
 			})
 		}
@@ -75,8 +75,8 @@ func (a *app) homePage(c *ui.Context) {
 
 		a.section(c, "推荐歌单")
 		ui.Grid(c).Columns(a.columns(c, 168)).GapX(20).GapY(28).Children(func() {
-			for i := range a.featured {
-				a.playlistCard(c.Key(a.featured[i].ID), &a.featured[i])
+			for i := range a.home.Featured {
+				a.playlistCard(c.Key(a.home.Featured[i].ID), &a.home.Featured[i])
 			}
 		})
 	})
@@ -84,7 +84,7 @@ func (a *app) homePage(c *ui.Context) {
 
 // officialChartGrid shows the leading charts on the home and charts pages.
 func (a *app) officialChartGrid(c *ui.Context) {
-	official := a.charts[:min(4, len(a.charts))]
+	official := a.home.Charts[:min(4, len(a.home.Charts))]
 	cols := min(4, max(2, a.columns(c, 260)))
 	ui.Grid(c).Columns(cols).Gap(20).Children(func() {
 		for i := range official {
@@ -98,9 +98,9 @@ func weekday(t time.Time) string {
 }
 
 func (a *app) chartsPage(c *ui.Context) {
-	loading := len(a.charts) == 0
-	if loading && (!a.homeLoading || a.homeErr != "") {
-		a.centered(c, a.homeErr, a.loadHome)
+	loading := len(a.home.Charts) == 0
+	if loading && (!a.home.Loading || a.home.Error != "") {
+		a.centered(c, a.home.Error, a.loadHome)
 		return
 	}
 	top, bottom := a.insets(c)
@@ -116,9 +116,9 @@ func (a *app) chartsPage(c *ui.Context) {
 			return
 		}
 		a.officialChartGrid(c)
-		if len(a.charts) > 4 {
+		if len(a.home.Charts) > 4 {
 			a.section(c, "全部榜单")
-			rest := a.charts[4:]
+			rest := a.home.Charts[4:]
 			ui.Grid(c).Columns(a.columns(c, 150)).GapX(20).GapY(28).Children(func() {
 				for i := range rest {
 					a.playlistCard(c.Key(rest[i].ID), &rest[i])

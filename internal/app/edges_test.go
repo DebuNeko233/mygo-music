@@ -17,7 +17,7 @@ func TestScrollEdgesFollowContent(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	for i := range 40 {
-		a.featured = append(a.featured, netease.Playlist{ID: int64(i + 1), Name: "歌单"})
+		a.home.Featured = append(a.home.Featured, netease.Playlist{ID: int64(i + 1), Name: "歌单"})
 	}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -48,7 +48,7 @@ func TestAccountMenuKeepsPlayerEdge(t *testing.T) {
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	for i := range 40 {
-		a.featured = append(a.featured, netease.Playlist{ID: int64(i + 1), Name: "歌单"})
+		a.home.Featured = append(a.home.Featured, netease.Playlist{ID: int64(i + 1), Name: "歌单"})
 	}
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()

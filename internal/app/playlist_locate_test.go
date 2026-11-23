@@ -319,7 +319,7 @@ func TestPlaylistLocateOnlyForMatchingPlaylist(t *testing.T) {
 				a.library.Loading[7] = true
 			case "daily":
 				a.route = route{page: pageDaily}
-				a.daily = pl.Tracks
+				a.home.Daily = pl.Tracks
 			}
 			tt.Frame()
 			if _, ok := tt.Find("定位正在播放的歌曲"); ok {

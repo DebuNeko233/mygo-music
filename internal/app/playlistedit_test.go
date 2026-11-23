@@ -312,7 +312,7 @@ func TestRenamePlaylist(t *testing.T) {
 
 	a := editTestApp()
 	a.route = route{page: pageHome}
-	a.homeLoading = true
+	a.home.Loading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("睡前"); err != nil {
@@ -368,7 +368,7 @@ func TestRenameFailureFromPreviousAccount(t *testing.T) {
 func TestNoRenamingLikedSongs(t *testing.T) {
 	a := editTestApp()
 	a.route = route{page: pageHome}
-	a.homeLoading = true
+	a.home.Loading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("小明喜欢的音乐"); err != nil {
@@ -387,7 +387,7 @@ func TestDeletePlaylist(t *testing.T) {
 	defer func() { deletePlaylist = netease.DeletePlaylist }()
 
 	a := editTestApp()
-	a.homeLoading = true
+	a.home.Loading = true
 	a.route = route{page: pageCharts}
 	a.open(route{page: pagePlaylist, id: 10})
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -472,7 +472,7 @@ func TestCancelDeletingPlaylist(t *testing.T) {
 
 	a := editTestApp()
 	a.route = route{page: pageHome}
-	a.homeLoading = true
+	a.home.Loading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("睡前"); err != nil {

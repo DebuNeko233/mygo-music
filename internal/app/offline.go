@@ -154,12 +154,8 @@ func (a *app) failedLoads(manual bool) bool {
 	if a.account.Pending && !a.account.Busy && (a.account.Failure == nil || retry(a.account.Failure)) {
 		return true
 	}
-	if !a.homeLoading {
-		for _, err := range a.homeFailures {
-			if retry(err) {
-				return true
-			}
-		}
+	if a.home.NeedsRetry(manual) {
+		return true
 	}
 	if a.library.Refresh.Mine.Failed && retry(a.library.Refresh.Mine.Failure) || a.library.Refresh.Likes.Failed && retry(a.library.Refresh.Likes.Failure) {
 		return true
@@ -222,9 +218,7 @@ func (a *app) retryLoads(manual bool) {
 	if a.account.Pending && (a.account.Failure == nil || retry(a.account.Failure)) {
 		a.confirmAccount()
 	}
-	if !a.homeLoading && len(a.homeFailures) > 0 {
-		a.loadHomeModules(true, manual)
-	}
+	a.home.Retry(manual, a.homeServices())
 	if a.account.Profile != nil && a.library.Refresh.Edits == 0 {
 		if a.library.Refresh.Mine.Failed && retry(a.library.Refresh.Mine.Failure) {
 			a.loadMine(a.account.Profile.UserID)
@@ -402,7 +396,7 @@ func (a *app) persistLibraryChanges(changed viewmodel.LibrarySnapshots, ids ...i
 
 // An in-flight recovery preserves its backoff, but needs no extra timer.
 func (a *app) recoveryBusy() bool {
-	if a.account.Busy || a.homeLoading || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy || a.pl.MetadataLoading() {
+	if a.account.Busy || a.home.Loading || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy || a.pl.MetadataLoading() {
 		return true
 	}
 	if a.trackArt.searching || a.trackArt.publication.loading && a.trackArt.publication.track == a.pl.Current() || a.art.hasLoading() {

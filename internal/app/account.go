@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
@@ -41,7 +40,7 @@ func (a *app) accountServices() viewmodel.AccountServices {
 		},
 	}
 }
-func (a *app) boot()           { a.homeLoading = true; a.account.Boot(a.accountServices()) }
+func (a *app) boot()           { a.home.Loading = true; a.account.Boot(a.accountServices()) }
 func (a *app) confirmAccount() { a.account.Confirm(a.accountServices()) }
 func (a *app) openLogin()      { a.account.OpenLogin(a.accountServices()) }
 func (a *app) checkLogin(gen int, key string, attempt viewmodel.QRLoginAttempt) bool {
@@ -69,16 +68,10 @@ func (a *app) signedIn(prof *netease.Profile) {
 	if identity := loginIdentity(); identity != "" && prof != nil {
 		a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
 	}
-	a.homeLoading = false
-	a.homeErr = ""
-	a.homeFailures = nil
-
-	a.featured, a.charts, a.daily = nil, nil, nil
-	a.homeAt = time.Time{}
+	a.home.Reset()
 	// Playback picks up where it was left, once the session that lets
 	// the listener play their songs is back.
 	a.restoreSession()
-	a.recPlaylists = nil
 
 	// What another listener played is not what this one played.
 	a.recent = recentData{}

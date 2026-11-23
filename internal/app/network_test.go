@@ -313,12 +313,12 @@ func TestHomeRefreshIconReloadsContent(t *testing.T) {
 			}
 			a.network = networkState{known: true, offline: scenario.reconnect || scenario.offline}
 			a.recovery.active = scenario.reconnect
-			a.featured = []netease.Playlist{{ID: 1, Name: "old featured"}}
-			a.charts = []netease.Playlist{{ID: 2, Name: "old charts"}}
-			a.daily = []netease.Track{{ID: 3, Name: "old daily"}}
-			a.recPlaylists = []netease.Playlist{{ID: 4, Name: "old personal"}}
+			a.home.Featured = []netease.Playlist{{ID: 1, Name: "old featured"}}
+			a.home.Charts = []netease.Playlist{{ID: 2, Name: "old charts"}}
+			a.home.Daily = []netease.Track{{ID: 3, Name: "old daily"}}
+			a.home.Recommended = []netease.Playlist{{ID: 4, Name: "old personal"}}
 			if scenario.reconnect {
-				a.homeFailures = map[string]error{"featured": netease.ErrOffline}
+				a.home.Failures = map[string]error{"featured": netease.ErrOffline}
 			}
 			a.art.art["failed-cover"] = &artwork{failed: true}
 			a.art.seen["failed-cover"] = struct{}{}
@@ -350,7 +350,7 @@ func TestHomeRefreshIconReloadsContent(t *testing.T) {
 				t.Fatal(err)
 			}
 			if scenario.offline {
-				if a.homeLoading || !a.network.offline {
+				if a.home.Loading || !a.network.offline {
 					t.Fatal("offline refresh started loading content")
 				}
 				for i := range calls {
@@ -360,24 +360,24 @@ func TestHomeRefreshIconReloadsContent(t *testing.T) {
 				}
 				return
 			}
-			if !a.homeLoading {
+			if !a.home.Loading {
 				t.Fatal("refresh retried artwork without requesting home content")
 			}
-			if a.featured[0].ID != 1 || a.charts[0].ID != 2 {
+			if a.home.Featured[0].ID != 1 || a.home.Charts[0].ID != 2 {
 				t.Fatal("refresh discarded the visible content before a reply")
 			}
 			// A second click while the same request is running must coalesce.
 			if err := tt.Click("刷新内容"); err != nil {
 				t.Fatal(err)
 			}
-			for a.homeLoading {
+			for a.home.Loading {
 				refreshPost(t, posts)
 			}
-			if calls[0].Load() != 1 || calls[1].Load() != 1 || a.featured[0].ID != 11 || a.charts[0].ID != 12 {
+			if calls[0].Load() != 1 || calls[1].Load() != 1 || a.home.Featured[0].ID != 11 || a.home.Charts[0].ID != 12 {
 				t.Fatal("home modules were not replaced exactly once")
 			}
 			if scenario.signedIn {
-				if calls[2].Load() != 1 || calls[3].Load() != 1 || a.daily[0].ID != 13 || a.recPlaylists[0].ID != 14 {
+				if calls[2].Load() != 1 || calls[3].Load() != 1 || a.home.Daily[0].ID != 13 || a.home.Recommended[0].ID != 14 {
 					t.Fatal("personal recommendations were not refreshed")
 				}
 			} else if calls[2].Load() != 0 || calls[3].Load() != 0 {
