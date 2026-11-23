@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // artistLinks shows a track's artists as its credits read, each a link to
@@ -77,300 +77,14 @@ var (
 	followArtist      = netease.FollowArtist
 )
 
-// artistData is what the app has of an artist: who they are, with their
-// most popular songs, and their newest songs, albums and events once
-// asked for.
-type artistData struct {
-	profile       *netease.ArtistProfile
-	loading       bool
-	err           string
-	failure       error
-	latest        []netease.Track
-	latestLoading bool
-	latestErr     string
-	latestFailure error
-	albums        []netease.AlbumProfile
-	albumsPage    paged
-	albumsRetry   int
-	albumsFailed  bool
-	events        []netease.Event
-	eventsPage    paged
-	eventsBefore  int64 // the time of the last event loaded, the next page's start
-	following     bool  // a follow or unfollow is on its way
-}
-
-// What an artist's page lists: their songs, the most popular or the
-// newest, their albums, or their events.
-const (
-	artistHot = iota
-	artistLatest
-	artistAlbums
-	artistEvents
-)
-
-// latestCount is how many of an artist's newest songs their page lists;
-// albumsPage and eventsPage how many albums and events load at a time.
-const (
-	latestCount = 100
-	albumsPage  = 30
-	eventsPage  = 20
-)
-
-func (a *app) artist(id int64) *artistData {
-	d := a.artists.get(id)
-	if d == nil {
-		d = &artistData{}
-		a.artists.set(id, d)
-	}
-	return d
-}
-
-// loadArtist loads an artist's page, and what it lists.
-func (a *app) loadArtist(id int64) {
-	d := a.artist(id)
-	switch a.artistTab {
-	case artistLatest:
-		a.loadLatest(id)
-	case artistAlbums:
-		if !d.albumsPage.loaded {
-			a.loadAlbums(id)
-		}
-	}
-	a.loadArtistProfile(id)
-}
-
-func (a *app) loadArtistProfile(id int64) {
-	d := a.artist(id)
-	if d.profile != nil && d.err == "" || d.loading {
-		if a.artistTab == artistEvents && !d.eventsPage.loaded {
-			a.loadEvents(id)
-		}
-		return
-	}
-	d.loading = true
-	req, gen := a.cacheRequest(fmt.Sprintf("artist/%d", id)), a.account.Generation
-	fetch := artistDetail
-	go func() {
-		var kept *netease.ArtistProfile
-		if at := req.Read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
-			a.post(func() {
-				if a.account.Generation == gen && a.artists.peek(id) == d && d.profile == nil {
-					d.profile = kept
-				}
-			})
-		}
-		ar, err := fetch(id)
-		bytes := cacheBytes(ar)
-		a.post(func() {
-			if a.account.Generation != gen || a.artists.peek(id) != d {
-				return
-			}
-			d.loading = false
-			d.failure = err
-			if err != nil {
-				d.err = "歌手加载失败"
-				return
-			}
-			if d.following {
-				return
-			}
-			d.profile = ar
-			d.err = ""
-			req.Keep(bytes)
-			// Their events are their account's, which their profile names.
-			if a.artistTab == artistEvents && a.route == (route{page: pageArtist, id: id}) {
-				a.loadEvents(id)
-			}
-		})
-	}()
-}
-
-func (a *app) loadLatest(id int64) {
-	d := a.artist(id)
-	if d.latest != nil && d.latestErr == "" || d.latestLoading {
-		return
-	}
-	d.latestLoading = true
-	req, gen := a.cacheRequest(fmt.Sprintf("artist-latest/%d", id)), a.account.Generation
-	fetch := artistLatestSongs
-	go func() {
-		var kept []netease.Track
-		if at := req.Read(&kept); !at.IsZero() {
-			a.post(func() {
-				if a.account.Generation == gen && a.artists.peek(id) == d && d.latest == nil {
-					d.latest = kept
-				}
-			})
-		}
-		songs, err := fetch(id, latestCount)
-		bytes := cacheBytes(songs)
-		a.post(func() {
-			if a.account.Generation != gen || a.artists.peek(id) != d {
-				return
-			}
-			d.latestLoading = false
-			d.latestFailure = err
-			if err != nil {
-				d.latestErr = "歌曲加载失败"
-				return
-			}
-			d.latest = songs
-			d.latestErr = ""
-			req.Keep(bytes)
-		})
-	}()
-}
-
-type keptAlbums struct {
-	Albums []netease.AlbumProfile
-	More   bool
-}
-
-// loadAlbums loads the next page of an artist's albums.
-func (a *app) loadAlbums(id int64) {
-	d := a.artist(id)
-	if d.albumsPage.loading {
-		return
-	}
-	d.albumsPage.loading, d.albumsPage.err = true, ""
-	offset := len(d.albums)
-	if d.albumsFailed {
-		offset = d.albumsRetry
-	}
-	req, gen := a.cacheRequest(fmt.Sprintf("artist-albums/%d/%d", id, offset)), a.account.Generation
-	fetch := albumsBy
-	go func() {
-		// Restore already visited pages together, so an offline failure of
-		// page zero does not prevent browsing the cached pages after it.
-		var cached []netease.AlbumProfile
-		var cachedAt time.Time
-		cachedMore := false
-		for page, cursor := 0, offset; page < 128; page++ {
-			part := req
-			part.Key = fmt.Sprintf("artist-albums/%d/%d", id, cursor)
-			var kept keptAlbums
-			at := part.Read(&kept)
-			if at.IsZero() {
-				break
-			}
-			cached = append(cached, kept.Albums...)
-			cachedMore = kept.More
-			if cachedAt.IsZero() {
-				cachedAt = at
-			}
-			if !kept.More || len(kept.Albums) == 0 {
-				break
-			}
-			cursor += len(kept.Albums)
-		}
-		if !cachedAt.IsZero() {
-			a.post(func() {
-				if a.account.Generation == gen && a.artists.peek(id) == d && len(d.albums) == offset {
-					d.albums = append(d.albums, cached...)
-					d.albumsPage.loaded, d.albumsPage.more = true, cachedMore
-				}
-			})
-		}
-		albums, more, err := fetch(id, albumsPage, offset)
-		bytes := cacheBytes(keptAlbums{albums, more})
-		a.post(func() {
-			if a.account.Generation != gen || a.artists.peek(id) != d {
-				return
-			}
-			d.albumsPage.loading = false
-			d.albumsPage.failure = err
-			if err != nil {
-				d.albumsPage.err = "专辑加载失败"
-				d.albumsFailed, d.albumsRetry = true, offset
-				return
-			}
-			d.albums = append(d.albums[:offset], albums...)
-			d.albumsFailed = false
-			req.Keep(bytes)
-			d.albumsPage.loaded, d.albumsPage.more = true, more && len(albums) > 0
-		})
-	}()
-}
-
-// loadEvents loads the next page of an artist's events, once their profile
-// says whose they are.
-func (a *app) loadEvents(id int64) {
-	d := a.artist(id)
-	if d.profile == nil || d.profile.AccountID == 0 || d.eventsPage.loading {
-		return
-	}
-	d.eventsPage.loading, d.eventsPage.err, d.eventsPage.failure = true, "", nil
-	uid, before := d.profile.AccountID, d.eventsBefore
-	if !d.eventsPage.loaded {
-		before = -1
-	}
-	fetch, gen := accountEvents, a.account.Generation
-	go func() {
-		events, last, more, err := fetch(uid, eventsPage, before)
-		a.post(func() {
-			if a.account.Generation != gen || a.artists.peek(id) != d {
-				return
-			}
-			d.eventsPage.loading = false
-			if err != nil {
-				d.eventsPage.err, d.eventsPage.failure = "动态加载失败", err
-				return
-			}
-			// The first page replaces what an earlier one kept, and the
-			// ones after it follow on: a page loaded again must not keep
-			// its events twice.
-			if before < 0 {
-				d.events = events
-			} else {
-				d.events = append(d.events, events...)
-			}
-			d.eventsPage.loaded = true
-			// A page that starts no earlier would load forever.
-			d.eventsPage.more = more && len(events) > 0 && (before == -1 || last < before)
-			d.eventsBefore = last
-		})
-	}()
-}
-
-// toggleFollow follows an artist, or unfollows them, at once, going back if
-// NetEase refuses. Signed out, it asks the listener to sign in.
-func (a *app) toggleFollow(id int64) {
-	d := a.artist(id)
-	if d.profile == nil || d.following {
-		return
-	}
-	if a.account.Profile == nil {
-		a.openLogin()
-		return
-	}
-	ar := d.profile
-	follow := !ar.Followed
-	ar.Followed, d.following = follow, true
-	go func() {
-		err := followArtist(id, follow)
-		a.post(func() {
-			d.following = false
-			switch {
-			case err != nil:
-				ar.Followed = !follow
-				a.toast = "操作失败，请稍后再试"
-			case follow:
-				a.toast = "已关注"
-			default:
-				a.toast = "已取消关注"
-			}
-		})
-	}()
-}
-
 // artistPage shows who an artist is over their songs, the most popular or
 // the newest, their albums or their events.
 func (a *app) artistPage(c *ui.Context) {
 	id := a.route.id
 	d := a.artist(id)
-	if d.profile == nil {
-		if !d.loading || d.err != "" {
-			a.centered(c, d.err, func() { a.loadArtist(id) })
+	if d.Profile == nil {
+		if !d.Loading || d.Error != "" {
+			a.centered(c, d.Error, func() { a.loadArtist(id) })
 			return
 		}
 		s := a.pageShimmer(c)
@@ -378,30 +92,30 @@ func (a *app) artistPage(c *ui.Context) {
 		return
 	}
 	header := func(c *ui.Context) { a.artistHeader(c, d) }
-	switch a.artistTab {
-	case artistAlbums:
+	switch a.artists.Tab {
+	case viewmodel.ArtistAlbums:
 		a.scrollPage(c, func() {
 			header(c)
-			a.albumGrid(c, d.albums)
-			a.pageFoot(c, &d.albumsPage, func() { a.loadAlbums(id) })
-			if d.albumsPage.loaded && len(d.albums) == 0 {
+			a.albumGrid(c, d.Albums)
+			a.pageFoot(c, &d.AlbumsPage, func() { a.loadAlbums(id) })
+			if d.AlbumsPage.Loaded && len(d.Albums) == 0 {
 				a.empty(c, "暂无专辑")
 			}
 		})
 		return
-	case artistEvents:
+	case viewmodel.ArtistEvents:
 		a.scrollPage(c, func() {
 			header(c)
 			a.artistEvents(c, d)
 		})
 		return
 	}
-	songs := d.profile.Songs
-	if a.artistTab == artistLatest {
+	songs := d.Profile.Songs
+	if a.artists.Tab == viewmodel.ArtistLatest {
 		switch {
-		case d.latest != nil:
-			songs = d.latest
-		case d.latestLoading && d.latestErr == "":
+		case d.Latest != nil:
+			songs = d.Latest
+		case d.LatestLoading && d.LatestError == "":
 			a.trackSkeleton(c, a.pageShimmer(c), true, header)
 			return
 		default:
@@ -409,9 +123,9 @@ func (a *app) artistPage(c *ui.Context) {
 			header = func(c *ui.Context) {
 				a.artistHeader(c, d)
 				ui.Column(c).Padding(40, 0).Gap(12).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, d.latestErr).TextColor(a.pal.muted).FontSize(13)
+					ui.Text(c, d.LatestError).TextColor(a.pal.muted).FontSize(13)
 					if iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载歌曲").Tooltip("重新加载歌曲").Clicked() {
-						a.loadLatest(d.profile.ID)
+						a.loadLatest(d.Profile.ID)
 					}
 				})
 			}
@@ -439,13 +153,13 @@ func (a *app) empty(c *ui.Context, msg string) {
 // artistPhotoSize is the width of an artist's round photo on their page.
 const artistPhotoSize = 212
 
-func (a *app) artistHeader(c *ui.Context, d *artistData) {
+func (a *app) artistHeader(c *ui.Context, d *viewmodel.ArtistPage) {
 	p := a.pal
-	ar := d.profile
+	ar := d.Profile
 	// What the buttons play: the songs listed, or else the most popular.
 	songs := ar.Songs
-	if a.artistTab == artistLatest && d.latest != nil {
-		songs = d.latest
+	if a.artists.Tab == viewmodel.ArtistLatest && d.Latest != nil {
+		songs = d.Latest
 	}
 	ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Padding(0, 0, 8, 0).Children(func() {
 		photo := ar.Avatar
@@ -494,9 +208,9 @@ func (a *app) artistHeader(c *ui.Context, d *artistData) {
 		})
 	})
 	ui.Row(c).AlignItems(ui.Center).Margin(34, 0, 14, 0).Children(func() {
-		ui.Text(c, artistTabTitles[a.artistTab]).FontSize(19).FontWeight(700).LetterSpacing(-0.3)
+		ui.Text(c, artistTabTitles[a.artists.Tab]).FontSize(19).FontWeight(700).LetterSpacing(-0.3)
 		ui.Spacer(c)
-		if segmented(c.Key("tab"), &a.artistTab, "热门", "最新", "专辑", "动态") {
+		if segmented(c.Key("tab"), &a.artists.Tab, "热门", "最新", "专辑", "动态") {
 			a.loadArtist(ar.ID)
 		}
 	})

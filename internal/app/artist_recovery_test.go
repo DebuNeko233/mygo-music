@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // Visible artist events recover temporary failures automatically and permanent failures only on explicit refresh.
@@ -18,9 +19,9 @@ func TestArtistEventsRecovery(t *testing.T) {
 			a := newTestApp()
 			posts := testPosts(a)
 			a.route = route{page: pageArtist, id: 9}
-			a.artistTab = artistEvents
+			a.artists.Tab = viewmodel.ArtistEvents
 			d := a.artist(9)
-			d.profile = &netease.ArtistProfile{ID: 9, AccountID: 42}
+			d.Profile = &netease.ArtistProfile{ID: 9, AccountID: 42}
 			old := accountEvents
 			t.Cleanup(func() { accountEvents = old })
 			accountEvents = func(int64, int, int64) ([]netease.Event, int64, bool, error) {
@@ -28,14 +29,14 @@ func TestArtistEventsRecovery(t *testing.T) {
 			}
 			a.loadEvents(9)
 			refreshPost(t, posts)
-			if a.needsRecovery() != temporary || !a.failedLoads(true) || d.eventsPage.failure != failure {
+			if a.needsRecovery() != temporary || !a.failedLoads(true) || d.EventsPage.Failure != failure {
 				t.Fatal("artist events lost their retry policy or underlying failure")
 			}
-			a.artistTab = artistAlbums
+			a.artists.Tab = viewmodel.ArtistAlbums
 			if a.needsRecovery() || a.failedLoads(true) {
 				t.Fatal("a hidden events tab kept recovery active")
 			}
-			a.artistTab = artistEvents
+			a.artists.Tab = viewmodel.ArtistEvents
 			requested := make(chan struct{}, 2)
 			release := make(chan struct{})
 			defer close(release)
@@ -49,13 +50,13 @@ func TestArtistEventsRecovery(t *testing.T) {
 			}
 			a.recoverLoads()
 			if !temporary {
-				if d.eventsPage.loading {
+				if d.EventsPage.Loading {
 					t.Fatal("automatic recovery retried a permanent failure")
 				}
 				a.retryLoads(true)
 			}
 			wait(t, requested, "artist events recovery")
-			if !a.recoveryBusy() || d.eventsPage.failure != nil {
+			if !a.recoveryBusy() || d.EventsPage.Failure != nil {
 				t.Fatal("an active events request lost its busy state or kept a stale failure")
 			}
 			a.retryLoads(true)
@@ -66,7 +67,7 @@ func TestArtistEventsRecovery(t *testing.T) {
 			}
 			release <- struct{}{}
 			refreshPost(t, posts)
-			if a.failedLoads(true) || a.recoveryBusy() || !d.eventsPage.loaded || len(d.events) != 1 {
+			if a.failedLoads(true) || a.recoveryBusy() || !d.EventsPage.Loaded || len(d.Events) != 1 {
 				t.Fatal("recovery failed to publish events and clear its error")
 			}
 		})

@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // searchResults and searchSuggest search NetEase; tests replace them.
@@ -34,7 +35,7 @@ var searchKinds = []struct {
 // searchData is what a search found, as far as its pages have loaded.
 type searchData struct {
 	res  netease.SearchResult
-	page paged
+	page viewmodel.Page
 }
 
 // search searches for q, of the kind last searched for.
@@ -69,35 +70,35 @@ func (a *app) searchFor(r route) {
 
 // loadSearch loads the first page of a search, unless it has, or again.
 func (a *app) loadSearch(r route, again bool) {
-	if a.searches.get(r) != nil && !again {
+	if a.searches.Get(r) != nil && !again {
 		return
 	}
 	d := &searchData{}
-	a.searches.set(r, d)
+	a.searches.Set(r, d)
 	a.moreResults(r, d)
 }
 
 // moreResults loads the next page of a search. A search done again has
 // new data, so the last one's pages land where nothing shows them.
 func (a *app) moreResults(r route, d *searchData) {
-	if d.page.loading {
+	if d.page.Loading {
 		return
 	}
-	d.page.loading, d.page.err = true, ""
+	d.page.Loading, d.page.Error = true, ""
 	offset := d.res.Len()
 	fetch := searchResults
 	go func() {
 		res, err := fetch(r.query, r.kind, searchLimit, offset)
 		a.post(func() {
-			d.page.loading = false
-			d.page.failure = err
+			d.page.Loading = false
+			d.page.Failure = err
 			if err != nil {
-				d.page.err = "搜索失败，请稍后再试"
+				d.page.Error = "搜索失败，请稍后再试"
 				return
 			}
 			d.res.Append(res)
 			// A server can claim more while sending none.
-			d.page.loaded, d.page.more = true, res.Len() > 0 && d.res.Len() < d.res.Total
+			d.page.Loaded, d.page.More = true, res.Len() > 0 && d.res.Len() < d.res.Total
 		})
 	}()
 }
@@ -124,11 +125,11 @@ func (a *app) clearSearchHistory() {
 
 func (a *app) searchPage(c *ui.Context) {
 	r := a.route
-	d := a.searches.get(r)
+	d := a.searches.Get(r)
 	header := func(c *ui.Context) { a.searchHeader(c, d) }
 	more := func() { a.moreResults(r, d) }
 	if r.kind == netease.SearchSongs {
-		if !d.page.loaded && d.page.loading {
+		if !d.page.Loaded && d.page.Loading {
 			a.trackSkeleton(c, a.pageShimmer(c), true, header)
 			return
 		}
@@ -165,7 +166,7 @@ func (a *app) searchPage(c *ui.Context) {
 				a.podcastRow(c.Key(res.Podcasts[i].ID), &res.Podcasts[i], trackPageWidth(c))
 			}
 		}
-		if !d.page.loaded && d.page.loading {
+		if !d.page.Loaded && d.page.Loading {
 			a.playlistCardsSkeleton(c, a.pageShimmer(c), a.columns(c, 156), 156, false)
 			return
 		}
@@ -175,7 +176,7 @@ func (a *app) searchPage(c *ui.Context) {
 }
 
 func (a *app) searchEmpty(c *ui.Context, d *searchData) {
-	if d.page.loaded && d.res.Len() == 0 {
+	if d.page.Loaded && d.res.Len() == 0 {
 		a.empty(c, "没有找到相关结果")
 	}
 }
@@ -189,7 +190,7 @@ func (a *app) searchHeader(c *ui.Context, d *searchData) {
 	for i, k := range searchKinds {
 		if k.kind == r.kind {
 			at = i
-			if d.page.loaded {
+			if d.page.Loaded {
 				sub = fmt.Sprintf("搜索 · 找到 %d %s", d.res.Total, k.unit)
 			}
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // These load a podcast and its episodes from NetEase, and subscribe to it,
@@ -32,18 +33,18 @@ type podcastData struct {
 	loading     bool
 	err         string
 	programs    []netease.Program
-	page        paged
+	page        viewmodel.Page
 	subscribing bool // a subscription or its end is on its way
 	thenPlay    bool // its card's play button waits for it to load
 }
 
 func (a *app) loadPodcast(id int64) {
-	d := a.podcasts.get(id)
+	d := a.podcasts.Get(id)
 	if d == nil {
 		d = &podcastData{}
-		a.podcasts.set(id, d)
+		a.podcasts.Set(id, d)
 	}
-	if !d.page.loaded {
+	if !d.page.Loaded {
 		a.loadPrograms(id)
 	}
 	if d.podcast != nil || d.loading {
@@ -66,22 +67,22 @@ func (a *app) loadPodcast(id int64) {
 
 // loadPrograms loads the next page of a podcast's episodes.
 func (a *app) loadPrograms(id int64) {
-	d := a.podcasts.get(id)
-	if d.page.loading {
+	d := a.podcasts.Get(id)
+	if d.page.Loading {
 		return
 	}
-	d.page.loading, d.page.err = true, ""
+	d.page.Loading, d.page.Error = true, ""
 	offset := len(d.programs)
 	go func() {
 		programs, more, err := podcastPrograms(id, programsPage, offset)
 		a.post(func() {
-			d.page.loading = false
+			d.page.Loading = false
 			if err != nil {
-				d.page.err, d.thenPlay = "节目加载失败", false
+				d.page.Error, d.thenPlay = "节目加载失败", false
 				return
 			}
 			d.programs = append(d.programs, programs...)
-			d.page.loaded, d.page.more = true, more && len(programs) > 0
+			d.page.Loaded, d.page.More = true, more && len(programs) > 0
 			// Which the listener likes, for their hearts.
 			ids := make([]int64, len(programs))
 			for i := range programs {
@@ -116,14 +117,14 @@ func (a *app) playProgram(d *podcastData, i int) {
 // once it and they have loaded.
 func (a *app) playPodcast(id int64) {
 	a.loadPodcast(id)
-	d := a.podcasts.get(id)
+	d := a.podcasts.Get(id)
 	d.thenPlay = true
 	a.playLoaded(d)
 }
 
 // playLoaded plays a podcast its card asked to play, once it can.
 func (a *app) playLoaded(d *podcastData) {
-	if d.thenPlay && d.podcast != nil && d.page.loaded {
+	if d.thenPlay && d.podcast != nil && d.page.Loaded {
 		d.thenPlay = false
 		a.playProgram(d, 0)
 	}
@@ -176,7 +177,7 @@ func (a *app) toggleSubscribe(d *podcastData) {
 func (a *app) podcastPage(c *ui.Context) {
 	p := a.pal
 	id := a.route.id
-	d := a.podcasts.get(id)
+	d := a.podcasts.Get(id)
 	if d.podcast == nil {
 		if !d.loading {
 			a.centered(c, d.err, func() { a.loadPodcast(id) })
@@ -228,7 +229,7 @@ func (a *app) podcastPage(c *ui.Context) {
 			a.programRow(c.Key(d.programs[i].ID), d, i, cur)
 		}
 		a.pageFoot(c, &d.page, func() { a.loadPrograms(id) })
-		if d.page.loaded && len(d.programs) == 0 {
+		if d.page.Loaded && len(d.programs) == 0 {
 			a.empty(c, "暂无节目")
 		}
 	})
@@ -338,7 +339,7 @@ type podcastTab struct {
 	subs    []netease.Podcast // the latest subscribed first
 	picks   []netease.Podcast
 	hot     []netease.Podcast
-	hotPage paged
+	hotPage viewmodel.Page
 	hotAt   int // how far into NetEase's list the next page starts
 	loading bool
 	err     string
@@ -347,7 +348,7 @@ type podcastTab struct {
 
 func (a *app) loadPodcastTab() {
 	t := a.podcastTab
-	if t.hotPage.loaded || t.loading {
+	if t.hotPage.Loaded || t.loading {
 		return
 	}
 	t.loading, t.err, t.failure = true, "", nil
@@ -367,9 +368,9 @@ func (a *app) loadPodcastTab() {
 			}
 			t.subs, t.picks = subs, picks
 			t.addHot(hot)
-			t.hotPage = paged{loaded: true, more: more && len(hot) > 0}
+			t.hotPage = viewmodel.Page{Loaded: true, More: more && len(hot) > 0}
 			if err2 != nil {
-				t.hotPage.err, t.hotPage.failure = "热门播客加载失败", err2
+				t.hotPage.Error, t.hotPage.Failure = "热门播客加载失败", err2
 			}
 		})
 	}()
@@ -378,21 +379,21 @@ func (a *app) loadPodcastTab() {
 // loadHotPodcasts loads the next page of the most popular podcasts.
 func (a *app) loadHotPodcasts() {
 	t := a.podcastTab
-	if t.hotPage.loading {
+	if t.hotPage.Loading {
 		return
 	}
-	t.hotPage.loading, t.hotPage.err, t.hotPage.failure = true, "", nil
+	t.hotPage.Loading, t.hotPage.Error, t.hotPage.Failure = true, "", nil
 	offset := t.hotAt
 	go func() {
 		hot, more, err := hotPodcasts(programsPage, offset)
 		a.post(func() {
-			t.hotPage.loading = false
+			t.hotPage.Loading = false
 			if err != nil {
-				t.hotPage.err, t.hotPage.failure = "热门播客加载失败", err
+				t.hotPage.Error, t.hotPage.Failure = "热门播客加载失败", err
 				return
 			}
 			t.addHot(hot)
-			t.hotPage.more = more && len(hot) > 0
+			t.hotPage.More = more && len(hot) > 0
 		})
 	}()
 }
@@ -412,7 +413,7 @@ func (t *podcastTab) addHot(page []netease.Podcast) {
 // subscribed lists a podcast the listener just subscribed to first, once
 // the tab has loaded what they subscribe to.
 func (t *podcastTab) subscribed(pod *netease.Podcast) {
-	if !t.hotPage.loaded {
+	if !t.hotPage.Loaded {
 		return
 	}
 	t.unsubscribed(pod.ID)
@@ -426,7 +427,7 @@ func (t *podcastTab) unsubscribed(id int64) {
 
 func (a *app) podcastsPage(c *ui.Context) {
 	t := a.podcastTab
-	if !t.hotPage.loaded && !t.loading {
+	if !t.hotPage.Loaded && !t.loading {
 		a.centered(c, t.err, a.loadPodcastTab)
 		return
 	}
@@ -436,7 +437,7 @@ func (a *app) podcastsPage(c *ui.Context) {
 		defer a.endMark(c)
 		a.heading(c, "播客", "")
 		cols := a.columns(c, 150)
-		if !t.hotPage.loaded {
+		if !t.hotPage.Loaded {
 			s := a.pageShimmer(c)
 			a.section(c, "精选播客").Margin(0, 0, 14, 0)
 			a.playlistCardsSkeleton(c, s, cols, 150, true)

@@ -14,6 +14,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func offlineFixture(t *testing.T) (*app, chan func()) {
@@ -41,13 +42,13 @@ func TestOfflineAlbumRetainsSongsAcrossRestart(t *testing.T) {
 	refreshPost(t, posts)
 	a.browseCache.Close() // Accepted snapshots must reach disk before restart.
 	a.browseCache = diskcache.New(dir, 1<<20)
-	a.albums = newPageCache[int64, *albumData](albumBusy)
+	a.albums.Reset()
 	albumDetail = func(int64) (*netease.AlbumProfile, error) { return nil, netease.ErrOffline }
 	a.loadAlbum(101)
-	for a.albums.get(101).loading {
+	for a.albums.Pages.Get(101).Loading {
 		refreshPost(t, posts)
 	}
-	got := a.albums.get(101).album
+	got := a.albums.Pages.Get(101).Album
 	if got == nil || got == al || len(got.Songs) != 2 || got.Songs[0].ID != 1 || got.Songs[1].ID != 2 || got.Size != 2 {
 		t.Fatalf("offline album lost tracks: %+v", got)
 	}
@@ -401,14 +402,14 @@ func TestOfflineArtistRestoresCachedPages(t *testing.T) {
 	a, posts := offlineFixture(t)
 	old := albumsBy
 	t.Cleanup(func() { albumsBy = old })
-	a.browseCache.Put("7", "artist-albums/1/0", cacheBytes(keptAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
-	a.browseCache.Put("7", "artist-albums/1/1", cacheBytes(keptAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
+	a.browseCache.Put("7", "artist-albums/1/0", cacheBytes(viewmodel.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
+	a.browseCache.Put("7", "artist-albums/1/1", cacheBytes(viewmodel.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
 	albumsBy = func(int64, int, int) ([]netease.AlbumProfile, bool, error) { return nil, false, netease.ErrOffline }
 	a.loadAlbums(1)
 	refreshPost(t, posts)
 	refreshPost(t, posts)
 	d := a.artist(1)
-	if len(d.albums) != 2 || d.albums[1].ID != 11 || !d.albumsFailed || d.albumsPage.more {
+	if len(d.Albums) != 2 || d.Albums[1].ID != 11 || !d.AlbumsFailed || d.AlbumsPage.More {
 		t.Fatal("cached pages beyond failed first page became inaccessible")
 	}
 }

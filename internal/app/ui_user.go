@@ -18,110 +18,13 @@ var (
 	subscribedPodcasts = netease.SubscribedPodcasts
 )
 
-// userData is what the app has of a user: who they are, and the playlists
-// they made that anyone may see. Of the listener's own page, it has the
-// artists they follow and the podcasts they subscribe to too, which
-// NetEase shows no one else.
-type userData struct {
-	user      *netease.User
-	playlists []netease.Playlist
-	loading   int // how many of the two are on their way
-	err       string
-
-	artists       []netease.ArtistProfile
-	podcasts      []netease.Podcast
-	artistsShown  bool // whether artists has loaded once
-	podcastsShown bool
-	subsLoading   int
-}
-
-func (a *app) loadUser(id int64) {
-	d := a.users.get(id)
-	if d == nil {
-		d = &userData{}
-		a.users.set(id, d)
-	}
-	if a.account.Profile != nil && a.account.Profile.UserID == id {
-		a.loadSubscriptions(d)
-		a.freshenAlbums()
-	}
-	if d.user != nil || d.loading > 0 {
-		return
-	}
-	d.loading, d.err = 2, ""
-	detail, lists := userDetail, userPlaylists
-	go func() {
-		u, err := detail(id)
-		a.post(func() {
-			d.loading--
-			if err != nil {
-				d.err = "用户加载失败"
-				return
-			}
-			d.user = u
-		})
-	}()
-	go func() {
-		made, _, err := lists(id)
-		a.post(func() {
-			d.loading--
-			if err == nil {
-				d.playlists = publicPlaylists(made, id)
-			}
-		})
-	}()
-}
-
-// loadSubscriptions loads the artists the listener follows and the
-// podcasts they subscribe to, each time their page shows: they follow and
-// subscribe on other pages, and these keep up. What they had shows while
-// the lists are on their way.
-func (a *app) loadSubscriptions(d *userData) {
-	if d.subsLoading > 0 {
-		return
-	}
-	d.subsLoading = 2
-	artists, podcasts := followedArtists, subscribedPodcasts
-	go func() {
-		ars, err := artists()
-		a.post(func() {
-			d.subsLoading--
-			if err == nil {
-				d.artists, d.artistsShown = ars, true
-			}
-		})
-	}()
-	go func() {
-		pods, err := podcasts()
-		a.post(func() {
-			d.subsLoading--
-			if err == nil {
-				d.podcasts, d.podcastsShown = pods, true
-			}
-		})
-	}()
-}
-
-// publicPlaylists are the playlists of lists a user made that anyone may
-// see: their own, as made lists those they saved too, but not their
-// private ones.
-func publicPlaylists(lists []netease.Playlist, uid int64) []netease.Playlist {
-	var out []netease.Playlist
-	for _, pl := range lists {
-		if pl.Creator.UserID == uid && pl.Privacy != 10 {
-			out = append(out, pl)
-		}
-	}
-	return out
-}
-
 func (a *app) userPage(c *ui.Context) {
 	p := a.pal
 	id := a.route.id
-	d := a.users.get(id)
-	if d.user == nil {
-		if d.loading == 0 {
-			a.centered(c, d.err, func() { a.loadUser(id) })
+	d := a.users.Pages.Get(id)
+	if d.User == nil {
+		if d.Loading == 0 {
+			a.centered(c, d.Error, func() { a.loadUser(id) })
 			return
 		}
 		s := a.pageShimmer(c)
@@ -131,7 +34,7 @@ func (a *app) userPage(c *ui.Context) {
 		})
 		return
 	}
-	u := d.user
+	u := d.User
 	own := a.account.Profile != nil && a.account.Profile.UserID == id
 	a.scrollPage(c, func() {
 		ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Children(func() {
@@ -147,14 +50,14 @@ func (a *app) userPage(c *ui.Context) {
 		})
 		a.section(c, "创建的歌单")
 		switch {
-		case d.loading > 0:
+		case d.Loading > 0:
 			a.playlistCardsSkeleton(c, a.pageShimmer(c), a.columns(c, 168), 168, false)
-		case len(d.playlists) == 0:
+		case len(d.Playlists) == 0:
 			a.empty(c, "暂无公开歌单")
 		default:
 			ui.Grid(c).Columns(a.columns(c, 168)).GapX(20).GapY(28).Children(func() {
-				for i := range d.playlists {
-					a.playlistCard(c.Key(d.playlists[i].ID), &d.playlists[i])
+				for i := range d.Playlists {
+					a.playlistCard(c.Key(d.Playlists[i].ID), &d.Playlists[i])
 				}
 			})
 		}
@@ -165,21 +68,21 @@ func (a *app) userPage(c *ui.Context) {
 			}
 			a.albumGrid(c, a.library.SubAlbums)
 		}
-		if own && d.podcastsShown {
+		if own && d.PodcastsShown {
 			a.section(c, "订阅的播客")
-			if len(d.podcasts) == 0 {
+			if len(d.Podcasts) == 0 {
 				a.empty(c, "还没有订阅播客")
 			}
-			a.podcastGrid(c, len(d.podcasts), func(i int) *netease.Podcast { return &d.podcasts[i] })
+			a.podcastGrid(c, len(d.Podcasts), func(i int) *netease.Podcast { return &d.Podcasts[i] })
 		}
-		if own && d.artistsShown {
+		if own && d.ArtistsShown {
 			a.section(c, "关注的歌手")
-			if len(d.artists) == 0 {
+			if len(d.Artists) == 0 {
 				a.empty(c, "还没有关注歌手")
 			}
 			ui.Grid(c).Columns(a.columns(c, 132)).GapX(20).GapY(28).Children(func() {
-				for i := range d.artists {
-					a.artistCard(c.Key(d.artists[i].ID), &d.artists[i])
+				for i := range d.Artists {
+					a.artistCard(c.Key(d.Artists[i].ID), &d.Artists[i])
 				}
 			})
 		}

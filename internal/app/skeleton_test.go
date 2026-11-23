@@ -27,11 +27,11 @@ var skeletonScenes = []struct {
 	}},
 	{"search", func(a *app) {
 		a.route = route{page: pageSearch, query: "春日影", kind: netease.SearchSongs}
-		a.searches.set(a.route, &searchData{page: paged{loading: true}})
+		a.searches.Set(a.route, &searchData{page: viewmodel.Page{Loading: true}})
 	}},
 	{"artists", func(a *app) {
 		a.route = route{page: pageSearch, query: "春日影", kind: netease.SearchArtists}
-		a.searches.set(a.route, &searchData{page: paged{loading: true}})
+		a.searches.Set(a.route, &searchData{page: viewmodel.Page{Loading: true}})
 	}},
 	{"login", func(a *app) { a.account.Login = viewmodel.LoginState{Open: true} }},
 	{"comments", func(a *app) {

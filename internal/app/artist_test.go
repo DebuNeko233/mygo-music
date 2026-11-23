@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // Each artist's name opens their page: from Now Playing, which closes, and
@@ -20,7 +21,7 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 	duet := netease.Track{ID: 1, Name: "广寒宫", Artists: []netease.Artist{{ID: 11, Name: "甲"}, {ID: 12, Name: "乙"}}, Duration: 200000}
 	a.pl.Cue([]netease.Track{duet})
 	a.pl.SetLyrics(nil)
-	a.artists.set(12, &artistData{profile: &netease.ArtistProfile{
+	a.artists.Pages.Set(12, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{
 		Artist: netease.Artist{ID: 12, Name: "乙"},
 		Songs:  []netease.Track{{ID: 2, Name: "起风了", Artists: []netease.Artist{{ID: 13, Name: "丙"}}, Duration: 200000}},
 	}})
@@ -73,8 +74,8 @@ func TestArtistSongsByLatest(t *testing.T) {
 	song := func(id int64, name string) netease.Track {
 		return netease.Track{ID: id, Name: name, Artists: []netease.Artist{{ID: 12, Name: "乙"}}, Duration: 200000}
 	}
-	d := &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}, Songs: []netease.Track{song(1, "老歌")}}}
-	a.artists.set(12, d)
+	d := &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}, Songs: []netease.Track{song(1, "老歌")}}}
+	a.artists.Pages.Set(12, d)
 	a.open(route{page: pageArtist, id: 12})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -92,7 +93,7 @@ func TestArtistSongsByLatest(t *testing.T) {
 		t.Fatal("the newest songs weren't asked for")
 	}
 	// As the answer lands, which post drops without a window.
-	d.latest, d.latestLoading = []netease.Track{song(2, "新歌"), song(3, "更新的歌")}, false
+	d.Latest, d.LatestLoading = []netease.Track{song(2, "新歌"), song(3, "更新的歌")}, false
 	tt.Frame()
 	if err := tt.Click("新歌"); err != nil {
 		t.Fatal(err)
@@ -107,14 +108,14 @@ func TestArtistSongsByLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.artistTab != artistHot {
+	if a.artists.Tab != viewmodel.ArtistHot {
 		t.Fatal("the popular songs were not chosen")
 	}
 	if err := tt.Click("最新"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.artistTab != artistLatest {
+	if a.artists.Tab != viewmodel.ArtistLatest {
 		t.Fatal("the newest songs were not chosen again")
 	}
 	if len(asked) > 0 {

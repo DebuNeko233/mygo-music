@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func musicLinkApp(t *testing.T) *app {
@@ -18,7 +19,7 @@ func musicLinkApp(t *testing.T) *app {
 	// never start a network request or open the system audio device.
 	a.pl.SuspendCache()
 	a.settings = defaultSettings()
-	a.albums.set(34, &albumData{album: &netease.AlbumProfile{Album: netease.Album{ID: 34}}})
+	a.albums.Pages.Set(34, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{Album: netease.Album{ID: 34}}})
 	a.library.Playlists[12] = &netease.Playlist{ID: 12}
 	return a
 }

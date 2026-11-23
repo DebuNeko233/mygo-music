@@ -13,6 +13,7 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/pagecache"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 )
@@ -92,11 +93,10 @@ type app struct {
 
 	dailySpin      spinState // the record on the daily card
 	dailyBars      barState  // the bars on its play button
-	artists        pageCache[int64, *artistData]
-	artistTab      int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
-	albums         pageCache[int64, *albumData]
-	users          pageCache[int64, *userData]
-	podcasts       pageCache[int64, *podcastData]
+	artists        viewmodel.Artists
+	albums         viewmodel.Albums
+	users          viewmodel.Users
+	podcasts       pagecache.Cache[int64, *podcastData]
 	podcastTab     *podcastTab // the podcasts tab's lists
 	trackList      ui.ListState
 	trackRowsCache trackRowsCache
@@ -115,8 +115,8 @@ type app struct {
 
 	query       string
 	searchBox   ui.Handle
-	searches    pageCache[route, *searchData] // the results of each search, by its page
-	searched    route                         // the search last shown, which the sidebar goes back to
+	searches    pagecache.Cache[route, *searchData] // the results of each search, by its page
+	searched    route                               // the search last shown, which the sidebar goes back to
 	links       musicLinkState
 	suggestions suggestState // what the search field's query may be after
 
@@ -307,17 +307,17 @@ func Run() error {
 		return nil
 	}
 	a := &app{
-		artists:    newPageCache[int64, *artistData](artistBusy),
-		albums:     newPageCache[int64, *albumData](albumBusy),
-		users:      newPageCache[int64, *userData](userBusy),
-		podcasts:   newPageCache[int64, *podcastData](podcastBusy),
+		podcasts:   pagecache.New[int64, *podcastData](podcastBusy),
 		podcastTab: &podcastTab{},
-		searches:   newPageCache[route, *searchData](searchBusy),
+		searches:   pagecache.New[route, *searchData](searchBusy),
 		lyricAt:    -1,
 		queueAt:    -1,
 		cacheUsed:  -1,
 	}
 	a.library.Reset()
+	a.artists.Reset()
+	a.albums.Reset()
+	a.users.Reset()
 	a.links.starting = true
 	offURL := mygo.App.OnOpenURL(func(raw string) {
 		a.showMain()

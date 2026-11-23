@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // Permanent page failures used to keep retrying on focus and network recovery.
@@ -25,7 +26,7 @@ func TestPermanentFailureStopsRetry(t *testing.T) {
 	a.recoveryFrame(true)
 	a.networkChanged(mygo.NetworkStatus{Online: false})
 	a.networkChanged(mygo.NetworkStatus{Online: true})
-	if a.needsRecovery() || a.recovery.timer != nil || a.albums.get(9).loading || calls != 1 {
+	if a.needsRecovery() || a.recovery.timer != nil || a.albums.Pages.Get(9).Loading || calls != 1 {
 		t.Fatal("permanent failure started an automatic request or timer")
 	}
 	if !a.failedLoads(true) {
@@ -37,7 +38,7 @@ func TestPermanentFailureStopsRetry(t *testing.T) {
 	}
 	a.retryLoads(true)
 	refreshPost(t, posts)
-	if calls != 2 || a.albums.get(9).album == nil || a.albums.get(9).err != "" {
+	if calls != 2 || a.albums.Pages.Get(9).Album == nil || a.albums.Pages.Get(9).Error != "" {
 		t.Fatal("explicit refresh could not recover a permanent failure")
 	}
 }
@@ -47,16 +48,16 @@ func TestRecoverySkipsHiddenArtistTab(t *testing.T) {
 	a, _ := offlineFixture(t)
 	a.route = route{page: pageArtist, id: 9}
 	d := a.artist(9)
-	d.profile = &netease.ArtistProfile{}
-	d.latestErr, d.latestFailure = "failed", netease.ErrOffline
+	d.Profile = &netease.ArtistProfile{}
+	d.LatestError, d.LatestFailure = "failed", netease.ErrOffline
 	if a.needsRecovery() {
 		t.Fatal("hidden tab keeps background recovery alive")
 	}
 	a.recoverLoads()
-	if d.latestLoading {
+	if d.LatestLoading {
 		t.Fatal("recovery fetched a hidden tab")
 	}
-	a.artistTab = artistLatest
+	a.artists.Tab = viewmodel.ArtistLatest
 	if !a.needsRecovery() {
 		t.Fatal("visible temporary failure cannot recover")
 	}
@@ -128,13 +129,13 @@ func TestRecoveryDoesNotCascadeIntoPermanentArtistTab(t *testing.T) {
 	calls := 0
 	artistLatestSongs = func(int64, int) ([]netease.Track, error) { calls++; return nil, netease.ErrNotLoggedIn }
 	a.route = route{page: pageArtist, id: 9}
-	a.artistTab = artistLatest
+	a.artists.Tab = viewmodel.ArtistLatest
 	d := a.artist(9)
-	d.err, d.failure = "profile failed", netease.ErrOffline
-	d.latestErr, d.latestFailure = "songs refused", netease.ErrNotLoggedIn
+	d.Error, d.Failure = "profile failed", netease.ErrOffline
+	d.LatestError, d.LatestFailure = "songs refused", netease.ErrNotLoggedIn
 	a.recoverLoads()
 	refreshPost(t, posts)
-	if calls != 0 || d.latestLoading || d.profile == nil || a.needsRecovery() {
+	if calls != 0 || d.LatestLoading || d.Profile == nil || a.needsRecovery() {
 		t.Fatal("profile recovery retried permanently refused songs")
 	}
 }
@@ -163,15 +164,15 @@ func TestRecoveryIgnoresHiddenArtistLoads(t *testing.T) {
 	a, _ := offlineFixture(t)
 	a.route = route{page: pageArtist, id: 9}
 	d := a.artist(9)
-	d.profile = &netease.ArtistProfile{}
-	d.latestLoading = true
+	d.Profile = &netease.ArtistProfile{}
+	d.LatestLoading = true
 	a.recovery.active = true
 	a.recovery.attempts = 3
 	a.recoveryFrame(true)
 	if a.recovery.attempts != 0 {
 		t.Fatal("hidden request kept visible recovery busy")
 	}
-	a.artistTab = artistLatest
+	a.artists.Tab = viewmodel.ArtistLatest
 	a.recovery.attempts = 2
 	a.recoveryFrame(true)
 	if a.recovery.attempts != 2 {

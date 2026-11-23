@@ -30,11 +30,11 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.route = route{page: tc.page, id: 77}
-			a.artists.set(77, &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
-			a.albums.set(77, &albumData{album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
+			a.artists.Pages.Set(77, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
+			a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
 			a.library.Playlists[77] = &netease.Playlist{ID: 77, Name: "歌单名称", Description: text}
-			a.podcasts.set(77, &podcastData{podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
-			a.users.set(77, &userData{user: &netease.User{UserID: 77, Nickname: "用户名称", Signature: text}})
+			a.podcasts.Set(77, &podcastData{podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
+			a.users.Pages.Set(77, &viewmodel.UserPage{User: &netease.User{UserID: 77, Nickname: "用户名称", Signature: text}})
 			view := ui.NewTester(a.view, 1180, 780)
 			more := "更多：" + tc.title
 			if err := view.Click(more); err != nil {
@@ -76,7 +76,7 @@ func TestDetailDescriptionMoreFollowsAvailableWidth(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.route = route{page: pageAlbum, id: 77}
-	a.albums.set(77, &albumData{album: &netease.AlbumProfile{
+	a.albums.Pages.Set(77, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{
 		Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: strings.Repeat("这是一段专辑介绍。", 10),
 	}})
 	view := ui.NewTester(a.view, 1420, 780)
@@ -110,13 +110,13 @@ func TestDescriptionMoreInSearchResults(t *testing.T) {
 			a.settings = defaultSettings()
 			r := route{page: pageSearch, query: "测试", kind: tc.kind}
 			a.route = r
-			d := &searchData{page: paged{loaded: true}}
+			d := &searchData{page: viewmodel.Page{Loaded: true}}
 			if tc.kind == netease.SearchPodcasts {
 				d.res.Podcasts = []netease.Podcast{{ID: 1, Name: "甲", Description: short}, {ID: 2, Name: "乙", Description: long}}
 			} else {
 				d.res.Users = []netease.User{{UserID: 1, Nickname: "甲", Signature: short}, {UserID: 2, Nickname: "乙", Signature: long}}
 			}
-			a.searches.set(r, d)
+			a.searches.Set(r, d)
 			view := ui.NewTester(a.view, 1180, 780)
 			if _, ok := view.Find("更多：甲 · " + tc.description); ok {
 				t.Fatal("the short description already fits")

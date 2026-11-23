@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // searchRequest is a search asked of NetEase.
@@ -120,9 +121,9 @@ func TestSearchPlaylists(t *testing.T) {
 		t.Fatalf("searched %+v", got)
 	}
 
-	a.searches.set(a.route, &searchData{
+	a.searches.Set(a.route, &searchData{
 		res:  netease.SearchResult{Playlists: []netease.Playlist{{ID: 42, Name: "迷途人偶", TrackCount: 52}}, Total: 1},
-		page: paged{loaded: true},
+		page: viewmodel.Page{Loaded: true},
 	})
 	a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "迷途人偶"} // so its page loads nothing
 	tt.Frame()
@@ -142,9 +143,9 @@ func TestSearchLoadsMore(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	r := route{page: pageSearch, query: "春日影", kind: netease.SearchUsers}
-	a.searches.set(r, &searchData{
+	a.searches.Set(r, &searchData{
 		res:  netease.SearchResult{Users: []netease.User{{UserID: 1, Nickname: "甲"}, {UserID: 2, Nickname: "乙"}}, Total: 5},
-		page: paged{loaded: true, more: true},
+		page: viewmodel.Page{Loaded: true, More: true},
 	})
 	a.open(r)
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -286,8 +287,8 @@ func TestArtistAlbumsAndEvents(t *testing.T) {
 	}()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	d := &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}, AccountID: 99}}
-	a.artists.set(12, d)
+	d := &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}, AccountID: 99}}
+	a.artists.Pages.Set(12, d)
 	a.open(route{page: pageArtist, id: 12})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -299,8 +300,8 @@ func TestArtistAlbumsAndEvents(t *testing.T) {
 	if offset := wait(t, albums, "the albums"); offset != 0 {
 		t.Fatalf("albums from %d", offset)
 	}
-	d.albums = []netease.AlbumProfile{{Album: netease.Album{ID: 8, Name: "迷跡波"}}}
-	d.albumsPage = paged{loaded: true}
+	d.Albums = []netease.AlbumProfile{{Album: netease.Album{ID: 8, Name: "迷跡波"}}}
+	d.AlbumsPage = viewmodel.Page{Loaded: true}
 	tt.Frame()
 	if err := tt.Click("迷跡波"); err != nil {
 		t.Fatal(err)
@@ -332,7 +333,7 @@ func TestFollowArtist(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.artists.set(12, &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}}})
+	a.artists.Pages.Set(12, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}}})
 	a.open(route{page: pageArtist, id: 12})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -340,13 +341,13 @@ func TestFollowArtist(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.artists.get(12).profile.Followed || !wait(t, asked, "the follow") {
+	if !a.artists.Pages.Get(12).Profile.Followed || !wait(t, asked, "the follow") {
 		t.Fatal("not followed")
 	}
 	if err := tt.Click("已关注"); err != nil {
 		t.Fatal(err)
 	}
-	if len(asked) > 0 || !a.artists.get(12).profile.Followed {
+	if len(asked) > 0 || !a.artists.Pages.Get(12).Profile.Followed {
 		t.Error("unfollowed before the follow landed")
 	}
 }
@@ -362,7 +363,7 @@ func TestPlayEpisode(t *testing.T) {
 		p.MainSong.ID = audio
 		return p
 	}
-	a.podcasts.set(5, &podcastData{podcast: pod, programs: []netease.Program{ep(1, 11, "第三期"), ep(2, 0, "第二期"), ep(3, 13, "第一期")}, page: paged{loaded: true}})
+	a.podcasts.Set(5, &podcastData{podcast: pod, programs: []netease.Program{ep(1, 11, "第三期"), ep(2, 0, "第二期"), ep(3, 13, "第一期")}, page: viewmodel.Page{Loaded: true}})
 	a.open(route{page: pagePodcast, id: 5})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -392,7 +393,7 @@ func TestPlayEpisode(t *testing.T) {
 func TestEpisodeOpensPodcast(t *testing.T) {
 	a := catalogApp()
 	a.open(route{page: pagePodcast, id: 5})
-	d := a.podcasts.get(5)
+	d := a.podcasts.Get(5)
 	a.playProgram(d, 0)
 	a.pl.SetLyrics(nil)
 	a.nowPlaying, a.npPane = true, paneProgram
@@ -495,7 +496,7 @@ func TestAlbumLinkInRow(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	song := netease.Track{ID: 2, Name: "起风了", Artists: []netease.Artist{{ID: 13, Name: "丙"}}, Album: netease.Album{ID: 8, Name: "迷跡波"}, Duration: 200000}
-	a.artists.set(13, &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 13, Name: "丙"}, Songs: []netease.Track{song}}})
+	a.artists.Pages.Set(13, &viewmodel.ArtistPage{Profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 13, Name: "丙"}, Songs: []netease.Track{song}}})
 	a.open(route{page: pageArtist, id: 13})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -527,18 +528,18 @@ func catalogApp() *app {
 	for i, name := range []string{"迷跡波", "跡暖空", "壱雫空", "音一会", "迷星叫", "焚音打"} {
 		albums = append(albums, netease.AlbumProfile{Album: netease.Album{ID: int64(20 + i), Name: name}, Artists: []netease.Artist{band}, PublishTime: day})
 	}
-	a.artists.set(7, &artistData{
-		profile: &netease.ArtistProfile{Artist: band, Alias: []string{"マイゴ"}, MusicSize: 38, AlbumSize: 9, BriefDesc: "迷いながらでも、前へ。", AccountID: 70, Songs: songs},
-		albums:  albums, albumsPage: paged{loaded: true},
-		events: []netease.Event{
+	a.artists.Pages.Set(7, &viewmodel.ArtistPage{
+		Profile: &netease.ArtistProfile{Artist: band, Alias: []string{"マイゴ"}, MusicSize: 38, AlbumSize: 9, BriefDesc: "迷いながらでも、前へ。", AccountID: 70, Songs: songs},
+		Albums:  albums, AlbumsPage: viewmodel.Page{Loaded: true},
+		Events: []netease.Event{
 			{ID: 1, Time: day, User: netease.User{Nickname: "MyGO!!!!!"}, Content: netease.EventContent{Msg: "新专辑《迷跡波》上线了！", Album: &albums[0]}},
 			{ID: 2, Time: day - 86400000, User: netease.User{Nickname: "MyGO!!!!!"}, Content: netease.EventContent{Msg: "谢谢大家来看演出", Forwarded: "听歌的人：现场太好了"}},
 		},
-		eventsPage: paged{loaded: true},
+		EventsPage: viewmodel.Page{Loaded: true},
 	})
-	a.albums.set(8, &albumData{album: &netease.AlbumProfile{Album: al, Artists: []netease.Artist{band}, PublishTime: day, Description: "MyGO!!!!! 的第一张专辑。", Songs: songs}})
+	a.albums.Pages.Set(8, &viewmodel.AlbumPage{Album: &netease.AlbumProfile{Album: al, Artists: []netease.Artist{band}, PublishTime: day, Description: "MyGO!!!!! 的第一张专辑。", Songs: songs}})
 	user := netease.User{UserID: 9, Nickname: "听歌的人", Signature: "在音乐里，寻找同路的人。", Follows: 12, Followeds: 24}
-	a.users.set(9, &userData{user: &user, playlists: []netease.Playlist{{ID: 30, Name: "通勤路上", TrackCount: 40}, {ID: 31, Name: "睡前", TrackCount: 12}}})
+	a.users.Pages.Set(9, &viewmodel.UserPage{User: &user, Playlists: []netease.Playlist{{ID: 30, Name: "通勤路上", TrackCount: 40}, {ID: 31, Name: "睡前", TrackCount: 12}}})
 	pod := &netease.Podcast{ID: 5, Name: "夜航电台", Category: "情感", DJ: user, ProgramCount: 120, SubCount: 34000, Description: "每晚陪你说说话。"}
 	var programs []netease.Program
 	for i := range 4 {
@@ -546,25 +547,25 @@ func catalogApp() *app {
 		p.MainSong.ID = int64(50 + i)
 		programs = append(programs, p)
 	}
-	a.podcasts.set(5, &podcastData{podcast: pod, programs: programs, page: paged{loaded: true}})
+	a.podcasts.Set(5, &podcastData{podcast: pod, programs: programs, page: viewmodel.Page{Loaded: true}})
 	var hot []netease.Podcast
 	for i, name := range []string{"深夜书店", "城市漫游", "慢慢说", "周末早餐", "通勤十分钟", "老唱片"} {
 		hot = append(hot, netease.Podcast{ID: int64(60 + i), Name: name, DJ: netease.User{Nickname: "主播"}, RcmdText: "陪你度过每个夜晚", PlayCount: float64(1e6 * (i + 1))})
 	}
 	subbed := *pod
 	subbed.LastProgram = programs[0].Name
-	a.podcastTab = &podcastTab{subs: []netease.Podcast{subbed}, picks: hot[:3], hot: hot, hotPage: paged{loaded: true}}
+	a.podcastTab = &podcastTab{subs: []netease.Podcast{subbed}, picks: hot[:3], hot: hot, hotPage: viewmodel.Page{Loaded: true}}
 	for _, res := range []struct {
 		kind netease.SearchType
 		res  netease.SearchResult
 	}{
 		{netease.SearchSongs, netease.SearchResult{Songs: songs, Total: 38}},
-		{netease.SearchArtists, netease.SearchResult{Artists: []netease.ArtistProfile{*a.artists.get(7).profile, {Artist: netease.Artist{ID: 10, Name: "Ave Mujica"}}}, Total: 2}},
+		{netease.SearchArtists, netease.SearchResult{Artists: []netease.ArtistProfile{*a.artists.Pages.Get(7).Profile, {Artist: netease.Artist{ID: 10, Name: "Ave Mujica"}}}, Total: 2}},
 		{netease.SearchAlbums, netease.SearchResult{Albums: albums, Total: 6}},
 		{netease.SearchUsers, netease.SearchResult{Users: []netease.User{user, {UserID: 10, Nickname: "夏日来信"}}, Total: 2}},
 		{netease.SearchPodcasts, netease.SearchResult{Podcasts: []netease.Podcast{*pod}, Total: 1}},
 	} {
-		a.searches.set(route{page: pageSearch, query: "MyGO", kind: res.kind}, &searchData{res: res.res, page: paged{loaded: true}})
+		a.searches.Set(route{page: pageSearch, query: "MyGO", kind: res.kind}, &searchData{res: res.res, page: viewmodel.Page{Loaded: true}})
 	}
 	return a
 }
@@ -580,9 +581,9 @@ var catalogScenes = []struct {
 	{"search-albums", route{page: pageSearch, query: "MyGO", kind: netease.SearchAlbums}, 0},
 	{"search-users", route{page: pageSearch, query: "MyGO", kind: netease.SearchUsers}, 0},
 	{"search-podcasts", route{page: pageSearch, query: "MyGO", kind: netease.SearchPodcasts}, 0},
-	{"artist", route{page: pageArtist, id: 7}, artistHot},
-	{"artist-albums", route{page: pageArtist, id: 7}, artistAlbums},
-	{"artist-events", route{page: pageArtist, id: 7}, artistEvents},
+	{"artist", route{page: pageArtist, id: 7}, viewmodel.ArtistHot},
+	{"artist-albums", route{page: pageArtist, id: 7}, viewmodel.ArtistAlbums},
+	{"artist-events", route{page: pageArtist, id: 7}, viewmodel.ArtistEvents},
 	{"album", route{page: pageAlbum, id: 8}, 0},
 	{"user", route{page: pageUser, id: 9}, 0},
 	{"podcast", route{page: pagePodcast, id: 5}, 0},
@@ -599,7 +600,7 @@ func TestCatalogFrames(t *testing.T) {
 	for _, s := range catalogScenes {
 		for _, dark := range []bool{false, true} {
 			a := catalogApp()
-			a.artistTab = s.tab
+			a.artists.Tab = s.tab
 			a.open(s.r)
 			tt := ui.NewTester(a.view, 1200, 800)
 			tt.SetDark(dark)
@@ -621,7 +622,7 @@ func TestCatalogFrames(t *testing.T) {
 func TestCatalogFrameBudget(t *testing.T) {
 	for _, s := range catalogScenes {
 		a := catalogApp()
-		a.artistTab = s.tab
+		a.artists.Tab = s.tab
 		a.open(s.r)
 		tt := ui.NewTester(a.view, 1200, 800)
 		tt.Advance(time.Second)

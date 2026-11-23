@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/pagecache"
 	"netease-music-mygo/internal/viewmodel"
 )
 
@@ -81,12 +82,12 @@ func (a *app) signedIn(prof *netease.Profile) {
 	// What the listener may play, and follows, changed: load the pages
 	// again.
 
-	a.artists = newPageCache[int64, *artistData](artistBusy)
-	a.albums = newPageCache[int64, *albumData](albumBusy)
-	a.users = newPageCache[int64, *userData](userBusy)
-	a.podcasts = newPageCache[int64, *podcastData](podcastBusy)
+	a.artists.Reset()
+	a.albums.Reset()
+	a.users.Reset()
+	a.podcasts = pagecache.New[int64, *podcastData](podcastBusy)
 	a.podcastTab = &podcastTab{}
-	a.searches = newPageCache[route, *searchData](searchBusy)
+	a.searches = pagecache.New[route, *searchData](searchBusy)
 	a.load(a.route)
 	a.loadHome()
 	a.openPendingMusicLink()

@@ -8,6 +8,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // palette holds the app's colors, for the light and the dark appearance.
@@ -367,33 +368,24 @@ func segmented(c *ui.Context, selected *int, labels ...string) bool {
 	return *selected != before
 }
 
-// paged is how a list loaded a page at a time is coming along.
-type paged struct {
-	loaded  bool // whether the first page came
-	loading bool
-	more    bool   // whether there is a page after those loaded
-	err     string // why the last page didn't load
-	failure error  // retained for automatic recovery, independently of wording
-}
-
 // pageFoot ends a list loaded a page at a time, asking next for the next
 // page once it is within a screen of coming into view: where the last
 // failed, it says so, with a button to try again.
-func (a *app) pageFoot(c *ui.Context, pg *paged, next func()) {
+func (a *app) pageFoot(c *ui.Context, pg *viewmodel.Page, next func()) {
 	foot := ui.Row(c.Key("foot")).Height(56).Gap(12).Center()
 	foot.Children(func() {
 		switch {
-		case pg.loading:
+		case pg.Loading:
 			ui.Text(c, "正在加载…").FontSize(12.5).TextColor(a.pal.muted)
-		case pg.err != "":
-			ui.Text(c, pg.err).FontSize(12.5).TextColor(a.pal.muted)
+		case pg.Error != "":
+			ui.Text(c, pg.Error).FontSize(12.5).TextColor(a.pal.muted)
 			if iconButton(c.Key("retry"), iconReload, 18, a.pal.muted, "重新加载内容").Tooltip("重新加载内容").Clicked() {
 				next()
 			}
 		}
 	})
 	_, h := c.Size()
-	if b := foot.Bounds(); pg.more && !pg.loading && pg.err == "" && b.W > 0 && b.Y < 2*h {
+	if b := foot.Bounds(); pg.More && !pg.Loading && pg.Error == "" && b.W > 0 && b.Y < 2*h {
 		next()
 	}
 }

@@ -15,81 +15,22 @@ var (
 	albumDetail = netease.AlbumDetail
 )
 
-// albumData is what the app has of an album.
-type albumData struct {
-	album   *netease.AlbumProfile
-	loading bool
-	err     string
-	failure error
-}
-
-// AlbumProfile omits Songs from JSON because API responses carry them beside
-// the album. A persistent snapshot must explicitly keep both parts together.
-type keptAlbum struct {
-	Album *netease.AlbumProfile
-	Songs []netease.Track
-}
-
-func (a *app) loadAlbum(id int64) {
-	d := a.albums.get(id)
-	if d == nil {
-		d = &albumData{}
-		a.albums.set(id, d)
-	}
-	if d.album != nil && d.err == "" || d.loading {
-		return
-	}
-	d.loading = true
-	req, gen := a.cacheRequest(fmt.Sprintf("album/%d", id)), a.account.Generation
-	fetch := albumDetail
-	go func() {
-		var kept keptAlbum
-		if at := req.Read(&kept); !at.IsZero() && kept.Album != nil && kept.Album.ID == id {
-			kept.Album.Songs = kept.Songs
-			a.post(func() {
-				if a.account.Generation == gen && a.albums.peek(id) == d && d.album == nil {
-					d.album = kept.Album
-				}
-			})
-		}
-		al, err := fetch(id)
-		var bytes []byte
-		if err == nil && al != nil {
-			bytes = cacheBytes(keptAlbum{al, al.Songs})
-		}
-		a.post(func() {
-			if a.account.Generation != gen || a.albums.peek(id) != d {
-				return
-			}
-			d.loading = false
-			d.failure = err
-			if err != nil {
-				d.err = "专辑加载失败"
-				return
-			}
-			d.album = al
-			d.err = ""
-			req.Keep(bytes)
-		})
-	}()
-}
-
 func (a *app) albumPage(c *ui.Context) {
 	id := a.route.id
 	// Whether the listener saved this album is whether the albums they saved
 	// list it: load that once, as the page may be the first thing opened.
 	a.freshenAlbums()
-	d := a.albums.get(id)
-	if d.album == nil {
-		if !d.loading || d.err != "" {
-			a.centered(c, d.err, func() { a.loadAlbum(id) })
+	d := a.albums.Pages.Get(id)
+	if d.Album == nil {
+		if !d.Loading || d.Error != "" {
+			a.centered(c, d.Error, func() { a.loadAlbum(id) })
 			return
 		}
 		s := a.pageShimmer(c)
 		a.trackSkeleton(c, s, false, func(c *ui.Context) { a.playlistHeaderSkeleton(c, s) })
 		return
 	}
-	a.trackRows(c, d.album.Songs, false, func(c *ui.Context) { a.albumHeader(c, d.album) })
+	a.trackRows(c, d.Album.Songs, false, func(c *ui.Context) { a.albumHeader(c, d.Album) })
 }
 
 func (a *app) albumHeader(c *ui.Context, al *netease.AlbumProfile) {
