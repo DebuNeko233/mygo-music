@@ -10,6 +10,7 @@ import (
 
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // fakeRecent answers for what the listener played lately, as NetEase does:
@@ -60,10 +61,10 @@ func recentTestApp(t *testing.T) (*app, chan func(), *ui.Tester) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	// The page asks for the records as it builds.
 	tt.Frame()
-	for a.recent.loading() {
+	for a.recent.Loading() {
 		refreshPost(t, posts)
 	}
-	if !a.recent.tabs[recentSongsTab].shown {
+	if !a.recent.Tabs[viewmodel.RecentSongs].Shown {
 		t.Fatal("the recent plays never loaded")
 	}
 	tt.Frame()
@@ -106,11 +107,11 @@ func TestRecentRequestsRunConcurrently(t *testing.T) {
 		wait(t, started, "recent requests to start")
 	}
 	unblock()
-	for range recentTabCount {
+	for range viewmodel.RecentTabCount {
 		refreshPost(t, posts)
 	}
-	for i, tab := range a.recent.tabs {
-		if tab.loading || !tab.shown {
+	for i, tab := range a.recent.Tabs {
+		if tab.Loading || !tab.Shown {
 			t.Fatalf("recent tab %d did not finish: %+v", i, tab)
 		}
 	}
@@ -134,7 +135,7 @@ func TestRecentShowsSongsBeforeOtherTabsFinish(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	wait(t, started, "the playlist request")
-	for len(a.recent.tracks) == 0 {
+	for len(a.recent.Tracks) == 0 {
 		refreshPost(t, posts)
 	}
 	tt.Frame()
@@ -151,13 +152,13 @@ func TestRecentKeepsOtherKindsWhenSongsFail(t *testing.T) {
 	a.account.Profile = &netease.Profile{UserID: 1}
 	posts := testPosts(a)
 	a.loadRecent()
-	for a.recent.loading() {
+	for a.recent.Loading() {
 		refreshPost(t, posts)
 	}
-	if tab := a.recent.tabs[recentSongsTab]; tab.shown || tab.failure != netease.ErrOffline {
+	if tab := a.recent.Tabs[viewmodel.RecentSongs]; tab.Shown || tab.Failure != netease.ErrOffline {
 		t.Fatalf("songs failure did not reach its tab: %+v", tab)
 	}
-	if len(a.recent.playlists) != 1 || len(a.recent.albums) != 1 || len(a.recent.voices) != 1 {
+	if len(a.recent.Playlists) != 1 || len(a.recent.Albums) != 1 || len(a.recent.Voices) != 1 {
 		t.Fatalf("songs failure discarded other records: %+v", a.recent)
 	}
 }
@@ -201,7 +202,7 @@ func TestRecentPageAsksAgainWhenOld(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatalf("asked for the songs %d times, want once", calls.Load())
 	}
-	a.recent.tabs[recentSongsTab].at = time.Now().Add(-time.Hour)
+	a.recent.Tabs[viewmodel.RecentSongs].At = time.Now().Add(-time.Hour)
 	tt.Frame()
 	for i := 0; i < 20 && calls.Load() == 1; i++ {
 		refreshPost(t, posts)
@@ -239,7 +240,7 @@ func TestRecentLoadsSnapshotOffTheUIThread(t *testing.T) {
 	store := diskcache.New(t.TempDir(), 1<<20)
 	defer store.Close()
 	a.browseCache = store
-	store.Put("7", "recent", cacheBytes(keptRecent{
+	store.Put("7", "recent", cacheBytes(viewmodel.RecentSnapshot{
 		Songs: []netease.Play{{Track: netease.Track{ID: 42}}},
 	}), store.Epoch())
 	posts := testPosts(a)
@@ -251,18 +252,18 @@ func TestRecentLoadsSnapshotOffTheUIThread(t *testing.T) {
 		return nil, netease.ErrOffline
 	}
 	a.loadRecent()
-	if a.recent.tabs[recentSongsTab].shown {
+	if a.recent.Tabs[viewmodel.RecentSongs].Shown {
 		t.Fatal("loadRecent read the disk snapshot before returning")
 	}
 	refreshPost(t, posts)
-	if !a.recent.tabs[recentSongsTab].shown || !a.recent.tabs[recentSongsTab].loading || len(a.recent.tracks) != 1 || a.recent.tracks[0].ID != 42 {
+	if !a.recent.Tabs[viewmodel.RecentSongs].Shown || !a.recent.Tabs[viewmodel.RecentSongs].Loading || len(a.recent.Tracks) != 1 || a.recent.Tracks[0].ID != 42 {
 		t.Fatalf("cached list did not appear before the refresh: %+v", a.recent)
 	}
 	unblock()
-	for a.recent.loading() {
+	for a.recent.Loading() {
 		refreshPost(t, posts)
 	}
-	if len(a.recent.tracks) != 1 || a.recent.tracks[0].ID != 42 {
+	if len(a.recent.Tracks) != 1 || a.recent.Tracks[0].ID != 42 {
 		t.Fatal("offline refresh discarded the cached list")
 	}
 }

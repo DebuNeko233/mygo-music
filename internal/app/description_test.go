@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // A long introduction on any detail page opens in a dialog that
@@ -135,13 +136,13 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route, a.recentTab = route{page: pageRecent}, recentPodcastsTab
-	for i := range a.recent.tabs {
-		a.recent.tabs[i].at = a.listsNow()
+	a.route, a.recent.Selected = route{page: pageRecent}, viewmodel.RecentPodcasts
+	for i := range a.recent.Tabs {
+		a.recent.Tabs[i].At = a.listsNow()
 	}
-	a.recent.tabs[recentPodcastsTab].shown = true
+	a.recent.Tabs[viewmodel.RecentPodcasts].Shown = true
 	desc := strings.Repeat("播客介绍", 12)
-	a.recent.podcasts = []netease.Played[netease.Podcast]{{Item: netease.Podcast{ID: 2, Name: "播客名称", Description: desc}}}
+	a.recent.Podcasts = []netease.Played[netease.Podcast]{{Item: netease.Podcast{ID: 2, Name: "播客名称", Description: desc}}}
 	view := ui.NewTester(a.view, 1180, 780)
 	if err := view.Click("更多：播客名称 · 简介"); err != nil {
 		t.Fatal(err)

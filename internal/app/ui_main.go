@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 const sidebarWidth = 232
@@ -171,7 +172,7 @@ func (a *app) load(r route) {
 	case pagePodcasts:
 		a.loadPodcastTab()
 	case pageCloud:
-		if !a.cloud.Loading() && a.cloud.Failure == nil && (!a.cloud.Loaded || listDue(a.cloud.At, a.listsNow())) {
+		if !a.cloud.Loading() && a.cloud.Failure == nil && (!a.cloud.Loaded || viewmodel.ListDue(a.cloud.At, a.listsNow())) {
 			a.refreshCloud()
 		}
 	case pageLocal:

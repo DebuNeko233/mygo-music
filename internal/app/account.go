@@ -74,7 +74,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.restoreSession()
 
 	// What another listener played is not what this one played.
-	a.recent = recentData{}
+	a.recent.Reset()
 	a.cancelCloudLoad()
 	a.cloud = viewmodel.Cloud{}
 

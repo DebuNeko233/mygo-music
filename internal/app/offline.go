@@ -166,7 +166,7 @@ func (a *app) failedLoads(manual bool) bool {
 			return true
 		}
 	case pageRecent:
-		if tab := &a.recent.tabs[a.recentTab]; !tab.loading && tab.failure != nil && retry(tab.failure) {
+		if tab := &a.recent.Tabs[a.recent.Selected]; !tab.Loading && tab.Failure != nil && retry(tab.Failure) {
 			return true
 		}
 	case pagePlaylist:
@@ -233,8 +233,8 @@ func (a *app) retryLoads(manual bool) {
 			a.loadCloud(viewmodel.CloudNextPage)
 		}
 	case pageRecent:
-		if tab := &a.recent.tabs[a.recentTab]; tab.failure != nil && retry(tab.failure) {
-			a.loadRecentTab(a.recentTab)
+		if tab := &a.recent.Tabs[a.recent.Selected]; tab.Failure != nil && retry(tab.Failure) {
+			a.loadRecentTab(a.recent.Selected)
 		}
 	case pagePlaylist:
 		if r := a.library.Refresh.Playlists[a.route.id]; r != nil && !r.Busy && r.Failed && retry(r.Failure) {
@@ -406,7 +406,7 @@ func (a *app) recoveryBusy() bool {
 	case pageCloud:
 		return a.cloud.Loading()
 	case pageRecent:
-		return a.recent.readingSnapshot || a.recent.tabs[a.recentTab].loading
+		return a.recent.ReadingSnapshot || a.recent.Tabs[a.recent.Selected].Loading
 	case pagePlaylist:
 		r := a.library.Refresh.Playlists[a.route.id]
 		return r != nil && r.Busy

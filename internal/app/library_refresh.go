@@ -11,15 +11,11 @@ import (
 	"netease-music-mygo/internal/viewmodel"
 )
 
-// Opening a list or returning to the foreground revalidates it once per interval.
-const listsFresh = 30 * time.Second
-
 var (
 	likedIDs         = netease.LikedIDs
 	subscribedAlbums = netease.SubscribedAlbums
 )
 
-func listDue(at, now time.Time) bool { return at.IsZero() || now.Sub(at) >= listsFresh }
 func (a *app) listenerID() int64 {
 	if a.account.Profile != nil {
 		return a.account.Profile.UserID
@@ -83,7 +79,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 		}
 		return
 	}
-	if was != nil && (a.library.Refresh.Edits != 0 || !listDue(r.At, a.listsNow())) {
+	if was != nil && (a.library.Refresh.Edits != 0 || !viewmodel.ListDue(r.At, a.listsNow())) {
 		return
 	}
 	r.At, r.Busy, r.Retry = a.listsNow(), true, false
@@ -203,18 +199,18 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 // loadSubscribedAlbums refreshes the albums the listener saved. An
 // optimistic save or unsave made during the request takes priority.
 func (a *app) freshenLikes() {
-	if a.account.Profile != nil && a.library.Refresh.Edits == 0 && listDue(a.library.Refresh.Likes.At, a.listsNow()) {
+	if a.account.Profile != nil && a.library.Refresh.Edits == 0 && viewmodel.ListDue(a.library.Refresh.Likes.At, a.listsNow()) {
 		a.loadLiked(a.account.Profile.UserID)
 	}
 }
 func (a *app) freshenAlbums() {
-	if a.account.Profile != nil && a.library.Refresh.Edits == 0 && listDue(a.library.Refresh.Albums.At, a.listsNow()) {
+	if a.account.Profile != nil && a.library.Refresh.Edits == 0 && viewmodel.ListDue(a.library.Refresh.Albums.At, a.listsNow()) {
 		a.loadSubscribedAlbums(a.account.Profile.UserID)
 	}
 }
 func (a *app) freshenLibrary() {
 	if a.account.Profile != nil && a.library.Refresh.Edits == 0 {
-		if listDue(a.library.Refresh.Mine.At, a.listsNow()) {
+		if viewmodel.ListDue(a.library.Refresh.Mine.At, a.listsNow()) {
 			a.loadMine(a.account.Profile.UserID)
 		}
 		a.freshenLikes()

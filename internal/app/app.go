@@ -82,8 +82,7 @@ type app struct {
 
 	// What the listener played lately, on any of their devices, and what
 	// the page lists: see ui_recent.go.
-	recent    recentData
-	recentTab int
+	recent viewmodel.Recent
 
 	// heard is the actual audio session; reports leave in playback order.
 	heard           heardPlay

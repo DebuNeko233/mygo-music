@@ -561,7 +561,7 @@ func TestCloudRefreshesWhenReopenedAfterFreshnessInterval(t *testing.T) {
 	if a.cloud.Loading() {
 		t.Fatal("reopening a fresh library repeated its request")
 	}
-	now = now.Add(listsFresh + time.Second)
+	now = now.Add(viewmodel.ListsFresh + time.Second)
 	a.load(a.route)
 	if got := wait(t, calls, "automatic cloud refresh"); got != 0 {
 		t.Fatalf("refresh offset %d", got)

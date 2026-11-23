@@ -60,7 +60,7 @@ func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
 	if written.IsZero() || !reflect.DeepEqual(*pl, stored) {
 		t.Fatal("matching refresh did not fill a missing offline snapshot")
 	}
-	*now = now.Add(listsFresh)
+	*now = now.Add(viewmodel.ListsFresh)
 	a.loadPlaylist(pl.ID, false)
 	refreshPost(t, posts)
 	a.waitForPlaylistSnapshot(req)
@@ -90,7 +90,7 @@ func TestPlaylistRefreshAppliesHeaderAndPrivileges(t *testing.T) {
 	if got.PlayCount != 10 || &got.Tracks[0] != &pl.Tracks[0] {
 		t.Fatal("header refresh lost the new count or replaced unchanged tracks")
 	}
-	*now = now.Add(listsFresh)
+	*now = now.Add(viewmodel.ListsFresh)
 	playlistDetail = func(int64) (*netease.Playlist, error) { return &withPrivilege, nil }
 	a.loadPlaylist(pl.ID, false)
 	refreshPost(t, posts)
@@ -197,7 +197,7 @@ func TestLibraryRefreshExpiryAndFailure(t *testing.T) {
 		t.Fatal("failed refresh lost content or duplicated requests")
 	}
 	a.loadPlaylist(7, false)
-	*now = now.Add(listsFresh - time.Second)
+	*now = now.Add(viewmodel.ListsFresh - time.Second)
 	a.loadPlaylist(7, false)
 	if calls.Load() != 1 {
 		t.Fatal("retried before the freshness interval")
@@ -520,7 +520,7 @@ func TestLibraryRefreshRetryFailureStops(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	a.freshenLikes()
-	if calls.Load() != 2 || a.library.Refresh.Likes.Retry || listDue(a.library.Refresh.Likes.At, a.listsNow()) {
+	if calls.Load() != 2 || a.library.Refresh.Likes.Retry || viewmodel.ListDue(a.library.Refresh.Likes.At, a.listsNow()) {
 		t.Fatal("failed follow-up kept retrying")
 	}
 }
