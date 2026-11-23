@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
 	"netease-music-mygo/internal/netease"
 )
 
@@ -65,7 +66,7 @@ func TestRecoverySkipsHiddenArtistTab(t *testing.T) {
 func TestCacheSerializationFailurePreservesSnapshot(t *testing.T) {
 	a, _ := offlineFixture(t)
 	req := a.cacheRequest("test")
-	req.store.Put(req.scope, req.key, []byte("kept"), req.epoch)
+	req.Store.Put(req.Scope, req.Key, []byte("kept"), req.Epoch)
 	var output bytes.Buffer
 	writer := log.Writer()
 	log.SetOutput(&output)
@@ -75,13 +76,13 @@ func TestCacheSerializationFailurePreservesSnapshot(t *testing.T) {
 		Invalid chan int
 	}{"session-secret", make(chan int)}
 	b := cacheBytes(bad)
-	req.keep(b)
-	write := req.store.Prepare(req.scope, req.key, req.epoch)
+	req.Keep(b)
+	write := req.Store.Prepare(req.Scope, req.Key, req.Epoch)
 	write(b) // Prepared library snapshots use this separate path.
 	if b != nil || !strings.Contains(output.String(), "cache: cannot encode") || strings.Contains(output.String(), bad.Private) {
 		t.Fatal("encoding failure was silent or leaked the payload")
 	}
-	got, _ := req.store.Read(req.scope, req.key)
+	got, _ := req.Store.Read(req.Scope, req.Key)
 	if string(got) != "kept" {
 		t.Fatal("bad encoder replaced the old snapshot")
 	}
@@ -90,7 +91,7 @@ func TestCacheSerializationFailurePreservesSnapshot(t *testing.T) {
 // Retrying a temporary home failure must not repeatedly request another module's permanent failure.
 func TestRecoverySeparatesHomeFailures(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.profile = nil
+	a.account.Profile = nil
 	featured, charts := featuredPlaylists, homeCharts
 	t.Cleanup(func() { featuredPlaylists, homeCharts = featured, charts })
 	featuredCalls, chartCalls := 0, 0
@@ -181,7 +182,7 @@ func TestRecoveryIgnoresHiddenArtistLoads(t *testing.T) {
 // A partial home failure must not refetch healthy modules every time the window regains focus.
 func TestHomeFailureDoesNotReloadHealthyModulesOnFocus(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.profile = nil
+	a.account.Profile = nil
 	featured, charts := featuredPlaylists, homeCharts
 	t.Cleanup(func() { featuredPlaylists, homeCharts = featured, charts })
 	chartCalls := 0

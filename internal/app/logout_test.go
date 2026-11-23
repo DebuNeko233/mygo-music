@@ -22,7 +22,7 @@ func TestLogoutReportsCredentialDeletionFailure(t *testing.T) {
 		return errors.New("server unavailable")
 	}
 	a.signOut()
-	if a.profile != nil || a.toast == "" {
+	if a.account.Profile != nil || a.toast == "" {
 		t.Fatal("sign-out hid the credential deletion failure")
 	}
 	initial := a.toast
@@ -32,7 +32,7 @@ func TestLogoutReportsCredentialDeletionFailure(t *testing.T) {
 	}
 	close(release)
 	refreshPost(t, posts)
-	if a.profile != nil || a.toast == "" || a.toast == initial {
+	if a.account.Profile != nil || a.toast == "" || a.toast == initial {
 		t.Fatal("remote logout failure did not preserve and update the local failure report")
 	}
 }
@@ -55,12 +55,12 @@ func TestLogoutCompletionBelongsToItsLogin(t *testing.T) {
 	for a.homeLoading {
 		refreshPost(t, posts)
 	}
-	a.login.gen++
-	a.profile = &netease.Profile{UserID: 8}
+	a.account.Login.Generation++
+	a.account.Profile = &netease.Profile{UserID: 8}
 	a.toast = "new login feedback"
 	close(release)
 	refreshPost(t, posts)
-	if a.profile.UserID != 8 || a.toast != "new login feedback" {
+	if a.account.Profile.UserID != 8 || a.toast != "new login feedback" {
 		t.Fatal("old logout completion affected the new login")
 	}
 }

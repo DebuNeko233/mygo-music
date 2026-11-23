@@ -54,7 +54,7 @@ func recentTestApp(t *testing.T) (*app, chan func(), *ui.Tester) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
+	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	posts := testPosts(a)
 	a.route = route{page: pageRecent}
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -74,7 +74,7 @@ func recentTestApp(t *testing.T) (*app, chan func(), *ui.Tester) {
 func TestRecentRequestsRunConcurrently(t *testing.T) {
 	fakeRecent(t)
 	a := newTestApp()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	posts := testPosts(a)
 	started := make(chan string, 5)
 	release := make(chan struct{})
@@ -120,7 +120,7 @@ func TestRecentRequestsRunConcurrently(t *testing.T) {
 func TestRecentShowsSongsBeforeOtherTabsFinish(t *testing.T) {
 	fakeRecent(t)
 	a := newTestApp()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.route = route{page: pageRecent}
 	posts := testPosts(a)
 	started := make(chan struct{})
@@ -148,7 +148,7 @@ func TestRecentKeepsOtherKindsWhenSongsFail(t *testing.T) {
 	fakeRecent(t)
 	recentPlays = func(int) ([]netease.Play, error) { return nil, netease.ErrOffline }
 	a := newTestApp()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	posts := testPosts(a)
 	a.loadRecent()
 	for a.recent.loading() {
@@ -235,7 +235,7 @@ func TestRecentPlaysSayWhen(t *testing.T) {
 func TestRecentLoadsSnapshotOffTheUIThread(t *testing.T) {
 	fakeRecent(t)
 	a := newTestApp()
-	a.profile = &netease.Profile{UserID: 7}
+	a.account.Profile = &netease.Profile{UserID: 7}
 	store := diskcache.New(t.TempDir(), 1<<20)
 	defer store.Close()
 	a.browseCache = store

@@ -49,12 +49,12 @@ type trackSearchList struct {
 func (a *app) searchTracks() trackSearchList {
 	switch a.route.page {
 	case pagePlaylist:
-		if pl := a.playlists[a.route.id]; pl != nil {
-			return trackSearchList{tracks: pl.Tracks, playlist: pl, revision: a.listRefresh.revision, label: "当前歌单", owner: a.route.id}
+		if pl := a.library.Playlists[a.route.id]; pl != nil {
+			return trackSearchList{tracks: pl.Tracks, playlist: pl, revision: a.library.Refresh.Revision, label: "当前歌单", owner: a.route.id}
 		}
 	case pageCloud:
-		if a.profile != nil {
-			return trackSearchList{tracks: a.cloud.Tracks, revision: a.listRefresh.revision, label: "网盘", owner: a.listenerID()}
+		if a.account.Profile != nil {
+			return trackSearchList{tracks: a.cloud.Tracks, revision: a.library.Refresh.Revision, label: "网盘", owner: a.listenerID()}
 		}
 	case pageLocal:
 		return trackSearchList{tracks: a.local.tracks, revision: a.local.revision, label: "本地"}

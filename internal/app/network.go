@@ -24,6 +24,10 @@ func (a *app) watchNetwork() {
 }
 
 func (a *app) networkChanged(status mygo.NetworkStatus) {
+	a.updateNetwork(status, true)
+}
+
+func (a *app) updateNetwork(status mygo.NetworkStatus, autoRecover bool) {
 	if a.quitting {
 		return
 	}
@@ -43,7 +47,7 @@ func (a *app) networkChanged(status mygo.NetworkStatus) {
 		a.recovery.timer.Stop()
 		a.recovery.timer = nil
 	}
-	if !offline && a.recovery.active {
+	if !offline && a.recovery.active && autoRecover {
 		a.recovery.attempts = 0
 		a.recoverLoads()
 	}
@@ -51,7 +55,12 @@ func (a *app) networkChanged(status mygo.NetworkStatus) {
 }
 
 func (a *app) refreshConnection() {
-	a.networkChanged(readNetworkStatus())
+	// The explicit action owns this refresh. Reconnection must not start a
+	// failure-only home request first and prevent the full refresh below.
+	a.updateNetwork(readNetworkStatus(), false)
 	a.recovery.attempts = 0
+	if !a.network.offline && (a.route.page == pageHome || a.route.page == pageCharts) {
+		a.loadHome()
+	}
 	a.retryLoads(true) // explicit refresh also retries permanent failures
 }

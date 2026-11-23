@@ -97,7 +97,7 @@ func boneWidth(i int) float32 { return boneWidths[i%len(boneWidths)] }
 func (a *app) homeSkeleton(c *ui.Context, s shimmer) {
 	s.bone(c.Key("daily"), dailyRadius).Height(dailyHeight)
 	cards := a.columns(c, 168)
-	if a.profile != nil {
+	if a.account.Profile != nil {
 		a.section(c, "今日为你推荐")
 		a.playlistCardsSkeleton(c.Key("rec"), s, cards, 168, false)
 	}

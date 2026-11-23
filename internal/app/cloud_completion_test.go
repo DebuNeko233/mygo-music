@@ -120,7 +120,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	original := []netease.Track{cloudTrack(1, "Old one"), cloudTrack(2, "Old two"), cloudTrack(3, "Old three")}
 	oldTime := time.Unix(1000, 0)
 	now := oldTime.Add(24 * time.Hour)
-	a.listRefresh.now = func() time.Time { return now }
+	a.library.Refresh.Now = func() time.Time { return now }
 	a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: original, Count: 3, Offset: 3}, Loaded: true, At: oldTime}
 	a.pl.Cue(slices.Clone(original))
 	calls := make(chan int, 4)

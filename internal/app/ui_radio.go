@@ -47,15 +47,6 @@ func playable(tracks []netease.Track) []netease.Track {
 }
 
 // likedPlaylist returns the ID of the listener's liked songs, or 0.
-func (a *app) likedPlaylist() int64 {
-	for _, pl := range a.mine {
-		if pl.SpecialType == 5 {
-			return pl.ID
-		}
-	}
-	return 0
-}
-
 // personalFM is the personal FM's next songs, a variable so a test can give
 // them without the network.
 var personalFM = netease.PersonalFM
@@ -148,13 +139,13 @@ func (a *app) trashFM() {
 		return
 	}
 	id := tr.ID
-	uid, gen := a.listenerID(), a.homeGen
+	uid, gen := a.listenerID(), a.account.Generation
 	send := fmTrash
 	a.pl.Next()
 	go func() {
 		if err := send(id); err != nil {
 			a.post(func() {
-				if a.listenerID() == uid && a.homeGen == gen {
+				if a.listenerID() == uid && a.account.Generation == gen {
 					a.toast = "不喜欢操作未保存，请稍后再试"
 				}
 			})
@@ -165,7 +156,7 @@ func (a *app) trashFM() {
 // startHeartMode plays songs like one the listener likes: the one playing,
 // if they like it, or else one of their liked songs at random.
 func (a *app) startHeartMode() {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		a.showMain()
 		a.openLogin()
 		return
@@ -181,11 +172,11 @@ func (a *app) startHeartMode() {
 	}
 	var seed *netease.Track
 	fromPlaying := false
-	if cur := a.pl.Current(); cur != nil && a.liked[cur.ID] {
+	if cur := a.pl.Current(); cur != nil && a.library.Liked[cur.ID] {
 		s := *cur
 		seed, fromPlaying = &s, true
 	}
-	liked := a.playlists[pid]
+	liked := a.library.Playlists[pid]
 	a.radioStarting = heartRadio
 	go func() {
 		if seed == nil {
@@ -326,7 +317,7 @@ func (a *app) fmCard(c *ui.Context) {
 					a.artistLinks(c, tr, white.Alpha(0.7), white, true).FontSize(14).SingleLine()
 				}
 				ui.Row(c).Gap(14).AlignItems(ui.Center).Margin(20, 0, 0, -8).Children(func() {
-					if a.profile != nil {
+					if a.account.Profile != nil {
 						if iconButton(c.Key("trash"), iconTrash, 20, white.Alpha(0.8), "不喜欢").Clicked() {
 							a.trashFM()
 						}
@@ -408,7 +399,7 @@ func (a *app) heartCard(c *ui.Context, p palette) {
 		}
 		label := "开启心动模式"
 		switch {
-		case a.profile == nil:
+		case a.account.Profile == nil:
 			label = "登录后开启"
 		case on:
 			label = "正在播放"

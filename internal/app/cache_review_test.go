@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 )
@@ -70,10 +71,10 @@ func TestCacheDirectoryCancelFromMainWindow(t *testing.T) {
 	posts := testPosts(a)
 	writeCachedSong(t, source)
 	seedOfflineCaches(t, a)
-	a.profile = &netease.Profile{UserID: 7, Nickname: "本地测试"}
+	a.account.Profile = &netease.Profile{UserID: 7, Nickname: "本地测试"}
 	a.route = route{page: pagePlaylist, id: 9}
-	a.playlists[9] = &netease.Playlist{ID: 9, Name: "已缓存歌单", Tracks: []netease.Track{{ID: 1, Name: "迁移期间仍可浏览的曲目", Duration: 180000}}}
-	a.mine = []netease.Playlist{*a.playlists[9]}
+	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "已缓存歌单", Tracks: []netease.Track{{ID: 1, Name: "迁移期间仍可浏览的曲目", Duration: 180000}}}
+	a.library.Mine = []netease.Playlist{*a.library.Playlists[9]}
 	if err := a.changeCacheDirectory(target, true); err != nil {
 		t.Fatal(err)
 	}

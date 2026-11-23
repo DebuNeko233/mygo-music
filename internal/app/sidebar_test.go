@@ -21,8 +21,8 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := editTestApp()
-			a.playlists[tc.playlist] = &netease.Playlist{ID: tc.playlist, Name: tc.row}
-			a.pl.Cue(a.playlists[10].Tracks)
+			a.library.Playlists[tc.playlist] = &netease.Playlist{ID: tc.playlist, Name: tc.row}
+			a.pl.Cue(a.library.Playlists[10].Tracks)
 			before := a.route
 			tt := ui.NewTester(a.view, 1200, 800)
 			tt.Frame()
@@ -37,7 +37,7 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 			if _, ok := tt.Find(tc.other); !ok {
 				t.Error("collapsing one section hid the other section's rows")
 			}
-			if a.route != before || len(a.pl.Queue()) != 2 || len(a.mine) != 3 || len(a.saved) != 1 {
+			if a.route != before || len(a.pl.Queue()) != 2 || len(a.library.Mine) != 3 || len(a.library.Saved) != 1 {
 				t.Error("collapsing the section changed the page, queue or playlists")
 			}
 
@@ -58,13 +58,13 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 // opening its page, and the header hides them without losing one.
 func TestSidebarSavedAlbums(t *testing.T) {
 	a := editTestApp()
-	a.subAlbums = []netease.AlbumProfile{
+	a.library.SubAlbums = []netease.AlbumProfile{
 		{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}},
 		{Album: netease.Album{ID: 78, Name: "城市"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}},
 	}
-	a.subsShown = true
+	a.library.SubsShown = true
 	// The saved albums were just loaded, so nothing asks NetEase for them.
-	a.listRefresh.albums.at = time.Now()
+	a.library.Refresh.Albums.At = time.Now()
 	a.albums.set(77, &albumData{album: &netease.AlbumProfile{
 		Album:   netease.Album{ID: 77, Name: "神的游戏"},
 		Artists: []netease.Artist{{ID: 3, Name: "张悬"}},
@@ -85,7 +85,7 @@ func TestSidebarSavedAlbums(t *testing.T) {
 	if _, ok := tt.Find("城市"); ok {
 		t.Error("the collapsed albums still show")
 	}
-	if !a.albumsCollapsed || len(a.subAlbums) != 2 {
+	if !a.albumsCollapsed || len(a.library.SubAlbums) != 2 {
 		t.Error("collapsing the albums changed which are saved")
 	}
 }
@@ -108,7 +108,7 @@ func TestNewPlaylistInCollapsedSidebar(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.naming.open {
+	if !a.library.Naming.Open {
 		t.Error("the plus did not open the naming dialog")
 	}
 	if !a.mineCollapsed || !a.savedCollapsed {

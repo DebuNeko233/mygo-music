@@ -23,8 +23,8 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			page := route{page: pagePlaylist, id: 42}
 			a.route = page
 			tr := netease.Track{ID: 1, Name: "测试封面", Album: netease.Album{PicURL: "https://p1.music.126.net/test/row.jpg"}}
-			a.playlists[42] = &netease.Playlist{ID: 42, Name: "原歌单", Tracks: []netease.Track{tr}}
-			a.playlists[43] = &netease.Playlist{ID: 43, Name: "其他歌单"}
+			a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "原歌单", Tracks: []netease.Track{tr}}
+			a.library.Playlists[43] = &netease.Playlist{ID: 43, Name: "其他歌单"}
 			a.pl.Cue([]netease.Track{{ID: 2, Name: "正在播放的歌曲"}})
 			a.comments.track = 2
 			a.pl.SetLyrics(nil)
@@ -83,7 +83,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 	for i := range tracks {
 		tracks[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("曲目%d", i+1)}
 	}
-	a.playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: tracks}
+	a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: tracks}
 	for i := range 40 {
 		a.charts = append(a.charts, netease.Playlist{ID: int64(100 + i), Name: fmt.Sprintf("榜单%d", i+1)})
 	}

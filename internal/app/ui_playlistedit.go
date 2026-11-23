@@ -1,8 +1,6 @@
 package app
 
 import (
-	"errors"
-	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -10,389 +8,11 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// The listener's own playlists: making them, renaming them, deleting them,
-// and adding songs to them or taking songs out.
-
-// These edit playlists with NetEase; tests replace them.
-var (
-	createPlaylist     = netease.CreatePlaylist
-	renamePlaylist     = netease.RenamePlaylist
-	addToPlaylist      = netease.AddToPlaylist
-	removeFromPlaylist = netease.RemoveFromPlaylist
-	deletePlaylist     = netease.DeletePlaylist
-	savePlaylist       = netease.SubscribePlaylist
-)
-
-// nameDialog asks for a playlist's name: a new one's, or one's new name.
-type nameDialog struct {
-	open   bool
-	name   string
-	rename int64          // the playlist renamed, or 0 to make one
-	add    *netease.Track // the song to add to the playlist made, if any
-	busy   bool           // NetEase is making the playlist
-}
-
-// deleteDialog asks whether to delete one of the listener's playlists.
-type deleteDialog struct {
-	open bool
-	id   int64
-	name string
-}
-
-// editable returns the listener's playlist id if they may edit its songs
-// and name, or nil: the liked songs' are their hearts'.
-func (a *app) editable(id int64) *netease.Playlist {
-	for i := range a.mine {
-		if a.mine[i].ID == id && a.mine[i].SpecialType != 5 {
-			return &a.mine[i]
-		}
-	}
-	return nil
-}
-
-// isSaved reports whether the listener saved playlist pl, as its page or
-// the sidebar says.
-func (a *app) isSaved(pl *netease.Playlist) bool {
-	return pl.Subscribed || slices.ContainsFunc(a.saved, func(s netease.Playlist) bool { return s.ID == pl.ID })
-}
-
-// savable reports whether the listener may save playlist pl: anyone's but
-// their own. Signed out, saving asks them to sign in.
-func (a *app) savable(pl *netease.Playlist) bool {
-	return a.profile == nil || pl.Creator.UserID != a.profile.UserID
-}
-
-// toggleSaved saves playlist pl for the listener, or unsaves it, at once
-// in the app and then with NetEase, going back if NetEase refuses. Signed
-// out, it asks the listener to sign in.
-func (a *app) toggleSaved(pl netease.Playlist) {
-	if a.profile == nil {
-		a.showMain()
-		a.openLogin()
-		return
-	}
-	id := pl.ID
-	if a.savingPl[id] {
-		return
-	}
-	if a.savingPl == nil {
-		a.savingPl = map[int64]bool{}
-	}
-	a.savingPl[id] = true
-	save := !a.isSaved(&pl)
-	at := a.setSaved(pl, save, 0)
-	uid := a.profile.UserID
-	finishEdit := a.beginLibraryEdit()
-	go func() {
-		err := savePlaylist(id, save)
-		a.post(func() {
-			finishEdit()
-			defer a.persistLibrary(id)
-			delete(a.savingPl, id)
-			switch {
-			case a.profile == nil || a.profile.UserID != uid:
-				// Signed out or in as someone else meanwhile.
-			case err != nil:
-				a.setSaved(pl, !save, max(at, 0))
-				a.toast = "操作失败，请稍后再试"
-			case save:
-				a.toast = "已收藏"
-			default:
-				a.toast = "已取消收藏"
-			}
-		})
-	}()
-}
-
-// setSaved marks playlist pl saved or not, on its page and in the sidebar,
-// where a saved one goes at index at, and returns where it was there, or
-// -1.
-func (a *app) setSaved(pl netease.Playlist, save bool, at int) int {
-	if loaded := a.playlists[pl.ID]; loaded != nil {
-		loaded.Subscribed = save
-	}
-	// A new slice, not shifting the one the sidebar may be listing.
-	saved := slices.Clone(a.saved)
-	was := slices.IndexFunc(saved, func(s netease.Playlist) bool { return s.ID == pl.ID })
-	if was >= 0 {
-		saved = slices.Delete(saved, was, was+1)
-	}
-	if save {
-		pl.Subscribed = true
-		pl.Tracks, pl.TrackIDs = nil, nil
-		saved = slices.Insert(saved, min(at, len(saved)), pl)
-	}
-	a.saved = saved
-	return was
-}
-
-// playlistChanged checks NetEase's new list order and the sidebar's covers
-// while keeping the loaded songs visible.
-func (a *app) playlistChanged(id int64) {
-	if a.playlists[id] == nil && a.editable(id) == nil {
-		return // the playlist was deleted while the edit was pending
-	}
-	a.revalidatePlaylist(id)
-	if a.profile != nil {
-		a.loadMine(a.profile.UserID)
-	}
-}
-
-// newPlaylist asks for the name of a playlist to make, then adds tr to it
-// if set. Signed out, it asks the listener to sign in.
-func (a *app) newPlaylist(tr *netease.Track) {
-	if a.profile == nil {
-		a.showMain()
-		a.openLogin()
-		return
-	}
-	a.naming = nameDialog{open: true, add: tr}
-}
-
-// startRename asks for a new name for the listener's playlist pl.
-func (a *app) startRename(pl *netease.Playlist) {
-	a.naming = nameDialog{open: true, name: pl.Name, rename: pl.ID}
-}
-
-// submitName makes the playlist named, or renames one: at once in the app,
-// as NetEase may refuse, when renaming.
-func (a *app) submitName() {
-	d := &a.naming
-	name := strings.TrimSpace(d.name)
-	if name == "" || d.busy {
-		return
-	}
-	if d.rename != 0 {
-		id := d.rename
-		d.open = false
-		pl := a.editable(id)
-		if pl == nil || pl.Name == name {
-			return
-		}
-		old := pl.Name
-		uid, gen := a.profile.UserID, a.homeGen
-		a.setPlaylistName(id, name)
-		finishEdit := a.beginLibraryEdit()
-		go func() {
-			err := renamePlaylist(id, name)
-			a.post(func() {
-				finishEdit()
-				if a.listenerID() != uid || a.homeGen != gen {
-					return
-				}
-				defer a.persistLibrary(id)
-				if err != nil {
-					a.setPlaylistName(id, old)
-					a.toast = "重命名失败，请稍后再试"
-				}
-			})
-		}()
-		return
-	}
-	d.busy = true
-	add := d.add
-	uid := a.profile.UserID // Capture UID for validation
-	finishEdit := a.beginLibraryEdit()
-	go func() {
-		pl, err := createPlaylist(name)
-		a.post(func() {
-			finishEdit()
-			defer a.persistLibrary()
-			// Validate that the user is still logged in with the same account
-			if a.profile == nil || a.profile.UserID != uid {
-				a.naming.busy = false
-				return
-			}
-			a.naming.busy = false
-			if err != nil {
-				a.toast = "创建歌单失败，请稍后再试"
-				return
-			}
-			a.naming.open = false
-			// Under the liked songs, as NetEase lists the newest.
-			at := 0
-			if len(a.mine) > 0 && a.mine[0].SpecialType == 5 {
-				at = 1
-			}
-			a.mine = slices.Insert(a.mine, at, *pl)
-			pl.Tracks = nil
-			a.playlists[pl.ID] = pl
-			a.touchPlaylist(pl.ID)
-			a.open(route{page: pagePlaylist, id: pl.ID})
-			if add != nil {
-				a.addTo(pl.ID, add)
-			}
-		})
-	}()
-}
-
-// confirmDelete asks whether to delete the listener's playlist pl.
-func (a *app) confirmDelete(pl *netease.Playlist) {
-	a.deleting = deleteDialog{open: true, id: pl.ID, name: pl.Name}
-}
-
-// deleteChosen deletes the playlist the dialog asked about: at once from
-// the sidebar, leaving its page, and then with NetEase, which may refuse:
-// it comes back then.
-func (a *app) deleteChosen() {
-	id := a.deleting.id
-	a.deleting.open = false
-	i := slices.IndexFunc(a.mine, func(pl netease.Playlist) bool { return pl.ID == id })
-	if i < 0 || a.mine[i].SpecialType == 5 {
-		return
-	}
-	pl := a.mine[i]
-	a.mine = slices.Delete(slices.Clone(a.mine), i, i+1)
-	// Leave no way back to its page, and leave it for the page before.
-	gone := func(r route) bool { return r.page == pagePlaylist && r.id == id }
-	a.history = slices.DeleteFunc(a.history, gone)
-	a.forward = slices.DeleteFunc(a.forward, gone)
-	if gone(a.route) {
-		r := route{page: pageHome}
-		if n := len(a.history); n > 0 {
-			r, a.history = a.history[n-1], a.history[:n-1]
-		}
-		a.show(r)
-	}
-	gen := a.homeGen
-	finishEdit := a.beginLibraryEdit()
-	go func() {
-		err := deletePlaylist(id)
-		a.post(func() {
-			finishEdit()
-			if a.homeGen != gen {
-				return
-			}
-			defer a.persistLibrary()
-			if err != nil {
-				a.mine = slices.Insert(a.mine, min(i, len(a.mine)), pl)
-				a.toast = "删除失败，请稍后再试"
-				return
-			}
-			a.forgetPlaylist(id)
-			a.toast = "已删除歌单"
-		})
-	}()
-}
-
-func (a *app) setPlaylistName(id int64, name string) {
-	if pl := a.editable(id); pl != nil {
-		pl.Name = name
-	}
-	if pl := a.playlists[id]; pl != nil {
-		pl.Name = name
-	}
-}
-
-// addTo adds tr to the listener's playlist pid; a toast says how it went.
-func (a *app) addTo(pid int64, tr *netease.Track) {
-	id := tr.ID
-	gen := a.homeGen
-	finishEdit := a.beginLibraryEdit()
-	go func() {
-		err := addToPlaylist(pid, id)
-		a.post(func() {
-			finishEdit()
-			if a.homeGen != gen {
-				return
-			}
-			defer a.persistLibrary(pid)
-			switch {
-			case errors.Is(err, netease.ErrInPlaylist):
-				a.toast = "歌曲已在歌单中"
-			case err != nil:
-				a.toast = "添加失败，请稍后再试"
-			default:
-				a.toast = "已添加到歌单"
-				a.playlistChanged(pid)
-			}
-		})
-	}()
-}
-
-// playlistRemoval shares the original song order across overlapping removals.
-// Hidden IDs include pending removals and successes until the last reply.
-type playlistRemoval struct {
-	original *netease.Playlist
-	hidden   map[int64]bool
-	pending  int
-}
-
-func playlistWithoutSong(pl *netease.Playlist, id int64) *netease.Playlist {
-	return playlistWithoutSongs(pl, func(song int64) bool { return song == id })
-}
-
-// playlistWithoutSongs makes a new track list and ID list for a removal.
-// The playback queue may still share the old tracks.
-func playlistWithoutSongs(pl *netease.Playlist, hidden func(int64) bool) *netease.Playlist {
-	next := *pl
-	next.Tracks = slices.DeleteFunc(slices.Clone(pl.Tracks), func(tr netease.Track) bool { return hidden(tr.ID) })
-	next.TrackIDs = slices.DeleteFunc(slices.Clone(pl.TrackIDs), func(id netease.TrackID) bool { return hidden(id.ID) })
-	removed := max(len(pl.Tracks)-len(next.Tracks), len(pl.TrackIDs)-len(next.TrackIDs))
-	if removed == 0 {
-		return pl
-	}
-	next.TrackCount = max(0, pl.TrackCount-removed)
-	return &next
-}
-
-// removeFrom takes tr out of the listener's playlist pid, at once in the
-// app and then with NetEase, which may refuse: the song comes back then.
-func (a *app) removeFrom(pid int64, tr *netease.Track) {
-	id := tr.ID
-	before := a.playlists[pid]
-	req := a.playlistRequest(pid)
-	edit := req.removal
-	if edit == nil {
-		edit = &playlistRemoval{original: before, hidden: map[int64]bool{}}
-		req.removal = edit
-	}
-	if edit.hidden[id] {
-		return
-	}
-	edit.hidden[id] = true
-	edit.pending++
-	if before != nil {
-		a.playlists[pid] = playlistWithoutSong(before, id)
-	}
-	gen := a.homeGen
-	finishEdit := a.beginLibraryEdit()
-	remove := removeFromPlaylist
-	go func() {
-		err := remove(pid, id)
-		a.post(func() {
-			finishEdit()
-			if a.homeGen != gen {
-				return
-			}
-			defer a.persistLibrary(pid)
-			if a.listRefresh.playlists[pid] != req {
-				return // The playlist itself was deleted.
-			}
-			edit.pending--
-			if edit.pending == 0 {
-				req.removal = nil
-			}
-			if err != nil {
-				delete(edit.hidden, id)
-				if current, original := a.playlists[pid], edit.original; current != nil && original != nil {
-					restored := *current
-					restored.Tracks, restored.TrackIDs, restored.TrackCount = original.Tracks, original.TrackIDs, original.TrackCount
-					a.playlists[pid] = playlistWithoutSongs(&restored, func(song int64) bool { return edit.hidden[song] })
-				}
-				a.toast = "移除失败，请稍后再试"
-				return
-			}
-			a.playlistChanged(pid)
-		})
-	}()
-}
-
 // playlistItems are the items of a song's menu that put it in the
 // listener's playlists, or take it out of pid, the one it is listed in, if
 // set.
 func (a *app) playlistItems(m *ui.Menu, tr *netease.Track, pid int64) {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		return
 	}
 	m.Separator()
@@ -401,8 +21,8 @@ func (a *app) playlistItems(m *ui.Menu, tr *netease.Track, pid int64) {
 			a.newPlaylist(tr)
 		}
 		var to []*netease.Playlist
-		for i := range a.mine {
-			if pl := &a.mine[i]; pl.SpecialType != 5 && pl.ID != pid {
+		for i := range a.library.Mine {
+			if pl := &a.library.Mine[i]; pl.SpecialType != 5 && pl.ID != pid {
 				to = append(to, pl)
 			}
 		}
@@ -424,30 +44,30 @@ func (a *app) playlistItems(m *ui.Menu, tr *netease.Track, pid int64) {
 // name for one.
 func (a *app) playlistNameDialog(c *ui.Context) {
 	p := a.pal
-	d := &a.naming
-	ui.DialogBase(c.Key("playlist-name"), &d.open, func(backdrop, panel ui.Element) {
+	d := &a.library.Naming
+	ui.DialogBase(c.Key("playlist-name"), &d.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(360).Padding(24).Radius(18).Gap(16).
 			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		title, action := "新建歌单", "创建"
-		if d.rename != 0 {
+		if d.Rename != 0 {
 			title, action = "重命名歌单", "保存"
 		}
-		if d.busy {
+		if d.Busy {
 			action = "正在创建…"
 		}
 		ui.Text(c, title).FontSize(17).FontWeight(700)
-		in := ui.TextInput(c.Key("name"), &d.name).Placeholder("歌单名称").Label("歌单名称").FontSize(14).AutoFocus()
+		in := ui.TextInput(c.Key("name"), &d.Name).Placeholder("歌单名称").Label("歌单名称").FontSize(14).AutoFocus()
 		if in.Submitted() {
 			a.submitName()
 		}
 		ui.Row(c).Gap(10).Justify(ui.End).Children(func() {
 			if pillButton(c.Key("cancel"), nil, "取消", p.hover.Over(p.bg), p.text).Clicked() {
-				d.open = false
+				d.Open = false
 			}
 			ok := pillButton(c.Key("ok"), nil, action, p.accent, p.onAccent)
-			if strings.TrimSpace(d.name) == "" {
+			if strings.TrimSpace(d.Name) == "" {
 				ok.Disabled(true).Opacity(0.5)
 			}
 			if ok.Clicked() {
@@ -461,17 +81,17 @@ func (a *app) playlistNameDialog(c *ui.Context) {
 // undone.
 func (a *app) deletePlaylistDialog(c *ui.Context) {
 	p := a.pal
-	d := &a.deleting
-	ui.DialogBase(c.Key("playlist-delete"), &d.open, func(backdrop, panel ui.Element) {
+	d := &a.library.Deleting
+	ui.DialogBase(c.Key("playlist-delete"), &d.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(360).Padding(24).Radius(18).Gap(8).
 			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		ui.Text(c, "删除歌单").FontSize(17).FontWeight(700)
-		ui.Text(c, "确定删除歌单“"+d.name+"”吗？删除后无法恢复。").FontSize(13).TextColor(p.muted).LineHeight(1.45)
+		ui.Text(c, "确定删除歌单“"+d.Name+"”吗？删除后无法恢复。").FontSize(13).TextColor(p.muted).LineHeight(1.45)
 		ui.Row(c).Gap(10).Justify(ui.End).Margin(8, 0, 0, 0).Children(func() {
 			if pillButton(c.Key("cancel"), nil, "取消", p.hover.Over(p.bg), p.text).Clicked() {
-				d.open = false
+				d.Open = false
 			}
 			if pillButton(c.Key("ok"), nil, "删除", p.accent, p.onAccent).Clicked() {
 				a.deleteChosen()

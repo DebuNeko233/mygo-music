@@ -118,7 +118,7 @@ func (a *app) dailyCard(c *ui.Context, now time.Time) {
 				ui.Text(c, dailyArtists(songs)).FontSize(13).TextColor(white.Alpha(0.8)).MaxLines(1)
 				ui.Row(c).Gap(10).Margin(12, 0, 0, 0).Children(func() {
 					a.dailyPlayButton(c.Key("play"), songs, ours, playing)
-					if a.profile == nil && pillButton(c.Key("login"), iconUser, "登录", white.Alpha(0.16), white).Clicked() {
+					if a.account.Profile == nil && pillButton(c.Key("login"), iconUser, "登录", white.Alpha(0.16), white).Clicked() {
 						a.openLogin()
 					}
 				})
@@ -458,7 +458,7 @@ func drawRecord(p *ui.Painter, r ui.Rect, bmp *ui.Bitmap, angle float32) {
 
 // dailyNote says, shortly, how the day's songs are picked.
 func (a *app) dailyNote() string {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		return "登录后为你专属生成"
 	}
 	return "每天 6:00 更新"
@@ -466,7 +466,7 @@ func (a *app) dailyNote() string {
 
 // dailyBlurb says whose taste the day's songs follow.
 func (a *app) dailyBlurb() string {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		return "大家都在听的好歌，登录后为你专属生成"
 	}
 	return "根据你的音乐口味生成，每天 6:00 更新"

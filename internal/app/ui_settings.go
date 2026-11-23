@@ -795,7 +795,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 
 	add("account", "账号", iconUser, func(row settingsRow, block settingsBlock) {
 
-		if a.profile == nil {
+		if a.account.Profile == nil {
 			row("未登录", "登录后，每日推荐与歌单将根据你的口味生成", func() {
 				if ui.PrimaryButton(c.Key("login"), "扫码登录").Clicked() {
 					a.showMain()
@@ -805,9 +805,9 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 			})
 			return
 		}
-		block(a.profile.Nickname+" 已登录网易云音乐 退出登录", func() {
+		block(a.account.Profile.Nickname+" 已登录网易云音乐 退出登录", func() {
 
-			prof := a.profile
+			prof := a.account.Profile
 			ui.Row(c).Padding(12, 16).Gap(12).AlignItems(ui.Center).Children(func() {
 				a.avatar(c, prof.AvatarURL, 36, p.press)
 				ui.Column(c).Grow(1).Gap(2).Children(func() {

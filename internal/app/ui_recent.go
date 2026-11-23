@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -83,23 +84,23 @@ type keptRecent struct {
 // its own result as soon as it arrives.
 func (a *app) loadRecent() {
 	d := &a.recent
-	if a.profile == nil || d.readingSnapshot {
+	if a.account.Profile == nil || d.readingSnapshot {
 		return
 	}
 	if !d.snapshotChecked {
 		d.snapshotChecked = true
-		if req := a.cacheRequest("recent"); req.store != nil {
+		if req := a.cacheRequest("recent"); req.Store != nil {
 			d.readingSnapshot = true
-			gen := a.homeGen
+			gen := a.account.Generation
 			go func() {
 				var kept keptRecent
-				at := req.read(&kept)
+				at := req.Read(&kept)
 				a.post(func() {
-					if a.homeGen != gen {
+					if a.account.Generation != gen {
 						return
 					}
 					d.readingSnapshot = false
-					if !at.IsZero() && a.browseCache == req.store && req.store.Epoch() == req.epoch {
+					if !at.IsZero() && a.browseCache == req.Store && req.Store.Epoch() == req.Epoch {
 						d.setSongs(kept.Songs)
 						d.playlists, d.albums = kept.Playlists, kept.Albums
 						d.podcasts, d.voices = kept.Podcasts, kept.Voices
@@ -123,7 +124,7 @@ func (a *app) loadRecent() {
 
 func (a *app) loadRecentTab(tab int) {
 	d := &a.recent
-	if a.profile == nil || d.readingSnapshot || d.tabs[tab].loading {
+	if a.account.Profile == nil || d.readingSnapshot || d.tabs[tab].loading {
 		return
 	}
 	switch tab {
@@ -143,11 +144,11 @@ func (a *app) loadRecentTab(tab int) {
 func fetchRecent[T any](a *app, tab int, fetch func(int) ([]T, error), apply func([]T)) {
 	d := &a.recent
 	d.tabs[tab].loading = true
-	gen, req := a.homeGen, a.cacheRequest("recent")
+	gen, req := a.account.Generation, a.cacheRequest("recent")
 	go func() {
 		items, err := fetch(recentLimit)
 		a.post(func() {
-			if a.homeGen != gen {
+			if a.account.Generation != gen {
 				return
 			}
 			state := &d.tabs[tab]
@@ -161,7 +162,7 @@ func fetchRecent[T any](a *app, tab int, fetch func(int) ([]T, error), apply fun
 			// preserves any previously available records for that tab.
 			if d.snapshotDirty && !d.loading() {
 				d.snapshotDirty = false
-				if req.store != nil {
+				if req.Store != nil {
 					d.keep(req, state.at)
 				}
 			}
@@ -169,14 +170,14 @@ func fetchRecent[T any](a *app, tab int, fetch func(int) ([]T, error), apply fun
 	}()
 }
 
-func (d *recentData) keep(req cacheRequest, at time.Time) {
+func (d *recentData) keep(req diskcache.Snapshot, at time.Time) {
 	var tabs uint8
 	for i, tab := range d.tabs {
 		if tab.shown {
 			tabs |= 1 << i
 		}
 	}
-	req.keep(cacheBytes(keptRecent{
+	req.Keep(cacheBytes(keptRecent{
 		Songs:     d.songs,
 		Playlists: d.playlists,
 		Albums:    d.albums,
@@ -200,7 +201,7 @@ const (
 var recentTabTitles = [...]string{"歌曲", "歌单", "专辑", "播客", "声音"}
 
 func (a *app) recentPage(c *ui.Context) {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		a.centered(c, "登录后查看最近播放", nil)
 		return
 	}

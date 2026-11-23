@@ -148,13 +148,13 @@ func (a *app) loadArtistProfile(id int64) {
 		return
 	}
 	d.loading = true
-	req, gen := a.cacheRequest(fmt.Sprintf("artist/%d", id)), a.homeGen
+	req, gen := a.cacheRequest(fmt.Sprintf("artist/%d", id)), a.account.Generation
 	fetch := artistDetail
 	go func() {
 		var kept *netease.ArtistProfile
-		if at := req.read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
+		if at := req.Read(&kept); !at.IsZero() && kept != nil && kept.ID == id {
 			a.post(func() {
-				if a.homeGen == gen && a.artists.peek(id) == d && d.profile == nil {
+				if a.account.Generation == gen && a.artists.peek(id) == d && d.profile == nil {
 					d.profile = kept
 				}
 			})
@@ -162,7 +162,7 @@ func (a *app) loadArtistProfile(id int64) {
 		ar, err := fetch(id)
 		bytes := cacheBytes(ar)
 		a.post(func() {
-			if a.homeGen != gen || a.artists.peek(id) != d {
+			if a.account.Generation != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.loading = false
@@ -176,7 +176,7 @@ func (a *app) loadArtistProfile(id int64) {
 			}
 			d.profile = ar
 			d.err = ""
-			req.keep(bytes)
+			req.Keep(bytes)
 			// Their events are their account's, which their profile names.
 			if a.artistTab == artistEvents && a.route == (route{page: pageArtist, id: id}) {
 				a.loadEvents(id)
@@ -191,13 +191,13 @@ func (a *app) loadLatest(id int64) {
 		return
 	}
 	d.latestLoading = true
-	req, gen := a.cacheRequest(fmt.Sprintf("artist-latest/%d", id)), a.homeGen
+	req, gen := a.cacheRequest(fmt.Sprintf("artist-latest/%d", id)), a.account.Generation
 	fetch := artistLatestSongs
 	go func() {
 		var kept []netease.Track
-		if at := req.read(&kept); !at.IsZero() {
+		if at := req.Read(&kept); !at.IsZero() {
 			a.post(func() {
-				if a.homeGen == gen && a.artists.peek(id) == d && d.latest == nil {
+				if a.account.Generation == gen && a.artists.peek(id) == d && d.latest == nil {
 					d.latest = kept
 				}
 			})
@@ -205,7 +205,7 @@ func (a *app) loadLatest(id int64) {
 		songs, err := fetch(id, latestCount)
 		bytes := cacheBytes(songs)
 		a.post(func() {
-			if a.homeGen != gen || a.artists.peek(id) != d {
+			if a.account.Generation != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.latestLoading = false
@@ -216,7 +216,7 @@ func (a *app) loadLatest(id int64) {
 			}
 			d.latest = songs
 			d.latestErr = ""
-			req.keep(bytes)
+			req.Keep(bytes)
 		})
 	}()
 }
@@ -237,7 +237,7 @@ func (a *app) loadAlbums(id int64) {
 	if d.albumsFailed {
 		offset = d.albumsRetry
 	}
-	req, gen := a.cacheRequest(fmt.Sprintf("artist-albums/%d/%d", id, offset)), a.homeGen
+	req, gen := a.cacheRequest(fmt.Sprintf("artist-albums/%d/%d", id, offset)), a.account.Generation
 	fetch := albumsBy
 	go func() {
 		// Restore already visited pages together, so an offline failure of
@@ -247,9 +247,9 @@ func (a *app) loadAlbums(id int64) {
 		cachedMore := false
 		for page, cursor := 0, offset; page < 128; page++ {
 			part := req
-			part.key = fmt.Sprintf("artist-albums/%d/%d", id, cursor)
+			part.Key = fmt.Sprintf("artist-albums/%d/%d", id, cursor)
 			var kept keptAlbums
-			at := part.read(&kept)
+			at := part.Read(&kept)
 			if at.IsZero() {
 				break
 			}
@@ -265,7 +265,7 @@ func (a *app) loadAlbums(id int64) {
 		}
 		if !cachedAt.IsZero() {
 			a.post(func() {
-				if a.homeGen == gen && a.artists.peek(id) == d && len(d.albums) == offset {
+				if a.account.Generation == gen && a.artists.peek(id) == d && len(d.albums) == offset {
 					d.albums = append(d.albums, cached...)
 					d.albumsPage.loaded, d.albumsPage.more = true, cachedMore
 				}
@@ -274,7 +274,7 @@ func (a *app) loadAlbums(id int64) {
 		albums, more, err := fetch(id, albumsPage, offset)
 		bytes := cacheBytes(keptAlbums{albums, more})
 		a.post(func() {
-			if a.homeGen != gen || a.artists.peek(id) != d {
+			if a.account.Generation != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.albumsPage.loading = false
@@ -286,7 +286,7 @@ func (a *app) loadAlbums(id int64) {
 			}
 			d.albums = append(d.albums[:offset], albums...)
 			d.albumsFailed = false
-			req.keep(bytes)
+			req.Keep(bytes)
 			d.albumsPage.loaded, d.albumsPage.more = true, more && len(albums) > 0
 		})
 	}()
@@ -304,11 +304,11 @@ func (a *app) loadEvents(id int64) {
 	if !d.eventsPage.loaded {
 		before = -1
 	}
-	fetch, gen := accountEvents, a.homeGen
+	fetch, gen := accountEvents, a.account.Generation
 	go func() {
 		events, last, more, err := fetch(uid, eventsPage, before)
 		a.post(func() {
-			if a.homeGen != gen || a.artists.peek(id) != d {
+			if a.account.Generation != gen || a.artists.peek(id) != d {
 				return
 			}
 			d.eventsPage.loading = false
@@ -339,7 +339,7 @@ func (a *app) toggleFollow(id int64) {
 	if d.profile == nil || d.following {
 		return
 	}
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		a.openLogin()
 		return
 	}

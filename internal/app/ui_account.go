@@ -1,398 +1,64 @@
 package app
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"runtime"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
 )
-
-// loginState is a QR code login under way.
-type loginState struct {
-	open     bool
-	gen      int // counts logins, to stop the polls of closed ones
-	code     *qr.Code
-	status   int // a QR state, or 0 while the code loads
-	scanner  string
-	avatar   string
-	err      string
-	finished bool
-}
-
-type qrLoginAttempt interface {
-	Check(string) (netease.QRStatus, error)
-	Commit()
-}
-
-// accountAsk asks NetEase whose session this is: tests set it.
-var accountAsk = netease.Account
-var restoreLoginSession = netease.RestoreSession
-var saveLoginSession = netease.SaveSession
-var clearLoginSession = netease.ClearSession
-var logoutSession = netease.Logout
-var loginIdentity = netease.SessionIdentity
-
-// saveLogin keeps a successful login usable in this process and reports
-// persistence failures in the matching dialog or on the main window.
-func (a *app) saveLogin(onSaved func()) {
-	save := saveLoginSession
-	gen, homeGen := a.login.gen, a.homeGen
-	go func() {
-		err := save()
-		if err == nil && onSaved == nil {
-			return
-		}
-		a.post(func() {
-			dialog := onSaved != nil && a.login.open && gen == a.login.gen
-			if err == nil {
-				if dialog {
-					onSaved()
-				}
-				return
-			}
-			const message = "登录凭据保存失败，本次登录仅在应用运行期间有效"
-			if dialog {
-				a.login.finished = false
-				a.login.err = message
-			} else if homeGen == a.homeGen {
-				a.toast = message
-			}
-		})
-	}()
-}
-
-// boot signs in with the session in the keychain, if any, then loads the
-// home page for whoever is listening.
-func (a *app) boot() {
-	a.homeLoading = true
-	gen := a.homeGen
-	store, restore, identityOf := a.identityCache, restoreLoginSession, loginIdentity
-	go func() {
-		restored := restore()
-		var kept *netease.Profile
-		identity := identityOf()
-		if restored && identity != "" {
-			b, _ := store.Read(identity, "profile")
-			if json.Unmarshal(b, &kept) != nil || kept != nil && kept.UserID <= 0 {
-				kept = nil
-			}
-		}
-		a.post(func() {
-			if a.homeGen != gen {
-				return
-			}
-			a.signedIn(kept)
-			if restored {
-				a.recovery.accountPending = true
-				a.confirmAccount()
-			}
-		})
-	}()
-}
-
-// confirmAccount changes identity only after a definite answer. A transport
-// error keeps the offline account and can recover without clearing its pages.
-func (a *app) confirmAccount() {
-	if a.network.offline {
-		a.recovery.accountPending = true
-		return
-	}
-	if a.recovery.accountBusy {
-		return
-	}
-	a.recovery.accountBusy = true
-	gen := a.homeGen
-	ask, identityOf := accountAsk, loginIdentity
-	go func() {
-		prof, err := ask()
-		if prof != nil && prof.UserID <= 0 {
-			prof = nil
-		}
-
-		identity := identityOf()
-		a.post(func() {
-			if a.homeGen != gen {
-				return
-			}
-			a.recovery.accountBusy = false
-			a.recovery.accountFailure = err
-			if err != nil && !errors.Is(err, netease.ErrNotLoggedIn) {
-				a.recovery.accountPending = true
-				return
-			}
-			a.recovery.accountPending = false
-			if prof == nil {
-				err := clearLoginSession()
-				a.identityCache.Clear("", nil)
-				a.discardAccount()
-				a.signedIn(nil)
-				if err != nil {
-					a.toast = "登录凭据清除失败"
-				}
-				return
-			}
-			if a.profile == nil || a.profile.UserID != prof.UserID {
-				a.discardAccount()
-				a.signedIn(prof)
-			} else {
-				a.profile = prof
-			}
-			a.saveLogin(nil)
-			a.bindOfflineLyrics()
-			if identity != "" {
-				a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
-			}
-			a.freshenLibrary()
-		})
-	}()
-}
-
-func (a *app) discardAccount() {
-	if a.profile != nil {
-		a.browseCache.Clear(fmt.Sprint(a.profile.UserID), nil)
-	}
-}
-
-// signedIn shows what is personal to prof, or to nobody.
-func (a *app) signedIn(prof *netease.Profile) {
-	a.cancelDownloads()
-	a.stopPlayReports()
-	if a.recovery.timer != nil {
-		a.recovery.timer.Stop()
-		a.recovery.timer = nil
-	}
-	a.recovery.accountBusy = false
-	a.recovery.accountPending = false
-	a.recovery.accountFailure = nil
-	a.profile = prof
-	a.bindOfflineLyrics()
-	if identity := loginIdentity(); identity != "" && prof != nil {
-		a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
-	}
-	a.homeLoading = false
-	a.homeErr = ""
-	a.homeFailures = nil
-	a.dirtySnapshots = nil
-	a.dirtyLibrary = 0
-	a.featured, a.charts, a.daily = nil, nil, nil
-	a.homeAt = time.Time{}
-	// Playback picks up where it was left, once the session that lets
-	// the listener play their songs is back.
-	a.restoreSession()
-	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
-	a.likedPrograms, a.askedPrograms = nil, nil
-	a.subAlbums, a.subsShown, a.savingAlb = nil, false, nil
-	// What another listener played is not what this one played.
-	a.recent = recentData{}
-	a.cancelCloudLoad()
-	a.cloud = viewmodel.Cloud{}
-	a.homeGen++ // Invalidate pending home page requests
-	a.resetLibraryFreshness()
-	// What the listener may play, and follows, changed: load the pages
-	// again.
-	a.playlists = map[int64]*netease.Playlist{}
-	a.plErr = map[int64]string{}
-	a.artists = newPageCache[int64, *artistData](artistBusy)
-	a.albums = newPageCache[int64, *albumData](albumBusy)
-	a.users = newPageCache[int64, *userData](userBusy)
-	a.podcasts = newPageCache[int64, *podcastData](podcastBusy)
-	a.podcastTab = &podcastTab{}
-	a.searches = newPageCache[route, *searchData](searchBusy)
-	a.load(a.route)
-	a.loadHome()
-	a.openPendingMusicLink()
-	if prof == nil {
-		return
-	}
-	a.loadLiked(prof.UserID)
-	a.loadMine(prof.UserID)
-	a.loadSubscribedAlbums(prof.UserID)
-}
-
-func (a *app) openLogin() {
-	a.login = loginState{open: true, gen: a.login.gen + 1}
-	gen := a.login.gen
-	go func() {
-		attempt := netease.NewQRLogin()
-		key, err := attempt.Key()
-		var code *qr.Code
-		if err == nil {
-			code, err = qr.Encode(netease.LoginURL(key), qr.M)
-		}
-		a.post(func() {
-			if gen != a.login.gen || !a.login.open {
-				return
-			}
-			if err != nil {
-				a.login.err = "无法获取二维码，请检查网络"
-				return
-			}
-			a.login.code, a.login.status = code, netease.QRWaiting
-			a.pollLogin(gen, key, attempt)
-		})
-	}()
-}
-
-// pollLogin asks every two seconds whether the code was scanned, until the
-// login ends or the dialog closes.
-func (a *app) pollLogin(gen int, key string, attempt qrLoginAttempt) {
-	go func() {
-		for {
-			time.Sleep(2 * time.Second)
-			if a.checkLogin(gen, key, attempt) {
-				return
-			}
-		}
-	}()
-}
-
-// checkLogin reports whether polling should stop after applying this reply.
-func (a *app) checkLogin(gen int, key string, attempt qrLoginAttempt) bool {
-	status, err := attempt.Check(key)
-	done := make(chan bool, 1)
-	a.post(func() {
-		l := &a.login
-		if gen != l.gen || !l.open || a.quitting {
-			done <- true
-			return
-		}
-		switch {
-		case err != nil:
-			// Try again: the network may come back.
-		case status.Code == netease.QRConfirmed:
-			// The old reporter already owns a copy of the old login's cookies.
-			a.stopPlayReports()
-			attempt.Commit()
-			l.status = status.Code
-			a.discardAccount()
-			a.signedIn(status.Profile)
-			a.saveLogin(func() {
-				a.login.finished = true
-				a.closeLoginSoon(gen)
-			})
-			if status.Profile == nil {
-				a.recovery.accountPending = true
-				a.confirmAccount()
-			} else {
-				a.pickUp(status.Profile.UserID)
-			}
-		case status.Code == netease.QRExpired || status.Code == netease.QRWaiting || status.Code == netease.QRScanned:
-			l.status = status.Code
-			if status.Nickname != "" {
-				l.scanner, l.avatar = status.Nickname, status.AvatarURL
-			}
-		default:
-			l.err = status.Message
-			if l.err == "" {
-				l.err = "登录失败，请稍后再试"
-			}
-		}
-		done <- l.status == netease.QRExpired || l.status == netease.QRConfirmed || l.err != ""
-	})
-	return <-done
-}
-
-// closeLoginSoon closes the dialog a moment after it showed the welcome.
-func (a *app) closeLoginSoon(gen int) {
-	go func() {
-		time.Sleep(1200 * time.Millisecond)
-		a.post(func() {
-			if gen == a.login.gen {
-				a.login.open = false
-			}
-		})
-	}()
-}
-
-func (a *app) signOut() {
-	a.login.gen++
-	a.recovery.accountPending = false
-	a.identityCache.Clear("", nil)
-	a.discardAccount()
-	// Taken before they are cleared here, as a session dropped here alone
-	// stays open with NetEase: ended there too, once the window shows the
-	// listener is out.
-	session := netease.SessionCookies()
-	clearErr := clearLoginSession()
-	a.signedIn(nil)
-	if clearErr != nil {
-		a.toast = "退出凭据清除失败，重启后可能恢复登录"
-	}
-	gen, logout := a.login.gen, logoutSession
-	go func() {
-		err := logout(session)
-		a.post(func() {
-			if gen != a.login.gen || a.profile != nil {
-				return
-			}
-			switch {
-			case clearErr != nil && err != nil:
-				a.toast = "本地凭据清除失败且服务器未响应，重启后可能恢复登录"
-			case clearErr != nil:
-				a.toast = "已退出登录，本地凭据清除失败"
-			case err != nil:
-				a.toast = "已退出登录，服务器未响应"
-			}
-		})
-	}()
-}
 
 // loginDialog shows the QR code to scan with the NetEase app on a phone.
 func (a *app) loginDialog(c *ui.Context) {
 	p := a.pal
-	l := &a.login
-	ui.DialogBase(c.Key("login"), &l.open, func(backdrop, panel ui.Element) {
+	l := &a.account.Login
+	ui.DialogBase(c.Key("login"), &l.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(340).Padding(28, 28, 26, 28).Radius(22).Gap(6).AlignItems(ui.Center).
 			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
 		title, sub := "扫码登录", "打开网易云音乐 App，扫一扫登录"
 		switch {
-		case l.finished:
+		case l.Finished:
 			title, sub = "登录成功", "欢迎回来，"+a.profileName()
-		case l.err != "":
-			sub = l.err
-		case l.status == netease.QRScanned:
+		case l.Err != "":
+			sub = l.Err
+		case l.Status == netease.QRScanned:
 			title, sub = "扫描成功", "请在手机上确认登录"
-		case l.status == netease.QRExpired:
+		case l.Status == netease.QRExpired:
 			sub = "二维码已失效"
 		}
 		ui.Text(c, title).FontSize(20).FontWeight(700)
 		ui.Text(c, sub).FontSize(13).TextColor(p.muted).TextAlign(ui.Center).Margin(0, 0, 14, 0)
 
 		ui.Box(c).Size(212, 212).Radius(16).Background(ui.RGB(255, 255, 255)).Border(1, p.hairline).Children(func() {
-			if l.code != nil {
-				code := l.code
+			if l.Code != nil {
+				code := l.Code
 				opacity := float32(1)
-				if l.status == netease.QRScanned || l.status == netease.QRExpired || l.finished || l.err != "" {
+				if l.Status == netease.QRScanned || l.Status == netease.QRExpired || l.Finished || l.Err != "" {
 					opacity = 0.12
 				}
 				ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Opacity(opacity).
 					Draw(func(pt *ui.Painter, r ui.Rect) { drawQR(pt, r, code, 14) })
-			} else if l.err == "" {
+			} else if l.Err == "" {
 				// On white whatever the appearance, as the code is.
 				s := shimmer{base: ui.RGBA(0, 0, 0, 0.08), sheen: ui.RGBA(0, 0, 0, 0.03)}.in(c)
 				qrSkeleton(c, s, 14).Absolute().Top(0).Left(0).Right(0).Bottom(0)
 			}
 			ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(10).Children(func() {
 				switch {
-				case l.finished || l.status == netease.QRScanned:
-					if bmp := bitmap(a.art.get(netease.Sized(l.avatar, 160), false)); bmp != nil {
+				case l.Finished || l.Status == netease.QRScanned:
+					if bmp := bitmap(a.art.get(netease.Sized(l.Avatar, 160), false)); bmp != nil {
 						pic := ui.Box(c).Size(72, 72).Radius(36).Shadow(0, 6, 16, -4, ui.RGBA(0, 0, 0, 0.3))
 						in := artIn(pic, bmp)
 						pic.Children(func() { artImage(c, bmp, 36, in) })
 					}
-					if l.scanner != "" {
-						ui.Text(c, l.scanner).FontSize(14).FontWeight(600).TextColor(ui.Hex("#1d1d1f"))
+					if l.Scanner != "" {
+						ui.Text(c, l.Scanner).FontSize(14).FontWeight(600).TextColor(ui.Hex("#1d1d1f"))
 					}
-				case l.status == netease.QRExpired || l.err != "":
+				case l.Status == netease.QRExpired || l.Err != "":
 					if pillButton(c.Key("refresh"), iconRepeat, "刷新二维码", p.accent, p.onAccent).Clicked() {
 						a.openLogin()
 					}
@@ -401,6 +67,9 @@ func (a *app) loginDialog(c *ui.Context) {
 		})
 		ui.Text(c, "登录后，每日推荐与歌单将根据你的口味生成").FontSize(11.5).TextColor(p.faint).Margin(16, 0, 0, 0)
 	})
+	if !l.Open {
+		a.account.CloseLogin()
+	}
 }
 
 // drawQR draws a QR code in r, as crisp squares on white, inside a quiet
@@ -422,10 +91,10 @@ func drawQR(p *ui.Painter, r ui.Rect, code *qr.Code, pad float32) {
 }
 
 func (a *app) profileName() string {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		return ""
 	}
-	return a.profile.Nickname
+	return a.account.Profile.Nickname
 }
 
 // accountRow sits at the foot of the sidebar: who is signed in, with a
@@ -434,10 +103,10 @@ func (a *app) profileName() string {
 func (a *app) accountRow(c *ui.Context) {
 	p := a.pal
 	b := ui.ButtonBase(c.Key("account")).Height(40).PaddingX(8).Gap(10).Radius(10).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
-	if b.Hovered() || a.accountOpen && a.profile != nil {
+	if b.Hovered() || a.accountOpen && a.account.Profile != nil {
 		b.Background(p.hover)
 	}
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		a.accountOpen = false
 		b.Label("登录").Children(func() {
 			ui.Box(c).Size(26, 26).Radius(13).Background(p.press).Center().Children(func() {
@@ -450,7 +119,7 @@ func (a *app) accountRow(c *ui.Context) {
 		}
 		return
 	}
-	prof := a.profile
+	prof := a.account.Profile
 	b.Label(prof.Nickname).Expanded(a.accountOpen).Children(func() {
 		a.avatar(c, prof.AvatarURL, 26, p.press)
 		ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
@@ -481,7 +150,7 @@ func (a *app) accountMenu(c *ui.Context, row ui.Element) {
 		}
 		if a.menuItem(c, iconUser, "我的主页", "").AutoFocus().Clicked() {
 			a.accountOpen = false
-			a.open(route{page: pageUser, id: a.profile.UserID})
+			a.open(route{page: pageUser, id: a.account.Profile.UserID})
 		}
 		if a.menuItem(c, iconSettings, "设置…", shortcut).Clicked() {
 			a.accountOpen = false

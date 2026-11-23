@@ -124,7 +124,7 @@ func TestSearchPlaylists(t *testing.T) {
 		res:  netease.SearchResult{Playlists: []netease.Playlist{{ID: 42, Name: "迷途人偶", TrackCount: 52}}, Total: 1},
 		page: paged{loaded: true},
 	})
-	a.playlists[42] = &netease.Playlist{ID: 42, Name: "迷途人偶"} // so its page loads nothing
+	a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "迷途人偶"} // so its page loads nothing
 	tt.Frame()
 	if err := tt.Click("迷途人偶"); err != nil {
 		t.Fatal(err)
@@ -331,7 +331,7 @@ func TestFollowArtist(t *testing.T) {
 	defer func() { followArtist = netease.FollowArtist }()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.artists.set(12, &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 12, Name: "乙"}}})
 	a.open(route{page: pageArtist, id: 12})
 	tt := ui.NewTester(a.view, 1200, 800)

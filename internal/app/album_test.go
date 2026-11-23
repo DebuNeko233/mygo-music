@@ -17,7 +17,7 @@ func albumTestApp(t *testing.T) *app {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
+	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	a.albums.set(77, &albumData{album: &netease.AlbumProfile{
 		Album:   netease.Album{ID: 77, Name: "神的游戏", PicURL: "https://p1.music.126.net/cover.jpg"},
 		Artists: []netease.Artist{{ID: 3, Name: "张悬"}},
@@ -28,7 +28,7 @@ func albumTestApp(t *testing.T) *app {
 	}})
 	a.route = route{page: pageAlbum, id: 77}
 	// The saved albums were just loaded, so the page does not ask again.
-	a.listRefresh.albums.at = time.Now()
+	a.library.Refresh.Albums.At = time.Now()
 	return a
 }
 
@@ -71,8 +71,8 @@ func TestSaveAlbumFromItsPage(t *testing.T) {
 	if !a.albumSaved(77) || a.toast != "" {
 		t.Errorf("album 77 saved %v, toast %q, want saved and nothing said", a.albumSaved(77), a.toast)
 	}
-	if len(a.subAlbums) != 1 || a.subAlbums[0].Songs != nil {
-		t.Errorf("saved albums are %+v, want album 77 alone, without its songs", a.subAlbums)
+	if len(a.library.SubAlbums) != 1 || a.library.SubAlbums[0].Songs != nil {
+		t.Errorf("saved albums are %+v, want album 77 alone, without its songs", a.library.SubAlbums)
 	}
 }
 
@@ -81,7 +81,7 @@ func TestSaveAlbumFromItsPage(t *testing.T) {
 func TestUnsaveAlbumFromItsPage(t *testing.T) {
 	calls := fakeAlbumSave(t, false)
 	a := albumTestApp(t)
-	a.subAlbums, a.subsShown = []netease.AlbumProfile{{Album: netease.Album{ID: 77, Name: "神的游戏"}}}, true
+	a.library.SubAlbums, a.library.SubsShown = []netease.AlbumProfile{{Album: netease.Album{ID: 77, Name: "神的游戏"}}}, true
 	posts := testPosts(a)
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -125,7 +125,7 @@ func TestSavedAlbumsOnOwnPage(t *testing.T) {
 	a := albumTestApp(t)
 	user := netease.User{UserID: 1, Nickname: "小明"}
 	a.users.set(1, &userData{user: &user})
-	a.subAlbums, a.subsShown = []netease.AlbumProfile{{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}}}, true
+	a.library.SubAlbums, a.library.SubsShown = []netease.AlbumProfile{{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}}}, true
 	posts := testPosts(a)
 	a.open(route{page: pageUser, id: 1})
 	for a.users.get(1).subsLoading > 0 {

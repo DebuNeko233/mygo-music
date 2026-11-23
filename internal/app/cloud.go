@@ -8,12 +8,12 @@ import (
 var cloudSongs = netease.CloudSongsContext
 
 func (a *app) cloudServices() viewmodel.CloudServices {
-	uid, generation := a.listenerID(), a.homeGen
+	uid, generation := a.listenerID(), a.account.Generation
 	return viewmodel.CloudServices{
 		Fetch: cloudSongs,
 		Post: func(update func() bool) {
 			a.postIfChanged(func() bool {
-				if a.homeGen != generation || a.listenerID() != uid {
+				if a.account.Generation != generation || a.listenerID() != uid {
 					return false
 				}
 				return update()
@@ -33,13 +33,13 @@ func (a *app) cloudServices() viewmodel.CloudServices {
 func (a *app) cancelCloudLoad() { a.cloud.Stop() }
 
 func (a *app) refreshCloud() {
-	if !a.quitting && a.profile != nil {
+	if !a.quitting && a.account.Profile != nil {
 		a.cloud.Refresh(a.cloudServices())
 	}
 }
 
 func (a *app) loadCloud(mode viewmodel.CloudLoadMode) {
-	if !a.quitting && a.profile != nil {
+	if !a.quitting && a.account.Profile != nil {
 		a.cloud.Load(mode, a.cloudServices())
 	}
 }

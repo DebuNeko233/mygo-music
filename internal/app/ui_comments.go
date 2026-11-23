@@ -316,7 +316,7 @@ func (a *app) commentLike(c *ui.Context, cm *netease.Comment) {
 // then with NetEase, which may refuse: it goes back then. Signed out, it
 // asks the listener to sign in.
 func (a *app) toggleCommentLike(id int64) {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		a.openLogin()
 		return
 	}

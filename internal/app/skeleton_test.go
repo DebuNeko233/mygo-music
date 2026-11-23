@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // skeletonScenes are the views that load, as they show while they do.
@@ -22,7 +23,7 @@ var skeletonScenes = []struct {
 	{"daily", func(a *app) { a.route = route{page: pageDaily} }},
 	{"playlist", func(a *app) {
 		a.route = route{page: pagePlaylist, id: 7}
-		a.loadingPl[7] = true
+		a.library.Loading[7] = true
 	}},
 	{"search", func(a *app) {
 		a.route = route{page: pageSearch, query: "春日影", kind: netease.SearchSongs}
@@ -32,7 +33,7 @@ var skeletonScenes = []struct {
 		a.route = route{page: pageSearch, query: "春日影", kind: netease.SearchArtists}
 		a.searches.set(a.route, &searchData{page: paged{loading: true}})
 	}},
-	{"login", func(a *app) { a.login = loginState{open: true} }},
+	{"login", func(a *app) { a.account.Login = viewmodel.LoginState{Open: true} }},
 	{"comments", func(a *app) {
 		a.nowPlaying, a.npPane = true, paneComments
 		a.comments = commentState{track: 1, loading: true}

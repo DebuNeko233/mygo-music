@@ -74,7 +74,7 @@ func TestCheckForUpdatesFromSettings(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.updates = true
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	showSettingsPage(t, tt, "更新")
 	tt.Frame()

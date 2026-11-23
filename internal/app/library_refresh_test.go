@@ -13,6 +13,7 @@ import (
 
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {
@@ -24,7 +25,7 @@ func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {
 	posts := testPosts(a)
 	a.settings = defaultSettings()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	a.listRefresh.now = func() time.Time { return now }
+	a.library.Refresh.Now = func() time.Time { return now }
 	return a, posts, &now
 }
 func refreshPost(t *testing.T, posts chan func()) {
@@ -44,7 +45,7 @@ func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
 	a.browseCache = diskcache.New(t.TempDir(), 64<<20)
 	t.Cleanup(a.browseCache.Close)
 	pl := &netease.Playlist{ID: 7, Name: "歌单", Tracks: []netease.Track{{ID: 1, Name: "歌曲"}}}
-	a.playlists[pl.ID] = pl
+	a.library.Playlists[pl.ID] = pl
 	req := a.cacheRequest("playlist/7")
 	playlistDetail = func(int64) (*netease.Playlist, error) {
 		result := copyPlaylist(*pl)
@@ -55,7 +56,7 @@ func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
 	refreshPost(t, posts)
 	a.waitForPlaylistSnapshot(req)
 	var stored netease.Playlist
-	written := req.read(&stored)
+	written := req.Read(&stored)
 	if written.IsZero() || !reflect.DeepEqual(*pl, stored) {
 		t.Fatal("matching refresh did not fill a missing offline snapshot")
 	}
@@ -63,10 +64,10 @@ func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
 	a.loadPlaylist(pl.ID, false)
 	refreshPost(t, posts)
 	a.waitForPlaylistSnapshot(req)
-	if again := req.read(&stored); !again.Equal(written) {
+	if again := req.Read(&stored); !again.Equal(written) {
 		t.Fatal("matching refresh rewrote the offline snapshot")
 	}
-	if a.playlists[pl.ID] != pl || a.playlistRequest(pl.ID).busy {
+	if a.library.Playlists[pl.ID] != pl || a.playlistRequest(pl.ID).Busy {
 		t.Fatal("matching refresh replaced the displayed list or stayed busy")
 	}
 }
@@ -76,7 +77,7 @@ func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
 func TestPlaylistRefreshAppliesHeaderAndPrivileges(t *testing.T) {
 	a, posts, now := refreshFixture(t)
 	pl := &netease.Playlist{ID: 7, Name: "歌单", Tracks: []netease.Track{{ID: 1, Name: "歌曲"}}}
-	a.playlists[pl.ID] = pl
+	a.library.Playlists[pl.ID] = pl
 	header := copyPlaylist(*pl)
 	header.PlayCount = 10
 	withPrivilege := copyPlaylist(header)
@@ -85,7 +86,7 @@ func TestPlaylistRefreshAppliesHeaderAndPrivileges(t *testing.T) {
 	playlistDetail = func(int64) (*netease.Playlist, error) { return &header, nil }
 	a.loadPlaylist(pl.ID, false)
 	refreshPost(t, posts)
-	got := a.playlists[pl.ID]
+	got := a.library.Playlists[pl.ID]
 	if got.PlayCount != 10 || &got.Tracks[0] != &pl.Tracks[0] {
 		t.Fatal("header refresh lost the new count or replaced unchanged tracks")
 	}
@@ -93,7 +94,7 @@ func TestPlaylistRefreshAppliesHeaderAndPrivileges(t *testing.T) {
 	playlistDetail = func(int64) (*netease.Playlist, error) { return &withPrivilege, nil }
 	a.loadPlaylist(pl.ID, false)
 	refreshPost(t, posts)
-	if a.playlists[pl.ID].Tracks[0].Playable() || !pl.Tracks[0].Playable() {
+	if a.library.Playlists[pl.ID].Tracks[0].Playable() || !pl.Tracks[0].Playable() {
 		t.Fatal("privilege refresh was lost or changed the old track")
 	}
 }
@@ -117,7 +118,7 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 				}
 			}
 			a.route = route{page: pagePlaylist, id: id}
-			a.playlists[id] = pl
+			a.library.Playlists[id] = pl
 			a.pl.Cue(pl.Tracks)
 			a.pl.Hold(43 * time.Second)
 			queue := slices.Clone(a.pl.Queue())
@@ -181,7 +182,7 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 func TestLibraryRefreshExpiryAndFailure(t *testing.T) {
 	a, posts, now := refreshFixture(t)
 	old := &netease.Playlist{ID: 7, Name: "Old"}
-	a.playlists[7] = old
+	a.library.Playlists[7] = old
 	var calls atomic.Int32
 	playlistDetail = func(id int64) (*netease.Playlist, error) {
 		if calls.Add(1) == 1 {
@@ -192,7 +193,7 @@ func TestLibraryRefreshExpiryAndFailure(t *testing.T) {
 	a.loadPlaylist(7, false)
 	a.loadPlaylist(7, false)
 	refreshPost(t, posts)
-	if calls.Load() != 1 || a.playlists[7] != old || a.plErr[7] != "" {
+	if calls.Load() != 1 || a.library.Playlists[7] != old || a.library.Errors[7] != "" {
 		t.Fatal("failed refresh lost content or duplicated requests")
 	}
 	a.loadPlaylist(7, false)
@@ -205,7 +206,7 @@ func TestLibraryRefreshExpiryAndFailure(t *testing.T) {
 	a.loadPlaylist(7, false)
 	a.loadPlaylist(7, false)
 	refreshPost(t, posts)
-	if calls.Load() != 2 || a.playlists[7].Name != "New" {
+	if calls.Load() != 2 || a.library.Playlists[7].Name != "New" {
 		t.Fatal("expired playlist did not refresh exactly once")
 	}
 }
@@ -217,7 +218,7 @@ func TestLibraryRefreshLocalPlaylistEditWins(t *testing.T) {
 		t.Run(edit, func(t *testing.T) {
 			a, posts, _ := refreshFixture(t)
 			original := &netease.Playlist{ID: 7, Name: "Before", Tracks: []netease.Track{{ID: 1}}}
-			a.playlists[7] = original
+			a.library.Playlists[7] = original
 			playlistDetail = func(id int64) (*netease.Playlist, error) { return &netease.Playlist{ID: id, Name: "Server"}, nil }
 			a.loadPlaylist(7, false)
 			switch edit {
@@ -228,15 +229,15 @@ func TestLibraryRefreshLocalPlaylistEditWins(t *testing.T) {
 			case "subscription":
 				original.Subscribed = true
 			case "replace":
-				a.playlists[7] = &netease.Playlist{ID: 7, Name: "Local"}
+				a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "Local"}
 			case "forget":
 				a.forgetPlaylist(7)
 			}
 			refreshPost(t, posts)
-			if got := a.playlists[7]; got != nil && got.Name == "Server" {
+			if got := a.library.Playlists[7]; got != nil && got.Name == "Server" {
 				t.Fatal("stale response overwrote a local edit")
 			}
-			if edit == "forget" && a.playlists[7] != nil {
+			if edit == "forget" && a.library.Playlists[7] != nil {
 				t.Fatal("forgotten playlist was restored")
 			}
 		})
@@ -275,12 +276,12 @@ func TestLibraryRefreshForgottenLoadCannotFinishNewLoad(t *testing.T) {
 	}
 	close(oldDone)
 	refreshPost(t, posts)
-	if !a.loadingPl[7] || !a.playlistRequest(7).busy || a.playlists[7] != nil {
+	if !a.library.Loading[7] || !a.playlistRequest(7).Busy || a.library.Playlists[7] != nil {
 		t.Fatal("old completion finished the new load")
 	}
 	close(newDone)
 	refreshPost(t, posts)
-	if a.loadingPl[7] || a.playlists[7].Name != "New" {
+	if a.library.Loading[7] || a.library.Playlists[7].Name != "New" {
 		t.Fatal("replacement did not finish")
 	}
 }
@@ -289,10 +290,10 @@ func TestLibraryRefreshForgottenLoadCannotFinishNewLoad(t *testing.T) {
 // list once, retaining all old values until their answers arrive.
 func TestLibraryRefreshOnWindowActivation(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.profile = &netease.Profile{UserID: 1}
-	a.mine = []netease.Playlist{{ID: 7, Name: "Old"}}
-	a.liked = map[int64]bool{1: true}
-	a.playlists[7] = &netease.Playlist{ID: 7, Name: "Old"}
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.library.Mine = []netease.Playlist{{ID: 7, Name: "Old"}}
+	a.library.Liked = map[int64]bool{1: true}
+	a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "Old"}
 	a.route = route{page: pagePlaylist, id: 7}
 	var mine, likes, detail atomic.Int32
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
@@ -310,13 +311,13 @@ func TestLibraryRefreshOnWindowActivation(t *testing.T) {
 	tt.SetWindowActive(true)
 	tt.Frame()
 	tt.Frame()
-	if a.mine[0].Name != "Old" || !a.liked[1] || a.playlists[7].Name != "Old" {
+	if a.library.Mine[0].Name != "Old" || !a.library.Liked[1] || a.library.Playlists[7].Name != "Old" {
 		t.Fatal("refresh blanked existing content")
 	}
 	for range 3 {
 		refreshPost(t, posts)
 	}
-	if a.mine[0].Name != "New" || !a.liked[2] || a.liked[1] || a.playlists[7].Name != "New" {
+	if a.library.Mine[0].Name != "New" || !a.library.Liked[2] || a.library.Liked[1] || a.library.Playlists[7].Name != "New" {
 		t.Fatal("foreground refresh did not update personal content")
 	}
 	tt.SetWindowActive(false)
@@ -332,9 +333,9 @@ func TestLibraryRefreshOnWindowActivation(t *testing.T) {
 // when the listener navigates back without switching to another application.
 func TestLibraryRefreshLikedPlaylistOnReopen(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.profile = &netease.Profile{UserID: 1}
-	a.liked = map[int64]bool{1: true}
-	a.playlists[7] = &netease.Playlist{ID: 7, SpecialType: 5, Tracks: []netease.Track{{ID: 1}}}
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.library.Liked = map[int64]bool{1: true}
+	a.library.Playlists[7] = &netease.Playlist{ID: 7, SpecialType: 5, Tracks: []netease.Track{{ID: 1}}}
 	playlistDetail = func(id int64) (*netease.Playlist, error) {
 		return &netease.Playlist{ID: id, SpecialType: 5, Tracks: []netease.Track{{ID: 2}}}, nil
 	}
@@ -342,7 +343,7 @@ func TestLibraryRefreshLikedPlaylistOnReopen(t *testing.T) {
 	a.open(route{page: pagePlaylist, id: 7})
 	refreshPost(t, posts)
 	refreshPost(t, posts)
-	if !a.liked[2] || a.liked[1] || a.playlists[7].Tracks[0].ID != 2 {
+	if !a.library.Liked[2] || a.library.Liked[1] || a.library.Playlists[7].Tracks[0].ID != 2 {
 		t.Fatal("liked page and hearts stayed stale")
 	}
 }
@@ -351,20 +352,20 @@ func TestLibraryRefreshLikedPlaylistOnReopen(t *testing.T) {
 // the request is in flight, including changes to a playlist's name in place.
 func TestLibraryRefreshPersonalEditsWin(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.profile = &netease.Profile{UserID: 1}
-	a.mine = []netease.Playlist{{ID: 7, Name: "Before"}}
-	a.liked = map[int64]bool{1: true}
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.library.Mine = []netease.Playlist{{ID: 7, Name: "Before"}}
+	a.library.Liked = map[int64]bool{1: true}
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
 		return []netease.Playlist{{ID: 7, Name: "Server"}}, nil, nil
 	}
 	likedIDs = func(int64) ([]int64, error) { return []int64{3}, nil }
 	a.loadMine(1)
 	a.loadLiked(1)
-	a.mine[0].Name = "Local"
-	a.setLiked(2, true)
+	a.library.Mine[0].Name = "Local"
+	a.library.SetLiked(2, true)
 	refreshPost(t, posts)
 	refreshPost(t, posts)
-	if a.mine[0].Name != "Local" || !a.liked[2] || a.liked[3] {
+	if a.library.Mine[0].Name != "Local" || !a.library.Liked[2] || a.library.Liked[3] {
 		t.Fatal("refresh overwrote local personal edits")
 	}
 }
@@ -373,9 +374,9 @@ func TestLibraryRefreshPersonalEditsWin(t *testing.T) {
 // current request even after signing back in as the original UID (A-B-A).
 func TestLibraryRefreshAccountEpoch(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.profile = &netease.Profile{UserID: 1}
-	a.mine = []netease.Playlist{{ID: 7, Name: "Current"}}
-	a.liked = map[int64]bool{9: true}
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.library.Mine = []netease.Playlist{{ID: 7, Name: "Current"}}
+	a.library.Liked = map[int64]bool{9: true}
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
 		return []netease.Playlist{{ID: 7, Name: "Stale"}}, nil, nil
 	}
@@ -386,16 +387,16 @@ func TestLibraryRefreshAccountEpoch(t *testing.T) {
 	a.loadPlaylist(7, false)
 	// This is the invalidation performed by signedIn, without launching its
 	// unrelated home/account requests in this isolated regression.
-	a.profile = &netease.Profile{UserID: 2}
-	a.homeGen++
+	a.account.Profile = &netease.Profile{UserID: 2}
+	a.account.Generation++
 	a.resetLibraryFreshness()
-	a.profile = &netease.Profile{UserID: 1}
-	a.homeGen++
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.account.Generation++
 	a.resetLibraryFreshness()
 	for range 3 {
 		refreshPost(t, posts)
 	}
-	if a.mine[0].Name != "Current" || !a.liked[9] || a.liked[3] || a.playlists[7] != nil {
+	if a.library.Mine[0].Name != "Current" || !a.library.Liked[9] || a.library.Liked[3] || a.library.Playlists[7] != nil {
 		t.Fatal("previous account's data returned")
 	}
 }
@@ -406,8 +407,8 @@ func TestLibraryRefreshPendingEditWins(t *testing.T) {
 	for _, finishBeforeReply := range []bool{false, true} {
 		t.Run(map[bool]string{false: "during", true: "after"}[finishBeforeReply], func(t *testing.T) {
 			a, posts, _ := refreshFixture(t)
-			a.profile = &netease.Profile{UserID: 1}
-			a.mine = []netease.Playlist{{ID: 7, Name: "Local"}}
+			a.account.Profile = &netease.Profile{UserID: 1}
+			a.library.Mine = []netease.Playlist{{ID: 7, Name: "Local"}}
 			userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
 				return []netease.Playlist{{ID: 99, Name: "Deleted"}}, nil, nil
 			}
@@ -420,10 +421,10 @@ func TestLibraryRefreshPendingEditWins(t *testing.T) {
 			if !finishBeforeReply {
 				finish()
 			}
-			if len(a.mine) != 1 || a.mine[0].ID != 7 {
+			if len(a.library.Mine) != 1 || a.library.Mine[0].ID != 7 {
 				t.Fatal("response reintroduced an item edited on the server")
 			}
-			if a.listRefresh.edits != 0 {
+			if a.library.Refresh.Edits != 0 {
 				t.Fatal("edit gate never closed")
 			}
 		})
@@ -437,7 +438,7 @@ func TestLibraryRefreshDiscardedSuccessRetries(t *testing.T) {
 		for _, pending := range []bool{false, true} {
 			t.Run(resource+map[bool]string{false: "/finished", true: "/pending"}[pending], func(t *testing.T) {
 				a, posts, _ := refreshFixture(t)
-				a.profile = &netease.Profile{UserID: 1}
+				a.account.Profile = &netease.Profile{UserID: 1}
 				var calls atomic.Int32
 				likedIDs = func(int64) ([]int64, error) { calls.Add(1); return []int64{42}, nil }
 				userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
@@ -455,7 +456,7 @@ func TestLibraryRefreshDiscardedSuccessRetries(t *testing.T) {
 					a.loadMine(1)
 				case "playlist":
 					a.route = route{page: pagePlaylist, id: 7}
-					a.playlists[7] = &netease.Playlist{ID: 7, Name: "Local"}
+					a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "Local"}
 					a.loadPlaylist(7, false)
 				}
 				finish := a.beginLibraryEdit()
@@ -475,15 +476,15 @@ func TestLibraryRefreshDiscardedSuccessRetries(t *testing.T) {
 				refreshPost(t, posts)
 				switch resource {
 				case "likes":
-					if !a.liked[42] {
+					if !a.library.Liked[42] {
 						t.Fatal("initial likes never recovered")
 					}
 				case "mine":
-					if len(a.mine) != 1 || a.mine[0].ID != 42 {
+					if len(a.library.Mine) != 1 || a.library.Mine[0].ID != 42 {
 						t.Fatal("initial sidebar never recovered")
 					}
 				case "playlist":
-					if a.playlists[7].Name != "Fresh" {
+					if a.library.Playlists[7].Name != "Fresh" {
 						t.Fatal("discarded playlist never recovered")
 					}
 				}
@@ -501,7 +502,7 @@ func TestLibraryRefreshDiscardedSuccessRetries(t *testing.T) {
 // stale response's follow-up into an offline network loop.
 func TestLibraryRefreshRetryFailureStops(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	var calls atomic.Int32
 	likedIDs = func(int64) ([]int64, error) {
 		if calls.Add(1) == 1 {
@@ -519,7 +520,14 @@ func TestLibraryRefreshRetryFailureStops(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	a.freshenLikes()
-	if calls.Load() != 2 || a.listRefresh.likes.retry || listDue(a.listRefresh.likes.at, a.listsNow()) {
+	if calls.Load() != 2 || a.library.Refresh.Likes.Retry || listDue(a.library.Refresh.Likes.At, a.listsNow()) {
 		t.Fatal("failed follow-up kept retrying")
 	}
+}
+
+// Reset only refresh bookkeeping to isolate the app account-generation guard.
+func (a *app) resetLibraryFreshness() {
+	a.library.Refresh = viewmodel.LibraryRefresh{Now: a.library.Refresh.Now}
+	a.library.Loading = map[int64]bool{}
+	a.library.PlayWhenLoaded = map[int64]bool{}
 }

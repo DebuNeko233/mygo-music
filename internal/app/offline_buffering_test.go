@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/netease"
 )
 
@@ -18,7 +19,7 @@ func TestOfflinePageRetryKeepsSettledState(t *testing.T) {
 	playlistDetail = func(int64) (*netease.Playlist, error) { return nil, errors.New("offline") }
 	a.loadPlaylist(9, false)
 	refreshPost(t, posts)
-	if a.loadingPl[9] || a.plErr[9] == "" {
+	if a.library.Loading[9] || a.library.Errors[9] == "" {
 		t.Fatal("missing page did not settle as failed")
 	}
 	hold := make(chan struct{})

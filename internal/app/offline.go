@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"path/filepath"
 	"slices"
 	"time"
@@ -11,7 +10,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
@@ -19,37 +20,9 @@ import (
 
 // A snapshot belongs to the account that requested it. It is serialized on
 // the worker but committed only after the UI accepts its generation/revision.
-type cacheRequest struct {
-	store      *diskcache.Store
-	scope, key string
-	epoch      uint64
+func (a *app) cacheRequest(key string) diskcache.Snapshot {
+	return diskcache.Snapshot{Store: a.browseCache, Scope: fmt.Sprint(a.listenerID()), Key: key, Epoch: a.browseCache.Epoch()}
 }
-
-func (a *app) cacheRequest(key string) cacheRequest {
-	return cacheRequest{a.browseCache, fmt.Sprint(a.listenerID()), key, a.browseCache.Epoch()}
-}
-func (r cacheRequest) read(value any) time.Time {
-	b, at := r.store.Read(r.scope, r.key)
-	if b == nil || json.Unmarshal(b, value) != nil {
-		return time.Time{}
-	}
-	return at
-}
-func cacheBytes(v any) []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
-		// Types identify a broken encoder without logging a session or payload.
-		log.Printf("cache: cannot encode %T (%T)", v, err)
-		return nil
-	}
-	return b
-}
-func (r cacheRequest) keep(b []byte) {
-	if b != nil {
-		r.store.Queue(r.scope, r.key, b, r.epoch)
-	}
-}
-
 func (a *app) initOffline() {
 	if paths, err := cachePaths(a.settings); err == nil {
 		a.browseCache = diskcache.New(paths.Browse, 64<<20)
@@ -110,11 +83,9 @@ func (a *app) bindOfflineLyrics() {
 }
 
 type recoveryState struct {
-	timer                       *time.Timer
-	attempts                    int
-	active                      bool
-	accountBusy, accountPending bool
-	accountFailure              error
+	timer    *time.Timer
+	attempts int
+	active   bool
 }
 
 var recoveryAfter = time.AfterFunc
@@ -155,7 +126,7 @@ func (a *app) recoveryFrame(active bool) {
 	if a.recovery.timer != nil {
 		return
 	}
-	generation := a.homeGen
+	generation := a.account.Generation
 	var timer *time.Timer
 	timer = recoveryAfter(recoveryGap(a.recovery.attempts), func() {
 		a.post(func() {
@@ -163,7 +134,7 @@ func (a *app) recoveryFrame(active bool) {
 				return
 			}
 			a.recovery.timer = nil
-			if a.recovery.active && a.homeGen == generation {
+			if a.recovery.active && a.account.Generation == generation {
 				a.recovery.attempts++
 				a.recoverLoads()
 			}
@@ -180,7 +151,7 @@ func (a *app) failedLoads(manual bool) bool {
 	if err := a.trackArtworkFailure(); err != nil && retry(err) {
 		return true
 	}
-	if a.recovery.accountPending && !a.recovery.accountBusy && (a.recovery.accountFailure == nil || retry(a.recovery.accountFailure)) {
+	if a.account.Pending && !a.account.Busy && (a.account.Failure == nil || retry(a.account.Failure)) {
 		return true
 	}
 	if !a.homeLoading {
@@ -190,7 +161,7 @@ func (a *app) failedLoads(manual bool) bool {
 			}
 		}
 	}
-	if a.listRefresh.mine.failed && retry(a.listRefresh.mine.failure) || a.listRefresh.likes.failed && retry(a.listRefresh.likes.failure) {
+	if a.library.Refresh.Mine.Failed && retry(a.library.Refresh.Mine.Failure) || a.library.Refresh.Likes.Failed && retry(a.library.Refresh.Likes.Failure) {
 		return true
 	}
 	switch a.route.page {
@@ -203,7 +174,7 @@ func (a *app) failedLoads(manual bool) bool {
 			return true
 		}
 	case pagePlaylist:
-		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
+		if r := a.library.Refresh.Playlists[a.route.id]; r != nil && !r.Busy && r.Failed && retry(r.Failure) {
 			return true
 		}
 	case pageAlbum:
@@ -248,18 +219,18 @@ func (a *app) retryLoads(manual bool) {
 		return
 	}
 	retry := func(err error) bool { return manual || netease.RetryableError(err) }
-	if a.recovery.accountPending && (a.recovery.accountFailure == nil || retry(a.recovery.accountFailure)) {
+	if a.account.Pending && (a.account.Failure == nil || retry(a.account.Failure)) {
 		a.confirmAccount()
 	}
 	if !a.homeLoading && len(a.homeFailures) > 0 {
 		a.loadHomeModules(true, manual)
 	}
-	if a.profile != nil && a.listRefresh.edits == 0 {
-		if a.listRefresh.mine.failed && retry(a.listRefresh.mine.failure) {
-			a.loadMine(a.profile.UserID)
+	if a.account.Profile != nil && a.library.Refresh.Edits == 0 {
+		if a.library.Refresh.Mine.Failed && retry(a.library.Refresh.Mine.Failure) {
+			a.loadMine(a.account.Profile.UserID)
 		}
-		if a.listRefresh.likes.failed && retry(a.listRefresh.likes.failure) {
-			a.loadLiked(a.profile.UserID)
+		if a.library.Refresh.Likes.Failed && retry(a.library.Refresh.Likes.Failure) {
+			a.loadLiked(a.account.Profile.UserID)
 		}
 	}
 	switch a.route.page {
@@ -272,8 +243,8 @@ func (a *app) retryLoads(manual bool) {
 			a.loadRecentTab(a.recentTab)
 		}
 	case pagePlaylist:
-		if r := a.listRefresh.playlists[a.route.id]; r != nil && !r.busy && r.failed && retry(r.failure) {
-			r.at = time.Time{}
+		if r := a.library.Refresh.Playlists[a.route.id]; r != nil && !r.Busy && r.Failed && retry(r.Failure) {
+			r.At = time.Time{}
 			a.loadPlaylist(a.route.id, false)
 		}
 	case pageAlbum:
@@ -374,51 +345,43 @@ func (a *app) measureOfflineCache() {
 	}()
 }
 
-type librarySnapshots uint8
-
-const (
-	snapshotLists librarySnapshots = 1 << iota
-	snapshotAlbums
-	snapshotLikes
-)
-
 func (a *app) persistLibrary(ids ...int64) {
-	a.persistLibraryChanges(snapshotLists|snapshotAlbums|snapshotLikes, ids...)
+	a.persistLibraryChanges(viewmodel.SnapshotLists|viewmodel.SnapshotAlbums|viewmodel.SnapshotLikes, ids...)
 }
 
 // Accumulate changes across overlapping edits and persist only after the
 // final success or rollback has landed.
-func (a *app) persistLibraryChanges(changed librarySnapshots, ids ...int64) {
+func (a *app) persistLibraryChanges(changed viewmodel.LibrarySnapshots, ids ...int64) {
 	// An edit can temporarily pin cached playlists, even without a disk store.
 	defer a.trimPlaylistCache()
-	if a.browseCache == nil || a.profile == nil {
+	if a.browseCache == nil || a.account.Profile == nil {
 		return
 	}
-	if a.dirtySnapshots == nil {
-		a.dirtySnapshots = map[int64]bool{}
+	if a.library.DirtySnapshots == nil {
+		a.library.DirtySnapshots = map[int64]bool{}
 	}
 	for _, id := range ids {
-		a.dirtySnapshots[id] = true
+		a.library.DirtySnapshots[id] = true
 	}
-	a.dirtyLibrary |= changed
-	if a.listRefresh.edits != 0 {
+	a.library.Dirty |= changed
+	if a.library.Refresh.Edits != 0 {
 		return
 	}
 	keep := func(key string, value any) {
 		req := a.cacheRequest(key)
-		if write := req.store.Prepare(req.scope, key, req.epoch); write != nil {
+		if write := req.Store.Prepare(req.Scope, key, req.Epoch); write != nil {
 			go func() { write(cacheBytes(value)) }()
 		}
 	}
-	if a.dirtyLibrary&snapshotLists != 0 && (a.mine != nil || a.saved != nil) {
-		keep("mine", keptLists{copyPlaylists(a.mine), copyPlaylists(a.saved)})
+	if a.library.Dirty&viewmodel.SnapshotLists != 0 && (a.library.Mine != nil || a.library.Saved != nil) {
+		keep("mine", library.Lists{Mine: copyPlaylists(a.library.Mine), Saved: copyPlaylists(a.library.Saved)})
 	}
-	if a.dirtyLibrary&snapshotAlbums != 0 && a.subsShown {
-		keep("albums", slices.Clone(a.subAlbums))
+	if a.library.Dirty&viewmodel.SnapshotAlbums != 0 && a.library.SubsShown {
+		keep("albums", slices.Clone(a.library.SubAlbums))
 	}
-	if a.dirtyLibrary&snapshotLikes != 0 && a.liked != nil {
-		likes := make([]int64, 0, len(a.liked))
-		for id, liked := range a.liked {
+	if a.library.Dirty&viewmodel.SnapshotLikes != 0 && a.library.Liked != nil {
+		likes := make([]int64, 0, len(a.library.Liked))
+		for id, liked := range a.library.Liked {
 			if liked {
 				likes = append(likes, id)
 			}
@@ -426,20 +389,20 @@ func (a *app) persistLibraryChanges(changed librarySnapshots, ids ...int64) {
 		slices.Sort(likes)
 		keep("likes", likes)
 	}
-	for id := range a.dirtySnapshots {
-		if pl := a.playlists[id]; pl != nil {
+	for id := range a.library.DirtySnapshots {
+		if pl := a.library.Playlists[id]; pl != nil {
 			req := a.cacheRequest(fmt.Sprintf("playlist/%d", id))
 			snapshot := copyPlaylist(*pl)
 			a.savePlaylistSnapshot(req, func() []byte { return cacheBytes(snapshot) })
 		}
 	}
-	clear(a.dirtySnapshots)
-	a.dirtyLibrary = 0
+	clear(a.library.DirtySnapshots)
+	a.library.Dirty = 0
 }
 
 // An in-flight recovery preserves its backoff, but needs no extra timer.
 func (a *app) recoveryBusy() bool {
-	if a.recovery.accountBusy || a.homeLoading || a.listRefresh.mine.busy || a.listRefresh.likes.busy || a.pl.MetadataLoading() {
+	if a.account.Busy || a.homeLoading || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy || a.pl.MetadataLoading() {
 		return true
 	}
 	if a.trackArt.searching || a.trackArt.publication.loading && a.trackArt.publication.track == a.pl.Current() || a.art.hasLoading() {
@@ -451,8 +414,8 @@ func (a *app) recoveryBusy() bool {
 	case pageRecent:
 		return a.recent.readingSnapshot || a.recent.tabs[a.recentTab].loading
 	case pagePlaylist:
-		r := a.listRefresh.playlists[a.route.id]
-		return r != nil && r.busy
+		r := a.library.Refresh.Playlists[a.route.id]
+		return r != nil && r.Busy
 	case pageAlbum:
 		d := a.albums.get(a.route.id)
 		return d != nil && d.loading
@@ -468,3 +431,5 @@ func (a *app) recoveryBusy() bool {
 	}
 	return false
 }
+
+func cacheBytes(v any) []byte { return diskcache.Encode(v) }

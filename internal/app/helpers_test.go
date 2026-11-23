@@ -7,7 +7,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
 
@@ -21,13 +20,13 @@ func isolateUserData(t *testing.T) {
 
 func newTestApp() *app {
 	a := &app{
-		playlists: map[int64]*netease.Playlist{}, loadingPl: map[int64]bool{}, plPlay: map[int64]bool{}, plErr: map[int64]string{},
 		artists: newPageCache[int64, *artistData](artistBusy), albums: newPageCache[int64, *albumData](albumBusy),
 		users:    newPageCache[int64, *userData](userBusy),
 		podcasts: newPageCache[int64, *podcastData](podcastBusy), podcastTab: &podcastTab{},
 		searches: newPageCache[route, *searchData](searchBusy),
 		lyricAt:  -1, queueAt: -1,
 	}
+	a.library.Reset()
 	a.art = newArtCache(func(func()) {})
 	a.pl = player.New(func(func()) {})
 	a.pl.SetVolume(0.5)

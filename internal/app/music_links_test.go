@@ -19,7 +19,7 @@ func musicLinkApp(t *testing.T) *app {
 	a.pl.SuspendCache()
 	a.settings = defaultSettings()
 	a.albums.set(34, &albumData{album: &netease.AlbumProfile{Album: netease.Album{ID: 34}}})
-	a.playlists[12] = &netease.Playlist{ID: 12}
+	a.library.Playlists[12] = &netease.Playlist{ID: 12}
 	return a
 }
 

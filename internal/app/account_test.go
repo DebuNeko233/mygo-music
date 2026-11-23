@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 type confirmedQR struct {
@@ -35,9 +36,9 @@ func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			a := newTestApp()
 			posts := testPosts(a)
-			a.login = loginState{open: true, gen: 1}
+			a.account.Login = viewmodel.LoginState{Open: true, Generation: 1}
 			previous := &netease.Profile{UserID: 42}
-			a.profile = previous
+			a.account.Profile = previous
 			queue := make(chan func(playReporter), 1)
 			a.reportQueue = queue
 			tt := ui.NewTester(a.loginDialog, 800, 600)
@@ -50,17 +51,17 @@ func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
 			apply := wait(t, posts, "the queued confirmation")
 			tt.Key(0, ui.KeyEscape)
 			tt.Frame()
-			if a.login.open {
+			if a.account.Login.Open {
 				t.Error("Escape did not close the dialog")
 			}
 			if reopen {
-				a.login = loginState{open: true, gen: 2}
+				a.account.Login = viewmodel.LoginState{Open: true, Generation: 2}
 			}
 			apply()
 			if !wait(t, stopped, "the stale poll to stop") {
 				t.Error("the stale attempt would keep polling")
 			}
-			if attempt.committed || a.profile != previous || a.reportQueue != queue || a.login.finished {
+			if attempt.committed || a.account.Profile != previous || a.reportQueue != queue || a.account.Login.Finished {
 				t.Fatal("a stale confirmation changed the account, its report queue, or the current dialog")
 			}
 		})
@@ -74,13 +75,13 @@ func TestLoginSaveFailureStaysVisible(t *testing.T) {
 	saveLoginSession = func() error { return errors.New("keychain unavailable") }
 	a := newTestApp()
 	posts := testPosts(a)
-	a.login = loginState{open: true, gen: 1, finished: true}
-	a.saveLogin(func() {
-		a.login.open = false
-	})
+	a.account.Login = viewmodel.LoginState{Open: true, Generation: 1, Finished: true}
+	a.account.SaveLogin(func() {
+		a.account.Login.Open = false
+	}, a.accountServices())
 	wait(t, posts, "the failed session save")()
-	if a.login.finished || !a.login.open || a.login.err == "" {
-		t.Fatalf("failed session save reported success: %+v", a.login)
+	if a.account.Login.Finished || !a.account.Login.Open || a.account.Login.Err == "" {
+		t.Fatalf("failed session save reported success: %+v", a.account.Login)
 	}
 }
 
@@ -91,8 +92,8 @@ func TestLoginSaveFailureWithoutDialogShowsToast(t *testing.T) {
 	saveLoginSession = func() error { return errors.New("keychain unavailable") }
 	a := newTestApp()
 	posts := testPosts(a)
-	a.profile = &netease.Profile{UserID: 1}
-	a.saveLogin(nil)
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.account.SaveLogin(nil, a.accountServices())
 	wait(t, posts, "the failed session save")()
 	if a.toast == "" {
 		t.Fatal("the current account's session save failure was hidden")
@@ -106,14 +107,14 @@ func TestLoginSaveSuccessClosesDialog(t *testing.T) {
 	saveLoginSession = func() error { return nil }
 	a := newTestApp()
 	posts := testPosts(a)
-	a.login = loginState{open: true, gen: 1}
-	a.saveLogin(func() {
-		a.login.finished = true
-		a.login.open = false
-	})
+	a.account.Login = viewmodel.LoginState{Open: true, Generation: 1}
+	a.account.SaveLogin(func() {
+		a.account.Login.Finished = true
+		a.account.Login.Open = false
+	}, a.accountServices())
 	wait(t, posts, "the successful session save")()
-	if !a.login.finished || a.login.open || a.login.err != "" {
-		t.Fatalf("saved session did not finish the login: %+v", a.login)
+	if !a.account.Login.Finished || a.account.Login.Open || a.account.Login.Err != "" {
+		t.Fatalf("saved session did not finish the login: %+v", a.account.Login)
 	}
 }
 
@@ -122,7 +123,7 @@ func TestLoginSaveSuccessClosesDialog(t *testing.T) {
 func TestAccountMenu(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
+	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
 
@@ -176,7 +177,7 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 42, Nickname: "小明"}
+	a.account.Profile = &netease.Profile{UserID: 42, Nickname: "小明"}
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
 	tt.Click("小明")
@@ -213,7 +214,7 @@ func fakeSubscriptions(t *testing.T) chan struct{} {
 func ownPageApp() *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 9, Nickname: "听歌的人"}
+	a.account.Profile = &netease.Profile{UserID: 9, Nickname: "听歌的人"}
 	user := netease.User{UserID: 9, Nickname: "听歌的人", Signature: "在音乐里，寻找同路的人。", Follows: 12, Followeds: 24}
 	a.users.set(9, &userData{
 		user:      &user,
@@ -265,7 +266,7 @@ func TestOwnPageFollows(t *testing.T) {
 func TestOthersPageHidesFollows(t *testing.T) {
 	asked := fakeSubscriptions(t)
 	a := ownPageApp()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.open(route{page: pageUser, id: 9})
 	tt := ui.NewTester(a.view, 1200, 1200)
 	tt.Frame()
@@ -308,12 +309,12 @@ func TestOwnPageFrames(t *testing.T) {
 		a := ownPageApp()
 		// The albums they saved were just loaded, so the page does not ask
 		// for them again.
-		a.subAlbums = []netease.AlbumProfile{
+		a.library.SubAlbums = []netease.AlbumProfile{
 			{Album: netease.Album{ID: 77, Name: "神的游戏"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, PublishTime: day},
 			{Album: netease.Album{ID: 78, Name: "城市"}, Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, PublishTime: day + 86400000},
 		}
-		a.subsShown = true
-		a.listRefresh.albums.at = time.Now()
+		a.library.SubsShown = true
+		a.library.Refresh.Albums.At = time.Now()
 		a.open(route{page: pageUser, id: 9})
 		tt := ui.NewTester(a.view, 1200, 1200)
 		tt.SetDark(dark)
@@ -339,7 +340,7 @@ func TestAccountMenuFrames(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a := newTestApp()
 		a.settings = defaultSettings()
-		a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
+		a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 		tt := ui.NewTester(a.view, 1000, 600)
 		tt.SetDark(dark)
 		tt.Frame()

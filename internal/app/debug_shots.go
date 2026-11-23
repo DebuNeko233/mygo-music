@@ -204,7 +204,7 @@ func init() {
 				// The listener's own page, and at its foot the podcasts they
 				// subscribe to and the artists they follow.
 				time.Sleep(4 * time.Second)
-				step(0, func() { a.open(route{page: pageUser, id: a.profile.UserID}) })
+				step(0, func() { a.open(route{page: pageUser, id: a.account.Profile.UserID}) })
 				time.Sleep(4 * time.Second)
 				shot("p-profile", a.win)
 				step(0, func() { a.pageScroll.ScrollTo(0, 100000, ui.Smooth) })
@@ -227,7 +227,7 @@ func init() {
 			time.Sleep(4 * time.Second)
 			shot("3-playlist", a.win)
 			step(0, func() {
-				pl := a.playlists[a.charts[1].ID]
+				pl := a.library.Playlists[a.charts[1].ID]
 				a.setVolume(0.15)
 				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
 			})

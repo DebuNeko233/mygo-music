@@ -31,7 +31,7 @@ func (a *app) playback(event player.PlaybackEvent) {
 		return
 	}
 	if event.Started {
-		if event.Track.ProgramID != 0 || a.profile == nil {
+		if event.Track.ProgramID != 0 || a.account.Profile == nil {
 			return
 		}
 		source := netease.PlaySource{Source: event.Source.Source, ID: event.Source.ID, Alg: event.Source.Alg}

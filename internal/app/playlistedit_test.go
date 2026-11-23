@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // editTestApp is signed in, with liked songs, two playlists of their own
@@ -19,14 +20,14 @@ import (
 func editTestApp() *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
-	a.mine = []netease.Playlist{
+	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
+	a.library.Mine = []netease.Playlist{
 		{ID: 5, Name: "小明喜欢的音乐", SpecialType: 5},
 		{ID: 10, Name: "通勤"},
 		{ID: 11, Name: "睡前"},
 	}
-	a.saved = []netease.Playlist{{ID: 20, Name: "飙升榜"}}
-	a.playlists[10] = &netease.Playlist{ID: 10, Name: "通勤", Tracks: []netease.Track{
+	a.library.Saved = []netease.Playlist{{ID: 20, Name: "飙升榜"}}
+	a.library.Playlists[10] = &netease.Playlist{ID: 10, Name: "通勤", Tracks: []netease.Track{
 		{ID: 1, Name: "一张相片", Artists: []netease.Artist{{Name: "林宥嘉"}}, Duration: 200000},
 		{ID: 2, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000},
 	}}
@@ -70,7 +71,7 @@ func TestAddSongKeepsVisiblePlaylistDuringRefresh(t *testing.T) {
 	a := editTestApp()
 	posts := testPosts(a)
 	id := a.route.id
-	original := a.playlists[id]
+	original := a.library.Playlists[id]
 	a.touchPlaylist(id)
 	added := netease.Track{ID: 3, Name: "新歌曲"}
 	next := copyPlaylist(*original)
@@ -86,7 +87,7 @@ func TestAddSongKeepsVisiblePlaylistDuringRefresh(t *testing.T) {
 		<-release
 		return &next, nil
 	}
-	mine, saved := a.mine, a.saved
+	mine, saved := a.library.Mine, a.library.Saved
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return mine, saved, nil }
 
 	a.addTo(id, &added)
@@ -96,13 +97,13 @@ func TestAddSongKeepsVisiblePlaylistDuringRefresh(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("add did not revalidate the recently loaded playlist")
 	}
-	if a.playlists[id] != original || a.loadingPl[id] {
+	if a.library.Playlists[id] != original || a.library.Loading[id] {
 		t.Fatal("add blanked the existing playlist while the refresh was pending")
 	}
 	release <- struct{}{}
 	refreshPost(t, posts)
 	refreshPost(t, posts)
-	if pl := a.playlists[id]; len(pl.Tracks) != 3 || pl.Tracks[0].ID != added.ID {
+	if pl := a.library.Playlists[id]; len(pl.Tracks) != 3 || pl.Tracks[0].ID != added.ID {
 		t.Fatal("add did not publish the server's updated list order")
 	}
 }
@@ -117,7 +118,7 @@ func TestRemoveSongFromPlaylist(t *testing.T) {
 
 	a := editTestApp()
 	// Playing the id: the queue keeps the song.
-	a.pl.Cue(a.playlists[10].Tracks)
+	a.pl.Cue(a.library.Playlists[10].Tracks)
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("宝船"); err != nil {
@@ -143,7 +144,7 @@ func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 	a := editTestApp()
 	posts := testPosts(a)
 	pid := a.route.id
-	original := a.playlists[pid]
+	original := a.library.Playlists[pid]
 	original.Tracks = append(original.Tracks, netease.Track{ID: 3})
 	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}, {ID: 3}}
 	original.TrackCount = 3
@@ -162,7 +163,7 @@ func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 
 	a.removeFrom(pid, &original.Tracks[0])
 	a.removeFrom(pid, &original.Tracks[1])
-	if pl := a.playlists[pid]; len(pl.Tracks) != 1 || pl.Tracks[0].ID != 3 {
+	if pl := a.library.Playlists[pid]; len(pl.Tracks) != 1 || pl.Tracks[0].ID != 3 {
 		t.Fatal("both rows should be hidden while their requests are pending")
 	}
 	results[2] <- nil
@@ -172,7 +173,7 @@ func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 	refreshPost(t, posts) // failed removal
 
 	// The failed removal must be reflected before a server refresh can land.
-	pl := a.playlists[pid]
+	pl := a.library.Playlists[pid]
 	want := []netease.TrackID{{ID: 1}, {ID: 3}}
 	if !slices.Equal(pl.TrackIDs, want) || pl.TrackCount != 2 ||
 		len(pl.Tracks) != 2 || pl.Tracks[0].ID != 1 || pl.Tracks[1].ID != 3 {
@@ -180,7 +181,7 @@ func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 	}
 	a.retryLibraryRefresh()
 	refreshPost(t, posts)
-	if a.playlists[pid] != pl || len(a.pl.Queue()) != 3 {
+	if a.library.Playlists[pid] != pl || len(a.pl.Queue()) != 3 {
 		t.Fatal("a failed refresh changed the playlist or its playback queue")
 	}
 }
@@ -191,7 +192,7 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 	a := editTestApp()
 	posts := testPosts(a)
 	id := a.route.id
-	original := a.playlists[id]
+	original := a.library.Playlists[id]
 	original.TrackCount = 2
 	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}}
 	a.route = route{page: pageHome}
@@ -209,7 +210,7 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 		requests <- pid
 		return <-replies, nil
 	}
-	mine, saved := a.mine, a.saved
+	mine, saved := a.library.Mine, a.library.Saved
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return mine, saved, nil }
 
 	a.loadPlaylist(id, false)
@@ -217,13 +218,13 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 	a.removeFrom(id, &original.Tracks[0])
 	refreshPost(t, posts) // the removal
 	refreshPost(t, posts) // the sidebar lookup
-	reduced := a.playlists[id]
+	reduced := a.library.Playlists[id]
 	if reduced.TrackCount != 1 || len(reduced.Tracks) != 1 || len(reduced.TrackIDs) != 1 || reduced.TrackIDs[0].ID != 2 {
 		t.Fatal("removal did not update the cached song and ID lists")
 	}
 	replies <- original
 	refreshPost(t, posts)
-	if a.playlists[id] != reduced {
+	if a.library.Playlists[id] != reduced {
 		t.Fatal("an older lookup restored the removed song")
 	}
 	a.retryLibraryRefresh()
@@ -234,7 +235,7 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 	server.PlayCount = 10
 	replies <- &server
 	refreshPost(t, posts)
-	if a.playlists[id].PlayCount != 10 || a.pl.QueueRevision() != revision || !a.pl.Playing() || a.pl.Position() != 10*time.Second {
+	if a.library.Playlists[id].PlayCount != 10 || a.pl.QueueRevision() != revision || !a.pl.Playing() || a.pl.Position() != 10*time.Second {
 		t.Fatal("the latest playlist did not publish or changed playback")
 	}
 }
@@ -242,7 +243,7 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 // A playlist the listener saved, not made, offers no removing.
 func TestNoRemovingFromSavedPlaylist(t *testing.T) {
 	a := editTestApp()
-	a.playlists[20] = &netease.Playlist{ID: 20, Name: "飙升榜", Tracks: a.playlists[10].Tracks}
+	a.library.Playlists[20] = &netease.Playlist{ID: 20, Name: "飙升榜", Tracks: a.library.Playlists[10].Tracks}
 	a.route = route{page: pagePlaylist, id: 20}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -293,8 +294,8 @@ func TestCreatePlaylistForSong(t *testing.T) {
 		t.Fatalf("%v; the menu shows %q", err, tt.Menu())
 	}
 	tt.Frame()
-	if !a.naming.open || a.naming.add == nil || a.naming.add.ID != 2 {
-		t.Fatalf("the dialog is %+v, want it open to add song 2", a.naming)
+	if !a.library.Naming.Open || a.library.Naming.Add == nil || a.library.Naming.Add.ID != 2 {
+		t.Fatalf("the dialog is %+v, want it open to add song 2", a.library.Naming)
 	}
 }
 
@@ -331,8 +332,8 @@ func TestRenamePlaylist(t *testing.T) {
 	if got := <-calls; got != (rename{11, "助眠"}) {
 		t.Errorf("renamed %+v, want playlist 11 to 助眠", got)
 	}
-	if a.mine[2].Name != "助眠" {
-		t.Errorf("the sidebar names it %q", a.mine[2].Name)
+	if a.library.Mine[2].Name != "助眠" {
+		t.Errorf("the sidebar names it %q", a.library.Mine[2].Name)
 	}
 	if _, ok := tt.Find("助眠"); !ok {
 		t.Error("the new name does not show")
@@ -349,17 +350,17 @@ func TestRenameFailureFromPreviousAccount(t *testing.T) {
 	t.Cleanup(func() { renamePlaylist = oldRename })
 	renamePlaylist = func(int64, string) error { return <-reply }
 
-	a.naming = nameDialog{open: true, rename: 10, name: "A new"}
+	a.library.Naming = viewmodel.PlaylistName{Open: true, Rename: 10, Name: "A new"}
 	a.submitName()
-	a.profile = &netease.Profile{UserID: 2}
-	a.homeGen++
+	a.account.Profile = &netease.Profile{UserID: 2}
+	a.account.Generation++
 	a.resetLibraryFreshness()
-	a.mine[1].Name = "B name"
-	a.playlists[10].Name = "B name"
+	a.library.Mine[1].Name = "B name"
+	a.library.Playlists[10].Name = "B name"
 	reply <- errors.New("rename failed")
 	refreshPost(t, posts)
-	if a.mine[1].Name != "B name" || a.playlists[10].Name != "B name" {
-		t.Fatalf("previous account's failed rename restored %q and %q", a.mine[1].Name, a.playlists[10].Name)
+	if a.library.Mine[1].Name != "B name" || a.library.Playlists[10].Name != "B name" {
+		t.Fatalf("previous account's failed rename restored %q and %q", a.library.Mine[1].Name, a.library.Playlists[10].Name)
 	}
 }
 
@@ -441,23 +442,23 @@ func TestDeletePlaylistReplyAccountIsolation(t *testing.T) {
 				return <-response
 			}
 
-			uid := a.profile.UserID
-			gen := a.homeGen
+			uid := a.account.Profile.UserID
+			gen := a.account.Generation
 			a.confirmDelete(a.editable(10))
 			a.deleteChosen()
 			<-started
-			a.profile = &netease.Profile{UserID: 2}
-			a.homeGen++
+			a.account.Profile = &netease.Profile{UserID: 2}
+			a.account.Generation++
 			newPlaylist := &netease.Playlist{ID: 10, Name: "新账号歌单"}
-			a.mine = []netease.Playlist{*newPlaylist}
-			a.playlists[10] = newPlaylist
+			a.library.Mine = []netease.Playlist{*newPlaylist}
+			a.library.Playlists[10] = newPlaylist
 			response <- result.err
 			refreshPost(t, posts)
 
-			if uid != 1 || a.homeGen != gen+1 || a.profile.UserID != 2 || len(a.mine) != 1 || a.mine[0].ID != 10 || a.mine[0].Name != newPlaylist.Name {
-				t.Fatalf("old delete changed current account: gen %d, UID %d, playlists %+v", a.homeGen, a.profile.UserID, a.mine)
+			if uid != 1 || a.account.Generation != gen+1 || a.account.Profile.UserID != 2 || len(a.library.Mine) != 1 || a.library.Mine[0].ID != 10 || a.library.Mine[0].Name != newPlaylist.Name {
+				t.Fatalf("old delete changed current account: gen %d, UID %d, playlists %+v", a.account.Generation, a.account.Profile.UserID, a.library.Mine)
 			}
-			if a.playlists[10] != newPlaylist {
+			if a.library.Playlists[10] != newPlaylist {
 				t.Fatal("old delete cleared the current account's same-ID cache")
 			}
 		})
@@ -517,12 +518,12 @@ func TestPlaylistEditFrames(t *testing.T) {
 		save("playlist" + suffix)
 		a.newPlaylist(nil)
 		save("create" + suffix)
-		a.naming.open = false
+		a.library.Naming.Open = false
 		a.startRename(a.editable(11))
 		save("rename" + suffix)
-		a.naming.open = false
+		a.library.Naming.Open = false
 		a.confirmDelete(a.editable(11))
 		save("delete" + suffix)
-		a.deleting.open = false
+		a.library.Deleting.Open = false
 	}
 }

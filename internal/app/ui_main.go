@@ -232,9 +232,9 @@ func (a *app) sidebar(c *ui.Context) {
 			if a.searched.query != "" {
 				a.navItem(c, iconSearch, "搜索结果", a.searched)
 			}
-			a.myPlaylists(c, "我的歌单", a.mine, true, &a.mineCollapsed)
-			a.myPlaylists(c, "收藏的歌单", a.saved, false, &a.savedCollapsed)
-			a.myAlbums(c, a.subAlbums, &a.albumsCollapsed)
+			a.myPlaylists(c, "我的歌单", a.library.Mine, true, &a.mineCollapsed)
+			a.myPlaylists(c, "收藏的歌单", a.library.Saved, false, &a.savedCollapsed)
+			a.myAlbums(c, a.library.SubAlbums, &a.albumsCollapsed)
 		})
 
 		a.accountRow(c)

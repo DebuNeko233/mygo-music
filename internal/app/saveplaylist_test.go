@@ -35,9 +35,9 @@ func TestSavePlaylist(t *testing.T) {
 	defer func() { savePlaylist = netease.SubscribePlaylist }()
 
 	a := editTestApp()
-	pl := &netease.Playlist{ID: 30, Name: "华语经典", Tracks: a.playlists[10].Tracks}
+	pl := &netease.Playlist{ID: 30, Name: "华语经典", Tracks: a.library.Playlists[10].Tracks}
 	pl.Creator.UserID = 2
-	a.playlists[30] = pl
+	a.library.Playlists[30] = pl
 	a.route = route{page: pagePlaylist, id: 30}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -48,15 +48,15 @@ func TestSavePlaylist(t *testing.T) {
 	if got := nextSave(t, calls); got != (saveCall{30, true}) {
 		t.Errorf("asked NetEase for %+v, want playlist 30 saved", got)
 	}
-	if len(a.saved) != 2 || a.saved[0].ID != 30 || a.saved[0].Tracks != nil {
-		t.Errorf("saved playlists are %+v, want playlist 30 first, without its songs", a.saved)
+	if len(a.library.Saved) != 2 || a.library.Saved[0].ID != 30 || a.library.Saved[0].Tracks != nil {
+		t.Errorf("saved playlists are %+v, want playlist 30 first, without its songs", a.library.Saved)
 	}
 }
 
 // The listener's own playlist offers no saving.
 func TestOwnPlaylistNotSavable(t *testing.T) {
 	a := editTestApp()
-	a.playlists[10].Creator.UserID = a.profile.UserID
+	a.library.Playlists[10].Creator.UserID = a.account.Profile.UserID
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if _, ok := tt.Find("收藏"); ok {
@@ -72,8 +72,8 @@ func TestUnsavePlaylistFromSidebar(t *testing.T) {
 	defer func() { savePlaylist = netease.SubscribePlaylist }()
 
 	a := editTestApp()
-	a.saved[0].Subscribed = true
-	a.playlists[20] = &netease.Playlist{ID: 20, Name: "飙升榜", Subscribed: true}
+	a.library.Saved[0].Subscribed = true
+	a.library.Playlists[20] = &netease.Playlist{ID: 20, Name: "飙升榜", Subscribed: true}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("飙升榜"); err != nil {
@@ -86,7 +86,7 @@ func TestUnsavePlaylistFromSidebar(t *testing.T) {
 	if got := nextSave(t, calls); got != (saveCall{20, false}) {
 		t.Errorf("asked NetEase for %+v, want playlist 20 unsaved", got)
 	}
-	if len(a.saved) != 0 || a.isSaved(a.playlists[20]) {
-		t.Errorf("playlist 20 still reads saved: %+v", a.saved)
+	if len(a.library.Saved) != 0 || a.isSaved(a.library.Playlists[20]) {
+		t.Errorf("playlist 20 still reads saved: %+v", a.library.Saved)
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
 )
@@ -185,23 +186,23 @@ func (a *app) syncTrackArtwork() {
 		return
 	}
 	state.searching = true
-	var cache cacheRequest
+	var cache diskcache.Snapshot
 	if !t.Temporary {
-		cache = cacheRequest{a.browseCache, "local-artwork", fmt.Sprintf("%d/%d/%d", key.id, key.stamp, key.size), a.browseCache.Epoch()}
+		cache = diskcache.Snapshot{Store: a.browseCache, Scope: "local-artwork", Key: fmt.Sprintf("%d/%d/%d", key.id, key.stamp, key.size), Epoch: a.browseCache.Epoch()}
 		if key.remote {
-			cache.scope = fmt.Sprintf("track-artwork/%d", key.listener)
-			cache.key = fmt.Sprintf("%d/%x", key.id, sha256.Sum256([]byte(key.tags)))
+			cache.Scope = fmt.Sprintf("track-artwork/%d", key.listener)
+			cache.Key = fmt.Sprintf("%d/%x", key.id, sha256.Sum256([]byte(key.tags)))
 		}
 	}
 	search := searchTrackArtwork
 	go func() {
 		result := trackArtworkResult{offlineOnly: offline}
-		cache.read(&result.url)
+		cache.Read(&result.url)
 		result.url = netease.CoverURL(result.url)
 		if result.url == "" && !offline {
 			result.url, result.failure = findTrackArtwork(track, search)
 			if result.url != "" {
-				cache.store.Put(cache.scope, cache.key, cacheBytes(result.url), cache.epoch)
+				cache.Store.Put(cache.Scope, cache.Key, cacheBytes(result.url), cache.Epoch)
 			}
 		}
 		a.post(func() {

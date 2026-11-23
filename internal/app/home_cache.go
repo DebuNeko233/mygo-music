@@ -1,11 +1,10 @@
 package app
 
 import (
-	"netease-music-mygo/internal/netease"
 	"time"
-)
 
-type keptLists struct{ Mine, Saved []netease.Playlist }
+	"netease-music-mygo/internal/netease"
+)
 
 var featuredPlaylists = func() ([]netease.Playlist, error) { return netease.FeaturedPlaylists(30) }
 var homeCharts = netease.Charts
@@ -49,7 +48,7 @@ func (a *app) loadHomeModules(failedOnly, manual bool) {
 			}
 		})
 	}
-	if a.profile != nil {
+	if a.account.Profile != nil {
 		if run("daily") {
 			homeModule(a, "daily", dailySongs, func(v []netease.Track, cached bool) {
 				if !cached || a.daily == nil {
@@ -71,12 +70,12 @@ func (a *app) loadHomeModules(failedOnly, manual bool) {
 }
 
 func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T, bool)) {
-	req, gen := a.cacheRequest(key), a.homeGen
+	req, gen := a.cacheRequest(key), a.account.Generation
 	go func() {
 		var kept T
-		if at := req.read(&kept); !at.IsZero() {
+		if at := req.Read(&kept); !at.IsZero() {
 			a.post(func() {
-				if a.homeGen == gen {
+				if a.account.Generation == gen {
 					apply(kept, true)
 				}
 			})
@@ -84,12 +83,12 @@ func homeModule[T any](a *app, key string, fetch func() (T, error), apply func(T
 		value, err := fetch()
 		bytes := cacheBytes(value)
 		a.post(func() {
-			if a.homeGen != gen {
+			if a.account.Generation != gen {
 				return
 			}
 			if err == nil {
 				apply(value, false)
-				req.keep(bytes)
+				req.Keep(bytes)
 				delete(a.homeFailures, key)
 			} else {
 				a.homeFailures[key] = err

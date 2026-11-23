@@ -41,7 +41,7 @@ func (a *app) loadUser(id int64) {
 		d = &userData{}
 		a.users.set(id, d)
 	}
-	if a.profile != nil && a.profile.UserID == id {
+	if a.account.Profile != nil && a.account.Profile.UserID == id {
 		a.loadSubscriptions(d)
 		a.freshenAlbums()
 	}
@@ -132,7 +132,7 @@ func (a *app) userPage(c *ui.Context) {
 		return
 	}
 	u := d.user
-	own := a.profile != nil && a.profile.UserID == id
+	own := a.account.Profile != nil && a.account.Profile.UserID == id
 	a.scrollPage(c, func() {
 		ui.Row(c).Gap(detailHeaderGap).AlignItems(ui.End).Children(func() {
 			ui.Box(c).Size(artistPhotoSize, artistPhotoSize).Radius(artistPhotoSize/2).Shadow(0, 18, 40, -10, p.cardShade).Children(func() {
@@ -158,12 +158,12 @@ func (a *app) userPage(c *ui.Context) {
 				}
 			})
 		}
-		if own && a.subsShown {
+		if own && a.library.SubsShown {
 			a.section(c, "收藏的专辑")
-			if len(a.subAlbums) == 0 {
+			if len(a.library.SubAlbums) == 0 {
 				a.empty(c, "还没有收藏专辑")
 			}
-			a.albumGrid(c, a.subAlbums)
+			a.albumGrid(c, a.library.SubAlbums)
 		}
 		if own && d.podcastsShown {
 			a.section(c, "订阅的播客")

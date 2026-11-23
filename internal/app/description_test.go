@@ -31,7 +31,7 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 			a.route = route{page: tc.page, id: 77}
 			a.artists.set(77, &artistData{profile: &netease.ArtistProfile{Artist: netease.Artist{ID: 77, Name: "歌手名称"}, BriefDesc: text}})
 			a.albums.set(77, &albumData{album: &netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "专辑名称"}, Description: text}})
-			a.playlists[77] = &netease.Playlist{ID: 77, Name: "歌单名称", Description: text}
+			a.library.Playlists[77] = &netease.Playlist{ID: 77, Name: "歌单名称", Description: text}
 			a.podcasts.set(77, &podcastData{podcast: &netease.Podcast{ID: 77, Name: "播客名称", Description: text}})
 			a.users.set(77, &userData{user: &netease.User{UserID: 77, Nickname: "用户名称", Signature: text}})
 			view := ui.NewTester(a.view, 1180, 780)
@@ -134,7 +134,7 @@ func TestDescriptionMoreInSearchResults(t *testing.T) {
 func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.route, a.recentTab = route{page: pageRecent}, recentPodcastsTab
 	for i := range a.recent.tabs {
 		a.recent.tabs[i].at = a.listsNow()

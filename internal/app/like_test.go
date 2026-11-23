@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -29,7 +30,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1, Nickname: "小明"}
+	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
 	a.pl.Cue([]netease.Track{tr})
 	a.pl.SetLyrics(nil)
@@ -40,7 +41,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 	if err := tt.Click("喜欢 宝船"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.liked[7] {
+	if !a.library.Liked[7] {
 		t.Fatal("the heart did not fill at once")
 	}
 	if like := <-calls; !like {
@@ -51,7 +52,7 @@ func TestLikeFromPlayerBar(t *testing.T) {
 	if err := tt.Click("取消喜欢 宝船"); err != nil {
 		t.Fatal(err)
 	}
-	if a.liked[7] {
+	if a.library.Liked[7] {
 		t.Error("still liked after unliking")
 	}
 	if like := <-calls; like {
@@ -66,7 +67,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 	for _, rejected := range []bool{false, true} {
 		t.Run(fmt.Sprintf("rejected=%t", rejected), func(t *testing.T) {
 			a, posts, _ := refreshFixture(t)
-			a.profile = &netease.Profile{UserID: 1}
+			a.account.Profile = &netease.Profile{UserID: 1}
 			a.browseCache = diskcache.New(t.TempDir(), 64<<20)
 			t.Cleanup(a.browseCache.Close)
 			const pid, song = 5, 50
@@ -76,11 +77,11 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 				pl.TrackIDs = append(pl.TrackIDs, netease.TrackID{ID: i})
 			}
 			a.route = route{page: pagePlaylist, id: pid}
-			a.playlists[pid] = pl
+			a.library.Playlists[pid] = pl
 			if !rejected {
-				a.mine = []netease.Playlist{{ID: pid, Name: pl.Name, SpecialType: 5}}
+				a.library.Mine = []netease.Playlist{{ID: pid, Name: pl.Name, SpecialType: 5}}
 			}
-			a.liked = map[int64]bool{song: true}
+			a.library.Liked = map[int64]bool{song: true}
 			a.pl.Cue(pl.Tracks)
 			a.pl.Hold(43 * time.Second)
 			queueRevision := a.pl.QueueRevision()
@@ -116,7 +117,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			if got := wait(t, requests, "the unlike"); got != song {
 				t.Fatalf("unliked song %d, want %d", got, song)
 			}
-			if a.liked[song] || a.playlists[pid] != pl || a.loadingPl[pid] {
+			if a.library.Liked[song] || a.library.Playlists[pid] != pl || a.library.Loading[pid] {
 				t.Fatal("unlike should update the heart while leaving the list visible")
 			}
 			var err error
@@ -129,7 +130,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			if top, _ := a.trackList.Visible(); top != first || a.pageScroll.Y != y {
 				t.Fatal("unlike moved the list")
 			}
-			if a.playlists[pid] == nil || a.loadingPl[pid] {
+			if a.library.Playlists[pid] == nil || a.library.Loading[pid] {
 				t.Fatal("unlike blanked the liked playlist")
 			}
 			if a.pl.QueueRevision() != queueRevision || a.pl.Queue()[song-1].ID != song ||
@@ -137,7 +138,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 				t.Fatal("unlike changed the active playback queue")
 			}
 			if rejected {
-				if !a.liked[song] || a.playlists[pid] != pl || a.playlistRequest(pid).busy {
+				if !a.library.Liked[song] || a.library.Playlists[pid] != pl || a.playlistRequest(pid).Busy {
 					t.Fatal("rejected unlike lost the original row or its heart")
 				}
 				return
@@ -145,8 +146,8 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			if requested := wait(t, detailRequests, "the liked playlist refresh"); requested != pid {
 				t.Fatalf("refreshed playlist %d, want %d", requested, pid)
 			}
-			next := a.playlists[pid]
-			if a.liked[song] || next.TrackCount != 99 || len(next.Tracks) != 99 || len(next.TrackIDs) != 99 ||
+			next := a.library.Playlists[pid]
+			if a.library.Liked[song] || next.TrackCount != 99 || len(next.Tracks) != 99 || len(next.TrackIDs) != 99 ||
 				next.Tracks[song-1].ID != song+1 || next.TrackIDs[song-1].ID != song+1 {
 				t.Fatal("the confirmed unlike did not remove the song from the cached list")
 			}
@@ -155,13 +156,13 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			detailReply <- &remote
 			refreshPost(t, posts)
 			tt.Frame()
-			if a.playlists[pid].PlayCount != 1 || a.pageScroll.Y != y {
+			if a.library.Playlists[pid].PlayCount != 1 || a.pageScroll.Y != y {
 				t.Fatal("the background refresh did not apply in place")
 			}
 			req := a.cacheRequest("playlist/5")
 			a.waitForPlaylistSnapshot(req)
 			var kept netease.Playlist
-			if at := req.read(&kept); at.IsZero() || len(kept.Tracks) != 99 || kept.TrackIDs[song-1].ID != song+1 {
+			if at := req.Read(&kept); at.IsZero() || len(kept.Tracks) != 99 || kept.TrackIDs[song-1].ID != song+1 {
 				t.Fatal("the offline snapshot did not record the unlike")
 			}
 		})
@@ -172,7 +173,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 // once the sidebar has supplied its ID, even when a prior lookup was pending.
 func TestLikeRefreshesOffscreenPlaylist(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.route = route{page: pageHome}
 	const pid, song = 5, 7
 	tr := netease.Track{ID: song, Name: "宝船"}
@@ -203,7 +204,7 @@ func TestLikeRefreshesOffscreenPlaylist(t *testing.T) {
 		t.Fatalf("refreshed playlist %d, want %d", id, pid)
 	}
 	refreshPost(t, posts)
-	if pl := a.playlists[pid]; pl == nil || len(pl.Tracks) != 1 || pl.Tracks[0].ID != song || a.route.page != pageHome {
+	if pl := a.library.Playlists[pid]; pl == nil || len(pl.Tracks) != 1 || pl.Tracks[0].ID != song || a.route.page != pageHome {
 		t.Fatal("offscreen favorites did not update in place")
 	}
 }
@@ -227,7 +228,7 @@ func TestLikeEpisode(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3, PodcastID: 5, Duration: 600000}})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
@@ -239,7 +240,7 @@ func TestLikeEpisode(t *testing.T) {
 	if err := tt.Click("喜欢 第一期"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.likedPrograms[3] {
+	if !a.library.LikedPrograms[3] {
 		t.Fatal("the heart did not fill at once")
 	}
 	if c := wait(t, calls, "the like"); c != (call{3, true}) {
@@ -250,8 +251,8 @@ func TestLikeEpisode(t *testing.T) {
 	if err := tt.Click("取消喜欢 第一期"); err != nil {
 		t.Fatal(err)
 	}
-	if c := wait(t, calls, "the unlike"); c != (call{3, false}) || a.likedPrograms[3] {
-		t.Errorf("asked NetEase for %+v, liked %v", c, a.likedPrograms[3])
+	if c := wait(t, calls, "the unlike"); c != (call{3, false}) || a.library.LikedPrograms[3] {
+		t.Errorf("asked NetEase for %+v, liked %v", c, a.library.LikedPrograms[3])
 	}
 	refreshPost(t, posts)
 	if len(asked) > 0 {
@@ -275,26 +276,26 @@ func TestEpisodeLikeClickBeatsAnswer(t *testing.T) {
 	defer func() { programsLiked, likeProgram = netease.ProgramsLiked, netease.LikeProgram }()
 	a := newTestApp()
 	posts := testPosts(a)
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.askProgramLikes([]int64{3, 4})
 	wait(t, asked, "the first answer request")
 	a.toggleLike(&netease.Track{ID: 13, ProgramID: 3})
 	refreshPost(t, posts)
 	answers <- map[int64]bool{4: true}
 	refreshPost(t, posts)
-	if !a.likedPrograms[3] || !a.likedPrograms[4] {
-		t.Fatalf("liked %v", a.likedPrograms)
+	if !a.library.LikedPrograms[3] || !a.library.LikedPrograms[4] {
+		t.Fatalf("liked %v", a.library.LikedPrograms)
 	}
 	a.askProgramLikes([]int64{5})
 	wait(t, asked, "the old account request")
 	a.signedIn(nil)
-	a.profile = &netease.Profile{UserID: 2}
+	a.account.Profile = &netease.Profile{UserID: 2}
 	answers <- map[int64]bool{5: true}
 	// Two guest home requests and the old account's answer all finish here.
 	for range 3 {
 		refreshPost(t, posts)
 	}
-	if a.likedPrograms[5] {
+	if a.library.LikedPrograms[5] {
 		t.Error("took the last listener's answer")
 	}
 }
@@ -308,8 +309,8 @@ func TestLikeEpisodeRow(t *testing.T) {
 	defer func() { programsLiked, likeProgram = netease.ProgramsLiked, netease.LikeProgram }()
 	a := catalogApp()
 	posts := testPosts(a)
-	a.profile = &netease.Profile{UserID: 1}
-	a.setProgramLiked(40, true)
+	a.account.Profile = &netease.Profile{UserID: 1}
+	a.library.SetProgramLiked(40, true)
 	a.open(route{page: pagePodcast, id: 5})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -329,7 +330,7 @@ func TestLikeEpisodeRow(t *testing.T) {
 	if err := tt.Click("喜欢 " + episodes[2].Name); err != nil {
 		t.Fatal(err)
 	}
-	if id := wait(t, liked, "the like"); id != 42 || !a.likedPrograms[42] {
+	if id := wait(t, liked, "the like"); id != 42 || !a.library.LikedPrograms[42] {
 		t.Errorf("liked %d", id)
 	}
 	refreshPost(t, posts)
@@ -350,7 +351,7 @@ func TestLikeBurstFrames(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	tr := netease.Track{ID: 7, Name: "宝船", Duration: 200000}
 	a.pl.Cue([]netease.Track{tr})
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -654,16 +655,16 @@ func TestLikeCurrent(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船"}})
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.likeCurrent()
 	refreshPost(t, posts)
-	if !a.liked[7] || a.toast == "" {
-		t.Fatalf("liked %v, toast %q", a.liked[7], a.toast)
+	if !a.library.Liked[7] || a.toast == "" {
+		t.Fatalf("liked %v, toast %q", a.library.Liked[7], a.toast)
 	}
 	a.likeCurrent()
 	refreshPost(t, posts)
-	if a.liked[7] || a.toast == "" {
-		t.Fatalf("unliked: liked %v, toast %q", a.liked[7], a.toast)
+	if a.library.Liked[7] || a.toast == "" {
+		t.Fatalf("unliked: liked %v, toast %q", a.library.Liked[7], a.toast)
 	}
 	// An episode playing: the episode, not its audio.
 	likeProgram = func(int64, bool) error { return nil }
@@ -671,8 +672,8 @@ func TestLikeCurrent(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3}})
 	a.likeCurrent()
 	refreshPost(t, posts)
-	if !a.likedPrograms[3] || a.liked[13] {
-		t.Fatalf("episode liked %v, its audio %v", a.likedPrograms[3], a.liked[13])
+	if !a.library.LikedPrograms[3] || a.library.Liked[13] {
+		t.Fatalf("episode liked %v, its audio %v", a.library.LikedPrograms[3], a.library.Liked[13])
 	}
 }
 
@@ -682,16 +683,16 @@ func TestSongLikeOnlyPersistsChangedSnapshots(t *testing.T) {
 	defer func() { likeSong = old }()
 	likeSong = func(int64, bool) error { return nil }
 	a := newTestApp()
-	a.profile = &netease.Profile{UserID: 7}
-	a.mine = []netease.Playlist{{ID: 12, Name: "existing"}}
-	a.subsShown = true
-	a.subAlbums = []netease.AlbumProfile{{Album: netease.Album{ID: 13, Name: "existing"}}}
+	a.account.Profile = &netease.Profile{UserID: 7}
+	a.library.Mine = []netease.Playlist{{ID: 12, Name: "existing"}}
+	a.library.SubsShown = true
+	a.library.SubAlbums = []netease.AlbumProfile{{Album: netease.Album{ID: 13, Name: "existing"}}}
 	dir := t.TempDir()
 	store := diskcache.New(dir, 1<<20)
 	defer store.Close()
 	a.browseCache = store
-	store.Put("7", "mine", cacheBytes(keptLists{Mine: a.mine}), store.Epoch())
-	store.Put("7", "albums", cacheBytes(a.subAlbums), store.Epoch())
+	store.Put("7", "mine", cacheBytes(library.Lists{Mine: a.library.Mine}), store.Epoch())
+	store.Put("7", "albums", cacheBytes(a.library.SubAlbums), store.Epoch())
 	_, mineAt := store.Read("7", "mine")
 	_, albumsAt := store.Read("7", "albums")
 	if mineAt.IsZero() || albumsAt.IsZero() {

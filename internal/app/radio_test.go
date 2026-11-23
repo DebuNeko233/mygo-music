@@ -35,7 +35,7 @@ func TestCommentTime(t *testing.T) {
 func TestExitHeartMode(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1, Nickname: "听众"}
+	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "听众"}
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "晚风"}, {ID: 2, Name: "推荐的歌"}})
 	a.pl.AttachRadio(heartRadio, func(got func([]netease.Track)) {})
 	a.route = route{page: pageFM}

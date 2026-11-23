@@ -127,7 +127,7 @@ func TestCloudArtworkUsesSharedResolver(t *testing.T) {
 	tr := netease.Track{ID: 700, Cloud: true, Name: "Song", Duration: 180000, Artists: []netease.Artist{{Name: "Band"}}, Album: netease.Album{PicURL: placeholder}}
 	makeApp := func() (*app, chan func()) {
 		a := newTestApp()
-		a.profile = &netease.Profile{UserID: 1}
+		a.account.Profile = &netease.Profile{UserID: 1}
 		a.browseCache = store
 		a.pl.Cue([]netease.Track{tr})
 		return a, testPosts(a)
@@ -156,7 +156,7 @@ func TestCloudArtworkUsesSharedResolver(t *testing.T) {
 	if reopened.trackArtworkURL(reopened.pl.Current()) != matched {
 		t.Fatal("cached cover was not reused offline")
 	}
-	reopened.profile = &netease.Profile{UserID: 2}
+	reopened.account.Profile = &netease.Profile{UserID: 2}
 	if reopened.hasTrackCover(reopened.pl.Current()) {
 		t.Fatal("matched private metadata leaked to a different account")
 	}
@@ -176,7 +176,7 @@ func TestCloudArtworkUsesSharedResolver(t *testing.T) {
 func artworkRecoveryFixture(t *testing.T, local bool) (*app, chan func()) {
 	t.Helper()
 	a := newTestApp()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.network.known = true
 	tr := netease.Track{ID: 700, Cloud: true, Name: "Song", Duration: 180000, Artists: []netease.Artist{{Name: "Band"}}}
 	if local {

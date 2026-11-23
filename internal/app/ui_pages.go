@@ -51,8 +51,8 @@ func (a *app) homePage(c *ui.Context) {
 		a.startMark(c)
 		defer a.endMark(c)
 		hello := greeting(now)
-		if a.profile != nil {
-			hello += "，" + a.profile.Nickname
+		if a.account.Profile != nil {
+			hello += "，" + a.account.Profile.Nickname
 		}
 		a.heading(c, hello, fmt.Sprintf("%d月%d日 %s", now.Month(), now.Day(), weekday(now)))
 		if loading {
@@ -244,10 +244,10 @@ func (a *app) chartCard(c *ui.Context, pl *netease.Playlist) {
 
 func (a *app) playlistPage(c *ui.Context) {
 	id := a.route.id
-	pl := a.playlists[id]
+	pl := a.library.Playlists[id]
 	if pl == nil {
-		if !a.loadingPl[id] || a.plErr[id] != "" {
-			a.centered(c, a.plErr[id], func() { a.loadPlaylist(id, false) })
+		if !a.library.Loading[id] || a.library.Errors[id] != "" {
+			a.centered(c, a.library.Errors[id], func() { a.loadPlaylist(id, false) })
 			return
 		}
 		s := a.pageShimmer(c)
@@ -470,7 +470,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 				ui.Button(c.Key("relink"), "重新定位").Disabled(a.local.busy).OnClick(func() { a.chooseLocalFile(tr.LocalID) })
 			} else {
 				ui.Box(c).Size(32, 32).Center().Children(func() {
-					if !tr.IsLocal() && (a.liked[tr.ID] || hovered) {
+					if !tr.IsLocal() && (a.library.Liked[tr.ID] || hovered) {
 						a.likeButton(c.Key("like"), tr, 15, p.muted)
 					}
 				})

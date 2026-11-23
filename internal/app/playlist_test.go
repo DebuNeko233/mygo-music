@@ -39,8 +39,8 @@ func TestPlaylistPlaysWhenItLands(t *testing.T) {
 		t.Fatal("the playlist never landed")
 	}
 	landed()
-	if a.loadingPl[7] || a.pl.Current() == nil || a.pl.Current().ID != 1 {
-		t.Fatalf("playing %+v, still loading %v", a.pl.Current(), a.loadingPl[7])
+	if a.library.Loading[7] || a.pl.Current() == nil || a.pl.Current().ID != 1 {
+		t.Fatalf("playing %+v, still loading %v", a.pl.Current(), a.library.Loading[7])
 	}
 	if q := a.pl.Queue(); len(q) != 2 {
 		t.Errorf("queued %d tracks", len(q))

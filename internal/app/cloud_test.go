@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
@@ -26,7 +27,7 @@ func cloudFixture(t *testing.T) (*app, chan func()) {
 	a := newTestApp()
 	t.Cleanup(a.dismissSuggestions)
 	a.settings = defaultSettings()
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.route = route{page: pageCloud}
 	return a, testPosts(a)
 }
@@ -139,8 +140,8 @@ func TestCloudRejectsPreviousAccount(t *testing.T) {
 	}
 	a.loadCloud(viewmodel.CloudNextPage)
 	wait(t, started, "blocked cloud request")
-	a.homeGen++
-	a.profile = &netease.Profile{UserID: 2}
+	a.account.Generation++
+	a.account.Profile = &netease.Profile{UserID: 2}
 	a.cloud = viewmodel.Cloud{}
 	close(release)
 	refreshPost(t, posts)
@@ -516,7 +517,7 @@ func TestCloudSuggestionRevalidatesSource(t *testing.T) {
 			case "removed":
 				a.cloud.Tracks = nil
 			case "account":
-				a.profile = &netease.Profile{UserID: 2}
+				a.account.Profile = &netease.Profile{UserID: 2}
 			case "page":
 				a.route = route{page: pageHome}
 			}
@@ -549,7 +550,7 @@ func TestCloudSuggestionRevalidatesSource(t *testing.T) {
 func TestCloudRefreshesWhenReopenedAfterFreshnessInterval(t *testing.T) {
 	a, posts := cloudFixture(t)
 	now := time.Date(2026, 11, 22, 10, 0, 0, 0, time.UTC)
-	a.listRefresh.now = func() time.Time { return now }
+	a.library.Refresh.Now = func() time.Time { return now }
 	a.cloud = viewmodel.Cloud{CloudListing: viewmodel.CloudListing{Tracks: []netease.Track{cloudTrack(1, "旧歌曲")}, Count: 1, Offset: 1}, Loaded: true, At: now}
 	calls := make(chan int, 2)
 	cloudSongs = func(_ context.Context, _, offset int) (*netease.CloudPage, error) {
@@ -841,7 +842,7 @@ func TestCloudLocateDoesNotScrollAnotherPage(t *testing.T) {
 	for i := range other {
 		other[i] = netease.Track{ID: int64(10000 + i), Name: fmt.Sprintf("其他歌曲 %03d", i+1)}
 	}
-	a.playlists[7] = &netease.Playlist{ID: 7, Name: "另一张歌单", Tracks: other}
+	a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "另一张歌单", Tracks: other}
 	a.route = route{page: pagePlaylist, id: 7}
 	tt.Frame()
 	unblock()

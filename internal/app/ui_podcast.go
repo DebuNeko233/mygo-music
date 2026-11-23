@@ -136,7 +136,7 @@ func (a *app) toggleSubscribe(d *podcastData) {
 	if d.podcast == nil || d.subscribing {
 		return
 	}
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		a.openLogin()
 		return
 	}
@@ -265,7 +265,7 @@ func (a *app) programRow(c *ui.Context, d *podcastData, i int, cur *netease.Trac
 		}
 		// A liked episode's heart shows; the others' as the pointer is on them.
 		ui.Box(c).Size(32, 32).Center().Children(func() {
-			if a.likedPrograms[pr.ID] || row.Hovered() {
+			if a.library.LikedPrograms[pr.ID] || row.Hovered() {
 				tr := pr.Track(d.podcast)
 				a.likeButton(c.Key(fmt.Sprintf("like-%d", pr.ID)), &tr, 15, p.muted)
 			}
@@ -351,7 +351,7 @@ func (a *app) loadPodcastTab() {
 		return
 	}
 	t.loading, t.err, t.failure = true, "", nil
-	signedIn := a.profile != nil
+	signedIn := a.account.Profile != nil
 	go func() {
 		var subs []netease.Podcast
 		if signedIn {

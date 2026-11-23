@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -17,11 +18,11 @@ func TestNetworkDisconnectOnCachedPage(t *testing.T) {
 	a, _ := offlineFixture(t)
 	a.route = route{page: pagePlaylist, id: 9}
 	pl := &netease.Playlist{ID: 9, Name: "Cached"}
-	a.playlists[9] = pl
+	a.library.Playlists[9] = pl
 	a.recovery.timer = time.NewTimer(time.Hour)
 	a.networkChanged(mygo.NetworkStatus{Online: false})
 	a.recoveryFrame(true)
-	if !a.network.offline || a.recovery.timer != nil || a.playlists[9] != pl {
+	if !a.network.offline || a.recovery.timer != nil || a.library.Playlists[9] != pl {
 		t.Fatal("idle disconnect was missed or cache was cleared")
 	}
 	read := readNetworkStatus
@@ -32,7 +33,7 @@ func TestNetworkDisconnectOnCachedPage(t *testing.T) {
 	if err := tt.Click("刷新内容"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.network.offline || a.playlists[9] != pl {
+	if !a.network.offline || a.library.Playlists[9] != pl {
 		t.Fatal("offline refresh changed cached page")
 	}
 }
@@ -42,9 +43,9 @@ func TestNetworkDisconnectOnCachedPage(t *testing.T) {
 func TestNetworkReconnectionRecoversCurrentPage(t *testing.T) {
 	a, posts := offlineFixture(t)
 	a.route = route{page: pagePlaylist, id: 9}
-	a.playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
-	a.playlistRequest(9).failed = true
-	a.playlistRequest(9).failure = netease.ErrOffline
+	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
+	a.playlistRequest(9).Failed = true
+	a.playlistRequest(9).Failure = netease.ErrOffline
 	a.network = networkState{known: true, offline: true}
 	a.recovery.active, a.recovery.attempts = true, 4
 	var calls atomic.Int32
@@ -54,11 +55,11 @@ func TestNetworkReconnectionRecoversCurrentPage(t *testing.T) {
 	}
 	a.networkChanged(mygo.NetworkStatus{Online: true})
 	a.networkChanged(mygo.NetworkStatus{Online: true, Metered: true})
-	if a.network.offline || a.recovery.attempts != 0 || a.playlists[9].Name != "Cached" {
+	if a.network.offline || a.recovery.attempts != 0 || a.library.Playlists[9].Name != "Cached" {
 		t.Fatal("reconnect did not reset recovery or replaced cache prematurely")
 	}
 	refreshPost(t, posts)
-	if calls.Load() != 1 || a.playlists[9].Name != "Online" || a.pl.Current() != nil {
+	if calls.Load() != 1 || a.library.Playlists[9].Name != "Online" || a.pl.Current() != nil {
 		t.Fatal("reconnect duplicated requests or altered playback")
 	}
 }
@@ -94,9 +95,9 @@ func TestPodcastTabRecoversWithConnection(t *testing.T) {
 func TestNetworkRefreshIcon(t *testing.T) {
 	a, posts := offlineFixture(t)
 	a.route = route{page: pagePlaylist, id: 9}
-	a.playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
+	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.network = networkState{known: true, offline: true}
-	a.recovery.accountPending = true
+	a.account.Pending = true
 	read, ask, save, identity := readNetworkStatus, accountAsk, saveLoginSession, loginIdentity
 	t.Cleanup(func() { readNetworkStatus, accountAsk, saveLoginSession, loginIdentity = read, ask, save, identity })
 	checks := 0
@@ -105,8 +106,8 @@ func TestNetworkRefreshIcon(t *testing.T) {
 	accountAsk = func() (*netease.Profile, error) { calls.Add(1); return &netease.Profile{UserID: 7}, nil }
 	saveLoginSession = func() error { return nil }
 	loginIdentity = func() string { return "" }
-	a.listRefresh.mine.at, a.listRefresh.likes.at = a.listsNow(), a.listsNow()
-	a.playlistRequest(9).at = a.listsNow()
+	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.listsNow(), a.listsNow()
+	a.playlistRequest(9).At = a.listsNow()
 	tt := ui.NewTester(a.view, 1100, 800)
 	tt.Frame()
 	if err := tt.Click("刷新内容"); err != nil {
@@ -120,7 +121,7 @@ func TestNetworkRefreshIcon(t *testing.T) {
 		t.Fatal(err)
 	}
 	refreshPost(t, posts)
-	if a.network.offline || a.recovery.accountPending || calls.Load() != 1 {
+	if a.network.offline || a.account.Pending || calls.Load() != 1 {
 		t.Fatal("refresh did not confirm the restored connection")
 	}
 	tt.Frame()
@@ -133,9 +134,9 @@ func TestNetworkRefreshIcon(t *testing.T) {
 func TestNetworkReconnectionWhileHidden(t *testing.T) {
 	a, _ := offlineFixture(t)
 	a.network = networkState{known: true, offline: true}
-	a.recovery.accountPending = true
+	a.account.Pending = true
 	a.networkChanged(mygo.NetworkStatus{Online: true})
-	if a.network.offline || a.recovery.accountBusy {
+	if a.network.offline || a.account.Busy {
 		t.Fatal("hidden window started a request or missed reconnection")
 	}
 }
@@ -145,7 +146,7 @@ func TestNetworkReconnectionWhileHidden(t *testing.T) {
 func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	a, posts := offlineFixture(t)
 	a.route = route{page: pagePlaylist, id: 9}
-	a.playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
+	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.pl = player.New(a.post)
 	a.pl.Cue([]netease.Track{{ID: 1}})
 	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
@@ -288,5 +289,107 @@ func TestNetworkLyricsRetryAction(t *testing.T) {
 		if !loaded || len(lines) != 1 || calls.Load() != 1 || a.pl.Playing() || a.pl.Current().ID != 7 {
 			t.Fatalf("lyrics recovery: loaded=%v lines=%d calls=%d playing=%v track=%d", loaded, len(lines), calls.Load(), a.pl.Playing(), a.pl.Current().ID)
 		}
+	}
+}
+
+// Refreshing the home page used to retry only failed covers, leaving healthy recommendation modules untouched.
+func TestHomeRefreshIconReloadsContent(t *testing.T) {
+	for _, scenario := range []struct {
+		name                         string
+		signedIn, reconnect, offline bool
+		page                         pageKind
+	}{
+		{"signed-in", true, false, false, pageHome},
+		{"signed-out", false, false, false, pageHome},
+		{"reconnection", true, true, false, pageHome},
+		{"offline", true, false, true, pageHome},
+		{"charts", true, false, false, pageCharts},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			a, posts := offlineFixture(t)
+			a.route = route{page: scenario.page}
+			if !scenario.signedIn {
+				a.account.Profile = nil
+			}
+			a.network = networkState{known: true, offline: scenario.reconnect || scenario.offline}
+			a.recovery.active = scenario.reconnect
+			a.featured = []netease.Playlist{{ID: 1, Name: "old featured"}}
+			a.charts = []netease.Playlist{{ID: 2, Name: "old charts"}}
+			a.daily = []netease.Track{{ID: 3, Name: "old daily"}}
+			a.recPlaylists = []netease.Playlist{{ID: 4, Name: "old personal"}}
+			if scenario.reconnect {
+				a.homeFailures = map[string]error{"featured": netease.ErrOffline}
+			}
+			a.art.art["failed-cover"] = &artwork{failed: true}
+			a.art.seen["failed-cover"] = struct{}{}
+			featured, charts, daily, recommended, status := featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists, readNetworkStatus
+			t.Cleanup(func() {
+				featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists, readNetworkStatus = featured, charts, daily, recommended, status
+			})
+			var calls [4]atomic.Int32
+			featuredPlaylists = func() ([]netease.Playlist, error) {
+				calls[0].Add(1)
+				return []netease.Playlist{{ID: 11, Name: "fresh featured"}}, nil
+			}
+			homeCharts = func() ([]netease.Playlist, error) {
+				calls[1].Add(1)
+				return []netease.Playlist{{ID: 12, Name: "fresh charts"}}, nil
+			}
+			dailySongs = func() ([]netease.Track, error) {
+				calls[2].Add(1)
+				return []netease.Track{{ID: 13, Name: "fresh daily"}}, nil
+			}
+			recommendedPlaylists = func() ([]netease.Playlist, error) {
+				calls[3].Add(1)
+				return []netease.Playlist{{ID: 14, Name: "fresh personal"}}, nil
+			}
+			readNetworkStatus = func() mygo.NetworkStatus { return mygo.NetworkStatus{Online: !scenario.offline} }
+			tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.offlineNotice(c) }, 1100, 800)
+			tt.Frame()
+			if err := tt.Click("刷新内容"); err != nil {
+				t.Fatal(err)
+			}
+			if scenario.offline {
+				if a.homeLoading || !a.network.offline {
+					t.Fatal("offline refresh started loading content")
+				}
+				for i := range calls {
+					if calls[i].Load() != 0 {
+						t.Fatal("offline refresh issued a request")
+					}
+				}
+				return
+			}
+			if !a.homeLoading {
+				t.Fatal("refresh retried artwork without requesting home content")
+			}
+			if a.featured[0].ID != 1 || a.charts[0].ID != 2 {
+				t.Fatal("refresh discarded the visible content before a reply")
+			}
+			// A second click while the same request is running must coalesce.
+			if err := tt.Click("刷新内容"); err != nil {
+				t.Fatal(err)
+			}
+			for a.homeLoading {
+				refreshPost(t, posts)
+			}
+			if calls[0].Load() != 1 || calls[1].Load() != 1 || a.featured[0].ID != 11 || a.charts[0].ID != 12 {
+				t.Fatal("home modules were not replaced exactly once")
+			}
+			if scenario.signedIn {
+				if calls[2].Load() != 1 || calls[3].Load() != 1 || a.daily[0].ID != 13 || a.recPlaylists[0].ID != 14 {
+					t.Fatal("personal recommendations were not refreshed")
+				}
+			} else if calls[2].Load() != 0 || calls[3].Load() != 0 {
+				t.Fatal("signed-out refresh requested private recommendations")
+			}
+			if a.pl.Current() != nil || len(a.pl.Queue()) != 0 {
+				t.Fatal("refresh started playback")
+			}
+			tt.Frame()
+			if err := tt.Click("刷新内容"); err == nil {
+				t.Fatal("successful content and cover recovery left a stale refresh control")
+			}
+		})
 	}
 }

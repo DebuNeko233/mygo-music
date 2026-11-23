@@ -37,7 +37,7 @@ func (a *app) resolveCloudLocate() {
 }
 
 func (a *app) cloudPage(c *ui.Context) {
-	if a.profile == nil {
+	if a.account.Profile == nil {
 		top, bottom := a.insets(c)
 		ui.Column(c).Grow(1).Padding(top, 0, bottom, 0).Center().Gap(12).Children(func() {
 			ui.Text(c, "登录后查看音乐网盘").FontSize(14).TextColor(a.pal.muted)

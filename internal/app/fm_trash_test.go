@@ -19,7 +19,7 @@ func TestFMTrashFailureFeedback(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			a := newTestApp()
 			posts := testPosts(a)
-			a.profile = &netease.Profile{UserID: 1}
+			a.account.Profile = &netease.Profile{UserID: 1}
 			a.settings = defaultSettings()
 			a.pl.Cue([]netease.Track{{ID: 42, Name: "FM song"}})
 			fed := 0
@@ -42,7 +42,7 @@ func TestFMTrashFailureFeedback(t *testing.T) {
 				t.Fatalf("rejected song %d, want 42", got)
 			}
 			if stale {
-				a.homeGen++
+				a.account.Generation++
 			}
 			result <- errors.New("preference refused")
 			refreshPost(t, posts)

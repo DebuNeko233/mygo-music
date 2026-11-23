@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
@@ -17,7 +18,7 @@ func featurePerfApp(cloud, jobs int) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settingsPage = "download"
-	a.profile = &netease.Profile{UserID: 1}
+	a.account.Profile = &netease.Profile{UserID: 1}
 	a.route = route{page: pageCloud}
 	a.cloud.Loaded = true
 	a.cloud.Count = cloud

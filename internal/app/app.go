@@ -48,18 +48,18 @@ type route struct {
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
-	network                                networkState
-	homeFailures                           map[string]error
-	dirtySnapshots                         map[int64]bool
-	dirtyLibrary                           librarySnapshots
+	account      viewmodel.Account
+	library      viewmodel.Library
+	network      networkState
+	homeFailures map[string]error
+
 	playlistWrites                         sync.Map // cacheRequest to the latest accepted write's done channel
 	browseCache, imageCache, identityCache *diskcache.Store
 	recovery                               recoveryState
 	browseUsed, imagesUsed                 int64
 	homePending                            int
 
-	listRefresh libraryRefreshState
-	wasBehind   bool
+	wasBehind bool
 
 	win    *mygo.Window
 	notch  *notch
@@ -74,28 +74,12 @@ type app struct {
 	history []route
 	forward []route // the pages gone back from, the last first to go to
 
-	profile      *netease.Profile
-	mine, saved  []netease.Playlist // the listener's playlists: made, and saved
-	savingPl     map[int64]bool     // the playlists whose saving or its end is on its way
 	recPlaylists []netease.Playlist // the day's playlists picked for the listener
-	login        loginState
-	accountOpen  bool         // the dropdown of the account row shows
-	naming       nameDialog   // the name of a playlist asked for
-	deleting     deleteDialog // whether to delete a playlist, asked
-	intro        descriptionDialog
-	liked        map[int64]bool // the songs the listener likes
-	toast        string         // a message to show once
-	picked       pickedUp       // the song a login picked up, waiting to play
 
-	// The episodes the listener likes, and doesn't, as far as NetEase has
-	// answered, and those asked about: see ui_like.go.
-	likedPrograms, askedPrograms map[int64]bool
-
-	// The albums the listener saved, those saved last first, and the ones
-	// whose saving or its end is on its way: see ui_album.go.
-	subAlbums []netease.AlbumProfile
-	subsShown bool // whether subAlbums has loaded once
-	savingAlb map[int64]bool
+	accountOpen bool // the dropdown of the account row shows
+	intro       descriptionDialog
+	toast       string   // a message to show once
+	picked      pickedUp // the song a login picked up, waiting to play
 
 	cloud viewmodel.Cloud
 
@@ -118,12 +102,10 @@ type app struct {
 	homeErr     string
 	homeLoading bool
 	homeAt      time.Time // when what the home page shows was asked for
-	homeGen     int       // generation counter to discard stale responses
+	// generation counter to discard stale responses
 
-	playlists      map[int64]*netease.Playlist
-	loadingPl      map[int64]bool
-	plPlay         map[int64]bool // playlists asked to play once they are in
-	plErr          map[int64]string
+	// playlists asked to play once they are in
+
 	artists        pageCache[int64, *artistData]
 	artistTab      int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
 	albums         pageCache[int64, *albumData]
@@ -338,10 +320,6 @@ func Run() error {
 		return nil
 	}
 	a := &app{
-		playlists:  map[int64]*netease.Playlist{},
-		loadingPl:  map[int64]bool{},
-		plPlay:     map[int64]bool{},
-		plErr:      map[int64]string{},
 		artists:    newPageCache[int64, *artistData](artistBusy),
 		albums:     newPageCache[int64, *albumData](albumBusy),
 		users:      newPageCache[int64, *userData](userBusy),
@@ -352,6 +330,7 @@ func Run() error {
 		queueAt:    -1,
 		cacheUsed:  -1,
 	}
+	a.library.Reset()
 	a.links.starting = true
 	offURL := mygo.App.OnOpenURL(func(raw string) {
 		a.showMain()
@@ -493,6 +472,7 @@ func Run() error {
 			return
 		}
 		a.quitting = true
+		a.account.CloseLogin()
 		a.cancelCloudLoad()
 		a.cancelDownloads()
 		a.settings.Volume = a.volume

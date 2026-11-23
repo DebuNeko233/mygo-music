@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -24,8 +25,8 @@ func TestOfflineFrames(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a, _ := offlineFixture(t)
 		a.route = route{page: pagePlaylist, id: 9}
-		a.playlists[9] = &netease.Playlist{ID: 9, Name: "离线歌单", Tracks: []netease.Track{{ID: 1, Name: "已缓存的音乐", Artists: []netease.Artist{{Name: "歌手"}}, Duration: 180000}}}
-		a.recovery.active, a.recovery.accountPending, a.recovery.accountBusy = true, true, true
+		a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "离线歌单", Tracks: []netease.Track{{ID: 1, Name: "已缓存的音乐", Artists: []netease.Artist{{Name: "歌手"}}, Duration: 180000}}}
+		a.recovery.active, a.account.Pending, a.account.Busy = true, true, true
 		a.network = networkState{known: true, offline: true}
 		a.settingsPage = "cache"
 		suffix := "light"

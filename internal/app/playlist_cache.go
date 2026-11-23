@@ -1,8 +1,10 @@
 package app
 
-// Bound both the number of cached playlists and their track records. The
-// visible playlist may exceed the budget; offscreen details can be read
-// back from the existing disk snapshot.
+import (
+	"netease-music-mygo/internal/diskcache"
+)
+
+// Bound cached pages and their track records; the visible playlist may exceed this budget.
 const (
 	playlistCachePages  = pageLimit
 	playlistCacheTracks = 20000
@@ -10,8 +12,8 @@ const (
 
 // A playlist can be evicted before its snapshot reaches disk. Keep the
 // latest accepted write visible to readers even after eviction.
-func (a *app) savePlaylistSnapshot(req cacheRequest, encode func() []byte) {
-	write := req.store.PrepareIfChanged(req.scope, req.key, req.epoch)
+func (a *app) savePlaylistSnapshot(req diskcache.Snapshot, encode func() []byte) {
+	write := req.Store.PrepareIfChanged(req.Scope, req.Key, req.Epoch)
 	if write == nil {
 		return
 	}
@@ -24,7 +26,7 @@ func (a *app) savePlaylistSnapshot(req cacheRequest, encode func() []byte) {
 	}()
 }
 
-func (a *app) waitForPlaylistSnapshot(req cacheRequest) {
+func (a *app) waitForPlaylistSnapshot(req diskcache.Snapshot) {
 	for {
 		done, pending := a.playlistWrites.Load(req)
 		if !pending {
@@ -35,38 +37,38 @@ func (a *app) waitForPlaylistSnapshot(req cacheRequest) {
 }
 
 func (a *app) usePlaylist(id int64) {
-	a.listRefresh.playlistUse++
-	a.playlistRequest(id).used = a.listRefresh.playlistUse
+	a.library.Refresh.PlaylistUse++
+	a.playlistRequest(id).Used = a.library.Refresh.PlaylistUse
 }
 
 func (a *app) trimPlaylistCache() {
-	if a.listRefresh.edits != 0 {
+	if a.library.Refresh.Edits != 0 {
 		return
 	}
 	weight := func(id int64) int {
-		p := a.playlists[id]
+		p := a.library.Playlists[id]
 		return max(len(p.Tracks), len(p.TrackIDs))
 	}
 	tracks := 0
-	for id := range a.playlists {
+	for id := range a.library.Playlists {
 		tracks += weight(id)
 	}
-	for len(a.playlists) > playlistCachePages || tracks > playlistCacheTracks {
+	for len(a.library.Playlists) > playlistCachePages || tracks > playlistCacheTracks {
 		var oldest int64
 		var used uint64
 		found := false
-		for id := range a.playlists {
-			_, editing := a.listRefresh.editedLists[id]
-			if (a.route.page == pagePlaylist && a.route.id == id) || a.plPlay[id] || a.dirtySnapshots[id] || editing {
+		for id := range a.library.Playlists {
+			_, editing := a.library.Refresh.EditedLists[id]
+			if (a.route.page == pagePlaylist && a.route.id == id) || a.library.PlayWhenLoaded[id] || a.library.DirtySnapshots[id] || editing {
 				continue
 			}
-			r := a.listRefresh.playlists[id]
+			r := a.library.Refresh.Playlists[id]
 			var last uint64
 			if r != nil {
-				if r.busy {
+				if r.Busy {
 					continue
 				}
-				last = r.used
+				last = r.Used
 			}
 			if !found || last < used {
 				oldest, used, found = id, last, true
@@ -77,8 +79,8 @@ func (a *app) trimPlaylistCache() {
 		}
 		tracks -= weight(oldest)
 		// Unlike forgetPlaylist, eviction must keep the offline snapshot.
-		delete(a.playlists, oldest)
-		delete(a.listRefresh.playlists, oldest)
-		delete(a.plErr, oldest)
+		delete(a.library.Playlists, oldest)
+		delete(a.library.Refresh.Playlists, oldest)
+		delete(a.library.Errors, oldest)
 	}
 }

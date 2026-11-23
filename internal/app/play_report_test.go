@@ -98,7 +98,7 @@ func TestPausedRestoreAndResumeDoNotCreateAReport(t *testing.T) {
 // not drop or reorder the following final play log.
 func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 	a := newTestApp()
-	a.profile = &netease.Profile{}
+	a.account.Profile = &netease.Profile{}
 	var sent []reportedPlay
 	done := make(chan struct{}, 2)
 	stubs := stubPlayReports(a)
@@ -139,7 +139,7 @@ func TestPlayReportsAreSerialAfterAStartFailure(t *testing.T) {
 // asynchronous reporting queue during process teardown.
 func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 	a := newTestApp()
-	a.profile = &netease.Profile{}
+	a.account.Profile = &netease.Profile{}
 	done := make(chan struct{})
 	stubs := stubPlayReports(a)
 	stubs.start = func(id int64, source netease.PlaySource) error { return nil }
@@ -173,7 +173,7 @@ func TestFlushPlayReportsCompletesTheFinalRequest(t *testing.T) {
 func TestPlayReportsDoNotBlockInputOrCloseDuringShutdown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		a := newTestApp()
-		a.profile = &netease.Profile{}
+		a.account.Profile = &netease.Profile{}
 		started := make(chan struct{})
 		sent := make(chan int64, 128)
 		release := make(chan struct{})
@@ -278,7 +278,7 @@ func TestStartedSessionSurvivesUntilItsEnd(t *testing.T) {
 // send on under its own cookies, so a stuck request cannot hold up the window.
 func TestAccountChangeDoesNotWaitForItsReports(t *testing.T) {
 	a := newTestApp()
-	a.profile = &netease.Profile{}
+	a.account.Profile = &netease.Profile{}
 	release := make(chan struct{})
 	letGo := sync.OnceFunc(func() { close(release) })
 	started := make(chan struct{})
@@ -322,7 +322,7 @@ func TestAccountChangeDoesNotWaitForItsReports(t *testing.T) {
 func reportFixture(t *testing.T) (*app, chan reportedPlay) {
 	t.Helper()
 	a := newTestApp()
-	a.profile = &netease.Profile{}
+	a.account.Profile = &netease.Profile{}
 	sent := make(chan reportedPlay, 16)
 	stubs := stubPlayReports(a)
 	stubs.start = func(id int64, source netease.PlaySource) error {

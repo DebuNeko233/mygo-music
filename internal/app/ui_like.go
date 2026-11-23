@@ -1,7 +1,6 @@
 package app
 
 import (
-	"log"
 	"math"
 	"time"
 
@@ -9,122 +8,6 @@ import (
 
 	"netease-music-mygo/internal/netease"
 )
-
-// likes are the songs and episodes the listener likes, which hearts show
-// filled.
-
-// These like or unlike a song or an episode with NetEase, and ask which
-// episodes the listener likes; tests replace them.
-var (
-	likeSong      = netease.Like
-	likeProgram   = netease.LikeProgram
-	programsLiked = netease.ProgramsLiked
-)
-
-// toggleLike likes a song or an episode, or unlikes it, at once in the app
-// and then with NetEase, which may refuse: the heart goes back then. Signed
-// out, it asks the listener to sign in.
-func (a *app) toggleLike(tr *netease.Track) {
-	if tr.IsLocal() || tr.Cloud {
-		return
-	}
-	if a.profile == nil {
-		a.showMain()
-		a.openLogin()
-		return
-	}
-	if tr.ProgramID != 0 {
-		a.toggleProgramLike(tr.ProgramID)
-		return
-	}
-	if a.liked == nil {
-		a.liked = map[int64]bool{}
-	}
-	id, like := tr.ID, !a.liked[tr.ID]
-	uid, gen := a.profile.UserID, a.homeGen
-	a.setLiked(id, like)
-	finishEdit := a.beginLibraryEdit()
-	ask := likeSong
-	go func() {
-		err := ask(id, like)
-		a.post(func() {
-			finishEdit()
-			if a.listenerID() != uid || a.homeGen != gen {
-				return
-			}
-			if err != nil {
-				log.Printf("like song %d: %v", id, err)
-				if a.liked[id] == like {
-					a.setLiked(id, !like)
-				}
-				a.toast = "操作失败，请稍后再试"
-			} else if changed := a.updateLikedPlaylist(id, like); changed != 0 {
-				a.persistLibraryChanges(snapshotLikes, changed)
-				return
-			}
-			a.persistLibraryChanges(snapshotLikes)
-		})
-	}()
-}
-
-// updateLikedPlaylist shows a confirmed removal right away, then checks the
-// server for the current song order after either kind of heart edit.
-func (a *app) updateLikedPlaylist(song int64, like bool) int64 {
-	pid := a.likedPlaylist()
-	if pid == 0 && a.route.page == pagePlaylist {
-		if visible := a.playlists[a.route.id]; visible != nil && visible.SpecialType == 5 {
-			pid = visible.ID
-		}
-	}
-	if pid == 0 {
-		a.listRefresh.findLiked = true
-		return 0
-	}
-	pl := a.playlists[pid]
-	var changed int64
-	if !like && pl != nil {
-		if next := playlistWithoutSong(pl, song); next != pl {
-			a.playlists[pid] = next
-			changed = pid
-		}
-	}
-	a.revalidatePlaylist(pid)
-	return changed
-}
-
-func (a *app) toggleProgramLike(id int64) {
-	if a.profile == nil {
-		return
-	}
-	like := !a.likedPrograms[id]
-	uid := a.profile.UserID // Capture UID for validation
-	a.setProgramLiked(id, like)
-	ask := likeProgram
-	go func() {
-		err := ask(id, like)
-		a.post(func() {
-			// Validate that the user is still logged in with the same account
-			if a.profile == nil || a.profile.UserID != uid {
-				return
-			}
-			if err != nil {
-				a.setProgramLiked(id, !like)
-				a.toast = "操作失败，请稍后再试"
-			}
-		})
-	}()
-}
-
-// isLiked reports whether the listener likes tr, a song or an episode.
-func (a *app) isLiked(tr *netease.Track) bool {
-	if tr.IsLocal() {
-		return false
-	}
-	if tr.ProgramID != 0 {
-		return a.likedPrograms[tr.ProgramID]
-	}
-	return a.liked[tr.ID]
-}
 
 // likeCurrent likes the song or episode playing, or unlikes it, from the
 // keyboard (⌘D), which shows no heart: a toast says which it did.
@@ -135,7 +18,7 @@ func (a *app) likeCurrent() {
 	}
 	a.toggleLike(tr)
 	switch {
-	case a.profile == nil:
+	case a.account.Profile == nil:
 		return // asked to sign in
 	case !a.isLiked(tr):
 		a.toast = "已取消喜欢"
@@ -146,71 +29,13 @@ func (a *app) likeCurrent() {
 	}
 }
 
-func (a *app) setLiked(id int64, like bool) {
-	if like {
-		if a.liked == nil {
-			a.liked = map[int64]bool{}
-		}
-		a.liked[id] = true
-	} else {
-		delete(a.liked, id)
-	}
-}
-
 // setProgramLiked says the listener likes an episode, or doesn't, over
 // what NetEase may still answer of it.
-func (a *app) setProgramLiked(id int64, like bool) {
-	if a.likedPrograms == nil {
-		a.likedPrograms = map[int64]bool{}
-	}
-	a.likedPrograms[id] = like
-	delete(a.askedPrograms, id)
-}
-
 // askProgramLikes asks NetEase whether the listener likes the episodes
 // ids, those not asked about yet: NetEase lists no episodes they like.
 // An episode it doesn't answer of shows not liked, and isn't asked again.
-func (a *app) askProgramLikes(ids []int64) {
-	if a.profile == nil {
-		return
-	}
-	var ask []int64
-	for _, id := range ids {
-		if _, known := a.likedPrograms[id]; !known && !a.askedPrograms[id] {
-			ask = append(ask, id)
-		}
-	}
-	if len(ask) == 0 {
-		return
-	}
-	if a.askedPrograms == nil {
-		a.askedPrograms = map[int64]bool{}
-	}
-	for _, id := range ask {
-		a.askedPrograms[id] = true
-	}
-	uid := a.profile.UserID
-	fetch := programsLiked
-	go func() {
-		liked, _ := fetch(ask)
-		a.post(func() { a.programLikesAnswered(uid, ask, liked) })
-	}()
-}
-
 // programLikesAnswered takes NetEase's answer of whether uid likes the
 // episodes asked about.
-func (a *app) programLikesAnswered(uid int64, asked []int64, liked map[int64]bool) {
-	if a.profile == nil || a.profile.UserID != uid {
-		return
-	}
-	for _, id := range asked {
-		// A heart clicked meanwhile knows better.
-		if a.askedPrograms[id] {
-			a.setProgramLiked(id, liked[id])
-		}
-	}
-}
-
 // likeButton is a heart that likes tr: filled in red once liked. Liking
 // pops it in on a spring while a ring swells around it and confetti flies
 // out; unliking lets it give a little.
@@ -240,7 +65,7 @@ func (a *app) likeButton(c *ui.Context, tr *netease.Track, size float32, color u
 	burst := ui.Local(wrap, "burst", func() time.Time { return time.Time{} })
 	if b.Clicked() {
 		switch {
-		case a.profile == nil:
+		case a.account.Profile == nil:
 		case liked:
 			b.Jump("pop", 0.8)
 		default:
