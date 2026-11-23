@@ -39,7 +39,7 @@ func newSongCache(s settings) *player.Cache {
 
 // applyCacheLimit gives the cache the limit the settings say.
 func (a *app) applyCacheLimit() {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		// The folder moves: its songs are being counted, and dropped, there.
 		return
 	}
@@ -72,21 +72,21 @@ func (a *app) measureSongCache(cache *player.Cache) {
 // cacheMeasured takes a count of what cache takes, unless it is of a cache
 // that is no longer the one in use, or one taken as the folder moved.
 func (a *app) cacheMeasured(cache *player.Cache, n int64) {
-	if a.cacheMoving || a.pl.Cache != cache {
+	if a.cacheSettings.Moving || a.pl.Cache != cache {
 		return
 	}
-	a.cacheUsed = n
+	a.cacheSettings.Used = n
 	if a.settingsWin != nil {
 		a.settingsWin.Invalidate()
 	}
 }
 
 func (a *app) clearCache() {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		return
 	}
 	if cache := a.pl.Cache; cache != nil {
-		a.cacheUsed = 0
+		a.cacheSettings.Used = 0
 		go func() {
 			cache.Clear()
 			a.measureSongCache(cache)
@@ -96,7 +96,7 @@ func (a *app) clearCache() {
 
 // cacheUsage says how much the cache takes, once measured.
 func (a *app) cacheUsage() string {
-	switch n := a.cacheUsed; {
+	switch n := a.cacheSettings.Used; {
 	case n < 0:
 		return "正在计算已用空间…"
 	case n >= 1<<30:

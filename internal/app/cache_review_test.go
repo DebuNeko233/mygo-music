@@ -42,15 +42,15 @@ func TestCacheDirectoryAdoptsPopulatedDefault(t *testing.T) {
 				t.Fatal(err)
 			}
 			finishCacheChange(t, a, posts)
-			if a.cacheError == "" || a.settings.CacheDir != source {
+			if a.cacheSettings.Error == "" || a.settings.CacheDir != source {
 				t.Fatal("overwrote a conflicting destination")
 			}
 			if err := a.changeCacheDirectory(selected, false); err != nil {
 				t.Fatal(err)
 			}
 			finishCacheChange(t, a, posts)
-			if a.cacheError != "" || a.settings.CacheDir != "" || a.pl.Cache.Size() != 5 {
-				t.Fatal("could not return to existing default caches", a.cacheError)
+			if a.cacheSettings.Error != "" || a.settings.CacheDir != "" || a.pl.Cache.Size() != 5 {
+				t.Fatal("could not return to existing default caches", a.cacheSettings.Error)
 			}
 			if b, _ := a.browseCache.Read("7", "playlist/9"); string(b) != "previous default" {
 				t.Fatal("did not adopt default snapshots")
@@ -78,7 +78,7 @@ func TestCacheDirectoryCancelFromMainWindow(t *testing.T) {
 	if err := a.changeCacheDirectory(target, true); err != nil {
 		t.Fatal(err)
 	}
-	for a.cacheTotal == 0 && a.cacheMoving {
+	for a.cacheSettings.Total == 0 && a.cacheSettings.Moving {
 		refreshPost(t, posts)
 	}
 	tt := ui.NewTester(a.view, 1100, 800)
@@ -107,7 +107,7 @@ func TestCacheDirectoryCancelFromMainWindow(t *testing.T) {
 	if err := tt.Click("取消迁移"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.cacheCancelling {
+	if !a.cacheSettings.Cancelling {
 		t.Fatal("main-window action did not cancel the copy")
 	}
 	finishCacheChange(t, a, posts)
@@ -134,10 +134,10 @@ func TestCacheDirectoryQuitWaitsForRollback(t *testing.T) {
 	if err := a.changeCacheDirectory(target, true); err != nil {
 		t.Fatal(err)
 	}
-	if !a.deferCacheQuit() || !a.cacheQuit || !a.cacheCancelling {
+	if !a.deferCacheQuit() || !a.cacheSettings.Quit || !a.cacheSettings.Cancelling {
 		t.Fatal("migration ignored the quit request")
 	}
-	for a.cacheMoving {
+	for a.cacheSettings.Moving {
 		refreshPost(t, posts)
 	}
 	if quits != 1 || a.settings.CacheDir != source {
@@ -157,11 +157,11 @@ func TestCacheDirectoryRecoveryKeepsCommittedLayout(t *testing.T) {
 	posts := testPosts(a)
 	writeCachedSong(t, source)
 	a.recoverCacheDirectory()
-	for a.cacheMoving {
+	for a.cacheSettings.Moving {
 		refreshPost(t, posts)
 	}
-	if a.settings.CacheDir != source || a.pl.Cache.Size() != 5 || a.cacheError != "" {
-		t.Fatal("startup cleanup changed a committed layout", a.cacheError)
+	if a.settings.CacheDir != source || a.pl.Cache.Size() != 5 || a.cacheSettings.Error != "" {
+		t.Fatal("startup cleanup changed a committed layout", a.cacheSettings.Error)
 	}
 }
 
@@ -174,10 +174,10 @@ func TestCacheDirectoryNormalizesExplicitDefault(t *testing.T) {
 	writeCachedSong(t, source)
 	cache := a.pl.Cache
 	a.confirmCacheDirectory("")
-	if a.cacheConfirm.open || a.cacheMoving || a.cacheError != "" || a.settings.CacheDir != "" || a.pl.Cache != cache || cache.Size() != 5 {
-		t.Fatal("restoring defaults did not normalize the existing path", a.cacheError)
+	if a.cacheSettings.Confirm.Open || a.cacheSettings.Moving || a.cacheSettings.Error != "" || a.settings.CacheDir != "" || a.pl.Cache != cache || cache.Size() != 5 {
+		t.Fatal("restoring defaults did not normalize the existing path", a.cacheSettings.Error)
 	}
-	if readCacheSettings(t, a.settings.path).CacheDir != "" {
+	if readCacheSettings(t, a.settings.Path).CacheDir != "" {
 		t.Fatal("default preference was not persisted")
 	}
 }
@@ -203,12 +203,12 @@ func TestCacheDirectoryAcceptsUnmanagedTargetContent(t *testing.T) {
 	if err := tt.Click("迁移并更改"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.cacheMoving {
-		t.Fatal("unrelated target content prevented migration", a.cacheConfirm.err)
+	if !a.cacheSettings.Moving {
+		t.Fatal("unrelated target content prevented migration", a.cacheSettings.Confirm.Error)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError != "" || a.settings.CacheDir != target || a.pl.Cache.Size() != 5 {
-		t.Fatal("could not adopt Finder folder", a.cacheError)
+	if a.cacheSettings.Error != "" || a.settings.CacheDir != target || a.pl.Cache.Size() != 5 {
+		t.Fatal("could not adopt Finder folder", a.cacheSettings.Error)
 	}
 	if b, err := os.ReadFile(metadata); err != nil || string(b) != "Finder metadata" {
 		t.Fatal("changed Finder metadata", err)

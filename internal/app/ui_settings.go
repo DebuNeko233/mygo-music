@@ -52,7 +52,7 @@ func (a *app) openSettings() {
 	a.settingsWin.OnClosed(func() {
 		a.settingsWin = nil
 		// The dialog asking about the folder goes with the window.
-		a.cacheConfirm.open = false
+		a.cacheSettings.Confirm.Open = false
 		// So does a key the settings were recording: one left recording
 		// would keep the app's own keys from working.
 		a.recording, a.recordingNote = "", ""
@@ -233,11 +233,11 @@ func (a *app) settingsView(c *ui.Context) {
 	sections := a.settingsSections(c, p)
 	current := sections[0]
 	for _, sec := range sections {
-		if sec.id == a.settingsPage {
+		if sec.id == a.preferences.Section {
 			current = sec
 		}
 	}
-	query := strings.ToLower(strings.TrimSpace(a.settingsQuery))
+	query := strings.ToLower(strings.TrimSpace(a.preferences.Query))
 
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		// Under the window buttons where they sit over the sidebar. Where nothing
@@ -312,7 +312,7 @@ func (a *app) settingsSearch(c *ui.Context, p palette) {
 	field.Children(func() {
 		// The input fills the field, under its icon, so a click anywhere on
 		// the field focuses it.
-		ui.TextInputBase(c.Key("search"), &a.settingsQuery).Bind(&a.settingsSearchBox).Grow(1).MinWidth(0).PaddingStart(29).PaddingEnd(9).
+		ui.TextInputBase(c.Key("search"), &a.preferences.Query).Bind(&a.settingsSearchBox).Grow(1).MinWidth(0).PaddingStart(29).PaddingEnd(9).
 			Placeholder("搜索").FontSize(13).Label("搜索设置")
 		ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted).Absolute().Left(9).Top(7.5).IgnoreInput(true)
 	})
@@ -337,7 +337,7 @@ func (a *app) settingsNavItem(c *ui.Context, p palette, sec settingsSection, sel
 		ui.Text(c, sec.title).FontSize(13).FontWeight(500).SingleLine().Shrink(1).MinWidth(0)
 	})
 	if b.Clicked() {
-		a.settingsPage, a.settingsQuery = sec.id, ""
+		a.preferences.Open(sec.id)
 	}
 }
 
@@ -712,13 +712,13 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 	add("cache", "缓存", iconDatabase, func(row settingsRow, block settingsBlock) {
 
 		row("缓存目录", a.cacheDirectoryDescription(), func() {
-			if ui.Button(c.Key("cache-directory"), "更改…").Label("更改缓存目录").Disabled(a.cacheMoving).Clicked() {
+			if ui.Button(c.Key("cache-directory"), "更改…").Label("更改缓存目录").Disabled(a.cacheSettings.Moving).Clicked() {
 				a.chooseCacheDirectory()
 			}
 		})
 		if s.CacheDir != "" {
 			row("默认缓存目录", "恢复到系统默认位置，立即生效", func() {
-				if ui.Button(c.Key("reset-cache-directory"), "恢复默认").Label("恢复默认缓存目录").Disabled(a.cacheMoving).Clicked() {
+				if ui.Button(c.Key("reset-cache-directory"), "恢复默认").Label("恢复默认缓存目录").Disabled(a.cacheSettings.Moving).Clicked() {
 					a.confirmCacheDirectory("")
 				}
 			})
@@ -732,7 +732,7 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 					chosen = l.label
 				}
 			}
-			if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存大小").Width(150).Disabled(a.cacheMoving).Changed() {
+			if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存大小").Width(150).Disabled(a.cacheSettings.Moving).Changed() {
 				for _, l := range cacheLimits {
 					if l.label == chosen {
 						s.CacheMB = l.mb
@@ -743,18 +743,18 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 			}
 		})
 		row("歌曲缓存", "听过的歌曲可离线播放；"+a.cacheUsage(), func() {
-			if ui.Button(c.Key("clear-cache"), "清除歌曲缓存").Disabled(a.cacheUsed <= 0 || a.cacheMoving).Clicked() {
+			if ui.Button(c.Key("clear-cache"), "清除歌曲缓存").Disabled(a.cacheSettings.Used <= 0 || a.cacheSettings.Moving).Clicked() {
 				a.clearCache()
 			}
 		})
 
 		row("浏览数据与歌词", fmt.Sprintf("已浏览页面和歌词可离线读取；上限 64 MiB，已用 %.1f MiB", float64(a.browseUsed)/(1<<20)), func() {
-			if ui.Button(c.Key("clear-browse-cache"), "清除浏览缓存").Disabled(a.cacheMoving).Clicked() {
+			if ui.Button(c.Key("clear-browse-cache"), "清除浏览缓存").Disabled(a.cacheSettings.Moving).Clicked() {
 				a.clearBrowseCache()
 			}
 		})
 		row("图片缓存", fmt.Sprintf("所有页面共用封面缓存；上限 256 MiB，已用 %.1f MiB", float64(a.imagesUsed)/(1<<20)), func() {
-			if ui.Button(c.Key("clear-image-cache"), "清除图片缓存").Disabled(a.cacheMoving).Clicked() {
+			if ui.Button(c.Key("clear-image-cache"), "清除图片缓存").Disabled(a.cacheSettings.Moving).Clicked() {
 				a.clearImageCache()
 			}
 		})

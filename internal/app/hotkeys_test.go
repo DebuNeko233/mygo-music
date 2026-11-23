@@ -166,7 +166,7 @@ func (s *keySystem) holds(acc string) bool {
 // The keys the settings hold as empty, or as something the set cannot take,
 // give way to the action's own.
 func TestTheShortcutSettingsFillInTheDefaults(t *testing.T) {
-	filled := shortcutKeys{}.filled()
+	filled := fillShortcutKeys(shortcutKeys{})
 	if len(filled.InApp) != len(hotkeys) || len(filled.Global) != len(hotkeys) {
 		t.Fatalf("filled %d in-app and %d global keys, want %d each",
 			len(filled.InApp), len(filled.Global), len(hotkeys))
@@ -178,10 +178,10 @@ func TestTheShortcutSettingsFillInTheDefaults(t *testing.T) {
 		}
 	}
 
-	kept := shortcutKeys{
+	kept := fillShortcutKeys(shortcutKeys{
 		InApp:  map[string]string{"playPause": "", "next": "Bogus+Q"},
 		Global: map[string]string{"next": "J", "prev": ""},
-	}.filled()
+	})
 	if kept.InApp["playPause"] != "" {
 		t.Errorf("a key the listener took away came back as %q", kept.InApp["playPause"])
 	}
@@ -249,7 +249,7 @@ func TestTheSettingsRecordAShortcut(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settingsPage = "keys"
+	a.preferences.Section = "keys"
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()
 	if !tt.HasText("Space") {
@@ -281,7 +281,7 @@ func TestTheDefaultKeyComesBack(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settingsPage = "keys"
+	a.preferences.Section = "keys"
 	a.setBinding(kindInApp, "volumeUp", "CmdOrCtrl+Alt+Up")
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()

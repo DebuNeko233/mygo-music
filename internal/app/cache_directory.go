@@ -1,14 +1,14 @@
 package app
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 
 	"github.com/egoist/mygo"
 
 	"netease-music-mygo/internal/cachemove"
+	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/viewmodel"
 )
 
 // openCacheDirectory asks for a folder, as the system's own picker does.
@@ -19,7 +19,7 @@ var quitAfterCacheMove = mygo.App.Quit
 // thread. Settings commit only after a successful copy; failure resumes the
 // original stores. Playback resumes with any controls changed during the move.
 func (a *app) changeCacheDirectory(directory string, migrate bool) error {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		return errors.New("正在更改缓存目录，请稍候")
 	}
 	source, err := cachePaths(a.settings)
@@ -68,119 +68,19 @@ func (a *app) changeCacheDirectory(directory string, migrate bool) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	a.cacheMoving, a.cacheTarget, a.cacheError = true, target, ""
-	a.cacheCancel, a.cacheCancelling = cancel, false
-	a.cacheCopied, a.cacheTotal = 0, 0
-	a.cacheRun++
-	run := a.cacheRun
-	cache := a.pl.Cache
-	browse, images := a.browseCache, a.imageCache
-	resume := a.pl.SuspendCache()
-	go func() {
-		defer cancel()
-		unblock := cache.Quiesce()
-		resumeBrowse, err := browse.Suspend()
-		resumeImages := func(string) {}
-		if err == nil {
-			resumeImages, err = images.Suspend()
-		}
-		var warning error
-		if err == nil {
-			lastPercent := -1
-			options := cachemove.Options{Context: ctx, Journal: journal, Progress: func(copied, total int64) {
-				percent := 0
-				if total > 0 {
-					percent = int(copied * 100 / total)
-				}
-				if percent == lastPercent {
-					return
-				}
-				lastPercent = percent
-				a.post(func() {
-					if a.cacheMoving && a.cacheRun == run {
-						a.cacheCopied, a.cacheTotal = copied, total
-					}
-				})
-			}}
-			warning, err = cachemove.MoveLayoutWithOptions(source, target, migrate, shared, func() error {
-				// Merge on the main thread so settings changed during the
-				// copy are preserved. The move rolls back if saving fails.
-				saved := make(chan error, 1)
-				a.post(func() {
-					if err := ctx.Err(); err != nil {
-						saved <- err
-						return
-					}
-					next := a.settings
-					next.CacheDir = directory
-					err := next.save()
-					if err == nil {
-						a.settings = next
-						a.cacheCancel = nil // the published transaction is now committed
-					}
-					saved <- err
-				})
-				if err := <-saved; err != nil {
-					return err
-				}
-				// Rebind while readers can still access the originals. Only
-				// after this callback returns may the move retire them.
-				resumeBrowse(filepath.Join(target, "browse-v1"))
-				resumeImages(filepath.Join(target, cachemove.ArtworkDir))
-				return nil
-			}, options)
-		}
-		if err != nil {
-			unblock()
-			resumeBrowse("")
-			resumeImages("")
-		}
-		a.post(func() {
-			a.cacheMoving, a.cacheTarget = false, ""
-			a.cacheCancel, a.cacheCancelling = nil, false
-			if err == context.Canceled {
-				a.cacheError = "已取消迁移，仍使用原目录"
-			} else if err != nil {
-				a.cacheError = "更改缓存目录失败，仍使用原目录：" + err.Error()
-				if migrate && isDefault && errors.Is(err, cachemove.ErrConflict) {
-					a.cacheError += "；可选择“仅更改目录”使用目标缓存"
-				}
-			} else {
-				// The old audio cache stays shut: delayed downloads must
-				// not recreate files at its former location.
-				a.pl.Cache = newSongCache(a.settings)
-				if warning != nil {
-					a.cacheError = "新目录已启用，但迁移清理未完成：" + warning.Error()
-				}
-			}
-			if a.cacheQuit {
-				quitAfterCacheMove()
-				return
-			}
-			resume()
-			a.cacheUsed = -1
-			a.measureCache()
-			a.measureOfflineCache()
-			if a.settingsWin != nil {
-				a.settingsWin.Invalidate()
-			}
-			a.redraw()
-		})
-	}()
-	return nil
+	return a.cacheSettings.Change(viewmodel.CacheChange{Source: source, Target: target, Directory: directory, Journal: journal, Migrate: migrate, Shared: shared, Default: isDefault}, a.cacheServices())
 }
 
 // chooseCacheDirectory asks for the shared cache root.
 func (a *app) chooseCacheDirectory() {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		return
 	}
 	paths, err := openCacheDirectory(mygo.OpenDialogOptions{
 		Parent: a.settingsWin, Title: "选择缓存目录", Directory: true, CreateDirectories: true,
 	})
 	if err != nil {
-		a.cacheError = err.Error()
+		a.cacheSettings.Error = err.Error()
 		return
 	}
 	if len(paths) == 0 {
@@ -192,41 +92,41 @@ func (a *app) chooseCacheDirectory() {
 
 // confirmCacheDirectory asks whether to move existing caches to directory.
 func (a *app) confirmCacheDirectory(directory string) {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		return
 	}
 	target, err := cacheDirectory(directory)
 	if err != nil {
-		a.cacheError = err.Error()
+		a.cacheSettings.Error = err.Error()
 		return
 	}
 	source, err := cacheDirectory(a.settings.CacheDir)
 	if err != nil {
-		a.cacheError = err.Error()
+		a.cacheSettings.Error = err.Error()
 		return
 	}
 	same, err := cachemove.SameDirectory(source, target)
 	if err != nil {
-		a.cacheError = err.Error()
+		a.cacheSettings.Error = err.Error()
 		return
 	}
 	if same {
 		if err := a.changeCacheDirectory(directory, false); err != nil {
-			a.cacheError = err.Error()
+			a.cacheSettings.Error = err.Error()
 		}
 		return
 	}
-	a.cacheConfirm = cacheDirectoryConfirmation{open: true, directory: directory, target: target}
+	a.cacheSettings.Confirm = viewmodel.CacheConfirmation{Open: true, Directory: directory, Target: target}
 }
 
 // submitCacheDirectory moves all caches when requested; otherwise old files stay.
 func (a *app) submitCacheDirectory(migrate bool) {
-	d := &a.cacheConfirm
-	if err := a.changeCacheDirectory(d.directory, migrate); err != nil {
-		d.err = err.Error()
+	d := &a.cacheSettings.Confirm
+	if err := a.changeCacheDirectory(d.Directory, migrate); err != nil {
+		d.Error = err.Error()
 		return
 	}
-	d.open = false
+	d.Open = false
 }
 
 // cacheDirectoryDescription shows the root and any directory change failure.
@@ -236,11 +136,11 @@ func (a *app) cacheDirectoryDescription() string {
 		return err.Error()
 	}
 	desc := dir
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		desc += "\n" + a.cacheMoveLabel()
 	}
-	if a.cacheError != "" {
-		desc += "\n" + a.cacheError
+	if a.cacheSettings.Error != "" {
+		desc += "\n" + a.cacheSettings.Error
 	}
 	return desc
 }
@@ -255,25 +155,25 @@ func cacheMoveJournal() (string, error) {
 func (a *app) recoverCacheDirectory() {
 	journal, err := cacheMoveJournal()
 	if err != nil {
-		a.cacheError = err.Error()
+		a.cacheSettings.Error = err.Error()
 		return
 	}
 	active, err := cachePaths(a.settings)
 	if err != nil {
-		a.cacheError = err.Error()
+		a.cacheSettings.Error = err.Error()
 		return
 	}
-	a.cacheMoving = true
+	a.cacheSettings.Moving = true
 	go func() {
 		err := cachemove.Recover(journal, active)
 		a.post(func() {
-			a.cacheMoving = false
-			if a.cacheQuit {
+			a.cacheSettings.Moving = false
+			if a.cacheSettings.Quit {
 				quitAfterCacheMove()
 				return
 			}
 			if err != nil {
-				a.cacheError = "清理上次缓存迁移失败：" + err.Error()
+				a.cacheSettings.Error = "清理上次缓存迁移失败：" + err.Error()
 				a.redraw()
 				return
 			}
@@ -281,33 +181,30 @@ func (a *app) recoverCacheDirectory() {
 	}()
 }
 
-func (a *app) cancelCacheChange() {
-	if a.cacheCancel != nil {
-		a.cacheCancelling = true
-		a.cacheCancel()
+func (a *app) cancelCacheChange() { a.cacheSettings.Cancel(); a.redraw() }
+func (a *app) deferCacheQuit() bool {
+	deferred := a.cacheSettings.DeferQuit()
+	if deferred {
 		a.redraw()
 	}
+	return deferred
 }
-
-// Quit waits for rollback, rather than silently refusing the user's request.
-func (a *app) deferCacheQuit() bool {
-	if !a.cacheMoving {
-		return false
-	}
-	a.cacheQuit = true
-	a.cancelCacheChange()
-	return true
-}
-
-func (a *app) cacheMoveLabel() string {
-	if a.cacheCancelling {
-		return "正在取消缓存迁移…"
-	}
-	if a.cacheTarget == "" {
-		return "正在清理上次缓存迁移…"
-	}
-	if a.cacheTotal > 0 {
-		return fmt.Sprintf("正在迁移缓存 %d%%", a.cacheCopied*100/a.cacheTotal)
-	}
-	return "正在准备缓存迁移…"
+func (a *app) cacheMoveLabel() string { return a.cacheSettings.Label() }
+func (a *app) cacheServices() viewmodel.CacheServices {
+	return viewmodel.CacheServices{Post: a.post, Player: a.pl, Browse: a.browseCache, Images: a.imageCache,
+		Commit: func(directory string) error {
+			next := a.settings
+			next.CacheDir = directory
+			if err := next.save(); err != nil {
+				return err
+			}
+			a.settings = next
+			return nil
+		},
+		NewCache: func() *player.Cache { return newSongCache(a.settings) }, Measure: func() { a.measureCache(); a.measureOfflineCache() }, Changed: func() {
+			if a.settingsWin != nil {
+				a.settingsWin.Invalidate()
+			}
+			a.redraw()
+		}, Quit: quitAfterCacheMove}
 }

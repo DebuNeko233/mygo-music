@@ -17,7 +17,7 @@ import (
 func featurePerfApp(cloud, jobs int) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settingsPage = "download"
+	a.preferences.Section = "download"
 	a.account.Profile = &netease.Profile{UserID: 1}
 	a.nav.Current = route{Page: pageCloud}
 	a.cloud.Loaded = true

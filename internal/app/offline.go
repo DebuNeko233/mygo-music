@@ -289,13 +289,13 @@ func (a *app) offlineNotice(c *ui.Context) {
 }
 
 func (a *app) clearBrowseCache() {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		return
 	}
 	a.browseCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
 }
 func (a *app) clearImageCache() {
-	if a.cacheMoving {
+	if a.cacheSettings.Moving {
 		return
 	}
 	a.imageCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
@@ -309,7 +309,7 @@ func (a *app) measureOfflineCache() {
 	go func() {
 		b, i := browse.Size(), images.Size()
 		a.post(func() {
-			if a.cacheMoving || a.browseCache != browse || a.imageCache != images || browse.Epoch() != browseEpoch || images.Epoch() != imageEpoch {
+			if a.cacheSettings.Moving || a.browseCache != browse || a.imageCache != images || browse.Epoch() != browseEpoch || images.Epoch() != imageEpoch {
 				return
 			}
 			a.browseUsed, a.imagesUsed = b, i

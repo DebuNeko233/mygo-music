@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
@@ -23,8 +24,8 @@ func downloadTestApp(t *testing.T) (*app, chan func()) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settingsPage = "download"
-	a.settings.path = filepath.Join(t.TempDir(), "settings.json")
+	a.preferences.Section = "download"
+	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	a.settings.DownloadDirectory = t.TempDir()
 	old := saveDownload
 	t.Cleanup(func() { saveDownload = old })
@@ -62,7 +63,7 @@ func TestDownloadSettingsIndependentQuality(t *testing.T) {
 	}
 	tt.Frame()
 	clickSettingsSwitch(t, tt, "另存歌词文件")
-	saved := readCacheSettings(t, a.settings.path)
+	saved := readCacheSettings(t, a.settings.Path)
 	if saved.DownloadQuality != "hires" || saved.Quality != "lossless" || saved.DownloadDirectory != dir || !saved.DownloadSidecar {
 		t.Fatal("download choices not saved")
 	}
@@ -106,7 +107,7 @@ func TestDownloadSettingsNameFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := readCacheSettings(t, a.settings.path).DownloadNameFormat; got != download.NameTitleArtist {
+	if got := readCacheSettings(t, a.settings.Path).DownloadNameFormat; got != download.NameTitleArtist {
 		t.Fatal("naming preference not saved", got)
 	}
 	a.enqueueDownloads([]netease.Track{{ID: 7}})
@@ -478,7 +479,7 @@ func TestDownloadSettingsFrames(t *testing.T) {
 		}{{"normal", 780, 640}, {"minimum", 640, 420}} {
 			a := newTestApp()
 			a.settings = defaultSettings()
-			a.settingsPage = "download"
+			a.preferences.Section = "download"
 			a.downloads.Jobs = []*viewmodel.DownloadJob{{Track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, Status: "正在下载", Received: 28, Total: 100}, {Track: netease.Track{Name: "没有封面的音乐"}, Status: "下载完成", Finished: true, Result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {Track: netease.Track{Name: "下载失败的歌曲"}, Status: "下载失败", Finished: true, Err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
 			tt := ui.NewTester(a.settingsView, size.w, size.h)
 			tt.SetDark(dark)

@@ -14,6 +14,7 @@ import (
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/navigation"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/preferences"
 	"netease-music-mygo/internal/viewmodel"
 )
 
@@ -180,23 +181,14 @@ type app struct {
 	// Settings navigation stays in memory; only user preferences are persisted.
 	downloads         viewmodel.Downloads
 	downloadList      ui.ListState
-	settingsPage      string
-	settingsQuery     string
+	preferences       viewmodel.Preferences
 	settingsSearchBox ui.Handle
 	settingsUnderTop  bool
 
-	settings                   settings
-	settingsWin                *mygo.Window
-	cacheUsed                  int64  // the bytes the song cache takes, -1 until measured
-	cacheError                 string // a move of the cache's folder failed, or left songs behind
-	cacheMoving                bool   // the cache's folder moves
-	cacheTarget                string // where it moves to
-	cacheCancel                func()
-	cacheCancelling, cacheQuit bool
-	cacheCopied, cacheTotal    int64
-	cacheRun                   uint64                     // ignores queued progress from an earlier move
-	cacheConfirm               cacheDirectoryConfirmation // the folder it asks to move the songs to
-	updates                    bool                       // the update plugin is used (useUpdater)
+	settings      settings
+	settingsWin   *mygo.Window
+	cacheSettings viewmodel.CacheSettings
+	updates       bool // the update plugin is used (useUpdater)
 
 	restored    bool // playback picked up where it was left
 	sessionSave sessionSaver
@@ -291,9 +283,9 @@ func Run() error {
 		return nil
 	}
 	a := &app{
-		lyricAt:   -1,
-		queueAt:   -1,
-		cacheUsed: -1,
+		lyricAt:       -1,
+		queueAt:       -1,
+		cacheSettings: viewmodel.CacheSettings{Used: -1},
 	}
 	a.library.Reset()
 	a.artists.Reset()
@@ -452,7 +444,7 @@ func Run() error {
 		}
 		// A write still owed from a key repeat would otherwise land
 		// after this one, with the settings as they were before it.
-		settingsWrites.wait()
+		preferences.Flush()
 		a.saveFinalSettings()
 		a.saveSession()
 		a.sessionSave.wait()

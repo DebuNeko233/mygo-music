@@ -17,7 +17,7 @@ func captionSettingsApp(t *testing.T) (*app, *ui.Tester, chan func()) {
 	t.Cleanup(func() { captionsAvailable = old })
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settings.path = filepath.Join(t.TempDir(), "settings.json")
+	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	a.captions.model.checked = true
 	posts := testPosts(a)
 	tt := ui.NewTester(a.settingsView, 780, 640)
@@ -49,7 +49,7 @@ func TestCaptionSettingsRequireModel(t *testing.T) {
 		checkCaptionSwitch(t, tt, preference, false)
 		clickSettingsSwitch(t, tt, "播客字幕")
 		checkCaptionSwitch(t, tt, !preference, false)
-		if a.settings.Captions != !preference || readCacheSettings(t, a.settings.path).Captions != !preference {
+		if a.settings.Captions != !preference || readCacheSettings(t, a.settings.Path).Captions != !preference {
 			t.Fatal("toggling captions with a model did not apply and save")
 		}
 		a.captions.model.installed = false
@@ -97,7 +97,7 @@ func TestCaptionSettingsModelLifecycle(t *testing.T) {
 				return
 			}
 			checkCaptionSwitch(t, tt, true, false)
-			if !readCacheSettings(t, a.settings.path).Captions {
+			if !readCacheSettings(t, a.settings.Path).Captions {
 				t.Fatal("a completed download did not save enabled captions")
 			}
 			if err := tt.Click("删除"); err != nil {

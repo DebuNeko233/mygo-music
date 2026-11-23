@@ -23,7 +23,7 @@ func init() {
 	shotHook = func(a *app) {
 		// The scenes change settings to measure them: keep the
 		// listener's own as they were.
-		a.settings.path = ""
+		a.settings.Path = ""
 		go func() {
 			shot := func(name string, w *mygo.Window) {
 				png, err := w.CapturePage()

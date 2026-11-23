@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/preferences"
 )
 
 // Choosing an accent in the settings colours the app with it, in the
@@ -453,7 +455,7 @@ func TestBackdropSlidersSetIndependentOpacity(t *testing.T) {
 	if playing >= 0.4 || a.settings.BackdropHomeOpacity != home {
 		t.Fatalf("playing slider left opacity at %v, %v", a.settings.BackdropHomeOpacity, playing)
 	}
-	settingsWrites.wait()
+	preferences.Flush()
 	kept := loadSettings()
 	if kept.BackdropHomeOpacity != home || kept.BackdropPlayingOpacity != playing {
 		t.Fatalf("reload left opacity at %v, %v, want %v, %v", kept.BackdropHomeOpacity, kept.BackdropPlayingOpacity, home, playing)

@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/preferences"
 )
 
 // The window shows the line being sung and the ones after it, as many as it
@@ -237,13 +238,13 @@ func TestDeskLyricsKaraokeSetting(t *testing.T) {
 	tt := ui.NewTester(a.settingsView, 780, 3400)
 	showSettingsPage(t, tt, "桌面歌词")
 	clickSettingsSwitch(t, tt, "逐字歌词")
-	settingsWrites.wait()
-	if !a.settings.LyricKaraoke || !readCacheSettings(t, a.settings.path).LyricKaraoke {
+	preferences.Flush()
+	if !a.settings.LyricKaraoke || !readCacheSettings(t, a.settings.Path).LyricKaraoke {
 		t.Fatal("enabling desktop karaoke did not persist")
 	}
 	clickSettingsSwitch(t, tt, "逐字歌词")
-	settingsWrites.wait()
-	if a.settings.LyricKaraoke || readCacheSettings(t, a.settings.path).LyricKaraoke {
+	preferences.Flush()
+	if a.settings.LyricKaraoke || readCacheSettings(t, a.settings.Path).LyricKaraoke {
 		t.Fatal("disabling desktop karaoke did not persist")
 	}
 }
@@ -259,8 +260,8 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	settingsWrites.wait()
-	if a.settings.LyricAlign != 2 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.path).LyricAlign != 2 {
+	preferences.Flush()
+	if a.settings.LyricAlign != 2 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.Path).LyricAlign != 2 {
 		t.Fatal("two-line alignment did not change only the current line and persist")
 	}
 	if err := tt.Click("单行"); err != nil {
@@ -271,8 +272,8 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	settingsWrites.wait()
-	if a.settings.LyricLines != 1 || a.settings.LyricAlign != 0 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.path).LyricAlign != 0 {
+	preferences.Flush()
+	if a.settings.LyricLines != 1 || a.settings.LyricAlign != 0 || a.settings.LyricNextAlign != 1 || readCacheSettings(t, a.settings.Path).LyricAlign != 0 {
 		t.Fatal("single-line alignment did not apply to the shared line and persist")
 	}
 	// Left alignment is zero and must be present in the file rather than
@@ -292,8 +293,8 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 	tt.ClickAt(r.X+r.W*0.75, r.Y+r.H/2)
 	tt.Key(0, ui.KeyRight)
 	tt.Frame()
-	settingsWrites.wait()
-	if a.settings.LyricLineGap <= 8 || readCacheSettings(t, a.settings.path).LyricLineGap != a.settings.LyricLineGap {
+	preferences.Flush()
+	if a.settings.LyricLineGap <= 8 || readCacheSettings(t, a.settings.Path).LyricLineGap != a.settings.LyricLineGap {
 		t.Fatalf("two-line spacing did not apply and persist: %v", a.settings.LyricLineGap)
 	}
 }

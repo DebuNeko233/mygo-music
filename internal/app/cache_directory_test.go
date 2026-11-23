@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/preferences"
 )
 
 // cacheTestApp is an app whose songs are kept in a directory of the test's,
@@ -29,9 +30,9 @@ func cacheTestApp(t *testing.T) (*app, string, string) {
 	}
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settingsPage = "cache"
+	a.preferences.Section = "cache"
 	a.settings.CacheDir = source
-	a.settings.path = filepath.Join(root, "settings.json")
+	a.settings.Path = filepath.Join(root, "settings.json")
 	a.pl.Cache = newSongCache(a.settings)
 	return a, source, target
 }
@@ -40,7 +41,7 @@ func readCacheSettings(t *testing.T, path string) settings {
 	t.Helper()
 	// The window keeps the settings on a goroutine of its own, so what is
 	// owed to the disk is waited for before it is read back.
-	settingsWrites.wait()
+	preferences.Flush()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -56,10 +57,10 @@ func finishCacheChange(t *testing.T, a *app, posts chan func()) {
 	t.Helper()
 	// Complete the follow-up measurements as well, before restoring the
 	// test dispatcher or starting another conversion with the same stores.
-	a.cacheUsed, a.browseUsed, a.imagesUsed = -1, -1, -1
+	a.cacheSettings.Used, a.browseUsed, a.imagesUsed = -1, -1, -1
 	timeout := time.NewTimer(5 * time.Second)
 	defer timeout.Stop()
-	for a.cacheMoving || a.cacheUsed < 0 || (a.browseCache != nil || a.imageCache != nil) && a.browseUsed < 0 {
+	for a.cacheSettings.Moving || a.cacheSettings.Used < 0 || (a.browseCache != nil || a.imageCache != nil) && a.browseUsed < 0 {
 		select {
 		case fn := <-posts:
 			fn()
@@ -102,13 +103,13 @@ func TestCacheDirectoryControls(t *testing.T) {
 	if err := tt.Click("更改缓存目录"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.cacheConfirm.open || a.cacheMoving || a.settings.CacheDir != source {
+	if !a.cacheSettings.Confirm.Open || a.cacheSettings.Moving || a.settings.CacheDir != source {
 		t.Fatal("started changing before confirmation")
 	}
 	if err := tt.Click("迁移并更改"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.cacheMoving || a.cacheConfirm.open || a.settings.CacheDir != source {
+	if !a.cacheSettings.Moving || a.cacheSettings.Confirm.Open || a.settings.CacheDir != source {
 		t.Fatal("did not start safely after confirmation")
 	}
 	a.chooseCacheDirectory()
@@ -116,9 +117,9 @@ func TestCacheDirectoryControls(t *testing.T) {
 		t.Fatal("allowed a concurrent change")
 	}
 	finishCacheChange(t, a, posts)
-	saved := readCacheSettings(t, a.settings.path)
-	if a.cacheError != "" || saved.CacheDir != target {
-		t.Fatalf("change failed: %s %+v", a.cacheError, saved)
+	saved := readCacheSettings(t, a.settings.Path)
+	if a.cacheSettings.Error != "" || saved.CacheDir != target {
+		t.Fatalf("change failed: %s %+v", a.cacheSettings.Error, saved)
 	}
 }
 
@@ -140,17 +141,17 @@ func TestCacheDirectorySameDirectory(t *testing.T) {
 		if err := tt.Click("更改缓存目录"); err != nil {
 			t.Fatal(err)
 		}
-		if a.cacheConfirm.open || a.cacheMoving || a.cacheError != "" || a.settings.CacheDir != source || a.pl.Cache != cache {
+		if a.cacheSettings.Confirm.Open || a.cacheSettings.Moving || a.cacheSettings.Error != "" || a.settings.CacheDir != source || a.pl.Cache != cache {
 			t.Fatalf("selecting current directory changed state: %s", target)
 		}
-		if err := a.changeCacheDirectory(target, true); err != nil || a.cacheMoving || a.pl.Cache != cache {
+		if err := a.changeCacheDirectory(target, true); err != nil || a.cacheSettings.Moving || a.pl.Cache != cache {
 			t.Fatalf("same-directory change was not a no-op: %v", err)
 		}
 	}
 	if cache.Size() != 5 {
 		t.Fatal("existing cache was modified")
 	}
-	if _, err := os.Stat(a.settings.path); !os.IsNotExist(err) {
+	if _, err := os.Stat(a.settings.Path); !os.IsNotExist(err) {
 		t.Fatalf("no-op saved settings: %v", err)
 	}
 }
@@ -181,7 +182,7 @@ func TestCacheDirectoryDialogCancel(t *testing.T) {
 			} else if cancel == "escape" {
 				tt.Key(0, ui.KeyEscape)
 			}
-			if a.cacheConfirm.open || a.settings.CacheDir != source || a.cacheMoving || a.pl.Cache != cache {
+			if a.cacheSettings.Confirm.Open || a.settings.CacheDir != source || a.cacheSettings.Moving || a.pl.Cache != cache {
 				t.Fatal("cancel changed active cache")
 			}
 		})
@@ -204,10 +205,10 @@ func TestCacheDirectoryImmediate(t *testing.T) {
 	// then must not be overwritten with the ones from before it.
 	a.settings.Quality = "lossless"
 	finishCacheChange(t, a, posts)
-	if a.cacheError != "" || a.settings.CacheDir != target {
-		t.Fatalf("migration failed: %s", a.cacheError)
+	if a.cacheSettings.Error != "" || a.settings.CacheDir != target {
+		t.Fatalf("migration failed: %s", a.cacheSettings.Error)
 	}
-	saved := readCacheSettings(t, a.settings.path)
+	saved := readCacheSettings(t, a.settings.Path)
 	if saved.CacheDir != target || saved.Quality != "lossless" {
 		t.Fatalf("settings lost: %+v", saved)
 	}
@@ -231,7 +232,7 @@ func TestCacheDirectoryWithoutMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError != "" || a.pl.Cache.Size() != 0 || a.settings.CacheDir != target {
+	if a.cacheSettings.Error != "" || a.pl.Cache.Size() != 0 || a.settings.CacheDir != target {
 		t.Fatal("failed to switch cache")
 	}
 	if _, err := os.Stat(filepath.Join(source, "songs", "123-exhigh.mp3")); err != nil {
@@ -246,12 +247,12 @@ func TestCacheDirectorySaveFailure(t *testing.T) {
 	posts := testPosts(a)
 	writeCachedSong(t, source)
 	cache := a.pl.Cache
-	a.settings.path = source // a directory: no settings may be written there
+	a.settings.Path = source // a directory: no settings may be written there
 	if err := a.changeCacheDirectory(target, true); err != nil {
 		t.Fatal(err)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError == "" || a.settings.CacheDir != source || a.pl.Cache != cache || cache.Size() != 5 {
+	if a.cacheSettings.Error == "" || a.settings.CacheDir != source || a.pl.Cache != cache || cache.Size() != 5 {
 		t.Fatal("failed to restore old cache")
 	}
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
@@ -271,7 +272,7 @@ func TestCacheDirectoryRejectsOccupied(t *testing.T) {
 	if err := a.changeCacheDirectory(target, true); err == nil {
 		t.Fatal("accepted occupied directory")
 	}
-	if a.cacheMoving || a.settings.CacheDir != source {
+	if a.cacheSettings.Moving || a.settings.CacheDir != source {
 		t.Fatal("invalid target changed live state")
 	}
 }
@@ -292,7 +293,7 @@ func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 	if err := tt.Click("迁移并更改"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.cacheConfirm.open || a.cacheConfirm.err == "" || a.cacheMoving || a.settings.CacheDir != source {
+	if !a.cacheSettings.Confirm.Open || a.cacheSettings.Confirm.Error == "" || a.cacheSettings.Moving || a.settings.CacheDir != source {
 		t.Fatal("validation failure dismissed confirmation or changed cache")
 	}
 	if data, err := os.ReadFile(personal); err != nil || string(data) != "keep" {
@@ -301,7 +302,7 @@ func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 	if err := tt.Click("取消"); err != nil {
 		t.Fatal(err)
 	}
-	if a.cacheConfirm.open {
+	if a.cacheSettings.Confirm.Open {
 		t.Fatal("cannot dismiss failed confirmation")
 	}
 }
@@ -312,23 +313,23 @@ func TestCacheDirectoryStaleMeasurement(t *testing.T) {
 	a, _, target := cacheTestApp(t)
 	posts := testPosts(a)
 	old := a.pl.Cache
-	a.cacheUsed = 123
-	a.cacheMoving = true
+	a.cacheSettings.Used = 123
+	a.cacheSettings.Moving = true
 	a.cacheMeasured(old, 0)
-	if a.cacheUsed != 123 {
+	if a.cacheSettings.Used != 123 {
 		t.Fatal("measurement changed usage during migration")
 	}
-	a.cacheMoving = false
+	a.cacheSettings.Moving = false
 	next := a.settings
 	next.CacheDir = target
 	a.pl.Cache = newSongCache(next)
 	go a.measureSongCache(old)
 	refreshPost(t, posts)
-	if a.cacheUsed != 123 {
+	if a.cacheSettings.Used != 123 {
 		t.Fatal("stale cache measurement overwrote usage")
 	}
 	a.cacheMeasured(a.pl.Cache, 789)
-	if a.cacheUsed != 789 {
+	if a.cacheSettings.Used != 789 {
 		t.Fatal("current cache measurement was ignored")
 	}
 }
@@ -340,7 +341,7 @@ func TestCacheDirectoryFrames(t *testing.T) {
 		t.Skip()
 	}
 	a, _, target := cacheTestApp(t)
-	a.cacheMoving, a.cacheTarget = true, target
+	a.cacheSettings.Moving, a.cacheSettings.Target = true, target
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()
 	f, err := os.Create(filepath.Join(dir, "cache-directory.png"))

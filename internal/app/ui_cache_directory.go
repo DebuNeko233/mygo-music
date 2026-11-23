@@ -2,20 +2,10 @@ package app
 
 import "github.com/egoist/mygo/ui"
 
-// cacheDirectoryConfirmation is the dialog that asks about a new folder for
-// all caches: the one chosen, empty for the system's own, what it goes to, and
-// what went wrong with the last try.
-type cacheDirectoryConfirmation struct {
-	open      bool
-	directory string // empty means the system default
-	target    string // displayed path, including the system default
-	err       string
-}
-
 // cacheDirectoryDialog asks whether existing caches move to the chosen root. It shows in the settings window's own theme.
 func (a *app) cacheDirectoryDialog(c *ui.Context, p palette) {
-	d := &a.cacheConfirm
-	ui.DialogBase(c.Key("cache-directory-confirm"), &d.open, func(backdrop, panel ui.Element) {
+	d := &a.cacheSettings.Confirm
+	ui.DialogBase(c.Key("cache-directory-confirm"), &d.Open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0.35))
 		panel.Width(420).Padding(24).Radius(18).Gap(12).
 			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
@@ -24,7 +14,7 @@ func (a *app) cacheDirectoryDialog(c *ui.Context, p palette) {
 		// long as it is.
 		_, height := c.Size()
 		details := height - 136 // padding, gaps, buttons and the window's margin
-		if d.err != "" {
+		if d.Error != "" {
 			details -= 48
 		}
 		ui.Scroll(c.Key("details")).MaxHeight(details).Gap(12).Children(func() {
@@ -32,17 +22,17 @@ func (a *app) cacheDirectoryDialog(c *ui.Context, p palette) {
 			ui.Text(c, "确认后立即生效，无需重启。").FontSize(13).TextColor(p.muted)
 			ui.Column(c).Padding(12).Radius(10).Gap(5).Background(p.sidebar).Children(func() {
 				ui.Text(c, "新目录").FontSize(11).FontWeight(600).TextColor(p.muted)
-				ui.Text(c, d.target).FontSize(12.5).TextColor(p.text).LineHeight(1.45)
+				ui.Text(c, d.Target).FontSize(12.5).TextColor(p.text).LineHeight(1.45)
 			})
 			ui.Text(c, "迁移并更改：搬移已有的歌曲、图片、页面与歌词缓存。\n仅更改目录：保留旧文件，之后使用新目录。").FontSize(13).TextColor(p.text).LineHeight(1.5)
 			ui.Text(c, "目标中的缓存文件夹需为空。更改期间暂时停止播放，完成后恢复进度；请勿同时运行其他应用实例。").FontSize(12).TextColor(p.muted).LineHeight(1.45)
 		})
-		if d.err != "" {
-			ui.Text(c, d.err).FontSize(12).TextColor(p.accent).LineHeight(1.45).MaxLines(2).Tooltip(d.err)
+		if d.Error != "" {
+			ui.Text(c, d.Error).FontSize(12).TextColor(p.accent).LineHeight(1.45).MaxLines(2).Tooltip(d.Error)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Margin(4, 0, 0, 0).Children(func() {
 			if pillButton(c.Key("cancel"), nil, "取消", p.hover.Over(p.bg), p.text).Clicked() {
-				d.open = false
+				d.Open = false
 			}
 			if pillButton(c.Key("switch"), nil, "仅更改目录", p.hover.Over(p.bg), p.text).Clicked() {
 				a.submitCacheDirectory(false)

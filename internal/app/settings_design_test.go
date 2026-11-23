@@ -39,20 +39,20 @@ func TestSettingsDesignNavigationAndSearch(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.settings.path = filepath.Join(t.TempDir(), "settings.json")
+	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	oldAccent := accentChosen
 	defer func() { accentChosen = oldAccent }()
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	showSettingsPage(t, tt, "播放")
 	before := a.settings.HotComments
 	clickSettingsSwitch(t, tt, "间奏时显示热评")
-	if a.settings.HotComments == before || readCacheSettings(t, a.settings.path).HotComments == before {
+	if a.settings.HotComments == before || readCacheSettings(t, a.settings.Path).HotComments == before {
 		t.Fatal("page change did not apply and save the preference")
 	}
 	tt.Key(ui.Cmd, ui.KeyF)
 	tt.Type("描边")
 	tt.Frame()
-	if a.settingsQuery != "描边" {
+	if a.preferences.Query != "描边" {
 		t.Fatal("find shortcut did not focus settings search")
 	}
 	slider, ok := tt.AccessByRole(ui.RoleSlider, "调整描边厚度")
@@ -64,11 +64,11 @@ func TestSettingsDesignNavigationAndSearch(t *testing.T) {
 	tt.Key(0, ui.KeyRight)
 	tt.Frame()
 	width := a.settings.LyricOutlineWidth
-	if width <= 0 || readCacheSettings(t, a.settings.path).LyricOutlineWidth != width {
+	if width <= 0 || readCacheSettings(t, a.settings.Path).LyricOutlineWidth != width {
 		t.Fatal("search result did not apply and save the desktop outline width")
 	}
 	showSettingsPage(t, tt, "桌面歌词")
-	if a.settingsQuery != "" || a.settingsPage != "lyrics" || a.settings.LyricOutlineWidth != width {
+	if a.preferences.Query != "" || a.preferences.Section != "lyrics" || a.settings.LyricOutlineWidth != width {
 		t.Fatal("leaving search changed the setting or failed to open its page")
 	}
 }
@@ -80,7 +80,7 @@ func TestSettingsDesignSearchBackgroundRows(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.BackdropHome = []string{"fixture.png"}
-	a.settings.path = filepath.Join(t.TempDir(), "settings.json")
+	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	tt := ui.NewTester(a.settingsView, 780, 640)
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyF)
@@ -89,7 +89,7 @@ func TestSettingsDesignSearchBackgroundRows(t *testing.T) {
 	if err := tt.Click("清空"); err != nil {
 		t.Fatal(err)
 	}
-	if len(a.settings.BackdropHome) != 0 || len(readCacheSettings(t, a.settings.path).BackdropHome) != 0 {
+	if len(a.settings.BackdropHome) != 0 || len(readCacheSettings(t, a.settings.Path).BackdropHome) != 0 {
 		t.Fatal("background search result did not clear and save the pictures")
 	}
 }

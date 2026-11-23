@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 )
@@ -39,8 +40,8 @@ func TestCacheDirectoryMovesOfflineResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError != "" || a.browseCache != browse || a.imageCache != images || a.pl.Cache.Size() != 5 {
-		t.Fatal("lost stores or audio", a.cacheError)
+	if a.cacheSettings.Error != "" || a.browseCache != browse || a.imageCache != images || a.pl.Cache.Size() != 5 {
+		t.Fatal("lost stores or audio", a.cacheSettings.Error)
 	}
 	for key, want := range map[string]string{"playlist/9": "page", "lyrics/1": "lyrics"} {
 		if b, _ := browse.Read("7", key); string(b) != want {
@@ -76,12 +77,12 @@ func TestCacheDirectoryOfflineRollback(t *testing.T) {
 	a, source, target := cacheTestApp(t)
 	posts := testPosts(a)
 	seedOfflineCaches(t, a)
-	a.settings.path = source
+	a.settings.Path = source
 	if err := a.changeCacheDirectory(target, true); err != nil {
 		t.Fatal(err)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError == "" || a.settings.CacheDir != source {
+	if a.cacheSettings.Error == "" || a.settings.CacheDir != source {
 		t.Fatal("committed a failed move")
 	}
 	if b, _ := a.browseCache.Read("7", "playlist/9"); string(b) != "page" {
@@ -123,11 +124,11 @@ func TestStartupLeavesFlatCacheFilesInPlace(t *testing.T) {
 	a.settings = loadSettings()
 	a.pl.Cache = newSongCache(a.settings)
 	a.recoverCacheDirectory()
-	for a.cacheMoving {
+	for a.cacheSettings.Moving {
 		refreshPost(t, posts)
 	}
-	if a.cacheError != "" || a.pl.Cache.Size() != 0 {
-		t.Fatalf("startup imported an old cache: size=%d, error=%q", a.pl.Cache.Size(), a.cacheError)
+	if a.cacheSettings.Error != "" || a.pl.Cache.Size() != 0 {
+		t.Fatalf("startup imported an old cache: size=%d, error=%q", a.pl.Cache.Size(), a.cacheSettings.Error)
 	}
 	for _, name := range []string{"123-exhigh.mp3", "123-exhigh.json"} {
 		if _, err := os.Stat(filepath.Join(source, name)); err != nil {
@@ -204,8 +205,8 @@ func TestCacheDirectoryRestoreDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError != "" || a.settings.CacheDir != "" || a.pl.Cache.Size() != 5 {
-		t.Fatal("failed to restore default", a.cacheError)
+	if a.cacheSettings.Error != "" || a.settings.CacheDir != "" || a.pl.Cache.Size() != 5 {
+		t.Fatal("failed to restore default", a.cacheSettings.Error)
 	}
 	if b, _ := a.browseCache.Read("7", "playlist/9"); string(b) != "page" {
 		t.Fatal("lost default page cache")
@@ -239,8 +240,8 @@ func TestCacheDirectoryIndexFlushFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	finishCacheChange(t, a, posts)
-	if a.cacheError == "" || a.settings.CacheDir != source || a.pl.Cache.Size() != 5 {
-		t.Fatal("failed flush changed directory or lost songs", a.cacheError)
+	if a.cacheSettings.Error == "" || a.settings.CacheDir != source || a.pl.Cache.Size() != 5 {
+		t.Fatal("failed flush changed directory or lost songs", a.cacheSettings.Error)
 	}
 	if b, _ := a.browseCache.Read("7", "playlist/9"); string(b) != "page" {
 		t.Fatal("failed flush left browsing suspended")

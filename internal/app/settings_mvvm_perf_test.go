@@ -1,0 +1,24 @@
+package app
+
+import (
+	"github.com/egoist/mygo/ui"
+	"testing"
+)
+
+// Settings builds retain the same controls and reuse the published preference data.
+func BenchmarkSettingsMVVM(b *testing.B) {
+	for _, section := range []string{"playback", "cache", "download"} {
+		b.Run(section, func(b *testing.B) {
+			a := newTestApp()
+			a.settings = defaultSettings()
+			a.preferences.Section = section
+			a.cacheSettings.Used = 0
+			tt := ui.NewTester(a.settingsView, 780, 640)
+			tt.Frame()
+			b.ReportAllocs()
+			for b.Loop() {
+				tt.Frame()
+			}
+		})
+	}
+}

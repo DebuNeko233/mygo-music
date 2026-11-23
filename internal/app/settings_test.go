@@ -8,21 +8,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"netease-music-mygo/internal/preferences"
 )
 
 // A transactional settings save must not be overwritten by an older queued slider change.
 func TestSettingsSaveSupersedesPendingChanges(t *testing.T) {
-	settingsWrites.wait()
+	preferences.Flush()
 	s := defaultSettings()
-	s.path = filepath.Join(t.TempDir(), "settings.json")
+	s.Path = filepath.Join(t.TempDir(), "settings.json")
 	s.CacheDir = "old"
 	s.saveSoon()
 	s.CacheDir = "new"
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
-	settingsWrites.wait()
-	b, err := os.ReadFile(s.path)
+	preferences.Flush()
+	b, err := os.ReadFile(s.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,12 +40,12 @@ func TestSettingsSaveSupersedesPendingChanges(t *testing.T) {
 // Turning immersive lyrics off must survive a reload with the feature enabled by default.
 func TestSaveKeepsImmersiveLyricsDisabled(t *testing.T) {
 	s := defaultSettings()
-	s.path = filepath.Join(t.TempDir(), "settings.json")
+	s.Path = filepath.Join(t.TempDir(), "settings.json")
 	s.LyricEdgeFade = false
 	if err := s.save(); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(s.path)
+	b, err := os.ReadFile(s.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +65,7 @@ func TestFinalSettingsSaveReportsFailure(t *testing.T) {
 	log.SetOutput(&output)
 	t.Cleanup(func() { log.SetOutput(writer) })
 	a := newTestApp()
-	a.settings.path = t.TempDir()
+	a.settings.Path = t.TempDir()
 	a.saveFinalSettings()
 	if !strings.Contains(output.String(), "settings: final save:") {
 		t.Fatalf("final save failure was not reported: %q", output.String())
@@ -75,7 +77,7 @@ func TestFinalSettingsSaveReportsFailure(t *testing.T) {
 // holding a shortcut that steps the lyric size takes them on every repeat.
 func TestSaveSoonKeepsTheLastOfABurst(t *testing.T) {
 	a := newTestApp()
-	a.settings.path = filepath.Join(t.TempDir(), "settings.json")
+	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 
 	a.settings.LyricSize = 28
 	a.settings.saveSoon()
@@ -83,9 +85,9 @@ func TestSaveSoonKeepsTheLastOfABurst(t *testing.T) {
 	a.settings.saveSoon()
 	a.settings.LyricSize = 32
 	a.settings.saveSoon()
-	settingsWrites.wait()
+	preferences.Flush()
 
-	b, err := os.ReadFile(a.settings.path)
+	b, err := os.ReadFile(a.settings.Path)
 	if err != nil {
 		t.Fatalf("read the settings back: %v", err)
 	}

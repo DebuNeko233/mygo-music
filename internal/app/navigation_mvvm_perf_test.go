@@ -1,9 +1,10 @@
 package app
 
 import (
+	"testing"
+
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
-	"testing"
 )
 
 // Loaded navigation only adjusts history and opens existing page state.

@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/lyrics"
+	"netease-music-mygo/internal/preferences"
 )
 
 // Ambiguous Han retains the region's Chinese or Japanese glyph preference.
@@ -83,7 +84,7 @@ func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
 			t.Errorf("custom font did not keep the original fallback and language for %v: %v", script, custom)
 		}
 	}
-	settingsWrites.wait()
+	preferences.Flush()
 	if saved := loadSettings(); saved.UIFont != wantedUI || saved.PlaybackLyricFont != wantedLyrics || saved.LyricFont != "Desktop font" {
 		t.Fatal("font choices did not survive reload independently of desktop lyrics")
 	}
@@ -93,7 +94,7 @@ func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
 		t.Fatal("resetting lyrics did not restore automatic typography while keeping the UI font")
 	}
 	choose("选择UI 字体", lyricFontSystem)
-	settingsWrites.wait()
+	preferences.Flush()
 	if saved := loadSettings(); saved.UIFont != "" || saved.PlaybackLyricFont != "" || settingsFont == wantedUI || mainFont == wantedUI {
 		t.Fatal("resetting the UI font did not restore the system choice")
 	}
