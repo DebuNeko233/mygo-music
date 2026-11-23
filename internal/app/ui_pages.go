@@ -243,7 +243,7 @@ func (a *app) chartCard(c *ui.Context, pl *netease.Playlist) {
 }
 
 func (a *app) playlistPage(c *ui.Context) {
-	id := a.route.ID
+	id := a.nav.Current.ID
 	pl := a.library.Playlists[id]
 	if pl == nil {
 		if !a.library.Loading[id] || a.library.Errors[id] != "" {
@@ -357,19 +357,19 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 	cur := a.pl.Current()
 	// A song's menu can take it out of the playlist it is listed in.
 	var pid int64
-	if a.route.Page == pagePlaylist {
-		pid = a.route.ID
+	if a.nav.Current.Page == pagePlaylist {
+		pid = a.nav.Current.ID
 	}
 	w, _ := c.Size()
 	// An album's page has no column of the album its songs are on.
-	wide := w-sidebarWidth > 820 && a.route.Page != pageAlbum
+	wide := w-sidebarWidth > 820 && a.nav.Current.Page != pageAlbum
 	top, bottom := a.insets(c)
 	// Rows out of view are not built, their marks with them: a list
 	// scrolled away from its start or end has content under the bars.
 	a.underTop, a.underBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
-	list := ui.List(c.Key(a.route), &a.trackList, rows)
-	if pid != 0 || a.route.Page == pageCloud || a.route.Page == pageLocal {
+	list := ui.List(c.Key(a.nav.Current), &a.trackList, rows)
+	if pid != 0 || a.nav.Current.Page == pageCloud || a.nav.Current.Page == pageLocal {
 		list.ItemKey(a.trackRowKeys(tracks))
 	}
 	list.Rows(func(item ui.ListRow) {
@@ -394,7 +394,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		playable := tr.Playable()
 		playing := cur != nil && cur.Key() == tr.Key()
 		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
-		if a.route.Page == pageLocal {
+		if a.nav.Current.Page == pageLocal {
 			row.ContextMenu(a.localSongItems(tr, true))
 		} else {
 			row.ContextMenu(a.songItems(tr, pid))
@@ -489,7 +489,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 			}
 		}
 	}).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0)
-	if a.route.Page == pagePlaylist || a.route.Page == pageCloud || a.route.Page == pageLocal {
+	if a.nav.Current.Page == pagePlaylist || a.nav.Current.Page == pageCloud || a.nav.Current.Page == pageLocal {
 		list.TrackScroll(&a.pageScroll)
 	}
 	return playingVisible

@@ -21,7 +21,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			page := route{Page: pagePlaylist, ID: 42}
-			a.route = page
+			a.nav.Current = page
 			tr := netease.Track{ID: 1, Name: "测试封面", Album: netease.Album{PicURL: "https://p1.music.126.net/test/row.jpg"}}
 			a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "原歌单", Tracks: []netease.Track{tr}}
 			a.library.Playlists[43] = &netease.Playlist{ID: 43, Name: "其他歌单"}
@@ -51,7 +51,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			if mode == "now playing" {
 				a.nowPlaying = true
 			} else {
-				a.route = route{Page: pagePlaylist, ID: 43}
+				a.nav.Current = route{Page: pagePlaylist, ID: 43}
 			}
 			view.Frame()
 			view.Advance(time.Second)
@@ -62,7 +62,7 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			if a.art.art[key] == nil || a.art.art["offscreen"] != nil || a.art.size > a.art.limit {
 				t.Fatal("the return page's cover was evicted despite room for it")
 			}
-			a.nowPlaying, a.route = false, page
+			a.nowPlaying, a.nav.Current = false, page
 			view.Frame()
 			view.Advance(time.Second)
 			view.Frame()

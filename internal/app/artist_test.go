@@ -36,8 +36,8 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.nowPlaying || a.route != (route{Page: pageArtist, ID: 12}) {
-		t.Fatalf("after the click: Now Playing open %v, page %+v", a.nowPlaying, a.route)
+	if a.nowPlaying || a.nav.Current != (route{Page: pageArtist, ID: 12}) {
+		t.Fatalf("after the click: Now Playing open %v, page %+v", a.nowPlaying, a.nav.Current)
 	}
 
 	tt.Advance(time.Second)
@@ -48,8 +48,8 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{Page: pageArtist, ID: 13}) {
-		t.Fatalf("a row's artist opened %+v", a.route)
+	if a.nav.Current != (route{Page: pageArtist, ID: 13}) {
+		t.Fatalf("a row's artist opened %+v", a.nav.Current)
 	}
 	if cur := a.pl.Current(); cur == nil || cur.ID != duet.ID {
 		t.Errorf("a click on a row's artist played %+v", cur)
@@ -58,8 +58,8 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 	// Back goes to the artist before.
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
-	if a.route.ID != 12 {
-		t.Errorf("back went to %+v", a.route)
+	if a.nav.Current.ID != 12 {
+		t.Errorf("back went to %+v", a.nav.Current)
 	}
 }
 

@@ -55,8 +55,8 @@ func TestMusicLinkSearchEnter(t *testing.T) {
 			tt.Type(tc.input)
 			tt.Key(0, ui.KeyEnter)
 			tt.Frame()
-			if a.route != tc.want || a.nowPlaying {
-				t.Fatalf("opened %+v, nowPlaying=%v", a.route, a.nowPlaying)
+			if a.nav.Current != tc.want || a.nowPlaying {
+				t.Fatalf("opened %+v, nowPlaying=%v", a.nav.Current, a.nowPlaying)
 			}
 			if len(a.settings.SearchHistory) != 1 || a.settings.SearchHistory[0] != "春日影" {
 				t.Fatal("URL entered search history")
@@ -75,8 +75,8 @@ func TestMusicLinkSearchEnter(t *testing.T) {
 // the error rather than silently searching for the URL.
 func TestMusicLinkInvalidInput(t *testing.T) {
 	a := musicLinkApp(t)
-	before := a.route
-	if !a.openMusicInput("orpheus://song/-1") || a.toast == "" || a.route != before {
+	before := a.nav.Current
+	if !a.openMusicInput("orpheus://song/-1") || a.toast == "" || a.nav.Current != before {
 		t.Fatal("invalid link changed route or failed silently")
 	}
 	if a.openMusicInput("春日影") {
@@ -158,15 +158,15 @@ func TestMusicLinkFailureAndNavigation(t *testing.T) {
 // destination; restoring the previous queue must happen before opening it.
 func TestMusicLinkColdStart(t *testing.T) {
 	a := musicLinkApp(t)
-	a.links.starting = true
+	a.links.Starting = true
 	a.openMusicInput("orpheus://playlist/12")
 	a.openMusicInput("orpheus://album/34")
-	if a.route.Page != pageHome || a.links.pending == nil {
+	if a.nav.Current.Page != pageHome || a.links.Pending == nil {
 		t.Fatal("link ran before restoration")
 	}
 	a.openPendingMusicLink()
-	if a.links.starting || a.links.pending != nil || a.route != (route{Page: pageAlbum, ID: 34}) {
-		t.Fatalf("pending link lost: %+v", a.route)
+	if a.links.Starting || a.links.Pending != nil || a.nav.Current != (route{Page: pageAlbum, ID: 34}) {
+		t.Fatalf("pending link lost: %+v", a.nav.Current)
 	}
 }
 
@@ -212,20 +212,20 @@ func TestMusicLinkRegistrationSetting(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if attempts != 1 || a.links.registrationError == "" {
+	if attempts != 1 || a.links.RegistrationError == "" {
 		t.Fatal("registration error not shown")
 	}
 	if err := tt.Click("设为网易云链接默认应用"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.links.registered || a.links.registrationError != "" {
+	if !a.links.Registered || a.links.RegistrationError != "" {
 		t.Fatal("successful registration not reflected")
 	}
 	registered = false
 	a.refreshMusicLinkHandler()
 	tt.Frame()
-	if a.links.registered {
+	if a.links.Registered {
 		t.Fatal("stale handler state")
 	}
 }
@@ -267,8 +267,8 @@ func TestMusicLinkShortShareOpensPage(t *testing.T) {
 	posts := testPosts(a)
 	a.search("https://163cn.tv/abc")
 	wait(t, posts, "resolved share")()
-	if a.route != (route{Page: pageAlbum, ID: 34}) {
-		t.Fatalf("short link opened %+v", a.route)
+	if a.nav.Current != (route{Page: pageAlbum, ID: 34}) {
+		t.Fatalf("short link opened %+v", a.nav.Current)
 	}
 }
 
@@ -296,5 +296,42 @@ func TestMusicLinkSearchPlaysSong(t *testing.T) {
 	}
 	if len(a.settings.SearchHistory) != 0 {
 		t.Fatal("song URL entered keyword history")
+	}
+}
+
+// A link started by the old account must not replace playback after account switching.
+func TestMusicLinkRejectsAccountChange(t *testing.T) {
+	a := musicLinkApp(t)
+	posts := testPosts(a)
+	old := musicLinkTrack
+	t.Cleanup(func() { musicLinkTrack = old })
+	musicLinkTrack = func(context.Context, netease.MusicLink) (netease.Track, error) {
+		return netease.Track{ID: 77, Name: "old account"}, nil
+	}
+	a.openMusicInput("orpheus://song/77")
+	update := wait(t, posts, "old link")
+	a.account.Generation++
+	update()
+	if a.pl.Current() != nil || a.nowPlaying {
+		t.Fatal("old link crossed account boundary")
+	}
+}
+
+// Going back while a short link resolves cancels its pending navigation too.
+func TestMusicLinkBackCancelsPending(t *testing.T) {
+	a := musicLinkApp(t)
+	posts := testPosts(a)
+	old := resolveMusicLink
+	t.Cleanup(func() { resolveMusicLink = old })
+	a.open(route{Page: pageAlbum, ID: 34})
+	resolveMusicLink = func(context.Context, netease.MusicLink) (netease.MusicLink, error) {
+		return netease.MusicLink{Kind: "playlist", ID: 12}, nil
+	}
+	a.openMusicInput("https://163cn.tv/abc")
+	update := wait(t, posts, "short link")
+	a.back()
+	update()
+	if a.nav.Current.Page != pageHome {
+		t.Fatalf("pending link replaced back navigation: %+v", a.nav.Current)
 	}
 }

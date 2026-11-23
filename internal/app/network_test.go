@@ -16,7 +16,7 @@ import (
 // without waiting for a failed request or changing the playing queue.
 func TestNetworkDisconnectOnCachedPage(t *testing.T) {
 	a, _ := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	pl := &netease.Playlist{ID: 9, Name: "Cached"}
 	a.library.Playlists[9] = pl
 	a.recovery.timer = time.NewTimer(time.Hour)
@@ -42,7 +42,7 @@ func TestNetworkDisconnectOnCachedPage(t *testing.T) {
 // event and preserves the existing page until the new response arrives.
 func TestNetworkReconnectionRecoversCurrentPage(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.playlistRequest(9).Failed = true
 	a.playlistRequest(9).Failure = netease.ErrOffline
@@ -70,7 +70,7 @@ func TestPodcastTabRecoversWithConnection(t *testing.T) {
 	for _, manual := range []bool{false, true} {
 		t.Run(map[bool]string{false: "reconnect", true: "manual"}[manual], func(t *testing.T) {
 			a, posts := offlineFixture(t)
-			a.route = route{Page: pagePodcasts}
+			a.nav.Current = route{Page: pagePodcasts}
 			a.podcasts.Home.HotPage.Error, a.podcasts.Home.HotPage.Failure = "热门播客加载失败", netease.ErrOffline
 			calls := 0
 			hotPodcasts = func(_, _ int) ([]netease.Podcast, bool, error) {
@@ -94,7 +94,7 @@ func TestPodcastTabRecoversWithConnection(t *testing.T) {
 // still offline, and starts one when that explicit check observes a connection.
 func TestNetworkRefreshIcon(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.network = networkState{known: true, offline: true}
 	a.account.Pending = true
@@ -145,7 +145,7 @@ func TestNetworkReconnectionWhileHidden(t *testing.T) {
 // they return only after closing, and network events still recover resources.
 func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.pl = player.New(a.post)
 	a.pl.Cue([]netease.Track{{ID: 1}})
@@ -307,7 +307,7 @@ func TestHomeRefreshIconReloadsContent(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			a, posts := offlineFixture(t)
-			a.route = route{Page: scenario.page}
+			a.nav.Current = route{Page: scenario.page}
 			if !scenario.signedIn {
 				a.account.Profile = nil
 			}

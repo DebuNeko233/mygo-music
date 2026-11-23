@@ -24,7 +24,7 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 			a := editTestApp()
 			a.library.Playlists[tc.playlist] = &netease.Playlist{ID: tc.playlist, Name: tc.row}
 			a.pl.Cue(a.library.Playlists[10].Tracks)
-			before := a.route
+			before := a.nav.Current
 			tt := ui.NewTester(a.view, 1200, 800)
 			tt.Frame()
 
@@ -38,7 +38,7 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 			if _, ok := tt.Find(tc.other); !ok {
 				t.Error("collapsing one section hid the other section's rows")
 			}
-			if a.route != before || len(a.pl.Queue()) != 2 || len(a.library.Mine) != 3 || len(a.library.Saved) != 1 {
+			if a.nav.Current != before || len(a.pl.Queue()) != 2 || len(a.library.Mine) != 3 || len(a.library.Saved) != 1 {
 				t.Error("collapsing the section changed the page, queue or playlists")
 			}
 
@@ -48,8 +48,8 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 				t.Fatalf("the restored playlist cannot be opened: %v", err)
 			}
 			tt.Frame()
-			if a.route != (route{Page: pagePlaylist, ID: tc.playlist}) {
-				t.Errorf("opened %+v, want playlist %d", a.route, tc.playlist)
+			if a.nav.Current != (route{Page: pagePlaylist, ID: tc.playlist}) {
+				t.Errorf("opened %+v, want playlist %d", a.nav.Current, tc.playlist)
 			}
 		})
 	}
@@ -76,8 +76,8 @@ func TestSidebarSavedAlbums(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{Page: pageAlbum, ID: 77}) {
-		t.Fatalf("opened %+v, want album 77", a.route)
+	if a.nav.Current != (route{Page: pageAlbum, ID: 77}) {
+		t.Fatalf("opened %+v, want album 77", a.nav.Current)
 	}
 	if err := tt.Click("收藏的专辑"); err != nil {
 		t.Fatal(err)

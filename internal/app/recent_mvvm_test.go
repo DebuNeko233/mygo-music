@@ -19,7 +19,7 @@ func TestRecentTabSwitchAndRetry(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 7}
-	a.route = route{Page: pageRecent}
+	a.nav.Current = route{Page: pageRecent}
 	fixed := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
 	a.library.Refresh.Now = func() time.Time { return fixed }
 	posts := testPosts(a)

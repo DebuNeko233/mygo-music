@@ -51,7 +51,7 @@ func (a *app) search(q string) {
 func (a *app) searchFor(r route) {
 	a.rememberSearch(r.Query)
 	a.dismissSuggestions()
-	if r == a.route {
+	if r == a.nav.Current {
 		a.nowPlaying = false
 		a.loadSearch(r, true)
 		return
@@ -91,7 +91,7 @@ func (a *app) clearSearchHistory() {
 }
 
 func (a *app) searchPage(c *ui.Context) {
-	r := a.route
+	r := a.nav.Current
 	d := a.searches.Pages.Get(r)
 	header := func(c *ui.Context) { a.searchHeader(c, d) }
 	more := func() { a.moreResults(r, d) }
@@ -151,7 +151,7 @@ func (a *app) searchEmpty(c *ui.Context, d *viewmodel.SearchPage) {
 // searchHeader is what was searched for, how many it found, and the tabs
 // of what it may look for instead.
 func (a *app) searchHeader(c *ui.Context, d *viewmodel.SearchPage) {
-	r := a.route
+	r := a.nav.Current
 	sub := "搜索"
 	at := 0
 	for i, k := range searchKinds {

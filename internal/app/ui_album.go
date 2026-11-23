@@ -16,7 +16,7 @@ var (
 )
 
 func (a *app) albumPage(c *ui.Context) {
-	id := a.route.ID
+	id := a.nav.Current.ID
 	// Whether the listener saved this album is whether the albums they saved
 	// list it: load that once, as the page may be the first thing opened.
 	a.freshenAlbums()
@@ -109,7 +109,7 @@ func (a *app) albumCard(c *ui.Context, al *netease.AlbumProfile) {
 		art.Children(func() { a.coverFill(c, al.PicURL, 400, 10) })
 		ui.Text(c, al.Name).FontSize(13).FontWeight(500).MaxLines(2).LineHeight(1.35)
 		var meta []string
-		if a.route.Page != pageArtist {
+		if a.nav.Current.Page != pageArtist {
 			meta = append(meta, al.ArtistNames())
 		}
 		if al.PublishTime > 0 {

@@ -21,13 +21,13 @@ func TestBackAndForward(t *testing.T) {
 
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
-	if a.route != charts {
-		t.Fatalf("back went to %+v", a.route)
+	if a.nav.Current != charts {
+		t.Fatalf("back went to %+v", a.nav.Current)
 	}
 	tt.Key(0, ui.KeyForward)
 	tt.Frame()
-	if a.route != list {
-		t.Fatalf("forward went to %+v", a.route)
+	if a.nav.Current != list {
+		t.Fatalf("forward went to %+v", a.nav.Current)
 	}
 
 	// Back closes Now Playing before it leaves the page under it.
@@ -36,8 +36,8 @@ func TestBackAndForward(t *testing.T) {
 	tt.Frame()
 	tt.Key(0, ui.KeyBack)
 	tt.Frame()
-	if a.nowPlaying || a.route != list {
-		t.Fatalf("back with Now Playing open: open %v, page %+v", a.nowPlaying, a.route)
+	if a.nowPlaying || a.nav.Current != list {
+		t.Fatalf("back with Now Playing open: open %v, page %+v", a.nowPlaying, a.nav.Current)
 	}
 
 	// A new page leaves nothing to go forward to.
@@ -46,7 +46,7 @@ func TestBackAndForward(t *testing.T) {
 	a.open(route{Page: pageHome})
 	tt.Key(0, ui.KeyForward)
 	tt.Frame()
-	if a.route != (route{Page: pageHome}) {
-		t.Fatalf("forward after a new page went to %+v", a.route)
+	if a.nav.Current != (route{Page: pageHome}) {
+		t.Fatalf("forward after a new page went to %+v", a.nav.Current)
 	}
 }

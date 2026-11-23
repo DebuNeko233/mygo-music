@@ -163,7 +163,7 @@ func (a *app) failedLoads(manual bool) bool {
 	if id, home, subs := a.podcastRecoveryScope(); a.podcasts.NeedsRecovery(id, home, subs, manual) {
 		return true
 	}
-	switch a.route.Page {
+	switch a.nav.Current.Page {
 	case pageCloud:
 		if !a.cloud.Loading() && a.cloud.Failure != nil && retry(a.cloud.Failure) {
 			return true
@@ -173,11 +173,11 @@ func (a *app) failedLoads(manual bool) bool {
 			return true
 		}
 	case pageAlbum:
-		if d := a.albums.Pages.Get(a.route.ID); d != nil && !d.Loading && d.Error != "" && retry(d.Failure) {
+		if d := a.albums.Pages.Get(a.nav.Current.ID); d != nil && !d.Loading && d.Error != "" && retry(d.Failure) {
 			return true
 		}
 	case pageArtist:
-		if d := a.artists.Pages.Get(a.route.ID); d != nil {
+		if d := a.artists.Pages.Get(a.nav.Current.ID); d != nil {
 			if !d.Loading && d.Error != "" && retry(d.Failure) {
 				return true
 			}
@@ -197,7 +197,7 @@ func (a *app) failedLoads(manual bool) bool {
 			}
 		}
 	case pageSearch:
-		if d := a.searches.Pages.Get(a.route); d != nil && !d.Page.Loading && d.Page.Error != "" && retry(d.Page.Failure) {
+		if d := a.searches.Pages.Get(a.nav.Current); d != nil && !d.Page.Loading && d.Page.Error != "" && retry(d.Page.Failure) {
 			return true
 		}
 
@@ -220,7 +220,7 @@ func (a *app) retryLoads(manual bool) {
 	if a.library.NeedsRecovery(a.visiblePlaylist(), manual) {
 		a.library.RetryFailed(a.listenerID(), a.visiblePlaylist(), manual, a.libraryServices())
 	}
-	switch a.route.Page {
+	switch a.nav.Current.Page {
 	case pageCloud:
 		if a.cloud.Failure != nil && retry(a.cloud.Failure) {
 			a.loadCloud(viewmodel.CloudNextPage)
@@ -230,27 +230,27 @@ func (a *app) retryLoads(manual bool) {
 			a.loadRecentTab(a.recent.Selected)
 		}
 	case pageAlbum:
-		if d := a.albums.Pages.Get(a.route.ID); d != nil && !d.Loading && d.Error != "" && retry(d.Failure) {
-			a.loadAlbum(a.route.ID)
+		if d := a.albums.Pages.Get(a.nav.Current.ID); d != nil && !d.Loading && d.Error != "" && retry(d.Failure) {
+			a.loadAlbum(a.nav.Current.ID)
 		}
 	case pageArtist:
-		if d := a.artists.Pages.Get(a.route.ID); d != nil {
+		if d := a.artists.Pages.Get(a.nav.Current.ID); d != nil {
 			if d.Error != "" && retry(d.Failure) {
-				a.loadArtistProfile(a.route.ID)
+				a.loadArtistProfile(a.nav.Current.ID)
 			}
 			if a.artists.Tab == viewmodel.ArtistLatest && d.LatestError != "" && retry(d.LatestFailure) {
-				a.loadLatest(a.route.ID)
+				a.loadLatest(a.nav.Current.ID)
 			}
 			if d.AlbumsPage.Error != "" && a.artists.Tab == viewmodel.ArtistAlbums && retry(d.AlbumsPage.Failure) {
-				a.loadAlbums(a.route.ID)
+				a.loadAlbums(a.nav.Current.ID)
 			}
 			if d.EventsPage.Error != "" && a.artists.Tab == viewmodel.ArtistEvents && retry(d.EventsPage.Failure) {
-				a.loadEvents(a.route.ID)
+				a.loadEvents(a.nav.Current.ID)
 			}
 		}
 	case pageSearch:
-		if d := a.searches.Pages.Get(a.route); d != nil && !d.Page.Loading && d.Page.Error != "" && retry(d.Page.Failure) {
-			a.moreResults(a.route, d)
+		if d := a.searches.Pages.Get(a.nav.Current); d != nil && !d.Page.Loading && d.Page.Error != "" && retry(d.Page.Failure) {
+			a.moreResults(a.nav.Current, d)
 		}
 
 	}
@@ -386,22 +386,22 @@ func (a *app) recoveryBusy() bool {
 	if a.trackArt.searching || a.trackArt.publication.loading && a.trackArt.publication.track == a.pl.Current() || a.art.hasLoading() {
 		return true
 	}
-	switch a.route.Page {
+	switch a.nav.Current.Page {
 	case pageCloud:
 		return a.cloud.Loading()
 	case pageRecent:
 		return a.recent.ReadingSnapshot || a.recent.Tabs[a.recent.Selected].Loading
 	case pagePlaylist:
-		r := a.library.Refresh.Playlists[a.route.ID]
+		r := a.library.Refresh.Playlists[a.nav.Current.ID]
 		return r != nil && r.Busy
 	case pageAlbum:
-		d := a.albums.Pages.Get(a.route.ID)
+		d := a.albums.Pages.Get(a.nav.Current.ID)
 		return d != nil && d.Loading
 	case pageArtist:
-		d := a.artists.Pages.Get(a.route.ID)
+		d := a.artists.Pages.Get(a.nav.Current.ID)
 		return d != nil && (d.Loading || a.artists.Tab == viewmodel.ArtistLatest && d.LatestLoading || a.artists.Tab == viewmodel.ArtistAlbums && d.AlbumsPage.Loading || a.artists.Tab == viewmodel.ArtistEvents && d.EventsPage.Loading)
 	case pageSearch:
-		d := a.searches.Pages.Get(a.route)
+		d := a.searches.Pages.Get(a.nav.Current)
 		return d != nil && d.Page.Loading
 
 	}

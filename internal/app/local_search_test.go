@@ -56,7 +56,7 @@ func TestLocalSidebarSearchPlaysAndLocates(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if cur := a.pl.Current(); cur == nil || cur.LocalID != 150 || cur.ID != 0 || !a.pl.Playing() || len(a.pl.Queue()) != len(songs) || a.route.Page != pageLocal {
+			if cur := a.pl.Current(); cur == nil || cur.LocalID != 150 || cur.ID != 0 || !a.pl.Playing() || len(a.pl.Queue()) != len(songs) || a.nav.Current.Page != pageLocal {
 				t.Fatal("sidebar did not play the selected local file with the library queue")
 			}
 			for i, tr := range a.pl.Queue() {

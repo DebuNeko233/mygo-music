@@ -117,7 +117,7 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 					pl.Tracks[i].ID = pl.Tracks[i-200].ID
 				}
 			}
-			a.route = route{Page: pagePlaylist, ID: id}
+			a.nav.Current = route{Page: pagePlaylist, ID: id}
 			a.library.Playlists[id] = pl
 			a.pl.Cue(pl.Tracks)
 			a.pl.Hold(43 * time.Second)
@@ -294,7 +294,7 @@ func TestLibraryRefreshOnWindowActivation(t *testing.T) {
 	a.library.Mine = []netease.Playlist{{ID: 7, Name: "Old"}}
 	a.library.Liked = map[int64]bool{1: true}
 	a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "Old"}
-	a.route = route{Page: pagePlaylist, ID: 7}
+	a.nav.Current = route{Page: pagePlaylist, ID: 7}
 	var mine, likes, detail atomic.Int32
 	userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) {
 		mine.Add(1)
@@ -455,7 +455,7 @@ func TestLibraryRefreshDiscardedSuccessRetries(t *testing.T) {
 				case "mine":
 					a.loadMine(1)
 				case "playlist":
-					a.route = route{Page: pagePlaylist, ID: 7}
+					a.nav.Current = route{Page: pagePlaylist, ID: 7}
 					a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "Local"}
 					a.loadPlaylist(7, false)
 				}

@@ -18,7 +18,7 @@ func TestArtistEventsRecovery(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			a := newTestApp()
 			posts := testPosts(a)
-			a.route = route{Page: pageArtist, ID: 9}
+			a.nav.Current = route{Page: pageArtist, ID: 9}
 			a.artists.Tab = viewmodel.ArtistEvents
 			d := a.artist(9)
 			d.Profile = &netease.ArtistProfile{ID: 9, AccountID: 42}

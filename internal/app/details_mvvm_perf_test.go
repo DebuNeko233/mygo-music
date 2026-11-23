@@ -23,21 +23,21 @@ func detailPerfApp(scene string) *app {
 	a.albums.Pages.Get(8).Album.Songs = songs
 	switch scene {
 	case "artist-hot":
-		a.route = route{Page: pageArtist, ID: 7}
+		a.nav.Current = route{Page: pageArtist, ID: 7}
 		a.artists.Tab = viewmodel.ArtistHot
 	case "artist-latest":
-		a.route = route{Page: pageArtist, ID: 7}
+		a.nav.Current = route{Page: pageArtist, ID: 7}
 		a.artists.Tab = viewmodel.ArtistLatest
 	case "artist-albums":
-		a.route = route{Page: pageArtist, ID: 7}
+		a.nav.Current = route{Page: pageArtist, ID: 7}
 		a.artists.Tab = viewmodel.ArtistAlbums
 	case "artist-events":
-		a.route = route{Page: pageArtist, ID: 7}
+		a.nav.Current = route{Page: pageArtist, ID: 7}
 		a.artists.Tab = viewmodel.ArtistEvents
 	case "album":
-		a.route = route{Page: pageAlbum, ID: 8}
+		a.nav.Current = route{Page: pageAlbum, ID: 8}
 	case "user":
-		a.route = route{Page: pageUser, ID: 9}
+		a.nav.Current = route{Page: pageUser, ID: 9}
 	}
 	return a
 }

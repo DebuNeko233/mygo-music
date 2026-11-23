@@ -86,7 +86,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.users.Reset()
 	a.podcasts.Reset()
 	a.searches.Reset()
-	a.load(a.route)
+	a.load(a.nav.Current)
 	a.loadHome()
 	a.openPendingMusicLink()
 	if prof == nil {

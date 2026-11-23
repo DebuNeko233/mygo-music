@@ -76,7 +76,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 				pl.Tracks = append(pl.Tracks, netease.Track{ID: i, Name: fmt.Sprintf("歌曲 %03d", i), Duration: 200000})
 				pl.TrackIDs = append(pl.TrackIDs, netease.TrackID{ID: i})
 			}
-			a.route = route{Page: pagePlaylist, ID: pid}
+			a.nav.Current = route{Page: pagePlaylist, ID: pid}
 			a.library.Playlists[pid] = pl
 			if !rejected {
 				a.library.Mine = []netease.Playlist{{ID: pid, Name: pl.Name, SpecialType: 5}}
@@ -174,7 +174,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 func TestLikeRefreshesOffscreenPlaylist(t *testing.T) {
 	a, posts, _ := refreshFixture(t)
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route = route{Page: pageHome}
+	a.nav.Current = route{Page: pageHome}
 	const pid, song = 5, 7
 	tr := netease.Track{ID: song, Name: "宝船"}
 	a.pl.Cue([]netease.Track{tr})
@@ -204,7 +204,7 @@ func TestLikeRefreshesOffscreenPlaylist(t *testing.T) {
 		t.Fatalf("refreshed playlist %d, want %d", id, pid)
 	}
 	refreshPost(t, posts)
-	if pl := a.library.Playlists[pid]; pl == nil || len(pl.Tracks) != 1 || pl.Tracks[0].ID != song || a.route.Page != pageHome {
+	if pl := a.library.Playlists[pid]; pl == nil || len(pl.Tracks) != 1 || pl.Tracks[0].ID != song || a.nav.Current.Page != pageHome {
 		t.Fatal("offscreen favorites did not update in place")
 	}
 }

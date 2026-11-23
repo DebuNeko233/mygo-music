@@ -24,7 +24,7 @@ var (
 
 func (a *app) podcastPage(c *ui.Context) {
 	p := a.pal
-	id := a.route.ID
+	id := a.nav.Current.ID
 	d := a.podcasts.Pages.Get(id)
 	if d.Podcast == nil {
 		if !d.Loading {

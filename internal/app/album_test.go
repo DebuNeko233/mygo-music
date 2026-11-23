@@ -27,7 +27,7 @@ func albumTestApp(t *testing.T) *app {
 			{ID: 901, Name: "蓝天白云", Artists: []netease.Artist{{ID: 3, Name: "张悬"}}, Duration: 220000},
 		},
 	}})
-	a.route = route{Page: pageAlbum, ID: 77}
+	a.nav.Current = route{Page: pageAlbum, ID: 77}
 	// The saved albums were just loaded, so the page does not ask again.
 	a.library.Refresh.Albums.At = time.Now()
 	return a
@@ -137,7 +137,7 @@ func TestSavedAlbumsOnOwnPage(t *testing.T) {
 	if err := tt.Click("神的游戏"); err != nil {
 		t.Fatal(err)
 	}
-	if a.route.Page != pageAlbum || a.route.ID != 77 {
-		t.Fatalf("route = %+v, want the page of album 77", a.route)
+	if a.nav.Current.Page != pageAlbum || a.nav.Current.ID != 77 {
+		t.Fatalf("route = %+v, want the page of album 77", a.nav.Current)
 	}
 }

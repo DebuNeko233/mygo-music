@@ -86,7 +86,7 @@ func TestPlaylistCacheKeepsOfflineSnapshots(t *testing.T) {
 // with a pending reply, or a modified list whose snapshot is not yet saved.
 func TestPlaylistCacheProtectsActiveEntries(t *testing.T) {
 	a := newTestApp()
-	a.route = route{Page: pagePlaylist, ID: 1}
+	a.nav.Current = route{Page: pagePlaylist, ID: 1}
 	for id := int64(1); id <= playlistCachePages+1; id++ {
 		a.library.Playlists[id] = &netease.Playlist{ID: id}
 		a.usePlaylist(id)

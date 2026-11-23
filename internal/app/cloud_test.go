@@ -28,7 +28,7 @@ func cloudFixture(t *testing.T) (*app, chan func()) {
 	t.Cleanup(a.dismissSuggestions)
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route = route{Page: pageCloud}
+	a.nav.Current = route{Page: pageCloud}
 	return a, testPosts(a)
 }
 func cloudTrack(id int64, name string) netease.Track {
@@ -458,7 +458,7 @@ func TestCloudSidebarSearchPlaysAndLocates(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if tr := a.pl.Current(); tr == nil || tr.ID != 70 || !tr.Cloud || len(a.pl.Queue()) != 80 || a.route.Page != pageCloud {
+			if tr := a.pl.Current(); tr == nil || tr.ID != 70 || !tr.Cloud || len(a.pl.Queue()) != 80 || a.nav.Current.Page != pageCloud {
 				t.Fatal("sidebar suggestion did not reuse the cloud queue")
 			}
 			for a.pl.Loading() || a.pl.MetadataLoading() {
@@ -491,7 +491,7 @@ func TestCloudSidebarSearchLoadsEntireLibrary(t *testing.T) {
 	if _, found := tt.Find("网盘：后页歌曲"); !found {
 		t.Fatal("new page did not appear in the existing search popup")
 	}
-	if a.searches.Query != "后页" || a.route.Page != pageCloud {
+	if a.searches.Query != "后页" || a.nav.Current.Page != pageCloud {
 		t.Fatal("whole-cloud search lost query or navigated away")
 	}
 	if err := tt.Click("清空搜索"); err != nil {
@@ -519,7 +519,7 @@ func TestCloudSuggestionRevalidatesSource(t *testing.T) {
 			case "account":
 				a.account.Profile = &netease.Profile{UserID: 2}
 			case "page":
-				a.route = route{Page: pageHome}
+				a.nav.Current = route{Page: pageHome}
 			}
 			// Resolve only the reorder case; suppress I/O while observing its queue decision.
 			if change == "reorder" {
@@ -557,12 +557,12 @@ func TestCloudRefreshesWhenReopenedAfterFreshnessInterval(t *testing.T) {
 		calls <- offset
 		return &netease.CloudPage{Tracks: []netease.Track{cloudTrack(2, "新歌曲")}, Count: 1, NextOffset: 1}, nil
 	}
-	a.load(a.route)
+	a.load(a.nav.Current)
 	if a.cloud.Loading() {
 		t.Fatal("reopening a fresh library repeated its request")
 	}
 	now = now.Add(viewmodel.ListsFresh + time.Second)
-	a.load(a.route)
+	a.load(a.nav.Current)
 	if got := wait(t, calls, "automatic cloud refresh"); got != 0 {
 		t.Fatalf("refresh offset %d", got)
 	}
@@ -712,7 +712,7 @@ func TestCloudLocateKeepsPlayback(t *testing.T) {
 			}
 			clickLocate(t, tt)
 			locatedRow(t, tt, tracks[149].Name, 800)
-			if a.pl.Current().ID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.route.Page != pageCloud {
+			if a.pl.Current().ID != 150 || a.pl.Playing() != playing || a.pl.Position() != pos || len(a.pl.Queue()) != 2 || a.pl.Queue()[1].ID != 999 || a.nav.Current.Page != pageCloud {
 				t.Fatal("cloud locator changed playback or queue")
 			}
 			tt.Scroll(750, 400, 0, -100000)
@@ -843,12 +843,12 @@ func TestCloudLocateDoesNotScrollAnotherPage(t *testing.T) {
 		other[i] = netease.Track{ID: int64(10000 + i), Name: fmt.Sprintf("其他歌曲 %03d", i+1)}
 	}
 	a.library.Playlists[7] = &netease.Playlist{ID: 7, Name: "另一张歌单", Tracks: other}
-	a.route = route{Page: pagePlaylist, ID: 7}
+	a.nav.Current = route{Page: pagePlaylist, ID: 7}
 	tt.Frame()
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.route != (route{Page: pagePlaylist, ID: 7}) {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.nav.Current != (route{Page: pagePlaylist, ID: 7}) {
 		t.Fatal("old cloud locate affected the new page")
 	}
 }
@@ -885,7 +885,7 @@ func TestCloudLocateStaysCancelledAfterReturning(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.route.Page != pageCloud {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.nav.Current.Page != pageCloud {
 		t.Fatal("returning revived the old locate action")
 	}
 }

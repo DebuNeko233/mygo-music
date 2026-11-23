@@ -61,9 +61,7 @@ type app struct {
 	pal    palette
 	pics   map[string]*backdropEntry // shared by the home and playing backdrops
 
-	route   route
-	history []route
-	forward []route // the pages gone back from, the last first to go to
+	nav navigation.Navigator
 
 	accountOpen bool // the dropdown of the account row shows
 	intro       descriptionDialog
@@ -104,7 +102,7 @@ type app struct {
 	mineCollapsed, savedCollapsed, albumsCollapsed bool
 	searchBox                                      ui.Handle
 	searches                                       viewmodel.Search // the results of each search, by its page
-	links                                          musicLinkState
+	links                                          viewmodel.Links
 
 	nowPlaying                     bool
 	npOpen                         bool      // Now Playing as it last showed: open or not
@@ -303,7 +301,7 @@ func Run() error {
 	a.users.Reset()
 	a.podcasts.Reset()
 	a.searches.Reset()
-	a.links.starting = true
+	a.links.Starting = true
 	offURL := mygo.App.OnOpenURL(func(raw string) {
 		a.showMain()
 		if a.openMusicInput(raw) {
@@ -411,7 +409,7 @@ func Run() error {
 		// Shown or switched to the morning after, it shows the new day's.
 		a.win.OnFocus(a.freshenHome)
 		a.win.OnFocus(func() {
-			if a.route.Page == pageLocal {
+			if a.nav.Current.Page == pageLocal {
 				a.refreshLocalSongs()
 			}
 		})

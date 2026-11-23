@@ -234,7 +234,7 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 	}
 	for i := range lists {
 		pl := &lists[i]
-		selected := a.route.Page == pagePlaylist && a.route.ID == pl.ID && !a.nowPlaying
+		selected := a.nav.Current.Page == pagePlaylist && a.nav.Current.ID == pl.ID && !a.nowPlaying
 		b := ui.ButtonBase(c.Key(pl.ID)).Height(34).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pl.Name)
 		switch {
 		case selected:
@@ -282,7 +282,7 @@ func (a *app) myAlbums(c *ui.Context, albums []netease.AlbumProfile, collapsed *
 	}
 	for i := range albums {
 		al := &albums[i]
-		selected := a.route.Page == pageAlbum && a.route.ID == al.ID && !a.nowPlaying
+		selected := a.nav.Current.Page == pageAlbum && a.nav.Current.ID == al.ID && !a.nowPlaying
 		b := ui.ButtonBase(c.Key(fmt.Sprintf("album/%d", al.ID))).Height(34).PaddingX(8).Gap(10).Radius(8).
 			AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(al.Name)
 		switch {

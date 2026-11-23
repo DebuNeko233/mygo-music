@@ -1,8 +1,6 @@
 package app
 
 import (
-	"slices"
-
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 )
@@ -24,8 +22,8 @@ func (a *app) libraryServices() viewmodel.LibraryServices {
 		Persist: a.persistLibraryChanges, ForgetSnapshot: a.forgetPlaylistSnapshot,
 		Open: func(id int64) { a.open(route{Page: pagePlaylist, ID: id}) }, LeaveDeleted: a.leaveDeletedPlaylist, Notify: func(message string) { a.toast = message },
 		VisibleLikedPlaylist: func() int64 {
-			if a.route.Page == pagePlaylist {
-				if pl := a.library.Playlists[a.route.ID]; pl != nil && pl.SpecialType == 5 {
+			if a.nav.Current.Page == pagePlaylist {
+				if pl := a.library.Playlists[a.nav.Current.ID]; pl != nil && pl.SpecialType == 5 {
 					return pl.ID
 				}
 			}
@@ -82,13 +80,7 @@ func (a *app) removeFrom(pid int64, tr *netease.Track) {
 }
 func (a *app) leaveDeletedPlaylist(id int64) {
 	gone := func(r route) bool { return r.Page == pagePlaylist && r.ID == id }
-	a.history = slices.DeleteFunc(a.history, gone)
-	a.forward = slices.DeleteFunc(a.forward, gone)
-	if gone(a.route) {
-		r := route{Page: pageHome}
-		if n := len(a.history); n > 0 {
-			r, a.history = a.history[n-1], a.history[:n-1]
-		}
+	if r, changed := a.nav.Forget(gone); changed {
 		a.show(r)
 	}
 }

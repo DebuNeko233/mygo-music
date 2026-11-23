@@ -196,7 +196,7 @@ func init() {
 				shot("a-loading", a.win)
 				time.Sleep(4 * time.Second)
 				shot("a-artist", a.win)
-				step(0, func() { a.artists.Tab = viewmodel.ArtistLatest; a.loadLatest(a.route.ID) })
+				step(0, func() { a.artists.Tab = viewmodel.ArtistLatest; a.loadLatest(a.nav.Current.ID) })
 				time.Sleep(3 * time.Second)
 				shot("a-latest", a.win)
 				mygo.RunOnMain(mygo.App.Quit)

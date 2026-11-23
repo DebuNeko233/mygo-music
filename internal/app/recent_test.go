@@ -57,7 +57,7 @@ func recentTestApp(t *testing.T) (*app, chan func(), *ui.Tester) {
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "小明"}
 	posts := testPosts(a)
-	a.route = route{Page: pageRecent}
+	a.nav.Current = route{Page: pageRecent}
 	tt := ui.NewTester(a.view, 1200, 800)
 	// The page asks for the records as it builds.
 	tt.Frame()
@@ -122,7 +122,7 @@ func TestRecentShowsSongsBeforeOtherTabsFinish(t *testing.T) {
 	fakeRecent(t)
 	a := newTestApp()
 	a.account.Profile = &netease.Profile{UserID: 1}
-	a.route = route{Page: pageRecent}
+	a.nav.Current = route{Page: pageRecent}
 	posts := testPosts(a)
 	started := make(chan struct{})
 	release := make(chan struct{})

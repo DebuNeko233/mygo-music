@@ -15,7 +15,7 @@ import (
 // it must not replace it with an indefinitely animated loading skeleton.
 func TestOfflinePageRetryKeepsSettledState(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	playlistDetail = func(int64) (*netease.Playlist, error) { return nil, errors.New("offline") }
 	a.loadPlaylist(9, false)
 	refreshPost(t, posts)

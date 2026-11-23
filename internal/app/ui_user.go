@@ -20,7 +20,7 @@ var (
 
 func (a *app) userPage(c *ui.Context) {
 	p := a.pal
-	id := a.route.ID
+	id := a.nav.Current.ID
 	d := a.users.Pages.Get(id)
 	if d.User == nil {
 		if d.Loading == 0 {

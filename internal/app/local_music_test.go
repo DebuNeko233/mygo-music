@@ -27,7 +27,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	a.pl.Hold(17 * time.Second)
 	a.pl.SetLyrics(nil)
 	a.comments = commentState{track: current.Key(), loaded: true}
-	a.route = route{Page: pageLocal}
+	a.nav.Current = route{Page: pageLocal}
 	tt := ui.NewTester(a.view, 1200, 800)
 
 	if err := tt.RightClick(local.Name); err != nil {
@@ -63,7 +63,7 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 	const path = "../player/testdata/seek.flac"
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: current, Path: path}, {Track: local, Path: path}}})
 	a.pl.Cue([]netease.Track{current, {ID: 2, Name: "在线歌曲"}})
-	a.route = route{Page: pageLocal}
+	a.nav.Current = route{Page: pageLocal}
 	tt := ui.NewTester(a.view, 1200, 800)
 	open := func(name string) {
 		t.Helper()
@@ -121,7 +121,7 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.route = route{Page: pageLocal}
+	a.nav.Current = route{Page: pageLocal}
 	played := netease.Track{LocalID: 1, Name: "已播本地歌曲"}
 	current := netease.Track{ID: 1, Name: "当前在线歌曲"}
 	next := netease.Track{ID: 2, Name: "下一首在线歌曲"}
@@ -266,7 +266,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 		return []string{moved}, nil
 	}
 	t.Cleanup(func() { openLocalDialog = old })
-	a.route = route{Page: pageLocal}
+	a.nav.Current = route{Page: pageLocal}
 	a.pl.Cue([]netease.Track{{ID: 31, Name: "Cloud song"}})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()

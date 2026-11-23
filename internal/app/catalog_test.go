@@ -81,8 +81,8 @@ func TestSearchKinds(t *testing.T) {
 
 	tt.Key(0, ui.KeyBack)
 	tt.Key(0, ui.KeyBack)
-	if a.route.Page != pageHome {
-		t.Errorf("back went to %+v", a.route)
+	if a.nav.Current.Page != pageHome {
+		t.Errorf("back went to %+v", a.nav.Current)
 	}
 }
 
@@ -98,8 +98,8 @@ func TestSearchKindFromSongs(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route.Kind != netease.SearchArtists {
-		t.Fatalf("on %+v", a.route)
+	if a.nav.Current.Kind != netease.SearchArtists {
+		t.Fatalf("on %+v", a.nav.Current)
 	}
 	if len(asked) > 0 {
 		t.Error("the artists found were searched for again")
@@ -121,7 +121,7 @@ func TestSearchPlaylists(t *testing.T) {
 		t.Fatalf("searched %+v", got)
 	}
 
-	a.searches.Pages.Set(a.route, &viewmodel.SearchPage{
+	a.searches.Pages.Set(a.nav.Current, &viewmodel.SearchPage{
 		Res:  netease.SearchResult{Playlists: []netease.Playlist{{ID: 42, Name: "迷途人偶", TrackCount: 52}}, Total: 1},
 		Page: viewmodel.Page{Loaded: true},
 	})
@@ -131,8 +131,8 @@ func TestSearchPlaylists(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{Page: pagePlaylist, ID: 42}) {
-		t.Errorf("clicked through to %+v", a.route)
+	if a.nav.Current != (route{Page: pagePlaylist, ID: 42}) {
+		t.Errorf("clicked through to %+v", a.nav.Current)
 	}
 }
 
@@ -218,8 +218,8 @@ func TestSuggestionOpensPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route != (route{Page: pageAlbum, ID: 8}) || !slices.Equal(a.settings.SearchHistory, []string{"迷跡"}) {
-		t.Fatalf("opened %+v, history %q", a.route, a.settings.SearchHistory)
+	if a.nav.Current != (route{Page: pageAlbum, ID: 8}) || !slices.Equal(a.settings.SearchHistory, []string{"迷跡"}) {
+		t.Fatalf("opened %+v, history %q", a.nav.Current, a.settings.SearchHistory)
 	}
 }
 
@@ -306,8 +306,8 @@ func TestArtistAlbumsAndEvents(t *testing.T) {
 	if err := tt.Click("迷跡波"); err != nil {
 		t.Fatal(err)
 	}
-	if a.route != (route{Page: pageAlbum, ID: 8}) {
-		t.Fatalf("the album opened %+v", a.route)
+	if a.nav.Current != (route{Page: pageAlbum, ID: 8}) {
+		t.Fatalf("the album opened %+v", a.nav.Current)
 	}
 
 	tt.Key(0, ui.KeyBack)
@@ -405,8 +405,8 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.nowPlaying || a.route != (route{Page: pagePodcast, ID: 5}) {
-		t.Fatalf("Now Playing open %v over %+v", a.nowPlaying, a.route)
+	if a.nowPlaying || a.nav.Current != (route{Page: pagePodcast, ID: 5}) {
+		t.Fatalf("Now Playing open %v over %+v", a.nowPlaying, a.nav.Current)
 	}
 }
 
@@ -428,8 +428,8 @@ func TestPodcastsTabLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route.Page != pagePodcasts {
-		t.Fatalf("opened %+v", a.route)
+	if a.nav.Current.Page != pagePodcasts {
+		t.Fatalf("opened %+v", a.nav.Current)
 	}
 	if got := wait(t, asked, "the popular podcasts"); got != 0 {
 		t.Fatalf("asked from %d", got)
@@ -455,13 +455,13 @@ func TestPodcastCard(t *testing.T) {
 	tt.Frame()
 	tt.ClickAt(x, y)
 	tt.Frame()
-	if cur := a.pl.Current(); cur == nil || cur.ProgramID != 40 || a.route.Page != pagePodcasts {
-		t.Fatalf("playing %+v on %+v", cur, a.route)
+	if cur := a.pl.Current(); cur == nil || cur.ProgramID != 40 || a.nav.Current.Page != pagePodcasts {
+		t.Fatalf("playing %+v on %+v", cur, a.nav.Current)
 	}
 	tt.ClickAt(r.X+r.W/2, r.Y+r.W/2)
 	tt.Frame()
-	if a.route != (route{Page: pagePodcast, ID: 5}) {
-		t.Fatalf("opened %+v", a.route)
+	if a.nav.Current != (route{Page: pagePodcast, ID: 5}) {
+		t.Fatalf("opened %+v", a.nav.Current)
 	}
 }
 
@@ -507,8 +507,8 @@ func TestAlbumLinkInRow(t *testing.T) {
 	}
 	tt.ClickAt(r.X+8, r.Y+r.H/2)
 	tt.Frame()
-	if a.route != (route{Page: pageAlbum, ID: 8}) || a.pl.Current() != nil {
-		t.Fatalf("opened %+v, playing %+v", a.route, a.pl.Current())
+	if a.nav.Current != (route{Page: pageAlbum, ID: 8}) || a.pl.Current() != nil {
+		t.Fatalf("opened %+v, playing %+v", a.nav.Current, a.pl.Current())
 	}
 }
 

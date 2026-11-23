@@ -12,9 +12,9 @@ import (
 
 func podcastPerfApp(detail bool) *app {
 	a := catalogApp()
-	a.route = route{Page: pagePodcasts}
+	a.nav.Current = route{Page: pagePodcasts}
 	if detail {
-		a.route = route{Page: pagePodcast, ID: 5}
+		a.nav.Current = route{Page: pagePodcast, ID: 5}
 		d := a.podcasts.Pages.Get(5)
 		d.Programs = make([]netease.Program, 300)
 		for i := range d.Programs {

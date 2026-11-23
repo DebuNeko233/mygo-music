@@ -31,7 +31,7 @@ func editTestApp() *app {
 		{ID: 1, Name: "一张相片", Artists: []netease.Artist{{Name: "林宥嘉"}}, Duration: 200000},
 		{ID: 2, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000},
 	}}
-	a.route = route{Page: pagePlaylist, ID: 10}
+	a.nav.Current = route{Page: pagePlaylist, ID: 10}
 	return a
 }
 
@@ -70,7 +70,7 @@ func TestAddSongToPlaylist(t *testing.T) {
 func TestAddSongKeepsVisiblePlaylistDuringRefresh(t *testing.T) {
 	a := editTestApp()
 	posts := testPosts(a)
-	id := a.route.ID
+	id := a.nav.Current.ID
 	original := a.library.Playlists[id]
 	a.touchPlaylist(id)
 	added := netease.Track{ID: 3, Name: "新歌曲"}
@@ -143,7 +143,7 @@ func TestRemoveSongFromPlaylist(t *testing.T) {
 func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 	a := editTestApp()
 	posts := testPosts(a)
-	pid := a.route.ID
+	pid := a.nav.Current.ID
 	original := a.library.Playlists[pid]
 	original.Tracks = append(original.Tracks, netease.Track{ID: 3})
 	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}, {ID: 3}}
@@ -191,11 +191,11 @@ func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 	a := editTestApp()
 	posts := testPosts(a)
-	id := a.route.ID
+	id := a.nav.Current.ID
 	original := a.library.Playlists[id]
 	original.TrackCount = 2
 	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}}
-	a.route = route{Page: pageHome}
+	a.nav.Current = route{Page: pageHome}
 	a.pl.Cue(original.Tracks)
 	a.pl.Hold(10 * time.Second)
 	revision := a.pl.QueueRevision()
@@ -244,7 +244,7 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 func TestNoRemovingFromSavedPlaylist(t *testing.T) {
 	a := editTestApp()
 	a.library.Playlists[20] = &netease.Playlist{ID: 20, Name: "飙升榜", Tracks: a.library.Playlists[10].Tracks}
-	a.route = route{Page: pagePlaylist, ID: 20}
+	a.nav.Current = route{Page: pagePlaylist, ID: 20}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("宝船"); err != nil {
@@ -311,7 +311,7 @@ func TestRenamePlaylist(t *testing.T) {
 	defer func() { renamePlaylist = netease.RenamePlaylist }()
 
 	a := editTestApp()
-	a.route = route{Page: pageHome}
+	a.nav.Current = route{Page: pageHome}
 	a.home.Loading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -367,7 +367,7 @@ func TestRenameFailureFromPreviousAccount(t *testing.T) {
 // The liked songs can't be renamed: they offer no menu.
 func TestNoRenamingLikedSongs(t *testing.T) {
 	a := editTestApp()
-	a.route = route{Page: pageHome}
+	a.nav.Current = route{Page: pageHome}
 	a.home.Loading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -388,7 +388,7 @@ func TestDeletePlaylist(t *testing.T) {
 
 	a := editTestApp()
 	a.home.Loading = true
-	a.route = route{Page: pageCharts}
+	a.nav.Current = route{Page: pageCharts}
 	a.open(route{Page: pagePlaylist, ID: 10})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -415,8 +415,8 @@ func TestDeletePlaylist(t *testing.T) {
 	if a.editable(10) != nil {
 		t.Error("the sidebar still lists it")
 	}
-	if a.route.Page != pageCharts || len(a.history) != 0 || len(a.forward) != 0 {
-		t.Errorf("on %+v, history %v, forward %v; want the charts with nowhere to go", a.route, a.history, a.forward)
+	if a.nav.Current.Page != pageCharts || len(a.nav.History) != 0 || len(a.nav.Forward) != 0 {
+		t.Errorf("on %+v, history %v, forward %v; want the charts with nowhere to go", a.nav.Current, a.nav.History, a.nav.Forward)
 	}
 }
 
@@ -471,7 +471,7 @@ func TestCancelDeletingPlaylist(t *testing.T) {
 	defer func() { deletePlaylist = netease.DeletePlaylist }()
 
 	a := editTestApp()
-	a.route = route{Page: pageHome}
+	a.nav.Current = route{Page: pageHome}
 	a.home.Loading = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()

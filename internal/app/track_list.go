@@ -13,7 +13,7 @@ func trackIndex(tracks []netease.Track, key int64) int    { return viewmodel.Tra
 func (a *app) playTrackQueue(tracks []netease.Track, at int) {
 	a.cloud.FollowQueue(0)
 	a.pl.PlayQueueFrom(tracks, at, a.playSource())
-	if a.route.Page == pageCloud {
+	if a.nav.Current.Page == pageCloud {
 		a.cloud.FollowQueue(a.pl.QueueRevision())
 	}
 }

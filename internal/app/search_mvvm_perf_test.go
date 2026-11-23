@@ -13,7 +13,7 @@ import (
 func searchPerfApp() *app {
 	a := catalogApp()
 	r := route{Page: pageSearch, Query: "MyGO", Kind: netease.SearchSongs}
-	a.route = r
+	a.nav.Current = r
 	songs := make([]netease.Track, 300)
 	for i := range songs {
 		songs[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌曲 %03d", i), Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}
@@ -38,6 +38,6 @@ func BenchmarkSearchMVVMLoaded(b *testing.B) {
 	a := searchPerfApp()
 	b.ReportAllocs()
 	for b.Loop() {
-		a.loadSearch(a.route, false)
+		a.loadSearch(a.nav.Current, false)
 	}
 }

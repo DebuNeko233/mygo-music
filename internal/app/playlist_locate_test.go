@@ -25,7 +25,7 @@ func locateFixture(t *testing.T, current int, playing bool) (*app, *netease.Play
 	for i := range pl.Tracks {
 		pl.Tracks[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("测试歌曲 %03d", i+1), Duration: 200000, Artists: []netease.Artist{{Name: "测试歌手"}}, Album: netease.Album{Name: "测试专辑"}}
 	}
-	a.route = route{Page: pagePlaylist, ID: 7}
+	a.nav.Current = route{Page: pagePlaylist, ID: 7}
 	a.library.Playlists[7] = pl
 	// The current song is queue index zero but is far down the displayed list.
 	// Suspend loading so a broken locate action cannot launch network/audio jobs.
@@ -71,10 +71,10 @@ func TestPlaylistLocateFindsCurrentWithoutPlaying(t *testing.T) {
 			}
 			queue := slices.Clone(a.pl.Queue())
 			pos := a.pl.Position()
-			beforeRoute := a.route
+			beforeRoute := a.nav.Current
 			clickLocate(t, tt)
 			locatedRow(t, tt, name, 760)
-			if a.pl.Current().ID != 250 || a.pl.Playing() != playing || a.pl.Position() != pos || !reflect.DeepEqual(a.pl.Queue(), queue) || a.route != beforeRoute || a.nowPlaying {
+			if a.pl.Current().ID != 250 || a.pl.Playing() != playing || a.pl.Position() != pos || !reflect.DeepEqual(a.pl.Queue(), queue) || a.nav.Current != beforeRoute || a.nowPlaying {
 				t.Fatal("locating changed playback, queue or page")
 			}
 		})
@@ -318,7 +318,7 @@ func TestPlaylistLocateOnlyForMatchingPlaylist(t *testing.T) {
 				delete(a.library.Playlists, 7)
 				a.library.Loading[7] = true
 			case "daily":
-				a.route = route{Page: pageDaily}
+				a.nav.Current = route{Page: pageDaily}
 				a.home.Daily = pl.Tracks
 			}
 			tt.Frame()

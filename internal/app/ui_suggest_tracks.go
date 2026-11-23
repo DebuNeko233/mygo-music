@@ -6,10 +6,10 @@ import (
 )
 
 func (a *app) searchTracks() viewmodel.TrackSearchList {
-	switch a.route.Page {
+	switch a.nav.Current.Page {
 	case pagePlaylist:
-		if pl := a.library.Playlists[a.route.ID]; pl != nil {
-			return viewmodel.TrackSearchList{Tracks: pl.Tracks, Playlist: pl, Revision: a.library.Refresh.Revision, Label: "当前歌单", Owner: a.route.ID}
+		if pl := a.library.Playlists[a.nav.Current.ID]; pl != nil {
+			return viewmodel.TrackSearchList{Tracks: pl.Tracks, Playlist: pl, Revision: a.library.Refresh.Revision, Label: "当前歌单", Owner: a.nav.Current.ID}
 		}
 	case pageCloud:
 		if a.account.Profile != nil {
@@ -22,11 +22,11 @@ func (a *app) searchTracks() viewmodel.TrackSearchList {
 }
 
 func (a *app) trackSuggestions(q string) []viewmodel.TrackSuggestion {
-	return a.searches.TrackSuggestions(q, a.route, a.listenerID(), a.nowPlaying, a.searchTracks(), a.local.Missing)
+	return a.searches.TrackSuggestions(q, a.nav.Current, a.listenerID(), a.nowPlaying, a.searchTracks(), a.local.Missing)
 }
 func (a *app) chooseTrackSuggestion(key, q string) bool {
 	list := a.searchTracks()
-	i, handled := a.searches.ResolveTrackSuggestion(key, q, a.route, a.listenerID(), a.nowPlaying, list, a.local.Missing)
+	i, handled := a.searches.ResolveTrackSuggestion(key, q, a.nav.Current, a.listenerID(), a.nowPlaying, list, a.local.Missing)
 	if i >= 0 {
 		a.rememberSearch(q)
 		a.dismissSuggestions()

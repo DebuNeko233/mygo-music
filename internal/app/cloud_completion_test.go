@@ -145,7 +145,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	if a.cloud.Failure == nil || len(a.trackSuggestions("Old two")) != 1 || len(a.cloud.Tracks) != 3 {
 		t.Fatal("refresh failure discarded known tracks")
 	}
-	a.load(a.route)
+	a.load(a.nav.Current)
 	if a.cloud.Loading() {
 		t.Fatal("reopening after failure restarted refresh instead of retaining its retry offset")
 	}

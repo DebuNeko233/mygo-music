@@ -17,7 +17,7 @@ func homePerfApp(count int) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 7, Nickname: "小明"}
-	a.route = route{Page: pageHome}
+	a.nav.Current = route{Page: pageHome}
 	for i := range 30 {
 		a.home.Featured = append(a.home.Featured, netease.Playlist{ID: int64(i + 1), Name: fmt.Sprintf("推荐歌单 %02d", i+1)})
 	}
@@ -43,7 +43,7 @@ func BenchmarkHomeDailyViewFrame(b *testing.B) {
 			}
 			a := homePerfApp(count)
 			if scene != "home" {
-				a.route = route{Page: pageDaily}
+				a.nav.Current = route{Page: pageDaily}
 			}
 			tt := ui.NewTester(func(c *ui.Context) {
 				a.pal = paletteFor(c.Theme())
@@ -68,7 +68,7 @@ func TestHomeDailyIdleFrameBudget(t *testing.T) {
 		t.Run(fmt.Sprint(daily), func(t *testing.T) {
 			a := homePerfApp(30)
 			if daily {
-				a.route = route{Page: pageDaily}
+				a.nav.Current = route{Page: pageDaily}
 			}
 			builds := 0
 			tt := ui.NewTester(func(c *ui.Context) {
@@ -102,12 +102,12 @@ func TestHomeDailyMVVMFrames(t *testing.T) {
 			a := homePerfApp(30)
 			switch scene {
 			case "daily", "empty-daily":
-				a.route = route{Page: pageDaily}
+				a.nav.Current = route{Page: pageDaily}
 				if scene == "empty-daily" {
 					a.home.Daily = nil
 				}
 			case "charts":
-				a.route = route{Page: pageCharts}
+				a.nav.Current = route{Page: pageCharts}
 			case "signed-out":
 				a.account.Profile = nil
 				a.home.Daily = nil
@@ -128,7 +128,7 @@ func TestHomeDailyMVVMFrames(t *testing.T) {
 			}
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				a.pal = paletteFor(c.Theme())
-				switch a.route.Page {
+				switch a.nav.Current.Page {
 				case pageDaily:
 					a.dailyPage(c)
 				case pageCharts:

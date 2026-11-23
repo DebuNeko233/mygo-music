@@ -61,7 +61,7 @@ func TestOfflinePlaylistRecoversWithoutRestart(t *testing.T) {
 	a.browseCache.Put("7", "playlist/9", cacheBytes(&netease.Playlist{ID: 9, Name: "Cached", Tracks: []netease.Track{{ID: 1}}}), 0)
 	release := make(chan struct{})
 	playlistDetail = func(id int64) (*netease.Playlist, error) { <-release; return nil, netease.ErrOffline }
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.loadPlaylist(9, false)
 	refreshPost(t, posts)
 	if a.library.Playlists[9] == nil || a.library.Playlists[9].Name != "Cached" {
@@ -232,7 +232,7 @@ func TestOfflineArtworkRetryTracksVisibleRows(t *testing.T) {
 // A healthy offline-enabled page schedules neither retry timers nor idle frames.
 func TestOfflineIdleFrameBudget(t *testing.T) {
 	a, _ := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Ready"}
 	tt := ui.NewTester(a.view, 1100, 800)
 	tt.Frame()
@@ -351,7 +351,7 @@ func TestOfflineExpiredAccountRequiresLogin(t *testing.T) {
 // stops when the window hides; a cancelled callback cannot restart a load.
 func TestOfflineRecoveryBackoffAndHiddenWindow(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.route = route{Page: pagePlaylist, ID: 9}
+	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.library.Playlists[9] = &netease.Playlist{ID: 9}
 	a.playlistRequest(9).Failed = true
 	a.playlistRequest(9).Failure = netease.ErrOffline

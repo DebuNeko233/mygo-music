@@ -20,8 +20,8 @@ func (a *app) artistServices() viewmodel.ArtistServices {
 		Post: a.detailPost(), Cache: a.cacheRequest, Detail: artistDetail, Latest: artistLatestSongs,
 		Albums: albumsBy, Events: accountEvents, Follow: followArtist,
 		Visible: func() int64 {
-			if a.route.Page == pageArtist {
-				return a.route.ID
+			if a.nav.Current.Page == pageArtist {
+				return a.nav.Current.ID
 			}
 			return 0
 		},

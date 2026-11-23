@@ -186,8 +186,8 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.route.Page != pageUser || a.route.ID != 42 {
-		t.Fatalf("route = %+v, want the page of user 42", a.route)
+	if a.nav.Current.Page != pageUser || a.nav.Current.ID != 42 {
+		t.Fatalf("route = %+v, want the page of user 42", a.nav.Current)
 	}
 	if a.accountOpen {
 		t.Fatal("the menu stayed open")
@@ -249,8 +249,8 @@ func TestOwnPageFollows(t *testing.T) {
 	if err := tt.Click("Ave Mujica"); err != nil {
 		t.Fatal(err)
 	}
-	if a.route.Page != pageArtist || a.route.ID != 10 {
-		t.Fatalf("route = %+v, want the page of artist 10", a.route)
+	if a.nav.Current.Page != pageArtist || a.nav.Current.ID != 10 {
+		t.Fatalf("route = %+v, want the page of artist 10", a.nav.Current)
 	}
 	for a.users.Pages.Get(9).SubsLoading > 0 || a.podcasts.Home.SubscriptionLoading || a.artists.Pages.Get(10).Loading {
 		refreshPost(t, posts)

@@ -43,7 +43,7 @@ func (a *app) view(c *ui.Context) {
 	// as once Now Playing covers the button that had it.
 	a.bindInApp(c, root)
 	npOpen, npSettled := a.npState(c)
-	a.art.pageFrame(a.route, !npOpen)
+	a.art.pageFrame(a.nav.Current, !npOpen)
 	// The pictures the listener chose for the home page, painted behind
 	// it: it stands on them, over its own colour, as deep as they asked.
 	home := a.pictures(a.settings.BackdropHome)
@@ -129,21 +129,28 @@ func (a *app) shortcuts(c *ui.Context) {
 func (a *app) open(r route) {
 	a.cancelMusicLink()
 	a.nowPlaying = false
-	if r == a.route {
+	a.leavingPage(r)
+	if !a.nav.Open(r) {
 		a.load(r)
 		return
 	}
-	a.history, a.forward = append(a.history, a.route), nil
-	a.show(r)
+	a.displayPage()
 }
 
 // show shows the page of r.
-func (a *app) show(r route) {
-	if a.route.Page == pageCloud && r.Page != pageCloud {
+func (a *app) leavingPage(r route) {
+	if a.nav.Current.Page == pageCloud && r.Page != pageCloud {
 		a.cloud.Locate = 0
 	}
+}
+func (a *app) show(r route) {
+	a.leavingPage(r)
+	a.nav.Current = r
+	a.displayPage()
+}
+func (a *app) displayPage() {
 	a.intro.open = false
-	a.route = r
+	r := a.nav.Current
 	if r.Page == pageSearch {
 		a.searches.Activate(r)
 	}
@@ -183,30 +190,24 @@ func (a *app) load(r route) {
 // back goes to the page before, as the back button of a mouse does, or
 // closes Now Playing, which covers the pages.
 func (a *app) back() {
+	a.cancelMusicLink()
 	if a.nowPlaying {
 		a.nowPlaying = false
 		return
 	}
-	if len(a.history) == 0 {
-		return
+	if r, ok := a.nav.Previous(); ok {
+		a.show(r)
 	}
-	a.forward = append(a.forward, a.route)
-	r := a.history[len(a.history)-1]
-	a.history = a.history[:len(a.history)-1]
-	a.show(r)
 }
 
 // goForward goes to the page back left, as the forward button of a mouse
 // does.
 func (a *app) goForward() {
-	if len(a.forward) == 0 {
-		return
+	a.cancelMusicLink()
+	if r, ok := a.nav.Next(); ok {
+		a.nowPlaying = false
+		a.show(r)
 	}
-	a.history = append(a.history, a.route)
-	r := a.forward[len(a.forward)-1]
-	a.forward = a.forward[:len(a.forward)-1]
-	a.nowPlaying = false
-	a.show(r)
 }
 
 func (a *app) sidebar(c *ui.Context) {
@@ -244,7 +245,7 @@ func (a *app) sidebar(c *ui.Context) {
 
 func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	p := a.pal
-	selected := a.route.Page == r.Page && !a.nowPlaying
+	selected := a.nav.Current.Page == r.Page && !a.nowPlaying
 	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	bg := ui.Transparent
 	switch {
@@ -346,16 +347,16 @@ func (a *app) pageTop(c *ui.Context) {
 	edge := ui.Box(c.Key("top-edge")).Absolute().Top(0).Left(0).Right(0).Height(top).DragWindow().
 		Material(glass.ScrollEdge{Hard: true, Background: a.pal.bg})
 	edge.Opacity(edgeShown(edge, a.underTop))
-	if len(a.history) > 0 || len(a.forward) > 0 {
+	if len(a.nav.History) > 0 || len(a.nav.Forward) > 0 {
 		ui.Row(c).Absolute().Top(0).Left(20).Height(topBar(c)).AlignItems(ui.Center).Children(func() {
-			back := iconButton(c.Key("back"), iconBack, 18, a.pal.muted, "返回").Disabled(len(a.history) == 0)
-			if len(a.history) == 0 {
+			back := iconButton(c.Key("back"), iconBack, 18, a.pal.muted, "返回").Disabled(len(a.nav.History) == 0)
+			if len(a.nav.History) == 0 {
 				back.Opacity(0.35)
 			}
 			if back.Clicked() {
 				a.back()
 			}
-			if len(a.forward) > 0 && iconButton(c.Key("forward"), iconForward, 18, a.pal.muted, "前进").Clicked() {
+			if len(a.nav.Forward) > 0 && iconButton(c.Key("forward"), iconForward, 18, a.pal.muted, "前进").Clicked() {
 				a.goForward()
 			}
 		})
@@ -365,13 +366,13 @@ func (a *app) pageTop(c *ui.Context) {
 func (a *app) content(c *ui.Context) {
 	// A new page starts at its top. Not as it is opened: a control in a
 	// list, as a page's tabs in its header, opens it as the list builds.
-	if a.scrolled != a.route {
-		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.route
+	if a.scrolled != a.nav.Current {
+		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.nav.Current
 		a.trackRowsCache = trackRowsCache{}
 	}
 	// Pages mark where their content is, as they scroll.
 	a.underTop, a.underBottom = false, false
-	switch a.route.Page {
+	switch a.nav.Current.Page {
 	case pageHome:
 		a.homePage(c)
 	case pageDaily:

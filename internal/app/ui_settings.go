@@ -418,15 +418,15 @@ func (a *app) settingsSections(c *ui.Context, p palette) []settingsSection {
 	add("general", "通用", iconSettings, func(row settingsRow, block settingsBlock) {
 		row("用本应用打开网易云链接", "", func() {
 			label := "设为默认打开"
-			if a.links.registered {
+			if a.links.Registered {
 				label = "已设为默认"
 			}
 			ui.Column(c).Gap(6).AlignItems(ui.End).Children(func() {
-				if ui.Button(c.Key("music-link-handler"), label).Label("设为网易云链接默认应用").Disabled(a.links.registered).Clicked() {
+				if ui.Button(c.Key("music-link-handler"), label).Label("设为网易云链接默认应用").Disabled(a.links.Registered).Clicked() {
 					a.registerMusicLinkHandler()
 				}
-				if a.links.registrationError != "" {
-					ui.Text(c, a.links.registrationError).FontSize(12).TextColor(p.warn)
+				if a.links.RegistrationError != "" {
+					ui.Text(c, a.links.RegistrationError).FontSize(12).TextColor(p.warn)
 				}
 			})
 		})

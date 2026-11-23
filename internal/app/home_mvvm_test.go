@@ -63,7 +63,7 @@ func TestDailyCardPlayPauseKeepsSharedQueue(t *testing.T) {
 	if err := tt.Click("播放"); err != nil {
 		t.Fatal(err)
 	}
-	if a.pl.Current() == nil || a.pl.Current().ID != 2 || len(a.pl.Queue()) != 3 || !a.pl.Playing() || a.route.Page != pageHome {
+	if a.pl.Current() == nil || a.pl.Current().ID != 2 || len(a.pl.Queue()) != 3 || !a.pl.Playing() || a.nav.Current.Page != pageHome {
 		t.Fatal("daily card bypassed the shared player or navigated instead of playing")
 	}
 	a.pl.Hold(17 * time.Second)
@@ -85,7 +85,7 @@ func TestDailyCardPlayPauseKeepsSharedQueue(t *testing.T) {
 // Daily page controls read the shared VM list and preserve the existing sequential-play and selected-row behavior after a refresh.
 func TestDailyPageUsesRefreshedHomeList(t *testing.T) {
 	a := homePerfApp(3)
-	a.route = route{Page: pageDaily}
+	a.nav.Current = route{Page: pageDaily}
 	a.pl.SuspendCache()
 	a.home.Daily[0].Fee = 1
 	a.pl.ToggleShuffle()
@@ -104,7 +104,7 @@ func TestDailyPageUsesRefreshedHomeList(t *testing.T) {
 	if err := tt.Click("刷新后的第二首"); err != nil {
 		t.Fatal(err)
 	}
-	if a.pl.Current().ID != 102 || len(a.pl.Queue()) != 2 || a.pl.Queue()[0].ID != 101 || a.route.Page != pageDaily {
+	if a.pl.Current().ID != 102 || len(a.pl.Queue()) != 2 || a.pl.Queue()[0].ID != 101 || a.nav.Current.Page != pageDaily {
 		t.Fatal("row selection used an old daily snapshot or a separate queue")
 	}
 }
