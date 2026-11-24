@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/preferences"
 )
@@ -23,7 +24,7 @@ func TestHanLyricLanguage(t *testing.T) {
 		"ko-KR":      "",
 		"en-US":      "zh-Hans",
 	} {
-		if got := hanLyricLanguage(locale); got != want {
+		if got := playbackview.HanLyricLanguage(locale); got != want {
 			t.Errorf("Han lyrics in %q use %q, want %q", locale, got, want)
 		}
 	}
@@ -31,7 +32,7 @@ func TestHanLyricLanguage(t *testing.T) {
 
 // The two font controls save independently and resetting one restores its own automatic choice.
 func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
-	names := lyricFontNames()
+	names := playbackview.LyricFontNames()
 	if len(names) < 3 {
 		t.Skip("two installed fonts are needed")
 	}
@@ -40,11 +41,11 @@ func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
 	a.settings = loadSettings()
 	a.settings.LyricFont = "Desktop font"
 	wantedUI, wantedLyrics := names[1], names[2]
-	automatic := a.playbackTypeface(lyrics.JapaneseScript, "zh-CN")
+	automatic := a.views.playback.PlaybackTypeface(lyrics.JapaneseScript, "zh-CN")
 
 	var settingsFont, mainFont string
 	tt := ui.NewTester(func(c *ui.Context) {
-		a.settingsView(c)
+		a.views.settings.Build(c)
 		settingsFont = c.Theme().Font
 	}, 780, 640)
 	main := ui.NewTester(func(c *ui.Context) {
@@ -68,19 +69,19 @@ func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
 	if settingsFont != wantedUI || mainFont != wantedUI || a.settings.UIFont != wantedUI {
 		t.Fatalf("settings font %q, main font %q, stored UI font %q", settingsFont, mainFont, a.settings.UIFont)
 	}
-	if got := a.playbackTypeface(lyrics.JapaneseScript, "zh-CN"); got != automatic {
+	if got := a.views.playback.PlaybackTypeface(lyrics.JapaneseScript, "zh-CN"); got != automatic {
 		t.Errorf("changing the UI altered the Japanese lyric font: %v", got)
 	}
-	if got := a.playbackTypeface(lyrics.UnknownScript, "zh-CN"); got.family != "system-ui" {
+	if got := a.views.playback.PlaybackTypeface(lyrics.UnknownScript, "zh-CN"); got.Family != "system-ui" {
 		t.Errorf("script without a lyric font took the custom UI font: %v", got)
 	}
 
 	choose("选择歌词字体", wantedLyrics)
 	for _, script := range []lyrics.Script{lyrics.JapaneseScript, lyrics.HanScript, lyrics.LatinScript} {
-		custom := a.playbackTypeface(script, "zh-CN")
-		auto := playbackLyricTypeface(script, "zh-CN")
-		first, _, _ := strings.Cut(custom.family, ",")
-		if first != wantedLyrics || custom.lang != auto.lang || !strings.HasSuffix(custom.family, auto.family) {
+		custom := a.views.playback.PlaybackTypeface(script, "zh-CN")
+		auto := playbackview.PlaybackLyricTypeface(script, "zh-CN")
+		first, _, _ := strings.Cut(custom.Family, ",")
+		if first != wantedLyrics || custom.Lang != auto.Lang || !strings.HasSuffix(custom.Family, auto.Family) {
 			t.Errorf("custom font did not keep the original fallback and language for %v: %v", script, custom)
 		}
 	}
@@ -89,11 +90,11 @@ func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
 		t.Fatal("font choices did not survive reload independently of desktop lyrics")
 	}
 
-	choose("选择歌词字体", lyricFontSystem)
-	if a.settings.PlaybackLyricFont != "" || a.playbackTypeface(lyrics.JapaneseScript, "zh-CN") != automatic || mainFont != wantedUI {
+	choose("选择歌词字体", playbackview.LyricFontSystem)
+	if a.settings.PlaybackLyricFont != "" || a.views.playback.PlaybackTypeface(lyrics.JapaneseScript, "zh-CN") != automatic || mainFont != wantedUI {
 		t.Fatal("resetting lyrics did not restore automatic typography while keeping the UI font")
 	}
-	choose("选择UI 字体", lyricFontSystem)
+	choose("选择UI 字体", playbackview.LyricFontSystem)
 	preferences.Flush()
 	if saved := loadSettings(); saved.UIFont != "" || saved.PlaybackLyricFont != "" || settingsFont == wantedUI || mainFont == wantedUI {
 		t.Fatal("resetting the UI font did not restore the system choice")

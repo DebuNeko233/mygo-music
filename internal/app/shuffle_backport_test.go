@@ -1,9 +1,11 @@
 package app
 
 import (
-	"github.com/egoist/mygo/ui"
-	"netease-music-mygo/internal/netease"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
+
+	"netease-music-mygo/internal/netease"
 )
 
 // Whole-list Shuffle kept the first playable song fixed on both the playlist
@@ -23,10 +25,10 @@ func TestWholeListShuffleStartsRandomly(t *testing.T) {
 			var view func(*ui.Context)
 			if page == "playlist" {
 				pl := &netease.Playlist{ID: 7, Name: "Fixture", Tracks: tracks}
-				view = func(c *ui.Context) { a.playlistHeader(c, pl) }
+				view = func(c *ui.Context) { a.views.library.Header(c, pl) }
 			} else {
 				a.home.Daily = tracks
-				view = a.dailyPage
+				view = a.views.daily.Build
 			}
 			tt := ui.NewTester(view, 1100, 800)
 			heads := map[int64]bool{}

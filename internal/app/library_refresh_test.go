@@ -126,12 +126,12 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 			queue := slices.Clone(a.pl.Queue())
 			tt := ui.NewTester(a.view, 1100, 760)
 			tt.Frame()
-			a.trackList.ScrollTo(249, ui.Start)
+			a.tracks.List.ScrollTo(249, ui.Start)
 			tt.Frame()
 			tt.Scroll(750, 400, 0, 57)
 			tt.Advance(time.Second)
 			tt.Frame()
-			first, _ := a.trackList.Visible()
+			first, _ := a.tracks.List.Visible()
 			if first < 241 || first > 260 {
 				t.Fatalf("test did not scroll into the target range: first row %d", first)
 			}
@@ -159,7 +159,7 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 			refreshPost(t, posts)
 			tt.Frame()
 			tt.Frame()
-			first, _ = a.trackList.Visible()
+			first, _ = a.tracks.List.Visible()
 			if edit == "long move" || edit == "remove top" {
 				locatedRow(t, tt, want, 760)
 			} else {

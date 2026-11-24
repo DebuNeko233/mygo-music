@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -37,7 +38,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	if err := tt.ChooseMenuItem("下一首播放"); err != nil {
 		t.Fatal(err)
 	}
-	a.playbackState.Open, a.playbackState.Pane = true, paneQueue
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneQueue
 	tt.Frame()
 	tt.Advance(time.Second)
 	if err := tt.RightClick(local.Name); err != nil {

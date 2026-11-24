@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
@@ -32,7 +33,7 @@ func tallLyricsApp(t *testing.T) *app {
 	}
 	a.pl.SetLyrics(lines)
 	a.pl.Hold(77 * time.Second)
-	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	return a
 }
@@ -80,7 +81,7 @@ func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
 // Entering or leaving a tall window must not paint lyrics at the previous height.
 func TestNowPlayingLyricsUseResizedHeightOnFirstFrame(t *testing.T) {
 	for _, immersive := range []bool{false, true} {
-		for _, count := range []int{0, 1, 28, timedListThreshold + 1} {
+		for _, count := range []int{0, 1, 28, playbackview.TimedListThreshold + 1} {
 			t.Run(fmt.Sprintf("immersive=%t/rows=%d", immersive, count), func(t *testing.T) {
 				a := tallLyricsApp(t)
 				a.settings.LyricEdgeFade = immersive
@@ -127,11 +128,11 @@ func TestNowPlayingLyricsUseResizedHeightOnFirstFrame(t *testing.T) {
 					before := findY()
 					tt.SetSize(size[0], size[1])
 					settled := findY()
-					if abs32(settled-before) < 100 {
+					if playbackview.Abs32(settled-before) < 100 {
 						t.Fatalf("the resize did not move the lyric from %.1f", before)
 					}
 					for _, y := range painted {
-						if abs32(y-settled) > 1 {
+						if playbackview.Abs32(y-settled) > 1 {
 							t.Fatalf("at %v: painted lyric at %.1f before settling at %.1f", size, y, settled)
 						}
 					}
@@ -162,7 +163,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 				a.pl.SetLyrics(lines)
 				// Exercise the animated remount that used to enter browsing
 				// mode in long immersive lyrics.
-				reduceMotion := !immersive || count < timedListThreshold
+				reduceMotion := !immersive || count < playbackview.TimedListThreshold
 				tt := ui.NewTesterWith(a.view, 750, 1330, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduceMotion}})
 				tt.SetScale(0.1) // The test inspects layout, so keep software rasterization small.
 				visibleY := func(line lyrics.Line) float32 {
@@ -170,7 +171,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 					row, ok := tt.AccessByRole(ui.RoleButton, line.Text)
 					if !ok || row.Offscreen || !a.lyricReading.BrowseUntil.IsZero() {
 						t.Fatalf("playback lost %q after opening: visible=%t offset=%.1f browsing=%t",
-							line.Text, ok && !row.Offscreen, a.lyricScroll.Y, !a.lyricReading.BrowseUntil.IsZero())
+							line.Text, ok && !row.Offscreen, a.LyricScroll.Y, !a.lyricReading.BrowseUntil.IsZero())
 					}
 					return row.Bounds.Y
 				}
@@ -179,7 +180,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 					a.playbackState.Open = true
 					tt.Frame()
 					visibleY(last)
-					tt.Advance(npSettle)
+					tt.Advance(playbackview.NPSettle)
 					return visibleY(last)
 				}
 				firstOpen := openAtEnd()
@@ -189,9 +190,9 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 				want := visibleY(middle)
 				a.playbackState.Open = false
 				tt.Frame()
-				tt.Advance(npSettle)
+				tt.Advance(playbackview.NPSettle)
 				reopened := openAtEnd()
-				if abs32(firstOpen-want) > 2 || abs32(reopened-want) > 2 {
+				if playbackview.Abs32(firstOpen-want) > 2 || playbackview.Abs32(reopened-want) > 2 {
 					t.Fatalf("last lyric at %.1f on first open and %.1f on reopen, want %.1f", firstOpen, reopened, want)
 				}
 			})
@@ -215,13 +216,13 @@ func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
 				// the full-screen Gaussian, which has its own gutter test.
 				a.settings.LyricEdgeFade = false
 				tt.SetSize(w, h)
-				a.seekLyricFollow()
+				a.views.playback.SeekLyricFollow()
 				tt.Frame()
 				if immersive {
 					a.settings.LyricEdgeFade = true
-					a.lyricReading.BrowseUntil = tt.Now().Add(lyricBrowseDelay)
+					a.lyricReading.BrowseUntil = tt.Now().Add(playbackview.LyricBrowseDelay)
 					tt.Frame()
-					if a.lyricBlurPass != nil {
+					if a.LyricBlurPass != nil {
 						t.Fatal("manual scrolling ran the automatic blur pass")
 					}
 				}
@@ -244,16 +245,16 @@ func TestNowPlayingLyricScrollbarAlignmentAndDrag(t *testing.T) {
 						}
 					}
 				}
-				if changed.Dy() < 12 || abs32(float32(changed.Max.X-want)) > 1 {
+				if changed.Dy() < 12 || playbackview.Abs32(float32(changed.Max.X-want)) > 1 {
 					t.Fatalf("%dx%d: cover left %.1f, want scrollbar right %d, got %v", w, h, cover.X, want, changed)
 				}
-				before := a.lyricScroll.Y
+				before := a.LyricScroll.Y
 				x, y := float32(changed.Min.X+changed.Max.X)/(2*scale), float32(changed.Min.Y+changed.Max.Y)/(2*scale)
 				tt.Press(x, y)
 				tt.Move(x, y+32)
 				tt.Release(x, y+32)
-				if a.lyricScroll.Y <= before {
-					t.Fatalf("%dx%d: dragging the thumb did not scroll: %.1f → %.1f", w, h, before, a.lyricScroll.Y)
+				if a.LyricScroll.Y <= before {
+					t.Fatalf("%dx%d: dragging the thumb did not scroll: %.1f → %.1f", w, h, before, a.LyricScroll.Y)
 				}
 			}
 		})

@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
@@ -387,7 +388,7 @@ func TestPlayEpisode(t *testing.T) {
 	}
 	tt.Advance(time.Second)
 	tt.Frame()
-	if !a.playbackState.Open || a.playbackState.Pane != paneProgram || !tt.HasText("第一期的简介") {
+	if !a.playbackState.Open || a.playbackState.Pane != playbackview.PaneProgram || !tt.HasText("第一期的简介") {
 		t.Fatalf("Now Playing open %v on pane %d", a.playbackState.Open, a.playbackState.Pane)
 	}
 }
@@ -401,7 +402,7 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 	d := a.podcasts.Pages.Get(5)
 	a.playProgram(d, 0)
 	a.pl.SetLyrics(nil)
-	a.playbackState.Open, a.playbackState.Pane = true, paneProgram
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneProgram
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
 	tt.Frame()

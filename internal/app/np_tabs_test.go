@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -18,13 +19,13 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 	a.comments.Loaded = true
 	var left float32
 	tt := ui.NewTesterWith(func(c *ui.Context) {
-		anchor := ui.Box(c).Absolute().Left(left).Top(20).Size(280, npTabsHeight)
-		a.npTabsRow(c, anchor, true).Children(func() { a.paneTabs(c) })
+		anchor := ui.Box(c).Absolute().Left(left).Top(20).Size(280, playbackview.NPTabsHeight)
+		a.views.playback.NPTabsRow(c, anchor, true).Children(func() { a.views.playback.PaneTabs(c) })
 	}, 640, 120, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for _, left = range []float32{0, 50, 360} {
 		for _, count := range []int{0, 32000, 12345678} {
 			a.comments.Total = count
-			a.playbackState.Pane = paneLyrics
+			a.playbackState.Pane = playbackview.PaneLyrics
 			tt.Frame()
 			tt.Advance(time.Second)
 			tt.Frame()
@@ -44,7 +45,7 @@ func TestNowPlayingTabsClampVisibleButtons(t *testing.T) {
 			if err := tt.Click(a.commentsTab()); err != nil {
 				t.Fatal(err)
 			}
-			if a.playbackState.Pane != paneComments {
+			if a.playbackState.Pane != playbackview.PaneComments {
 				t.Fatal("the comment button stopped taking clicks near the edge")
 			}
 		}
@@ -57,8 +58,8 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 		name, activeTab string
 		pane            int
 	}{
-		{"lyrics", "歌词", paneLyrics},
-		{"stage", "律动", paneStage},
+		{"lyrics", "歌词", playbackview.PaneLyrics},
+		{"stage", "律动", playbackview.PaneStage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
@@ -75,12 +76,12 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			const scale = 0.5
 			tt.SetScale(scale)
 			tt.Move(680, 260)
-			tt.Advance(npSettle)
+			tt.Advance(playbackview.NPSettle)
 
 			// The selected tab has a painted background even without CJK glyphs.
 			const closeLabel = "关闭"
 			labels := []string{tc.activeTab, closeLabel}
-			if tc.pane == paneStage {
+			if tc.pane == playbackview.PaneStage {
 				labels = append(labels, "律动效果")
 			}
 			regions := make(map[string]image.Rectangle, len(labels))
@@ -132,7 +133,7 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			check(shown)
 
 			a.pl.TogglePlay()
-			a.playbackState.Pane = paneQueue
+			a.playbackState.Pane = playbackview.PaneQueue
 			tt.Frame()
 			queueShown := tt.Image()
 			tt.Advance(3 * time.Second)

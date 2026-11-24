@@ -30,7 +30,7 @@ func TestFMTrashFailureFeedback(t *testing.T) {
 			result := make(chan error, 1)
 			defer close(result)
 			fmTrash = func(id int64) error { requested <- id; return <-result }
-			tt := ui.NewTester(a.fmCard, 1000, 600)
+			tt := ui.NewTester(a.views.radio.Card, 1000, 600)
 			tt.Frame()
 			if err := tt.Click("不喜欢"); err != nil {
 				t.Fatal(err)

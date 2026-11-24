@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/player"
 	playbackvm "netease-music-mygo/internal/viewmodel/playback"
@@ -29,7 +30,7 @@ func Run() error {
 func newApp() *app {
 	a := &app{
 		lyricReading:  playbackvm.LyricReading{At: -1},
-		mainViewState: mainViewState{queueAt: -1},
+		mainViewState: mainViewState{State: playbackview.State{QueueAt: -1}},
 		cacheSettings: settingsvm.CacheSettings{Used: -1},
 	}
 	a.library.Reset()
@@ -38,26 +39,27 @@ func newApp() *app {
 	a.users.Reset()
 	a.podcasts.Reset()
 	a.searches.Reset()
+	a.bindDesktopViews()
 	return a
 }
 
 func (a *app) bindApplication() {
-	a.native.listen(mygo.App.OnOpenURL(func(raw string) {
+	a.native.Listen(mygo.App.OnOpenURL(func(raw string) {
 		a.showMain()
 		if a.openMusicInput(raw) {
 			a.redraw()
 		}
 	}))
-	a.native.listen(mygo.App.OnOpenFile(a.openTemporaryAudio))
-	a.native.listen(mygo.App.OnSecondInstance(func([]string, string) { a.showMain() }))
-	a.native.listen(mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
+	a.native.Listen(mygo.App.OnOpenFile(a.openTemporaryAudio))
+	a.native.Listen(mygo.App.OnSecondInstance(func([]string, string) { a.showMain() }))
+	a.native.Listen(mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
 		if !a.requestQuit(e.SessionEnding) {
 			e.PreventDefault()
 		}
 	}))
-	a.native.listen(mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.stopNative() }))
-	a.native.listen(mygo.App.OnWindowAllClosed(func() {}))
-	a.native.listen(mygo.App.OnActivate(func(bool) { a.activate() }))
+	a.native.Listen(mygo.App.OnWillQuit(func(*mygo.QuitEvent) { a.stopNative() }))
+	a.native.Listen(mygo.App.OnWindowAllClosed(func() {}))
+	a.native.Listen(mygo.App.OnActivate(func(bool) { a.activate() }))
 }
 
 func (a *app) start() {
@@ -67,12 +69,12 @@ func (a *app) start() {
 	a.settings = loadSettings()
 	a.initialized = true
 	a.settings.applyAppearance()
-	a.playbackState.Pane = a.lyricsPaneChosen()
+	a.playbackState.Pane = a.LyricsPaneChosen()
 	a.preloadPictures()
 	if runtime.GOOS == "darwin" {
 		// Start Metal's shader and pipeline compilation before the first
 		// spectrum draw, without making the window wait for it.
-		go lyricSpectrumShader()
+		go playbackview.LyricSpectrumShader()
 	}
 	// Before the window: on Windows it lays out its content as it is
 	// made, and the view asks the player what plays.

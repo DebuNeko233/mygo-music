@@ -11,7 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/components"
+	"netease-music-mygo/internal/desktop/view/components"
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -29,7 +30,7 @@ func TestLyricWordFinishesBeforeRegularTick(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
 		c.Root().Background(ui.RGB(0, 0, 0))
-		a.paintLyricWords(c, &line, 200, linesStyle{size: 30, weight: 800, lineHeight: 1.25})
+		a.views.playback.PaintLyricWords(c, &line, 200, playbackview.LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
 	}, 200, 65)
 	partial := tt.Image()
 	before := builds
@@ -61,7 +62,7 @@ func TestLyricWordPaintBudget(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
 		c.Root().Background(ui.RGB(0, 0, 0))
-		a.paintLyricWords(c, &line, 240, linesStyle{size: 30, weight: 800, lineHeight: 1.25})
+		a.views.playback.PaintLyricWords(c, &line, 240, playbackview.LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
 	}, 240, 70)
 	brightness := func(r image.Rectangle) int {
 		img := tt.Image()
@@ -126,7 +127,7 @@ func lyricScrollFixture(n int) (*ui.Tester, *int, func(time.Duration)) {
 				seekTime = time.Time{}
 			}
 		}
-		a.lyricsPane(c, a.pl.Current(), 520, ui.Rect{}, 0)
+		a.views.playback.LyricsPane(c, a.pl.Current(), 520, ui.Rect{}, 0)
 	}, 480, 520)
 	tt.Advance(2 * time.Second)
 	seek := func(pos time.Duration) {
@@ -179,7 +180,7 @@ func TestLongCaptionMeasurementBudget(t *testing.T) {
 	a.pl.Seek(cs.Lines[active].At)
 	tt := ui.NewTester(func(c *ui.Context) {
 		_, h := c.Size()
-		a.captionsPane(c, a.pl.Current(), h)
+		a.views.playback.CaptionsPane(c, a.pl.Current(), h)
 	}, 640, 460)
 
 	for _, width := range []int{640, 485, 340} {
@@ -190,7 +191,7 @@ func TestLongCaptionMeasurementBudget(t *testing.T) {
 			t.Fatalf("width %d: active caption lost its reading position: %+v", width, row.Bounds)
 		}
 		measured := 0
-		for _, done := range a.timedList.measured {
+		for _, done := range a.TimedList.Measured {
 			if done {
 				measured++
 			}
@@ -238,7 +239,7 @@ func TestPlayerBarCoverFrameBudget(t *testing.T) {
 	builds := 0
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
-		a.playerBarArtwork(c, track)
+		a.views.playback.PlayerBarArtwork(c, track)
 	}, 64, 64)
 	tt.Advance(time.Second)
 	track.Album.PicURL = after
@@ -263,12 +264,12 @@ func TestCoverSlideFrameBudget(t *testing.T) {
 		builds := 0
 		tt := ui.NewTesterWith(func(c *ui.Context) {
 			builds++
-			ui.Column(c).Fill().Center().Children(func() { a.npCover(c, a.pl.Current(), nil, 220) })
+			ui.Column(c).Fill().Center().Children(func() { a.views.playback.NPCover(c, a.pl.Current(), nil, 220) })
 		}, 320, 320, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
 		a.pl.Next()
 		tt.Frame()
 		tt.Advance(time.Second)
-		if a.npCoverState.switching || a.npCoverState.previous != nil {
+		if a.NPCoverState.Switching || a.NPCoverState.Previous != nil {
 			t.Fatal("the outgoing cover outlived its animation")
 		}
 		before := builds
@@ -336,19 +337,19 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 	// Its rows still, the wall asks for no more than the lyrics beside it
 	// do: it moves only as it is moved.
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 	lyricsFrames := framesAt(a, tt, 12*time.Second)
-	a.playbackState.Pane = paneWall
+	a.playbackState.Pane = playbackview.PaneWall
 	if n := framesAt(a, tt, 12*time.Second); n > lyricsFrames+3 {
 		t.Errorf("the wall, still: %d frames a second, the lyrics %d", n, lyricsFrames)
 	}
 	tt.SetPreferences(ui.Preferences{})
-	a.playbackState.Pane = paneStage
+	a.playbackState.Pane = playbackview.PaneStage
 	a.settings.StageSparks = true
-	for _, s := range stageStyles {
-		a.settings.StageStyle = s.id
+	for _, s := range playbackview.StageStyles {
+		a.settings.StageStyle = s.ID
 		if n := framesAt(a, tt, 18*time.Second); n > 12 {
-			t.Errorf("the stage between lines, in %s: %d frames a second", s.label, n)
+			t.Errorf("the stage between lines, in %s: %d frames a second", s.Label, n)
 		}
 	}
 }
@@ -364,12 +365,12 @@ func TestBackdropFadeEnds(t *testing.T) {
 	tt.Frame()
 	a.pl.Next()
 	tt.Frame()
-	if a.backdropCache.before == nil {
+	if a.BackdropCache.Before == nil {
 		t.Fatal("the backdrop changed songs without fading")
 	}
-	tt.Advance(backdropFade + 100*time.Millisecond)
+	tt.Advance(playbackview.BackdropFade + 100*time.Millisecond)
 	tt.Frame()
-	if a.backdropCache.before != nil {
+	if a.BackdropCache.Before != nil {
 		t.Error("the last song's backdrop still fades after the fade")
 	}
 }
@@ -380,21 +381,21 @@ func TestStaticBackdropStopsFog(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.Fog = true
-	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
+	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
 	// Tester uses software rendering, so seed the moving GPU fog's state
 	// before switching modes; no audio device or wall-clock phase is needed.
-	bd := &a.backdropCache
-	bd.speed, bd.last = 1, time.Unix(1, 0)
-	bd.level.Step(bd.last, [player.Bands]float32{1}, true)
+	bd := &a.BackdropCache
+	bd.Speed, bd.Last = 1, time.Unix(1, 0)
+	bd.Level.Step(bd.Last, [player.Bands]float32{1}, true)
 	a.settings.Fog = false
 	tt.Frame()
-	at, canvas := bd.at, bd.canvas
+	at, canvas := bd.At, bd.Canvas
 	for range 120 {
-		tt.Advance(backdropFrame)
+		tt.Advance(playbackview.BackdropFrame)
 		tt.Frame()
 		// FramePending alone misses delayed Painter.After callbacks, so
 		// also verify that the cache and paint timestamp never change.
-		if bd.at != at || bd.canvas != canvas || bd.speed != 0 || bd.level != (components.BarState{}) || !bd.last.IsZero() {
+		if bd.At != at || bd.Canvas != canvas || bd.Speed != 0 || bd.Level != (components.BarState{}) || !bd.Last.IsZero() {
 			t.Fatal("static background kept the fog's animation state or repainted")
 		}
 		if tt.FramePending() {
@@ -458,7 +459,7 @@ func TestImmersiveLRCStaysIdleBetweenLines(t *testing.T) {
 	paints := 0
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		c.Root().Draw(func(*ui.Painter, ui.Rect) { paints++ })
-		a.lyricsPane(c, a.pl.Current(), 110, ui.Rect{}, 0)
+		a.views.playback.LyricsPane(c, a.pl.Current(), 110, ui.Rect{}, 0)
 	}, 180, 110, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	before := paints
 	tt.Advance(time.Second)
@@ -478,7 +479,7 @@ func hotCommentStageClock(style string, reduced bool, pos time.Duration) (*app, 
 		}
 		builds++
 		a.pl.Hold(pos + c.Now().Sub(start))
-		ui.Column(c).Fill().Children(func() { a.stage(c, a.pl.Current(), ui.RGB(255, 100, 100)) })
+		ui.Column(c).Fill().Children(func() { a.views.playback.Stage(c, a.pl.Current(), ui.RGB(255, 100, 100)) })
 	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
 	return a, tt, &builds
 }
@@ -486,9 +487,9 @@ func hotCommentStageClock(style string, reduced bool, pos time.Duration) (*app, 
 // Reduce Motion must cover hot-comment entry, replacement and exit too:
 // comments appear centered immediately, without fades, movement or frame loops.
 func TestStageHotCommentsReducedMotion(t *testing.T) {
-	for _, style := range stageStyles {
-		t.Run(style.label, func(t *testing.T) {
-			a, tt, builds := hotCommentStageClock(style.id, true, 0)
+	for _, style := range playbackview.StageStyles {
+		t.Run(style.Label, func(t *testing.T) {
+			a, tt, builds := hotCommentStageClock(style.ID, true, 0)
 			elapsed := time.Duration(0)
 			for _, step := range []struct {
 				at time.Duration
@@ -503,7 +504,7 @@ func TestStageHotCommentsReducedMotion(t *testing.T) {
 					}
 					continue
 				}
-				if !shown || a.quiet.cm.ID != step.id || math.Abs(float64(card.Y-(800-card.H)/2)) > 0.5 {
+				if !shown || a.Quiet.Cm.ID != step.id || math.Abs(float64(card.Y-(800-card.H)/2)) > 0.5 {
 					t.Fatalf("comment did not appear immediately in place: id=%d bounds=%v shown=%v", step.id, card, shown)
 				}
 				before := *builds

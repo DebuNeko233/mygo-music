@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -36,9 +37,9 @@ func lyricsMVVMPerfApp(comments bool) *app {
 	(<-posts)()
 	threadComments = old
 	a.playbackState.Open = true
-	a.playbackState.Pane = paneLyrics
+	a.playbackState.Pane = playbackview.PaneLyrics
 	if comments {
-		a.playbackState.Pane = paneComments
+		a.playbackState.Pane = playbackview.PaneComments
 	}
 	return a
 }

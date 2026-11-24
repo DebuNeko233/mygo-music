@@ -34,7 +34,7 @@ func TestRecentTabSwitchAndRetry(t *testing.T) {
 		}
 		return []netease.Played[netease.AlbumProfile]{{Item: netease.AlbumProfile{Album: netease.Album{ID: 77, Name: "神的游戏"}}}}, nil
 	}
-	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.recentPage(c) }, 1200, 800)
+	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.recent.Build(c) }, 1200, 800)
 	tt.Frame()
 	for len(a.recent.Tracks) == 0 || a.recent.Tabs[recentvm.RecentPlaylists].Loading || a.recent.Tabs[recentvm.RecentPodcasts].Loading || a.recent.Tabs[recentvm.RecentVoices].Loading {
 		refreshPost(t, posts)

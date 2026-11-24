@@ -28,7 +28,7 @@ func TestLoginDismissalRetiresQueuedKey(t *testing.T) {
 	s.NewQR = func() (string, accountvm.QRLoginAttempt, error) { return "test-key", &pendingLibraryQR{}, nil }
 	a.account.OpenLogin(s)
 	old := wait(t, posts, "queued key")
-	tt := ui.NewTester(a.loginDialog, 800, 600)
+	tt := ui.NewTester(a.views.account.Login, 800, 600)
 	tt.Frame()
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()

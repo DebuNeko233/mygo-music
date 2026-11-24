@@ -50,7 +50,7 @@ func BenchmarkHomeDailyViewFrame(b *testing.B) {
 				if scene == "home" {
 					a.homePage(c)
 				} else {
-					a.dailyPage(c)
+					a.views.daily.Build(c)
 				}
 			}, 1200, 800)
 			tt.Frame()
@@ -75,7 +75,7 @@ func TestHomeDailyIdleFrameBudget(t *testing.T) {
 				builds++
 				a.pal = paletteFor(c.Theme())
 				if daily {
-					a.dailyPage(c)
+					a.views.daily.Build(c)
 				} else {
 					a.homePage(c)
 				}
@@ -130,7 +130,7 @@ func TestHomeDailyMVVMFrames(t *testing.T) {
 				a.pal = paletteFor(c.Theme())
 				switch a.nav.Current.Page {
 				case pageDaily:
-					a.dailyPage(c)
+					a.views.daily.Build(c)
 				case pageCharts:
 					a.chartsPage(c)
 				default:

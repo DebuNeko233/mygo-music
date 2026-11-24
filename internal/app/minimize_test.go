@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
@@ -18,7 +19,7 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 	for _, pane := range []struct {
 		id   int
 		name string
-	}{{paneLyrics, "lyrics"}, {paneComments, "comments"}, {paneQueue, "queue"}} {
+	}{{playbackview.PaneLyrics, "lyrics"}, {playbackview.PaneComments, "comments"}, {playbackview.PaneQueue, "queue"}} {
 		t.Run(pane.name, func(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
@@ -31,7 +32,7 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			a.comments = commentsvm.Comments{Track: 1, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
 			a.playbackState.Open, a.playbackState.Pane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
-			if pane.id == paneLyrics {
+			if pane.id == playbackview.PaneLyrics {
 				a.pl.Hold(lines[150].At)
 			}
 			// The minimized layout and restored hit targets are measured in DIPs.
@@ -39,13 +40,13 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			tt.Frame()
 			tt.Advance(time.Second)
 			tt.Frame()
-			if pane.id == paneLyrics {
-				if a.lyricScroll.Y == 0 {
-					t.Fatalf("lyrics did not follow before minimize: at=%d viewport=%vx%v", a.lyricReading.At, a.lyricViewportW, a.lyricViewportH)
+			if pane.id == playbackview.PaneLyrics {
+				if a.LyricScroll.Y == 0 {
+					t.Fatalf("lyrics did not follow before minimize: at=%d viewport=%vx%v", a.lyricReading.At, a.LyricViewportW, a.LyricViewportH)
 				}
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[150].Text)
 				if !ok || row.Offscreen {
-					t.Fatalf("active lyric was not followed before minimize: offset=%v row=%+v", a.lyricScroll.Y, row)
+					t.Fatalf("active lyric was not followed before minimize: offset=%v row=%+v", a.LyricScroll.Y, row)
 				}
 			}
 			tt.SetWindowHidden(true)
@@ -56,11 +57,11 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 			if _, ok := tt.Access("关闭"); !ok {
 				t.Fatal("Now Playing did not return after restoring the window")
 			}
-			if pane.id == paneLyrics {
+			if pane.id == playbackview.PaneLyrics {
 				tt.Advance(time.Second)
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[150].Text)
-				if !ok || row.Offscreen || a.lyricScroll.Y == 0 {
-					t.Fatalf("restoring the window lost the active lyric: offset=%v row=%+v", a.lyricScroll.Y, row)
+				if !ok || row.Offscreen || a.LyricScroll.Y == 0 {
+					t.Fatalf("restoring the window lost the active lyric: offset=%v row=%+v", a.LyricScroll.Y, row)
 				}
 			}
 		})

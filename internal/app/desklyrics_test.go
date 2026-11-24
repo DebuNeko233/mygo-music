@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/preferences"
@@ -24,30 +25,30 @@ func TestLyricWindowLinesFollowTheLineSung(t *testing.T) {
 	}
 
 	// Two lines: the one sung and the next.
-	shown, start := lyricWindowLines(lines, 1, 2)
+	shown, start := playbackview.LyricWindowLines(lines, 1, 2)
 	if start != 1 || len(shown) != 2 || shown[0].Text != "two" || shown[1].Text != "three" {
 		t.Fatalf("two lines, at two: %d from %d", len(shown), start)
 	}
 	// One line: the one sung alone.
-	shown, start = lyricWindowLines(lines, 1, 1)
+	shown, start = playbackview.LyricWindowLines(lines, 1, 1)
 	if start != 1 || len(shown) != 1 || shown[0].Text != "two" {
 		t.Fatalf("one line, at two: %d from %d", len(shown), start)
 	}
 	// The last line shows alone, not past the song's.
-	shown, start = lyricWindowLines(lines, 4, 2)
+	shown, start = playbackview.LyricWindowLines(lines, 4, 2)
 	if start != 4 || len(shown) != 1 || shown[0].Text != "five" {
 		t.Fatalf("at five: %d from %d", len(shown), start)
 	}
 	// Before the first, the first ones show, with none of them lit.
-	shown, start = lyricWindowLines(lines, -1, 2)
+	shown, start = playbackview.LyricWindowLines(lines, -1, 2)
 	if start != 0 || len(shown) != 2 || shown[0].Text != "one" {
 		t.Fatalf("before the first: %d from %d", len(shown), start)
 	}
 	// A song without lines has none to show, and no settings ask for none.
-	if shown, _ := lyricWindowLines(nil, 0, 2); shown != nil {
+	if shown, _ := playbackview.LyricWindowLines(nil, 0, 2); shown != nil {
 		t.Fatalf("a song without lines: %d", len(shown))
 	}
-	if shown, _ := lyricWindowLines(lines, 0, 0); len(shown) != 1 {
+	if shown, _ := playbackview.LyricWindowLines(lines, 0, 0); len(shown) != 1 {
 		t.Fatalf("no lines asked for: %d", len(shown))
 	}
 }
@@ -64,38 +65,38 @@ func TestLyricWindowStaysOnScreen(t *testing.T) {
 
 	// A saved window on a secondary display must not be clamped into the
 	// primary display when the app reopens or the display configuration changes.
-	if got := lyricWindowArea(2200, 400, 840, 172, displays); got != secondary {
+	if got := playbackview.LyricWindowArea(2200, 400, 840, 172, displays); got != secondary {
 		t.Errorf("secondary work area: %+v, want %+v", got, secondary)
 	}
-	if x, y := lyricWindowPlace(2200, 400, 840, 172, secondary); x != 2200 || y != 400 {
+	if x, y := playbackview.LyricWindowPlace(2200, 400, 840, 172, secondary); x != 2200 || y != 400 {
 		t.Errorf("secondary position: %d, %d", x, y)
 	}
 	// Keep the window within its secondary display, including near its edge.
-	if x, y := lyricWindowPlace(3300, 500, 840, 172, secondary); x != 3280 || y != 500 {
+	if x, y := playbackview.LyricWindowPlace(3300, 500, 840, 172, secondary); x != 3280 || y != 500 {
 		t.Errorf("secondary right edge: %d, %d", x, y)
 	}
 	// With that display removed, the saved position is off every display and
 	// falls back to the nearest remaining one.
-	if got := lyricWindowArea(2200, 400, 840, 172, displays[:1]); got != area {
+	if got := playbackview.LyricWindowArea(2200, 400, 840, 172, displays[:1]); got != area {
 		t.Errorf("removed display work area: %+v, want %+v", got, area)
 	}
-	if x, y := lyricWindowPlace(2200, 400, 840, 172, area); x != 600 || y != 400 {
+	if x, y := playbackview.LyricWindowPlace(2200, 400, 840, 172, area); x != 600 || y != 400 {
 		t.Errorf("removed display position: %d, %d", x, y)
 	}
 
-	if x, y := lyricWindowPlace(0, 0, 840, 172, area); x != 300 || y != area.Y+area.Height*3/4-86 {
+	if x, y := playbackview.LyricWindowPlace(0, 0, 840, 172, area); x != 300 || y != area.Y+area.Height*3/4-86 {
 		t.Errorf("never placed: %d, %d", x, y)
 	}
 	// Past the right of it, as a screen went away from under the window.
-	if x, y := lyricWindowPlace(1600, 400, 840, 172, area); x != area.Width-840 || y != 400 {
+	if x, y := playbackview.LyricWindowPlace(1600, 400, 840, 172, area); x != area.Width-840 || y != 400 {
 		t.Errorf("past the right: %d, %d", x, y)
 	}
 	// Above it.
-	if x, y := lyricWindowPlace(100, -200, 840, 172, area); x != 100 || y != area.Y {
+	if x, y := playbackview.LyricWindowPlace(100, -200, 840, 172, area); x != 100 || y != area.Y {
 		t.Errorf("past the top: %d, %d", x, y)
 	}
 	// Larger than the screen: its top left corner.
-	if x, y := lyricWindowPlace(300, 300, 2000, 1000, area); x != area.X || y != area.Y {
+	if x, y := playbackview.LyricWindowPlace(300, 300, 2000, 1000, area); x != area.X || y != area.Y {
 		t.Errorf("larger than the screen: %d, %d", x, y)
 	}
 }
@@ -110,11 +111,11 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
 	a.pl.SetLyrics([]lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
 	a.pl.Hold(0)
-	d := &deskLyrics{a: a}
+	d := &playbackview.DeskLyrics{A: &a.views.playback}
 	a.lyrics = d
 
-	w, h := lyricWindowSize(a.settings.LyricSize, a.settings.LyricLines)
-	tt := ui.NewTester(d.view, int(w), int(h))
+	w, h := playbackview.LyricWindowSize(a.settings.LyricSize, a.settings.LyricLines)
+	tt := ui.NewTester(d.View, int(w), int(h))
 	// Pointed at, the buttons show: they are how the window is locked. The
 	// window itself is not there: the words stand on what is under them.
 	tt.Move(w/2, h/2)
@@ -143,7 +144,7 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	}
 	// The padlock is in the lyrics' own window, the one part of it that
 	// takes the pointer: no little window of its own.
-	d.hot = true
+	d.Hot = true
 	tt.Move(-20, -20)
 	tt.Frame()
 	if _, ok := tt.Find("设置"); ok {
@@ -165,7 +166,7 @@ func TestDeskLyricsAreVerticallyCentered(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
 	a.pl.SetLyrics([]lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
 	a.pl.Hold(0)
-	tt := ui.NewTester((&deskLyrics{a: a}).view, 840, 400)
+	tt := ui.NewTester((&playbackview.DeskLyrics{A: &a.views.playback}).View, 840, 400)
 	tt.Frame()
 	first, ok := tt.Find("第一句")
 	if !ok {
@@ -195,7 +196,7 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	})
 	a.pl.Hold(2 * time.Second)
 
-	settings := ui.NewTester(a.settingsView, 780, 3400)
+	settings := ui.NewTester(a.views.settings.Build, 780, 3400)
 	showSettingsPage(t, settings, "桌面歌词")
 	settings.Frame()
 	if err := settings.Click("单行"); err != nil {
@@ -206,8 +207,8 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	}
 
 	shown := func() *ui.Tester {
-		w, h := lyricWindowSize(a.settings.LyricSize, a.settings.LyricLines)
-		tt := ui.NewTester((&deskLyrics{a: a}).view, int(w), int(h))
+		w, h := playbackview.LyricWindowSize(a.settings.LyricSize, a.settings.LyricLines)
+		tt := ui.NewTester((&playbackview.DeskLyrics{A: &a.views.playback}).View, int(w), int(h))
 		tt.Move(w/2, h/2)
 		tt.Frame()
 		return tt
@@ -235,7 +236,7 @@ func TestDeskLyricsKaraokeSetting(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = loadSettings()
-	tt := ui.NewTester(a.settingsView, 780, 3400)
+	tt := ui.NewTester(a.views.settings.Build, 780, 3400)
 	showSettingsPage(t, tt, "桌面歌词")
 	clickSettingsSwitch(t, tt, "逐字歌词")
 	preferences.Flush()
@@ -254,7 +255,7 @@ func TestDeskLyricsAlignmentSetting(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = loadSettings()
-	tt := ui.NewTester(a.settingsView, 780, 3400)
+	tt := ui.NewTester(a.views.settings.Build, 780, 3400)
 	showSettingsPage(t, tt, "桌面歌词")
 	if err := tt.Click("靠右"); err != nil {
 		t.Fatal(err)
@@ -307,7 +308,7 @@ func TestDeskLyricsAlignInstrumentalNotice(t *testing.T) {
 	a.settings = defaultSettings()
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "纯音乐"}})
 	a.pl.SetLyrics(nil)
-	tt := ui.NewTester((&deskLyrics{a: a}).view, 840, 400)
+	tt := ui.NewTester((&playbackview.DeskLyrics{A: &a.views.playback}).View, 840, 400)
 	for _, lines := range []int{1, 2} {
 		for _, choice := range []int{0, 1, 2} {
 			a.settings.LyricLines = lines
@@ -334,15 +335,15 @@ func TestDeskLyricsAlignInstrumentalNotice(t *testing.T) {
 // A font setting uses the selected system family, or the default family
 // when no family is selected.
 func TestTheFamiliesAFontSettingStandsFor(t *testing.T) {
-	if got := lyricFamily(lyricFontSystem); got != "" {
+	if got := playbackview.LyricFamily(playbackview.LyricFontSystem); got != "" {
 		t.Errorf("the system's own stands for %q", got)
 	}
-	if got := lyricFamily(""); got != "" {
+	if got := playbackview.LyricFamily(""); got != "" {
 		t.Errorf("no choice stands for %q", got)
 	}
-	names := lyricFontNames()
+	names := playbackview.LyricFontNames()
 	if len(names) > 1 {
-		if got := lyricFamily(names[1]); got != names[1] {
+		if got := playbackview.LyricFamily(names[1]); got != names[1] {
 			t.Errorf("the system's font %q stands for %q", names[1], got)
 		}
 	}

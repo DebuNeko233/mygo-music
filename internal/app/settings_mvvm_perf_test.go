@@ -14,7 +14,7 @@ func BenchmarkSettingsMVVM(b *testing.B) {
 			a.settings = defaultSettings()
 			a.preferences.Section = section
 			a.cacheSettings.Used = 0
-			tt := ui.NewTester(a.settingsView, 780, 640)
+			tt := ui.NewTester(a.views.settings.Build, 780, 640)
 			tt.Frame()
 			b.ReportAllocs()
 			for b.Loop() {

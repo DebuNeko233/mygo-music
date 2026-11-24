@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
@@ -590,7 +591,7 @@ func TestMissingArtworkFrames(t *testing.T) {
 		name string
 		pane int
 		open bool
-	}{{"list", paneLyrics, false}, {"classic", paneLyrics, true}, {"stage", paneStage, true}, {"wall", paneWall, true}} {
+	}{{"list", playbackview.PaneLyrics, false}, {"classic", playbackview.PaneLyrics, true}, {"stage", playbackview.PaneStage, true}, {"wall", playbackview.PaneWall, true}} {
 		a.playbackState.Open, a.playbackState.Pane = tc.open, tc.pane
 		tt := ui.NewTester(a.view, 1200, 800)
 		tt.Frame()

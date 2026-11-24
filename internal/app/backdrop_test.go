@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -19,37 +20,37 @@ import (
 // The drift eases in as the music plays and glides to a stop as it
 // pauses; the bass swells and settles.
 func TestBackdropDrifts(t *testing.T) {
-	var bd backdropCache
+	var bd playbackview.BackdropCache
 	now := time.Unix(0, 0)
 	var quiet [player.Bands]float32
 	for range 120 {
-		now = now.Add(backdropFrame)
-		bd.step(now, true, quiet, true)
+		now = now.Add(playbackview.BackdropFrame)
+		bd.Step(now, true, quiet, true)
 	}
-	if bd.speed != 1 || bd.drift <= 0 {
-		t.Fatalf("playing: speed %v, drift %v", bd.speed, bd.drift)
+	if bd.Speed != 1 || bd.Drift <= 0 {
+		t.Fatalf("playing: speed %v, drift %v", bd.Speed, bd.Drift)
 	}
 	var loud [player.Bands]float32
 	for i := range loud {
 		loud[i] = 1
 	}
-	now = now.Add(backdropFrame)
-	bd.step(now, true, loud, true)
-	if bd.level.Group(0, 6) <= 0.2 {
-		t.Errorf("bass %v on a beat", bd.level.Group(0, 6))
+	now = now.Add(playbackview.BackdropFrame)
+	bd.Step(now, true, loud, true)
+	if bd.Level.Group(0, 6) <= 0.2 {
+		t.Errorf("bass %v on a beat", bd.Level.Group(0, 6))
 	}
 	moving := true
 	for range 120 {
-		now = now.Add(backdropFrame)
-		moving = bd.step(now, false, quiet, false)
+		now = now.Add(playbackview.BackdropFrame)
+		moving = bd.Step(now, false, quiet, false)
 	}
-	if moving || bd.speed != 0 {
-		t.Errorf("paused: still moving, speed %v", bd.speed)
+	if moving || bd.Speed != 0 {
+		t.Errorf("paused: still moving, speed %v", bd.Speed)
 	}
-	at := bd.drift
+	at := bd.Drift
 	now = now.Add(time.Second)
-	bd.step(now, false, quiet, false)
-	if bd.drift != at {
+	bd.Step(now, false, quiet, false)
+	if bd.Drift != at {
 		t.Error("drifted while paused")
 	}
 }
@@ -59,19 +60,19 @@ func TestBackdropDrifts(t *testing.T) {
 func TestBackdropPixelResolution(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
+	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
 	check := func() {
 		t.Helper()
-		w, h := a.backdropCache.canvas.Size()
+		w, h := a.BackdropCache.Canvas.Size()
 		want := tt.Image().Bounds().Size()
 		if w != want.X || h != want.Y {
 			t.Fatalf("background %dx%d for a %dx%d display", w, h, want.X, want.Y)
 		}
 	}
 	check()
-	first := a.backdropCache.canvas
+	first := a.BackdropCache.Canvas
 	tt.Frame()
-	if a.backdropCache.canvas != first {
+	if a.BackdropCache.Canvas != first {
 		t.Fatal("unchanged background replaced its canvas")
 	}
 	if tt.FramePending() {
@@ -95,13 +96,13 @@ func TestBackdropRampPrecision(t *testing.T) {
 		{"red", ui.RGB(180, 50, 45)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ramp := backdropRamp(tc.tint)
+			ramp := playbackview.BackdropRamp(tc.tint)
 			decode := func(x, channel int) uint16 {
 				return uint16(ramp.Pix[x*4+channel])<<8 | uint16(ramp.Pix[ramp.Stride+x*4+channel])
 			}
-			top, foot := backdropColors(tc.tint)
+			top, foot := playbackview.BackdropColors(tc.tint)
 			for i, colors := range [][3]uint8{{top.R, top.G, top.B}, {foot.R, foot.G, foot.B}} {
-				x := i * (backdropRampSize - 1)
+				x := i * (playbackview.BackdropRampSize - 1)
 				for channel, want := range colors {
 					if math.Abs(float64(decode(x, channel))/65535-float64(want)/255) > 1.0/65535 {
 						t.Fatalf("endpoint %d channel %d lost precision", i, channel)
@@ -110,7 +111,7 @@ func TestBackdropRampPrecision(t *testing.T) {
 			}
 			distinct := map[[3]uint16]bool{}
 			last := decode(0, 0)
-			for x := range backdropRampSize {
+			for x := range playbackview.BackdropRampSize {
 				v := [3]uint16{decode(x, 0), decode(x, 1), decode(x, 2)}
 				if tc.name == "gray" && v[0] > last {
 					t.Fatal("dark gradient reversed its direction")
@@ -123,7 +124,7 @@ func TestBackdropRampPrecision(t *testing.T) {
 				distinct[v] = true
 				last = v[0]
 			}
-			if len(distinct) <= backdropRampSize/2 {
+			if len(distinct) <= playbackview.BackdropRampSize/2 {
 				t.Fatalf("only %d distinct colors in a dark gradient", len(distinct))
 			}
 		})
@@ -135,15 +136,15 @@ func TestBackdropRampPrecision(t *testing.T) {
 func TestBackdropRampSurvivesResize(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
-	palette := a.backdropCache.still
+	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
+	palette := a.BackdropCache.Still
 	if palette == nil {
 		t.Fatal("no palette")
 	}
-	ramp := palette.ramp
+	ramp := palette.Ramp
 	tt.SetScale(2)
 	tt.SetSize(280, 180)
-	if a.backdropCache.still != palette || a.backdropCache.still.ramp != ramp {
+	if a.BackdropCache.Still != palette || a.BackdropCache.Still.Ramp != ramp {
 		t.Fatal("resize replaced the palette")
 	}
 }
@@ -151,28 +152,28 @@ func TestBackdropRampSurvivesResize(t *testing.T) {
 // A crossfade keeps at most the previous palette and drops it once the
 // transition finishes; an unchanged color shares the same ramp.
 func TestStillBackdropTransition(t *testing.T) {
-	var bd backdropCache
+	var bd playbackview.BackdropCache
 	now := time.Unix(0, 0)
 	blue := ui.RGB(50, 80, 140)
-	bd.prepareStill(nil, blue, now)
-	first := bd.still
-	bd.prepareStill(nil, blue, now.Add(backdropFade/4))
-	if bd.still != first || bd.previousStill != nil || bd.stillAt != now {
+	bd.PrepareStill(nil, blue, now)
+	first := bd.Still
+	bd.PrepareStill(nil, blue, now.Add(playbackview.BackdropFade/4))
+	if bd.Still != first || bd.PreviousStill != nil || bd.StillAt != now {
 		t.Fatal("unchanged background restarted its transition")
 	}
-	bd.prepareStill(&artwork{}, blue, now)
-	if bd.still.ramp != first.ramp || bd.previousStill != first {
+	bd.PrepareStill(&artwork{}, blue, now)
+	if bd.Still.Ramp != first.Ramp || bd.PreviousStill != first {
 		t.Fatal("unchanged color failed to reuse its ramp")
 	}
-	second := bd.still
-	bd.prepareStill(nil, ui.RGB(180, 50, 45), now)
-	if bd.previousStill != second || bd.still.ramp == second.ramp {
+	second := bd.Still
+	bd.PrepareStill(nil, ui.RGB(180, 50, 45), now)
+	if bd.PreviousStill != second || bd.Still.Ramp == second.Ramp {
 		t.Fatal("rapid track change kept more than the previous palette")
 	}
-	if got := bd.stillWeight(now.Add(backdropFade / 2)); math.Abs(float64(got-0.125)) > 0.001 {
+	if got := bd.StillWeight(now.Add(playbackview.BackdropFade / 2)); math.Abs(float64(got-0.125)) > 0.001 {
 		t.Fatalf("midpoint previous weight %v", got)
 	}
-	if bd.stillWeight(now.Add(backdropFade)) != 0 || bd.previousStill != nil {
+	if bd.StillWeight(now.Add(playbackview.BackdropFade)) != 0 || bd.PreviousStill != nil {
 		t.Fatal("transition retained the old palette")
 	}
 }
@@ -183,15 +184,15 @@ func TestFogDropsStillPalettes(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	tint := ui.RGB(50, 80, 140)
-	tt := ui.NewTester(func(c *ui.Context) { a.backdrop(c, nil, tint) }, 240, 160)
+	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.Backdrop(c, nil, tint) }, 240, 160)
 	tint = ui.RGB(180, 50, 45)
 	tt.Frame()
-	if a.backdropCache.still == nil || a.backdropCache.previousStill == nil {
+	if a.BackdropCache.Still == nil || a.BackdropCache.PreviousStill == nil {
 		t.Fatal("song change did not retain two palettes for its transition")
 	}
 	a.settings.Fog = true
 	tt.Frame()
-	if a.backdropCache.still != nil || a.backdropCache.previousStill != nil {
+	if a.BackdropCache.Still != nil || a.BackdropCache.PreviousStill != nil {
 		t.Fatal("fog retained static palette states")
 	}
 }
@@ -212,10 +213,10 @@ func TestBackdropGradientFrames(t *testing.T) {
 		{"gray", ui.RGB(100, 100, 100)},
 	} {
 		for _, scale := range []float32{1, 2} {
-			var bd backdropCache
-			bd.prepareStill(nil, tc.tint, time.Unix(0, 0))
+			var bd playbackview.BackdropCache
+			bd.PrepareStill(nil, tc.tint, time.Unix(0, 0))
 			tt := ui.NewTester(func(c *ui.Context) {
-				ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { bd.drawStill(p, r, r, 0, 1) })
+				ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { bd.DrawStill(p, r, r, 0, 1) })
 			}, 800, 600)
 			tt.SetScale(scale)
 			name := tc.name + "-1x.png"
@@ -261,7 +262,7 @@ func TestBackdropDriftFrames(t *testing.T) {
 		row := image.NewRGBA(image.Rect(0, 0, w*len(shots), h))
 		for i, s := range shots {
 			tt := ui.NewTester(func(c *ui.Context) {
-				ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { drawFog(p, r, art.tint, s.drift, s.bass) })
+				ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { playbackview.DrawFog(p, r, art.tint, s.drift, s.bass) })
 			}, w, h)
 			tt.Frame()
 			shot := tt.Image()

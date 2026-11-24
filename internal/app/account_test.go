@@ -42,7 +42,7 @@ func TestStaleQRConfirmationKeepsActiveAccount(t *testing.T) {
 			a.account.Profile = previous
 			queue := make(chan func(playReporter), 1)
 			a.reportQueue = queue
-			tt := ui.NewTester(a.loginDialog, 800, 600)
+			tt := ui.NewTester(a.views.account.Login, 800, 600)
 			tt.Frame()
 			tt.Advance(300 * time.Millisecond)
 
@@ -132,8 +132,8 @@ func TestAccountMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.accountOpen || !tt.HasText("退出登录") {
-		t.Fatalf("menu not open: %v", a.accountOpen)
+	if !a.views.account.MenuOpen || !tt.HasText("退出登录") {
+		t.Fatalf("menu not open: %v", a.views.account.MenuOpen)
 	}
 	if !tt.Focused("我的主页") {
 		t.Fatal("the first item has no focus")
@@ -146,7 +146,7 @@ func TestAccountMenu(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
-	if a.accountOpen {
+	if a.views.account.MenuOpen {
 		t.Fatal("Escape left the menu open")
 	}
 
@@ -154,14 +154,14 @@ func TestAccountMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.accountOpen {
+	if !a.views.account.MenuOpen {
 		t.Fatal("the second opening did not show the account menu")
 	}
 	if err := tt.Click("小明"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.accountOpen {
+	if a.views.account.MenuOpen {
 		t.Fatal("a second click left the menu open")
 	}
 }
@@ -190,7 +190,7 @@ func TestAccountMenuOpensOwnPage(t *testing.T) {
 	if a.nav.Current.Page != pageUser || a.nav.Current.ID != 42 {
 		t.Fatalf("route = %+v, want the page of user 42", a.nav.Current)
 	}
-	if a.accountOpen {
+	if a.views.account.MenuOpen {
 		t.Fatal("the menu stayed open")
 	}
 	for d := a.users.Pages.Get(42); d.Loading > 0 || d.SubsLoading > 0 || a.podcasts.Home.SubscriptionLoading; {

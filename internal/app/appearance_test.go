@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/preferences"
 )
 
@@ -24,7 +25,7 @@ func TestChoosingAccentColorsIt(t *testing.T) {
 	defer func() { accentChosen = old }()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	showSettingsPage(t, tt, "外观")
 	tt.Frame()
 	// The select opens on a click, and the option under the pointer picks
@@ -129,8 +130,8 @@ func TestPictureIsReadAtItsSize(t *testing.T) {
 	if pic == nil {
 		t.Fatal("could not read the picture")
 	}
-	if pic.w != 2000 || pic.h != 50 {
-		t.Errorf("kept %v×%v, want 2000×50", pic.w, pic.h)
+	if pic.W != 2000 || pic.H != 50 {
+		t.Errorf("kept %v×%v, want 2000×50", pic.W, pic.H)
 	}
 	if decodePicture(filepath.Join(t.TempDir(), "missing.png")) != nil {
 		t.Error("read a picture that is not there")
@@ -168,8 +169,8 @@ func TestEveryPictureFormatIsRead(t *testing.T) {
 			t.Errorf("%s: could not read the picture", name)
 			continue
 		}
-		if pic.w != 3 || pic.h != 2 {
-			t.Errorf("%s: kept %v×%v, want 3×2", name, pic.w, pic.h)
+		if pic.W != 3 || pic.H != 2 {
+			t.Errorf("%s: kept %v×%v, want 3×2", name, pic.W, pic.H)
 		}
 	}
 }
@@ -187,7 +188,7 @@ func TestCoverSourceKeepsTheShape(t *testing.T) {
 		{"a wide picture in a wide page", ui.Rect{W: 400, H: 100}, 200, 100, ui.Rect{Y: 25, W: 200, H: 50}},
 		{"the same shape", ui.Rect{W: 200, H: 100}, 200, 100, ui.Rect{W: 200, H: 100}},
 	} {
-		src := coverSource(tc.page, tc.w, tc.h)
+		src := playbackview.CoverSource(tc.page, tc.w, tc.h)
 		if src != tc.want {
 			t.Errorf("%s: source %+v, want %+v", tc.name, src, tc.want)
 		}
@@ -309,7 +310,7 @@ func TestPlayingBackdropCoversTheStage(t *testing.T) {
 	const w, h = 400, 300
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Box(c).Fill().Background(ui.Hex("#0b0b0d"))
-		a.backdrop(c, nil, ui.RGB(120, 120, 130))
+		a.views.playback.Backdrop(c, nil, ui.RGB(120, 120, 130))
 	}, w, h)
 	tt.Frame()
 	if got := redPixels(tt.Image()); got < w*h/2 {
@@ -323,7 +324,7 @@ func TestSettingsSlidersPaintTheirTrack(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	for _, label := range []string{"调整主页面背景透明度", "调整播放页背景透明度", "调整歌词字号"} {
 		page := "外观"
@@ -406,7 +407,7 @@ func TestBackdropFramesKeepBothPagesDecoded(t *testing.T) {
 	}
 	tt := ui.NewTester(func(c *ui.Context) {
 		a.pictures(a.settings.BackdropHome)
-		a.backdrop(c, nil, ui.RGB(120, 120, 130))
+		a.views.playback.Backdrop(c, nil, ui.RGB(120, 120, 130))
 	}, 300, 240)
 	for range 3 {
 		tt.Frame()
@@ -432,7 +433,7 @@ func TestBackdropSlidersSetIndependentOpacity(t *testing.T) {
 	a.settings.BackdropPlayingOpacity = 0.4
 	a.settings.BackdropHome = []string{"这里是一张用来确认长文件名不会把外观设置内容挤出去的主页面背景图片.jpg"}
 	a.settings.BackdropPlaying = []string{"这里是一张用来确认长文件名不会把外观设置内容挤出去的播放页背景图片.jpg"}
-	tt := ui.NewTester(a.settingsView, 640, 420)
+	tt := ui.NewTester(a.views.settings.Build, 640, 420)
 	showSettingsPage(t, tt, "外观")
 
 	set := func(label string, progress float32) {

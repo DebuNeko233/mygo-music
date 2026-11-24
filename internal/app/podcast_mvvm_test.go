@@ -28,9 +28,9 @@ func TestPodcastMVVMSubscriptionUpdatesPersonalPage(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		a.pal = paletteFor(c.Theme())
 		if personal {
-			a.userPage(c)
+			a.views.user.Build(c)
 		} else {
-			a.podcastPage(c)
+			a.views.podcast.Build(c)
 		}
 	}, 1200, 1200)
 	tt.Frame()

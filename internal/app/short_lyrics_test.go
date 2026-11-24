@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -23,7 +24,7 @@ func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
 	a.pl.Hold(0)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		_, height := c.Size()
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), height, ui.Rect{}, 0) })
+		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), height, ui.Rect{}, 0) })
 	}, w, h, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	return a, tt
 }
@@ -41,7 +42,7 @@ func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.
 	// Find returns painted bounds. Undo the inactive rows' emphasis scale
 	// to check the layout, including when font metrics make a row taller.
 	top, bottom := first.Y, last.Y+last.H
-	const unscale = (1/inactiveTimedLyricScale - 1) / 2
+	const unscale = (1/playbackview.InactiveTimedLyricScale - 1) / 2
 	if a.lyricReading.At != 0 {
 		top -= first.H * unscale
 	}
@@ -51,8 +52,8 @@ func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.
 	if center := (top + bottom) / 2; math.Abs(float64(center-float32(h)/2)) > 2 {
 		t.Fatalf("lyrics centered at %.1f, want %.1f", center, float32(h)/2)
 	}
-	if a.lyricScroll.MaxY > 1 || a.lyricScroll.Y != 0 {
-		t.Fatalf("short lyrics still scroll: %+v", a.lyricScroll)
+	if a.LyricScroll.MaxY > 1 || a.LyricScroll.Y != 0 {
+		t.Fatalf("short lyrics still scroll: %+v", a.LyricScroll)
 	}
 }
 
@@ -93,7 +94,7 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	checkShortLyricsCenter(t, tt, a, lines, 900)
 	tt.SetSize(260, 300)
 	tt.Advance(2 * time.Second)
-	if a.lyricScroll.MaxY <= 0 {
+	if a.LyricScroll.MaxY <= 0 {
 		t.Fatal("wrapped lyrics did not become scrollable")
 	}
 	a.pl.Hold(lines[len(lines)-1].At)
@@ -148,7 +149,7 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 			tt.Frame()
 			first, ok := tt.Find(lyrics.InstrumentalText)
 			last, lastOK := tt.Find("指挥 Conductor : C")
-			if !ok || !lastOK || first.Y >= last.Y || abs32((first.Y+last.Y+last.H)/2-h/2) > 3 {
+			if !ok || !lastOK || first.Y >= last.Y || playbackview.Abs32((first.Y+last.Y+last.H)/2-h/2) > 3 {
 				t.Fatalf("static credits did not center together: %v, %v", first, last)
 			}
 			if _, ok := tt.AccessByRole(ui.RoleButton, "作曲 : A"); ok {
@@ -164,7 +165,7 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 			a.pl.Hold(110 * time.Second)
 			tt.Frame()
 			held, _ := tt.Find("指挥 Conductor : C")
-			if abs32(held.Y-scrolled.Y) > 1 {
+			if playbackview.Abs32(held.Y-scrolled.Y) > 1 {
 				t.Fatalf("static block followed playback: %v -> %v", scrolled, held)
 			}
 		})
@@ -183,8 +184,8 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	if title, ok := tt.Find(lyrics.InstrumentalText); !ok || title.Y < 16 || title.Y+title.H >= h {
 		t.Fatalf("overflowing credits must start with the notice in view: %+v", title)
 	}
-	if a.lyricScroll.MaxY < 90 || a.lyricScroll.MaxX > 0 {
-		t.Fatalf("long credit did not wrap vertically: %+v", a.lyricScroll)
+	if a.LyricScroll.MaxY < 90 || a.LyricScroll.MaxX > 0 {
+		t.Fatalf("long credit did not wrap vertically: %+v", a.LyricScroll)
 	}
 	tt.Scroll(w/2, h/2, 0, 1500)
 	tt.Advance(time.Second)
@@ -196,8 +197,8 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	a.pl.SetLyrics(nil)
 	tt.Frame()
 	title, ok := tt.Find(lyrics.InstrumentalText)
-	if !ok || a.lyricScroll.Y != 0 || abs32(title.Y+title.H/2-h/2) > 2 {
-		t.Fatalf("next track inherited the scroll position: %+v, offset %.1f", title, a.lyricScroll.Y)
+	if !ok || a.LyricScroll.Y != 0 || playbackview.Abs32(title.Y+title.H/2-h/2) > 2 {
+		t.Fatalf("next track inherited the scroll position: %+v, offset %.1f", title, a.LyricScroll.Y)
 	}
 }
 
@@ -247,7 +248,7 @@ func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, la
 			checkTop()
 		}
 		c.Root().Background(ui.RGB(0, 0, 0))
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
+		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
 	}, w, h)
 
 	a.pl.Cue([]netease.Track{{ID: 2}})
@@ -256,7 +257,7 @@ func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, la
 	checkTop()
 	top, topOK := tt.Find(first)
 	bottom, bottomOK := tt.Find(last)
-	if !topOK || !bottomOK || abs32((top.Y+bottom.Y+bottom.H)/2-h/2) > 2 {
+	if !topOK || !bottomOK || playbackview.Abs32((top.Y+bottom.Y+bottom.H)/2-h/2) > 2 {
 		t.Fatalf("the lyric block did not appear centered: %+v, %+v", top, bottom)
 	}
 }

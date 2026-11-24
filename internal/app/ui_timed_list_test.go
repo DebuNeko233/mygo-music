@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/speech"
 	captionsvm "netease-music-mygo/internal/viewmodel/captions"
@@ -53,7 +54,7 @@ func TestLongLyricsWindow(t *testing.T) {
 	a.pl.Seek(0)
 	tt.Frame()
 	tt.Advance(time.Second)
-	if got, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text); !ok || got.Offscreen || a.lyricScroll.Y != 0 || got.Bounds.H < 80 {
+	if got, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text); !ok || got.Offscreen || a.LyricScroll.Y != 0 || got.Bounds.H < 80 {
 		t.Fatalf("backward seek lost the first row: %+v", got)
 	}
 }
@@ -73,7 +74,7 @@ func TestLongLyricsKeepAnchorWhenTogglingImmersive(t *testing.T) {
 		tt.Frame()
 		tt.Advance(time.Second)
 		row, ok := tt.AccessByRole(ui.RoleButton, active.Text)
-		if !ok || row.Offscreen || abs32(row.Bounds.Y-height*0.3) > 2 {
+		if !ok || row.Offscreen || playbackview.Abs32(row.Bounds.Y-height*0.3) > 2 {
 			t.Fatalf("immersive=%v: active lyric lost its reading position: %+v", immersive, row)
 		}
 	}
@@ -101,17 +102,17 @@ func TestTimedListMeasuresOnlyRenderedWordText(t *testing.T) {
 			line.Timed = tc.timed
 			rows := []lyrics.Line{line}
 			ui.NewTester(func(c *ui.Context) {
-				st := linesStyle{size: 22, weight: 600, lineHeight: 1.25, centerShort: tc.lyric, immersive: tc.immersive}
-				var layout timedListLayout
-				layout.reset(c, rows, width, st, 0)
-				layout.measure(rows, 0, len(rows), st)
+				st := playbackview.LinesStyle{Size: 22, Weight: 600, LineHeight: 1.25, CenterShort: tc.lyric, Immersive: tc.immersive}
+				var layout playbackview.TimedListLayout
+				layout.Reset(c, rows, width, st, 0)
+				layout.Measure(rows, 0, len(rows), st)
 				text := line.Text
 				if tc.wantWordHeight {
 					text = line.Words[0].Text
 				}
-				_, height := shapeLyric(text, lyricFont(c, st), width, c.Direction()).Size()
-				want := height + 2*timedLineInsetY + timedLineGap
-				if got := layout.offsets[1]; abs32(got-want) > 0.5 {
+				_, height := playbackview.ShapeLyric(text, playbackview.LyricFont(c, st), width, c.Direction()).Size()
+				want := height + 2*playbackview.TimedLineInsetY + playbackview.TimedLineGap
+				if got := layout.Offsets[1]; playbackview.Abs32(got-want) > 0.5 {
 					t.Fatalf("row height = %.1f, want %.1f for the displayed text", got, want)
 				}
 			}, 200, 220)
@@ -128,7 +129,7 @@ func TestLongCaptionsWindow(t *testing.T) {
 	for i := range 300 {
 		cs.Lines = append(cs.Lines, lyrics.Line{At: time.Duration(i) * sec, Text: fmt.Sprintf("第 %d 句字幕", i)})
 	}
-	tt := ui.NewTester(func(c *ui.Context) { a.captionsPane(c, a.pl.Current(), 520) }, 440, 520)
+	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.CaptionsPane(c, a.pl.Current(), 520) }, 440, 520)
 	a.pl.Seek(250 * sec)
 	tt.Frame()
 	tt.Advance(time.Second)
@@ -158,7 +159,7 @@ func TestCaptionResizeKeepsManualPosition(t *testing.T) {
 	a.pl.Seek(250 * sec)
 	tt := ui.NewTester(func(c *ui.Context) {
 		_, h := c.Size()
-		a.captionsPane(c, a.pl.Current(), h)
+		a.views.playback.CaptionsPane(c, a.pl.Current(), h)
 	}, 520, 460)
 	tt.Scroll(200, 220, 0, 900)
 	tt.Advance(time.Second)
@@ -186,7 +187,7 @@ func TestCaptionResizeKeepsManualPosition(t *testing.T) {
 
 // While reading ahead, new captions keep the scrolled row reachable, even as the list starts windowing.
 func TestCaptionAppendKeepsManualPosition(t *testing.T) {
-	for _, count := range []int{timedListThreshold - 1, 300} {
+	for _, count := range []int{playbackview.TimedListThreshold - 1, 300} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			a := captionsTestApp(t, true)
 			work := &captionsvm.CaptionWork{Program: 42}
@@ -200,7 +201,7 @@ func TestCaptionAppendKeepsManualPosition(t *testing.T) {
 				add(i)
 			}
 			a.pl.Seek(20 * time.Second)
-			tt := ui.NewTester(func(c *ui.Context) { a.captionsPane(c, a.pl.Current(), 460) }, 440, 460)
+			tt := ui.NewTester(func(c *ui.Context) { a.views.playback.CaptionsPane(c, a.pl.Current(), 460) }, 440, 460)
 			tt.Advance(2 * time.Second)
 			anchor := func() ui.Rect {
 				t.Helper()

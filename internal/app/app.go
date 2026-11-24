@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/navigation"
@@ -54,6 +55,7 @@ const (
 // app composes shared models and services. Views own widget/animation state;
 // startup, windows and shutdown coordinate their lifetimes on the UI thread.
 type app struct {
+	views desktopViews
 	mainViewState
 	settingsViewState
 	appDispatch
@@ -70,15 +72,15 @@ type app struct {
 	browseUsed, imagesUsed                 int64
 
 	win    *mygo.Window
-	notch  *notch
-	lyrics *deskLyrics // the lyrics in their own window, once it is made
-	tray   *mygo.Tray  // the icon in the menu bar or notification area, while it shows
+	notch  *playbackview.Notch
+	lyrics *playbackview.DeskLyrics // the lyrics in their own window, once it is made
+	tray   *mygo.Tray               // the icon in the menu bar or notification area, while it shows
 	art    *artCache
 	pl     *player.Player
 
 	nav navigation.Navigator
 
-	picked pickedUp // the song a login picked up, waiting to play
+	picked playbackview.PickedUp // the song a login picked up, waiting to play
 
 	cloud cloudvm.Cloud
 

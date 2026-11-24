@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -25,9 +26,9 @@ func TestLyricSpectrumMaskFillsToBottom(t *testing.T) {
 	light := ui.RGB(192, 184, 255)
 	const scale = .6
 	const height = 100
-	glow := make([]spectrumGlow, dst.Bounds().Dx())
-	spectrumGlowColumns(glow, bands[:], .85, 400)
-	paintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint, light.Alpha(0))
+	glow := make([]playbackview.SpectrumGlow, dst.Bounds().Dx())
+	playbackview.SpectrumGlowColumns(glow, bands[:], .85, 400)
+	playbackview.PaintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint, light.Alpha(0))
 
 	edgeAt := func(x int) int {
 		for y := range dst.Bounds().Dy() {
@@ -53,7 +54,7 @@ func TestLyricSpectrumMaskFillsToBottom(t *testing.T) {
 	}
 	edge := edgeAt(0)
 	floor := dst.RGBAAt(0, 79)
-	paintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint, light)
+	playbackview.PaintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint, light)
 	if above, beside, away := dst.RGBAAt(0, edge-14).A, dst.RGBAAt(14, edge-14).A, dst.RGBAAt(100, edge-14).A; above == 0 || beside == 0 || beside >= above || away != 0 {
 		t.Errorf("glow outside a strong peak = %d above, %d beside, %d far away", above, beside, away)
 	}
@@ -61,13 +62,13 @@ func TestLyricSpectrumMaskFillsToBottom(t *testing.T) {
 	if dst.RGBAAt(0, 79) != floor {
 		t.Error("peak lighting reached the bottom of the spectrum")
 	}
-	paintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint.Alpha(.22), light)
+	playbackview.PaintLyricSpectrumFill(dst, bands[:], .85, height, scale, glow, tint.Alpha(.22), light)
 	if dst.RGBAAt(14, edge-14) != outside {
 		t.Error("the outside glow changed with the page's fill opacity")
 	}
 	clear(bands[:])
 	clear(glow)
-	paintLyricSpectrumFill(dst, bands[:], 0, height, scale, glow, tint, light)
+	playbackview.PaintLyricSpectrumFill(dst, bands[:], 0, height, scale, glow, tint, light)
 	if dst.RGBAAt(0, 40).A != 0 {
 		t.Error("a previous peak leaked into the next mask")
 	}
@@ -76,39 +77,39 @@ func TestLyricSpectrumMaskFillsToBottom(t *testing.T) {
 // A seek keeps the old contour while the light falls away and blends to the first destination samples.
 func TestLyricSpectrumSeekBlend(t *testing.T) {
 	start := time.Unix(10, 0)
-	st := lyricSpectrum{at: start}
-	st.levels[6] = .9
-	st.smoothContour()
-	st.beginBlend(start, spectrumSeeking)
-	st.step(start.Add(40*time.Millisecond), [player.DetailBands]float32{}, false)
-	if light := st.blend.light(st.at); light <= 0 || light >= 1 || st.levels[6] <= .6 {
-		t.Fatalf("after seeking, light = %g and outgoing level = %g", light, st.levels[6])
+	st := playbackview.LyricSpectrum{At: start}
+	st.Levels[6] = .9
+	st.SmoothContour()
+	st.BeginBlend(start, playbackview.SpectrumSeeking)
+	st.Step(start.Add(40*time.Millisecond), [player.DetailBands]float32{}, false)
+	if light := st.Blend.Light(st.At); light <= 0 || light >= 1 || st.Levels[6] <= .6 {
+		t.Fatalf("after seeking, light = %g and outgoing level = %g", light, st.Levels[6])
 	}
 
 	arrival := start.Add(90 * time.Millisecond)
 	var incoming [player.DetailBands]float32
 	incoming[42] = .85
-	before := st.levels
-	st.step(arrival, incoming, true)
-	if st.levels != before || st.blend.light(arrival) != 0 {
+	before := st.Levels
+	st.Step(arrival, incoming, true)
+	if st.Levels != before || st.Blend.Light(arrival) != 0 {
 		t.Fatal("the first destination sample jumped the contour or relit the old peak")
 	}
-	half := arrival.Add(spectrumBlendTime / 2)
-	st.step(half, incoming, true)
-	if got := st.levels[42]; got <= 0 || got >= incoming[42] || st.blend.light(half) <= 0 || st.blend.light(half) >= 1 {
-		t.Fatalf("mid-blend incoming level = %g, light = %g", got, st.blend.light(half))
+	half := arrival.Add(playbackview.SpectrumBlendTime / 2)
+	st.Step(half, incoming, true)
+	if got := st.Levels[42]; got <= 0 || got >= incoming[42] || st.Blend.Light(half) <= 0 || st.Blend.Light(half) >= 1 {
+		t.Fatalf("mid-blend incoming level = %g, light = %g", got, st.Blend.Light(half))
 	}
 
 	// Seeking again restarts from what is visible, even mid-blend.
-	before, light := st.levels, st.blend.light(half)
-	st.beginBlend(half, spectrumSeeking)
-	if st.levels != before || st.blend.light(half) != light {
+	before, light := st.Levels, st.Blend.Light(half)
+	st.BeginBlend(half, playbackview.SpectrumSeeking)
+	if st.Levels != before || st.Blend.Light(half) != light {
 		t.Fatal("a second seek jumped the displayed spectrum")
 	}
 	arrival = half.Add(90 * time.Millisecond)
-	st.step(arrival, incoming, true)
-	st.step(arrival.Add(spectrumBlendTime), incoming, true)
-	if st.levels != incoming || st.blend.light(st.at) != 1 || st.blend.phase != spectrumFollowing {
+	st.Step(arrival, incoming, true)
+	st.Step(arrival.Add(playbackview.SpectrumBlendTime), incoming, true)
+	if st.Levels != incoming || st.Blend.Light(st.At) != 1 || st.Blend.Phase != playbackview.SpectrumFollowing {
 		t.Fatal("the second blend did not settle on the destination samples")
 	}
 }
@@ -121,35 +122,35 @@ func TestLyricSpectrumResumesWithNewSamples(t *testing.T) {
 	for i := 16; i < 24; i++ {
 		incoming[i] = .95
 	}
-	st := lyricSpectrum{track: track, at: start, wantsPlay: true, levels: incoming}
-	st.smoothContour()
-	st.updateTransport(start, track, false, 0)
+	st := playbackview.LyricSpectrum{Track: track, At: start, WantsPlay: true, Levels: incoming}
+	st.SmoothContour()
+	st.UpdateTransport(start, track, false, 0)
 	for elapsed := 20 * time.Millisecond; elapsed <= 2*time.Second; elapsed += 20 * time.Millisecond {
-		st.step(start.Add(elapsed), silence, false)
+		st.Step(start.Add(elapsed), silence, false)
 	}
-	if st.peak > lyricSpectrumSilent || st.blend.light(st.at) != 0 {
+	if st.Peak > playbackview.LyricSpectrumSilent || st.Blend.Light(st.At) != 0 {
 		t.Fatal("the paused spectrum and light did not settle")
 	}
 
 	resume := start.Add(10 * time.Second)
-	st.updateTransport(resume, track, true, 0)
-	st.step(resume, silence, false)
-	if st.peak > lyricSpectrumSilent || st.blend.light(resume) != 0 {
+	st.UpdateTransport(resume, track, true, 0)
+	st.Step(resume, silence, false)
+	if st.Peak > playbackview.LyricSpectrumSilent || st.Blend.Light(resume) != 0 {
 		t.Fatal("the spectrum lit up while waiting for resumed audio")
 	}
 	first := resume.Add(350 * time.Millisecond)
-	before := st.levels
-	st.step(first, incoming, true)
-	if st.levels != before || st.blend.light(first) != 0 {
+	before := st.Levels
+	st.Step(first, incoming, true)
+	if st.Levels != before || st.Blend.Light(first) != 0 {
 		t.Fatal("the first resumed audio sample jumped the contour or flashed")
 	}
-	mid := first.Add(spectrumBlendTime / 2)
-	st.step(mid, incoming, true)
-	if st.levels[20] <= before[20] || st.levels[20] >= incoming[20] || st.blend.light(mid) <= 0 || st.blend.light(mid) >= 1 {
+	mid := first.Add(playbackview.SpectrumBlendTime / 2)
+	st.Step(mid, incoming, true)
+	if st.Levels[20] <= before[20] || st.Levels[20] >= incoming[20] || st.Blend.Light(mid) <= 0 || st.Blend.Light(mid) >= 1 {
 		t.Fatal("the contour and highlight did not ease back in")
 	}
-	st.step(first.Add(spectrumBlendTime), incoming, true)
-	if st.levels != incoming || st.blend.light(st.at) != 1 || st.blend.phase != spectrumFollowing {
+	st.Step(first.Add(playbackview.SpectrumBlendTime), incoming, true)
+	if st.Levels != incoming || st.Blend.Light(st.At) != 1 || st.Blend.Phase != playbackview.SpectrumFollowing {
 		t.Fatal("the spectrum did not resume normal playback")
 	}
 }
@@ -162,27 +163,27 @@ func TestLyricSpectrumRapidPauseResume(t *testing.T) {
 	for i := 16; i < 24; i++ {
 		incoming[i] = .95
 	}
-	st := lyricSpectrum{track: track, at: start, wantsPlay: true, levels: incoming}
-	st.smoothContour()
-	st.updateTransport(start, track, false, 0)
+	st := playbackview.LyricSpectrum{Track: track, At: start, WantsPlay: true, Levels: incoming}
+	st.SmoothContour()
+	st.UpdateTransport(start, track, false, 0)
 	resume := start.Add(50 * time.Millisecond)
-	st.step(resume, silence, false)
-	before, light := st.levels, st.blend.light(resume)
-	st.updateTransport(resume, track, true, 0)
-	st.step(resume, incoming, true)
-	if st.levels != before || light <= 0 || light >= 1 || st.blend.light(resume) != light {
+	st.Step(resume, silence, false)
+	before, light := st.Levels, st.Blend.Light(resume)
+	st.UpdateTransport(resume, track, true, 0)
+	st.Step(resume, incoming, true)
+	if st.Levels != before || light <= 0 || light >= 1 || st.Blend.Light(resume) != light {
 		t.Fatal("resuming during the fade jumped the displayed spectrum")
 	}
 
-	pause := resume.Add(spectrumBlendTime / 2)
-	st.step(pause, incoming, true)
-	before, light = st.levels, st.blend.light(pause)
-	st.updateTransport(pause, track, false, 0)
-	if st.levels != before || st.blend.light(pause) != light {
+	pause := resume.Add(playbackview.SpectrumBlendTime / 2)
+	st.Step(pause, incoming, true)
+	before, light = st.Levels, st.Blend.Light(pause)
+	st.UpdateTransport(pause, track, false, 0)
+	if st.Levels != before || st.Blend.Light(pause) != light {
 		t.Fatal("pausing during the blend jumped the displayed spectrum")
 	}
-	st.step(pause.Add(30*time.Millisecond), silence, false)
-	if st.levels[20] >= before[20] || st.blend.light(st.at) >= light {
+	st.Step(pause.Add(30*time.Millisecond), silence, false)
+	if st.Levels[20] >= before[20] || st.Blend.Light(st.At) >= light {
 		t.Fatal("the interrupted resume kept raising the contour or its highlight")
 	}
 }
@@ -196,73 +197,73 @@ func TestLyricSpectrumStops(t *testing.T) {
 
 	seedLyricSpectrum(a, tt.Now())
 	tt.Frame()
-	if a.npSpectrum.renderer.mask == nil {
+	if a.NPSpectrum.Renderer.Mask == nil {
 		t.Fatal("the lyrics page did not draw the spectrum")
 	}
-	initial := a.npSpectrum.peak
+	initial := a.NPSpectrum.Peak
 	// Its motion follows display frames rather than skipping every other one.
 	updates := 0
 	for range 12 {
-		before := a.npSpectrum.at
+		before := a.NPSpectrum.At
 		tt.Advance(time.Second / 60)
-		if a.npSpectrum.at.After(before) {
+		if a.NPSpectrum.At.After(before) {
 			updates++
 		}
 	}
 	if updates < 10 {
 		t.Fatalf("spectrum updated on only %d of 12 display frames", updates)
 	}
-	if peak := a.npSpectrum.peak; peak <= initial*0.40 || peak >= initial {
+	if peak := a.NPSpectrum.Peak; peak <= initial*0.40 || peak >= initial {
 		t.Errorf("the paused spectrum should fall gradually, from %g to %g", initial, peak)
 	}
 	tt.Advance(2 * time.Second)
-	if a.npSpectrum.peak > lyricSpectrumSilent {
+	if a.NPSpectrum.Peak > playbackview.LyricSpectrumSilent {
 		t.Fatal("the paused spectrum did not settle")
 	}
-	at := a.npSpectrum.at
+	at := a.NPSpectrum.At
 	tt.Advance(time.Second)
-	if !at.Equal(a.npSpectrum.at) {
+	if !at.Equal(a.NPSpectrum.At) {
 		t.Error("an idle spectrum kept asking for frames")
 	}
 
 	seedLyricSpectrum(a, tt.Now())
-	peak := a.npSpectrum.peak
+	peak := a.NPSpectrum.Peak
 	a.pl.Seek(12 * time.Second)
 	tt.Frame()
-	if a.npSpectrum.peak != peak {
+	if a.NPSpectrum.Peak != peak {
 		t.Error("the spectrum jumped on the first frame after seeking")
 	}
 	tt.Advance(250 * time.Millisecond)
-	if next := a.npSpectrum.peak; next <= 0 || next >= peak {
+	if next := a.NPSpectrum.Peak; next <= 0 || next >= peak {
 		t.Errorf("the spectrum did not ease out while seeking: %g → %g", peak, next)
 	}
-	peak = a.npSpectrum.peak
+	peak = a.NPSpectrum.Peak
 	a.pl.Cue([]netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
 	tt.Frame()
-	if a.npSpectrum.peak != peak {
+	if a.NPSpectrum.Peak != peak {
 		t.Error("the spectrum jumped on the first frame of the next song")
 	}
 	tt.Advance(250 * time.Millisecond)
-	if next := a.npSpectrum.peak; next <= 0 || next >= peak {
+	if next := a.NPSpectrum.Peak; next <= 0 || next >= peak {
 		t.Errorf("the outgoing spectrum did not fall while waiting for audio: %g → %g", peak, next)
 	}
 	seedLyricSpectrum(a, tt.Now())
-	peak, mask := a.npSpectrum.peak, a.npSpectrum.renderer.mask
-	a.playbackState.Pane = paneStage
+	peak, mask := a.NPSpectrum.Peak, a.NPSpectrum.Renderer.Mask
+	a.playbackState.Pane = playbackview.PaneStage
 	tt.Frame()
-	if a.npSpectrum.peak != peak || a.npSpectrum.renderer.mask != mask {
+	if a.NPSpectrum.Peak != peak || a.NPSpectrum.Renderer.Mask != mask {
 		t.Error("switching to the stage discarded the current spectrum")
 	}
-	a.playbackState.Pane = paneQueue
+	a.playbackState.Pane = playbackview.PaneQueue
 	tt.Frame()
-	if a.npSpectrum != (lyricSpectrum{}) {
+	if a.NPSpectrum != (playbackview.LyricSpectrum{}) {
 		t.Error("the queue kept the lyrics page's spectrum")
 	}
-	a.playbackState.Pane = paneLyrics
+	a.playbackState.Pane = playbackview.PaneLyrics
 	tt.Frame()
 	seedLyricSpectrum(a, tt.Now())
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-	if a.npSpectrum != (lyricSpectrum{}) {
+	if a.NPSpectrum != (playbackview.LyricSpectrum{}) {
 		t.Error("Reduce Motion kept the animated spectrum")
 	}
 }
@@ -270,13 +271,13 @@ func TestLyricSpectrumStops(t *testing.T) {
 // Spatial smoothing restrains a single spike without flattening a sustained band of energy.
 func TestLyricSpectrumRoundsSpikes(t *testing.T) {
 	const n = player.DetailBands
-	var st lyricSpectrum
-	st.levels[n/4] = 1
+	var st playbackview.LyricSpectrum
+	st.Levels[n/4] = 1
 	for i := n / 2; i < 3*n/4; i++ {
-		st.levels[i] = .75
+		st.Levels[i] = .75
 	}
-	st.smoothContour()
-	if spike, hill := st.contour[n/4], st.contour[5*n/8]; spike >= .5 || hill < .74 {
+	st.SmoothContour()
+	if spike, hill := st.Contour[n/4], st.Contour[5*n/8]; spike >= .5 || hill < .74 {
 		t.Errorf("isolated spike %g and broad hill %g", spike, hill)
 	}
 }
@@ -285,23 +286,23 @@ func TestLyricSpectrumRoundsSpikes(t *testing.T) {
 func TestLyricSpectrumTintTransition(t *testing.T) {
 	start := time.Unix(10, 0)
 	red, blue, green := ui.RGB(180, 80, 80), ui.RGB(80, 80, 180), ui.RGB(80, 180, 80)
-	var st lyricSpectrum
-	if got := st.blendTint(start, red); got != red {
+	var st playbackview.LyricSpectrum
+	if got := st.BlendTint(start, red); got != red {
 		t.Fatalf("first draw should use its cover's color immediately: %v", got)
 	}
 	firstChange := start.Add(time.Second)
-	if got := st.blendTint(firstChange, blue); got != red {
+	if got := st.BlendTint(firstChange, blue); got != red {
 		t.Errorf("a new cover should begin at the previous color: %v", got)
 	}
-	secondChange := firstChange.Add(backdropFade / 4)
-	visible := st.blendTint(secondChange, blue)
+	secondChange := firstChange.Add(playbackview.BackdropFade / 4)
+	visible := st.BlendTint(secondChange, blue)
 	if visible == red || visible == blue {
 		t.Errorf("the first transition did not blend: %v", visible)
 	}
-	if got := st.blendTint(secondChange, green); got != visible {
+	if got := st.BlendTint(secondChange, green); got != visible {
 		t.Errorf("a quick second change jumped from %v to %v", visible, got)
 	}
-	if got := st.blendTint(secondChange.Add(backdropFade), green); got != green {
+	if got := st.BlendTint(secondChange.Add(playbackview.BackdropFade), green); got != green {
 		t.Errorf("the transition did not settle on the final cover: %v", got)
 	}
 }
@@ -316,7 +317,7 @@ func TestLyricSpectrumFrames(t *testing.T) {
 		name          string
 		width, height int
 		pane          int
-	}{{"desktop", 1200, 800, paneLyrics}, {"compact", 750, 580, paneLyrics}, {"stage", 1200, 800, paneStage}} {
+	}{{"desktop", 1200, 800, playbackview.PaneLyrics}, {"compact", 750, 580, playbackview.PaneLyrics}, {"stage", 1200, 800, playbackview.PaneStage}} {
 		a := spectrumTestApp()
 		a.playbackState.Pane = size.pane
 		tt := ui.NewTester(a.view, size.width, size.height)
@@ -339,7 +340,7 @@ func spectrumTestApp() *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.LyricSpectrum = true
-	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "夜航", Artists: []netease.Artist{{Name: "测试音轨"}}, Duration: 200000}})
 	a.pl.SetLyrics(lyrics.Build("[00:00.00]夜色落在海面\n[00:04.00]星光照亮归途\n[00:08.00]远处的灯缓缓亮起\n[00:12.00]风从耳边经过\n[00:16.00]潮水轻轻退去\n[00:20.00]月亮停在天边\n", "", ""))
 	a.pl.Seek(8 * time.Second)
@@ -347,11 +348,11 @@ func spectrumTestApp() *app {
 }
 
 func seedLyricSpectrum(a *app, now time.Time) {
-	st := &a.npSpectrum
-	st.at = now
-	for i := range st.levels {
-		x := float64(i) / float64(len(st.levels)-1)
-		st.levels[i] = float32((.48 + .22*math.Sin(16*x) + .19*math.Sin(35*x) + .04*math.Cos(150*x)) * (1 - .50*x))
+	st := &a.NPSpectrum
+	st.At = now
+	for i := range st.Levels {
+		x := float64(i) / float64(len(st.Levels)-1)
+		st.Levels[i] = float32((.48 + .22*math.Sin(16*x) + .19*math.Sin(35*x) + .04*math.Cos(150*x)) * (1 - .50*x))
 	}
-	st.smoothContour()
+	st.SmoothContour()
 }

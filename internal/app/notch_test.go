@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -19,29 +20,29 @@ import (
 func TestNotchGreetsOnce(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	n := &notch{a: a, w0: 200, h0: 32, winW: notchOpenW + 60, winH: 240}
+	n := &playbackview.Notch{A: &a.views.playback, W0: 200, H0: 32, WinW: playbackview.NotchOpenW + 60, WinH: 240}
 	a.notch = n
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
 	a.syncWindows()
-	if n.hello {
+	if n.Hello {
 		t.Fatal("greeted before the song played")
 	}
 	out := newSilentAudio()
 	a.pl.Attach(out)
 	defer out.Close()
 	a.syncWindows()
-	if !n.hello || !a.settings.NotchGreeted {
+	if !n.Hello || !a.settings.NotchGreeted {
 		t.Fatal("did not greet as the song played")
 	}
 
-	tt := ui.NewTester(n.view, int(n.winW), int(n.winH))
+	tt := ui.NewTester(n.View, int(n.WinW), int(n.WinH))
 	tt.Advance(time.Second)
 	tt.Frame()
 	if err := tt.Click("开启刘海播放器"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.settings.Notch || n.hello {
-		t.Fatalf("kept: notch %v, greeting %v", a.settings.Notch, n.hello)
+	if !a.settings.Notch || n.Hello {
+		t.Fatalf("kept: notch %v, greeting %v", a.settings.Notch, n.Hello)
 	}
 
 	// Turned off again, it does not greet the next song.
@@ -49,7 +50,7 @@ func TestNotchGreetsOnce(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
 	a.pl.Attach(out)
 	a.syncWindows()
-	if n.hello {
+	if n.Hello {
 		t.Error("greeted twice")
 	}
 }
@@ -60,33 +61,33 @@ func TestNotchGreetsOnce(t *testing.T) {
 func TestNotchGreetingKeptUnderPointer(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	n := &notch{a: a, real: true, w0: 185, h0: 32, winW: notchOpenW + 60, winH: 240}
+	n := &playbackview.Notch{A: &a.views.playback, Real: true, W0: 185, H0: 32, WinW: playbackview.NotchOpenW + 60, WinH: 240}
 	a.notch = n
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
-	n.greet()
-	if !n.hello {
+	n.Greet()
+	if !n.Hello {
 		t.Fatal("did not greet")
 	}
 
 	defer func(f func() mygo.Point) { cursorPoint = f }(cursorPoint)
 	cursorPoint = func() mygo.Point {
-		return mygo.Point{X: int(n.screenX + n.winW/2 + 120), Y: int(n.screenY + n.h0 + 28)}
+		return mygo.Point{X: int(n.ScreenX + n.WinW/2 + 120), Y: int(n.ScreenY + n.H0 + 28)}
 	}
-	n.poll()
-	n.enteredAt = n.lastInside.Add(-time.Second) // as if it had rested there
-	n.poll()
-	if n.open {
+	n.Poll()
+	n.EnteredAt = n.LastInside.Add(-time.Second) // as if it had rested there
+	n.Poll()
+	if n.Open {
 		t.Fatal("opened the player over the greeting")
 	}
 
-	tt := ui.NewTester(n.view, int(n.winW), int(n.winH))
+	tt := ui.NewTester(n.View, int(n.WinW), int(n.WinH))
 	tt.Advance(time.Second)
 	tt.Frame()
 	if err := tt.Click("开启刘海播放器"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.settings.Notch || n.hello {
-		t.Fatalf("kept: notch %v, greeting %v", a.settings.Notch, n.hello)
+	if !a.settings.Notch || n.Hello {
+		t.Fatalf("kept: notch %v, greeting %v", a.settings.Notch, n.Hello)
 	}
 }
 
@@ -104,21 +105,21 @@ func TestFirstUseFrames(t *testing.T) {
 	}
 	a := newTestApp()
 	a.settings = defaultSettings()
-	n := &notch{a: a, real: true, w0: 185, h0: 32, winW: notchOpenW + 60, winH: 240}
+	n := &playbackview.Notch{A: &a.views.playback, Real: true, W0: 185, H0: 32, WinW: playbackview.NotchOpenW + 60, WinH: 240}
 	a.notch = n
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "NAINAINAI", Artists: []netease.Artist{{Name: "ATARASHII GAKKO!"}}, Duration: 193877}})
 	main := ui.NewTester(a.view, 1200, 800) // for the app's colors
 	main.Frame()
-	tt := ui.NewTester(n.view, int(n.winW), int(n.winH))
+	tt := ui.NewTester(n.View, int(n.WinW), int(n.WinH))
 	tt.Frame()
-	n.greet()
+	n.Greet()
 	for _, ms := range []int{120, 600} {
 		tt.Advance(time.Duration(ms) * time.Millisecond)
 		tt.Frame()
 		save(fmt.Sprintf("notch-hello-%d", ms), tt)
 	}
 
-	a.picked = pickedUp{id: 7, heard: "3分钟前在手机上听过"}
+	a.picked = playbackview.PickedUp{ID: 7, Heard: "3分钟前在手机上听过"}
 	main.Advance(time.Second)
 	main.Frame()
 	save("pickup-bar", main)

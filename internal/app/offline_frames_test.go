@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -38,7 +39,7 @@ func TestOfflineFrames(t *testing.T) {
 			view func(*ui.Context)
 			w, h int
 		}{
-			{"offline-", a.view, 1180, 780}, {"offline-settings-", a.settingsView, 780, 820},
+			{"offline-", a.view, 1180, 780}, {"offline-settings-", a.views.settings.Build, 780, 820},
 		} {
 			tt := ui.NewTester(view.view, view.w, view.h)
 			tt.SetDark(dark)
@@ -70,7 +71,7 @@ func TestOfflineUnavailableFrames(t *testing.T) {
 		for a.pl.Loading() || a.pl.MetadataLoading() {
 			refreshPost(t, posts)
 		}
-		a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
+		a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 		tt := ui.NewTester(a.view, 1180, 780)
 		tt.SetDark(dark)
 		tt.Frame()

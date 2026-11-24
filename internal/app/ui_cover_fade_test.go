@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -20,17 +21,17 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 		name, label string
 		pane        int
 	}{
-		{"stage", "律动封面", paneStage},
-		{"wall", "选歌封面", paneWall},
+		{"stage", "律动封面", playbackview.PaneStage},
+		{"wall", "选歌封面", playbackview.PaneWall},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, tt, arts := paintedCoverApp(t, 5, false)
 			a.playbackState.Pane = tc.pane
 			tt.Frame()
 			tt.Advance(time.Second)
-			state := &a.stageCover
-			if tc.pane == paneWall {
-				state = &a.wallCover
+			state := &a.StageCover
+			if tc.pane == playbackview.PaneWall {
+				state = &a.WallCover
 			}
 			center := func() color.RGBA {
 				t.Helper()
@@ -68,22 +69,22 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 				t.Fatal(err)
 			}
 			tt.Frame()
-			if a.pl.Current().Key() != q[1].Key() || state.current != arts[0] || center() != old {
+			if a.pl.Current().Key() != q[1].Key() || state.Current != arts[0] || center() != old {
 				t.Fatal("Next cleared the visible cover while its replacement was loading")
 			}
 			a.pl.Jump(2)
 			tt.Frame()
 			a.art.add(key(1), arts[1])
 			tt.Frame()
-			if state.current != arts[0] || center() != old {
+			if state.Current != arts[0] || center() != old {
 				t.Fatal("an obsolete completion replaced the held cover")
 			}
 			a.art.add(key(2), arts[2])
 			tt.Frame()
-			if state.current != arts[2] || state.previous != arts[0] || center() != old {
+			if state.Current != arts[2] || state.Previous != arts[0] || center() != old {
 				t.Fatal("the latest ready cover did not start over the old picture")
 			}
-			tt.Advance(coverFadeDuration / 2)
+			tt.Advance(playbackview.CoverFadeDuration / 2)
 			mixed := center()
 			if mixed.R <= old.R || mixed.R >= 120 || mixed.G <= 140 || mixed.G >= old.G {
 				t.Fatalf("both covers should cover the center during the blend: %v", mixed)
@@ -91,29 +92,29 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 			save("blend")
 			a.pl.Jump(3)
 			tt.Frame()
-			if state.current != arts[2] || state.previous != arts[0] {
+			if state.Current != arts[2] || state.Previous != arts[0] {
 				t.Fatal("a rapid skip interrupted the visible blend")
 			}
-			tt.Advance(2 * coverFadeDuration)
-			if state.current != arts[3] || state.previous != nil || !state.changedAt.IsZero() {
+			tt.Advance(2 * playbackview.CoverFadeDuration)
+			if state.Current != arts[3] || state.Previous != nil || !state.ChangedAt.IsZero() {
 				t.Fatal("the latest selection did not settle and release its predecessor")
 			}
 			save("after")
 			a.art.add(key(4), &artwork{failed: true})
 			a.pl.Next()
 			tt.Frame()
-			tt.Advance(2 * coverFadeDuration)
-			if state.current != nil || state.previous != nil {
+			tt.Advance(2 * playbackview.CoverFadeDuration)
+			if state.Current != nil || state.Previous != nil {
 				t.Fatal("a failed image kept the previous song's cover indefinitely")
 			}
 			save("placeholder")
 			tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-			a.playbackState.Pane = paneLyrics
+			a.playbackState.Pane = playbackview.PaneLyrics
 			tt.Frame()
 			a.pl.Jump(0)
 			a.playbackState.Pane = tc.pane
 			tt.Frame()
-			if state.current != arts[0] || state.previous != nil || center() != old {
+			if state.Current != arts[0] || state.Previous != nil || center() != old {
 				t.Fatal("returning with reduced motion should show the ready cover immediately")
 			}
 		})

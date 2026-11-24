@@ -79,7 +79,7 @@ func TestNowPlayingTimeForLongAndUnknownDuration(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a.pl.Cue([]netease.Track{{ID: 7, Duration: tc.duration}})
 			a.pl.Hold(time.Hour + time.Minute + time.Second + 500*time.Millisecond)
-			tt := ui.NewTester(a.nowPlayingTime, 300, 24)
+			tt := ui.NewTester(a.views.playback.NowPlayingTime, 300, 24)
 			tt.Frame()
 			texts := tt.Texts()
 			if !slices.Contains(texts, tc.elapsed) || !slices.Contains(texts, tc.remaining) {
@@ -94,7 +94,7 @@ func TestNowPlayingTimeRefreshesWithoutScrubber(t *testing.T) {
 	a := newTestApp()
 	a.pl.Cue([]netease.Track{{ID: 7, Duration: 10_500}})
 	a.pl.Hold(2*time.Second + 250*time.Millisecond)
-	tt := ui.NewTester(a.nowPlayingTime, 300, 24)
+	tt := ui.NewTester(a.views.playback.NowPlayingTime, 300, 24)
 	check := func(elapsed, remaining string) {
 		t.Helper()
 		texts := tt.Texts()

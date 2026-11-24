@@ -7,6 +7,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 )
 
 // keyKind is one of the two sets of shortcuts: the ones that work while the
@@ -40,7 +42,7 @@ var hotkeys = []hotkey{
 	{name: "next", label: "下一首", inApp: "CmdOrCtrl+Shift+Right", global: "MediaNextTrack",
 		run: func(a *app) { a.pl.Next() }},
 	{name: "deskLyrics", label: "桌面歌词", inApp: "CmdOrCtrl+Shift+L", global: "CmdOrCtrl+Alt+L",
-		run: func(a *app) { a.toggleDeskLyrics() }},
+		run: func(a *app) { a.views.playback.ToggleDeskLyrics() }},
 	{name: "lyricBigger", label: "歌词字号变大", inApp: "CmdOrCtrl+Shift+=", global: "CmdOrCtrl+Alt+Up",
 		run: func(a *app) { a.stepLyricSize(2) }},
 	{name: "lyricSmaller", label: "歌词字号变小", inApp: "CmdOrCtrl+Shift+-", global: "CmdOrCtrl+Alt+Down",
@@ -59,14 +61,14 @@ func (a *app) stepVolumeBy(d float64) {
 // stepLyricSize makes the lines of the lyrics window d points larger or
 // smaller, within the sizes it takes.
 func (a *app) stepLyricSize(d float64) {
-	size := min(lyricSizeMax, max(lyricSizeMin, a.settings.LyricSize+d))
+	size := min(playbackview.LyricSizeMax, max(playbackview.LyricSizeMin, a.settings.LyricSize+d))
 	if size == a.settings.LyricSize {
 		return
 	}
 	a.settings.LyricSize = size
 	a.settings.saveSoon()
 	if a.lyrics != nil {
-		a.lyrics.apply()
+		a.lyrics.Apply()
 	}
 	a.redraw()
 }
@@ -137,7 +139,7 @@ func (a *app) restoreBinding(kind keyKind, name string) {
 	if kind == kindGlobal {
 		a.registerGlobals()
 	}
-	a.recording, a.recordingNote = "", ""
+	a.Recording, a.RecordingNote = "", ""
 	a.redraw()
 }
 
@@ -218,7 +220,7 @@ func (a *app) runHotkey(h hotkey) {
 // all, as once Now Playing covers the button that had it.
 func (a *app) bindInApp(c *ui.Context, root ui.Element) {
 	// A key being recorded is not an action.
-	if a.recording != "" {
+	if a.Recording != "" {
 		return
 	}
 	// A field that has the focus is typed into, and a key without a

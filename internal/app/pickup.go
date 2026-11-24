@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -15,12 +16,6 @@ import (
 
 // recentPlays returns the listener's recent plays; tests replace it.
 var recentPlays = netease.RecentPlays
-
-// pickedUp is the song a login picked up, while it waits to play.
-type pickedUp struct {
-	id    int64
-	heard string // where and when, as "12分钟前在手机上听过"
-}
 
 // pickUp queues the songs the listener played last, paused, if nothing is
 // in the player.
@@ -40,7 +35,7 @@ func (a *app) pickUp(uid int64) {
 				order[i] = i
 			}
 			a.pl.Restore(player.Session{Queue: songs, Order: order, At: len(songs) - 1})
-			a.picked = pickedUp{id: last.Track.ID, heard: heardAt(last, time.Now())}
+			a.picked = playbackview.PickedUp{ID: last.Track.ID, Heard: heardAt(last, time.Now())}
 			where := "上次"
 			if d := deviceName(last.Device); d != "" {
 				where = "在" + d + "上"

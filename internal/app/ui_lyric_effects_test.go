@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -20,10 +21,10 @@ func TestLyricInterludeTiming(t *testing.T) {
 		{At: 20 * time.Second, End: 22 * time.Second, Timed: true},
 		{At: 24 * time.Second, End: 28 * time.Second},
 	}
-	if got := lyricInterludeAt(lines, -1, 0); !got.intro || got.to != lines[0].At {
+	if got := playbackview.LyricInterludeAt(lines, -1, 0); !got.Intro || got.To != lines[0].At {
 		t.Fatalf("intro: %+v", got)
 	}
-	if got := lyricInterludeAt(lines, 0, 1); got.from != 8*time.Second || got.to != lines[1].At {
+	if got := playbackview.LyricInterludeAt(lines, 0, 1); got.From != 8*time.Second || got.To != lines[1].At {
 		t.Fatalf("interlude: %+v", got)
 	}
 	for _, i := range []int{1, 2, 3} {
@@ -31,12 +32,12 @@ func TestLyricInterludeTiming(t *testing.T) {
 		if next >= len(lines) {
 			next = -1
 		}
-		if got := lyricInterludeAt(lines, i, next); got.to != 0 {
+		if got := playbackview.LyricInterludeAt(lines, i, next); got.To != 0 {
 			t.Errorf("line %d unexpectedly has an interlude: %+v", i, got)
 		}
 	}
 	lrc := lyrics.Build("[00:05.00]First\n[00:17.00]Second", "", "")
-	if got := lyricInterludeAt(lrc, 0, 1); got.to != 0 {
+	if got := playbackview.LyricInterludeAt(lrc, 0, 1); got.To != 0 {
 		t.Fatalf("estimated LRC end produced an interlude: %+v", got)
 	}
 }
@@ -46,7 +47,7 @@ func TestLyricInterludeUsesYRCLineEnd(t *testing.T) {
 	const yrc = "[5000,3000](5000,1000,0)First\n[15000,1000](15000,1000,0)Second"
 	_, display := lyrics.BuildDisplay("[00:10]作曲：甲", "", yrc)
 	cur, next := display.Position(8 * time.Second)
-	if got := lyricInterludeAt(display.Lines, cur, next); got.from != 9*time.Second || got.to != 15*time.Second {
+	if got := playbackview.LyricInterludeAt(display.Lines, cur, next); got.From != 9*time.Second || got.To != 15*time.Second {
 		t.Fatalf("gap used the last word or an intervening credit instead of the sung line cues: %+v", got)
 	}
 }
@@ -65,7 +66,7 @@ func TestLyricIntroSkipsFittingLyrics(t *testing.T) {
 	a.settings.LyricEdgeFade = true
 	tt.Frame()
 	with, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text)
-	if !ok || abs32(with.Bounds.Y-without.Bounds.Y) > 1 {
+	if !ok || playbackview.Abs32(with.Bounds.Y-without.Bounds.Y) > 1 {
 		t.Fatalf("the intro moved the first lyric: before %+v, after %+v", without.Bounds, with.Bounds)
 	}
 	checkShortLyricsCenter(t, tt, a, lines, 320)
@@ -88,8 +89,8 @@ func TestLyricIntroFollowsReflow(t *testing.T) {
 	checkShortLyricsCenter(t, tt, a, lines, height)
 	tt.SetSize(180, height)
 	first, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text)
-	if !ok || a.lyricScroll.MaxY <= 0 || first.Bounds.Y < height*0.3+lyricIntroHeight {
-		t.Fatalf("wrapped credits should scroll and show the intro: first row %+v, scroll %+v", first.Bounds, a.lyricScroll)
+	if !ok || a.LyricScroll.MaxY <= 0 || first.Bounds.Y < height*0.3+playbackview.LyricIntroHeight {
+		t.Fatalf("wrapped credits should scroll and show the intro: first row %+v, scroll %+v", first.Bounds, a.LyricScroll)
 	}
 	tt.SetSize(720, height)
 	checkShortLyricsCenter(t, tt, a, lines, height)
@@ -103,9 +104,9 @@ func TestLyricNearCloseDoesNotSeek(t *testing.T) {
 	y := float32(35)
 	var hovered bool
 	tt := ui.NewTester(func(c *ui.Context) {
-		st := linesStyle{size: 20, immersive: true, closeBounds: ui.Rect{X: 60, Y: 0, W: 38, H: 38}}
+		st := playbackview.LinesStyle{Size: 20, Immersive: true, CloseBounds: ui.Rect{X: 60, Y: 0, W: 38, H: 38}}
 		ui.Column(c).Absolute().Top(y).Left(75).Width(180).Children(func() {
-			_, hovered = a.timedLine(c, &line, 0, 156, st)
+			_, hovered = a.views.playback.TimedLine(c, &line, 0, 156, st)
 		})
 	}, 280, 180)
 	tt.Frame()
@@ -143,7 +144,7 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 		count, height int
 	}{
 		{12, 180},
-		{timedListThreshold, 180},
+		{playbackview.TimedListThreshold, 180},
 	} {
 		t.Run(fmt.Sprintf("%d-lines-%d-high", tc.count, tc.height), func(t *testing.T) {
 			lines := make([]lyrics.Line, tc.count)
@@ -167,14 +168,14 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 				}
 				return row.Bounds.Y
 			}
-			start := firstY(lyricIntroExit)
-			tt.Advance(lyricIntroExit / 2)
-			mid := firstY(lyricIntroExit / 2)
-			tt.Advance(lyricIntroExit/2 - 10*time.Millisecond)
+			start := firstY(playbackview.LyricIntroExit)
+			tt.Advance(playbackview.LyricIntroExit / 2)
+			mid := firstY(playbackview.LyricIntroExit / 2)
+			tt.Advance(playbackview.LyricIntroExit/2 - 10*time.Millisecond)
 			near := firstY(10 * time.Millisecond)
 			tt.Advance(10 * time.Millisecond)
 			end := firstY(0)
-			if !(start > mid && mid > near) || abs32(near-end) > 1 || abs32(end-float32(tc.height)*0.3) > 2 {
+			if !(start > mid && mid > near) || playbackview.Abs32(near-end) > 1 || playbackview.Abs32(end-float32(tc.height)*0.3) > 2 {
 				t.Fatalf("the first row jumped during the intro: start %.2f, middle %.2f, near %.2f, end %.2f", start, mid, near, end)
 			}
 		})
@@ -192,17 +193,17 @@ func TestLyricIntroExitReusesLayout(t *testing.T) {
 			start = c.Now()
 		}
 		builds++
-		gap := lyricInterlude{to: firstAt, intro: c.Now().Sub(start) < firstAt}
+		gap := playbackview.LyricInterlude{To: firstAt, Intro: c.Now().Sub(start) < firstAt}
 		ui.Column(c).Fill().Background(ui.Hex("#000000")).Children(func() {
 			box := ui.Column(c.Key("lyrics"))
-			motion := prepareLyricIntro(c, box, gap, c.Now().Sub(start), true)
-			if motion.gap.intro {
-				motion.move(box, lyricIntroSpace)
+			motion := playbackview.PrepareLyricIntro(c, box, gap, c.Now().Sub(start), true)
+			if motion.Gap.Intro {
+				motion.Move(box, playbackview.LyricIntroSpace)
 			}
 			box.Children(func() {
-				if motion.gap.intro {
-					slot, dots := lyricIntroDots(c)
-					a.introDots(c, slot, dots, motion)
+				if motion.Gap.Intro {
+					slot, dots := playbackview.LyricIntroDots(c)
+					a.views.playback.IntroDots(c, slot, dots, motion)
 				}
 				ui.Button(c.Key("first"), "First lyric").Margin(0, 0, 0, 80)
 			})
@@ -219,17 +220,17 @@ func TestLyricIntroExitReusesLayout(t *testing.T) {
 	dotLight := func() int {
 		img := tt.Image()
 		light := 0
-		for y := range lyricIntroHeight {
+		for y := range playbackview.LyricIntroHeight {
 			for x := range 60 {
 				light += int(img.RGBAAt(x, y).R)
 			}
 		}
 		return light
 	}
-	tt.Advance(firstAt - lyricIntroExit)
+	tt.Advance(firstAt - playbackview.LyricIntroExit)
 	before, top := builds, y()
 	startDots := dotLight()
-	tt.Advance(lyricIntroExit / 2)
+	tt.Advance(playbackview.LyricIntroExit / 2)
 	if middle := y(); middle <= 5 || middle >= top-5 {
 		t.Fatalf("first row did not move through the exit: start %.2f, mid %.2f", top, middle)
 	}
@@ -237,7 +238,7 @@ func TestLyricIntroExitReusesLayout(t *testing.T) {
 		t.Fatalf("the exit rebuilt the view %d times before the first cue", builds-before)
 	}
 	midDots := dotLight()
-	tt.Advance(lyricIntroExit / 2)
+	tt.Advance(playbackview.LyricIntroExit / 2)
 	if end := y(); end > 1 {
 		t.Fatalf("first row did not settle at its layout position: %.2f", end)
 	}
@@ -248,7 +249,7 @@ func TestLyricIntroExitReusesLayout(t *testing.T) {
 
 // Resizing during an automatic glide retargets the motion without snapping to the new anchor.
 func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
-	for _, count := range []int{12, timedListThreshold} {
+	for _, count := range []int{12, playbackview.TimedListThreshold} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			lines := make([]lyrics.Line, count)
 			for i := range lines {
@@ -278,7 +279,7 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 			middle := row()
 			tt.Advance(1100 * time.Millisecond)
 			end := row()
-			if start-middle < 2 || middle-end < 2 || abs32(end-target) > 2 {
+			if start-middle < 2 || middle-end < 2 || playbackview.Abs32(end-target) > 2 {
 				t.Fatalf("resize interrupted the glide: %.1f → %.1f → %.1f (target %.1f)", start, middle, end, target)
 			}
 		})
@@ -287,7 +288,7 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 
 // Clicking a visible lyric resumes following with a glide, even after scrolling manually.
 func TestLyricClickGlidesToReadingPosition(t *testing.T) {
-	for _, count := range []int{20, timedListThreshold} {
+	for _, count := range []int{20, playbackview.TimedListThreshold} {
 		for _, immersive := range []bool{false, true} {
 			for _, browse := range []bool{false, true} {
 				t.Run(fmt.Sprintf("rows=%d/immersive=%t/browse=%t", count, immersive, browse), func(t *testing.T) {
@@ -329,7 +330,7 @@ func TestLyricClickGlidesToReadingPosition(t *testing.T) {
 					middle := rowY()
 					tt.Advance(1100 * time.Millisecond)
 					end := rowY()
-					if abs32(start-before) > 2 || start-middle < 2 || middle-end < 2 || abs32(end-90) > 2 {
+					if playbackview.Abs32(start-before) > 2 || start-middle < 2 || middle-end < 2 || playbackview.Abs32(end-90) > 2 {
 						t.Fatalf("want a glide to y=90, got %.1f before click, then %.1f → %.1f → %.1f", before, start, middle, end)
 					}
 				})
@@ -347,16 +348,16 @@ func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
 	if len(line.Words) == 0 {
 		t.Fatal("the LRC fixture needs estimated words")
 	}
-	st := linesStyle{size: 24, weight: 800, lineHeight: 1.25, immersive: true}
+	st := playbackview.LinesStyle{Size: 24, Weight: 800, LineHeight: 1.25, Immersive: true}
 	tt := ui.NewTester(func(c *ui.Context) {
-		a.timedLine(c, &line, 0, 256, st)
+		a.views.playback.TimedLine(c, &line, 0, 256, st)
 	}, 280, 80)
-	if !tt.HasText(line.Text) || a.paintedLyric.line != nil {
+	if !tt.HasText(line.Text) || a.PaintedLyric.Line != nil {
 		t.Fatal("LRC should render as one line without scheduling word highlights")
 	}
 	line.Timed = true
 	tt.Frame()
-	if a.paintedLyric.line != &line || len(a.paintedLyric.clips) != len(line.Words) {
+	if a.PaintedLyric.Line != &line || len(a.PaintedLyric.Clips) != len(line.Words) {
 		t.Fatal("word-timed lyrics should paint individual words")
 	}
 }

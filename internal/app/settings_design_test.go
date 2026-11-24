@@ -42,7 +42,7 @@ func TestSettingsDesignNavigationAndSearch(t *testing.T) {
 	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	oldAccent := accentChosen
 	defer func() { accentChosen = oldAccent }()
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	showSettingsPage(t, tt, "播放")
 	before := a.settings.HotComments
 	clickSettingsSwitch(t, tt, "间奏时显示热评")
@@ -81,7 +81,7 @@ func TestSettingsDesignSearchBackgroundRows(t *testing.T) {
 	a.settings = defaultSettings()
 	a.settings.BackdropHome = []string{"fixture.png"}
 	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyF)
 	tt.Type("主页面背景")
@@ -100,20 +100,20 @@ func TestSettingsDesignResizeAndScroll(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 78})
 	showSettingsPage(t, tt, "桌面歌词")
 	tt.Scroll(550, 400, 0, 10000)
 	tt.Advance(time.Second)
 	tt.Frame()
 	tt.Frame()
-	if !a.settingsUnderTop {
+	if !a.UnderTop {
 		t.Fatal("long settings page did not scroll")
 	}
 	tt.SetSize(640, 420)
 	showSettingsPage(t, tt, "播放")
 	tt.Frame()
-	if a.settingsUnderTop {
+	if a.UnderTop {
 		t.Fatal("new page inherited the previous page's scroll")
 	}
 	before := a.settings.Normalize
@@ -151,7 +151,7 @@ func TestSettingsDesignFrames(t *testing.T) {
 		for _, dark := range []bool{false, true} {
 			a := newTestApp()
 			a.settings = defaultSettings()
-			tt := ui.NewTester(a.settingsView, size.w, size.h)
+			tt := ui.NewTester(a.views.settings.Build, size.w, size.h)
 			tt.SetDark(dark)
 			tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 78})
 			appearance := "light"

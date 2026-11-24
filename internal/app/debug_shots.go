@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
@@ -50,7 +51,7 @@ func init() {
 					// NM_SMOKE=0 and NM_NOTCH=0 turn them off, to measure them.
 					a.settings.Smoke = os.Getenv("NM_SMOKE") != "0"
 					a.settings.Notch = os.Getenv("NM_NOTCH") != "0"
-					a.notch.setEnabled(a.settings.Notch)
+					a.notch.SetEnabled(a.settings.Notch)
 				})
 				for range 40 {
 					var n int
@@ -89,7 +90,7 @@ func init() {
 				if long := os.Getenv("NM_LONG"); long != "" {
 					// Each pane for a while, as one listens: a mark every 5 s.
 					// NM_LONG=stage shows only the stage.
-					panes := []int{paneLyrics, paneStage}
+					panes := []int{playbackview.PaneLyrics, playbackview.PaneStage}
 					if long == "stage" {
 						panes = panes[1:]
 					}
@@ -117,7 +118,7 @@ func init() {
 						}
 					}
 					mark(fmt.Sprint("open", round))
-					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics })
+					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics })
 					time.Sleep(3 * time.Second)
 					mark(fmt.Sprint("close", round))
 					step(0, func() { a.playbackState.Open = false })
@@ -136,7 +137,7 @@ func init() {
 						}
 					}
 					mark(fmt.Sprint("stage", round))
-					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, paneStage })
+					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage })
 					time.Sleep(4 * time.Second)
 					mark(fmt.Sprint("shut", round))
 					step(0, func() { a.playbackState.Open = false })
@@ -188,7 +189,7 @@ func init() {
 				time.Sleep(5 * time.Second)
 				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
 				time.Sleep(3 * time.Second)
-				step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics })
+				step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics })
 				time.Sleep(3 * time.Second)
 				shot("a-np", a.win)
 				step(0, func() { a.openArtist(a.pl.Current().Artists[0].ID) })
@@ -217,11 +218,11 @@ func init() {
 			}
 			time.Sleep(5 * time.Second)
 			mygo.RunOnMain(func() {
-				x, y, w, h := windowFrame(a.notch.win.NativeHandle())
+				x, y, w, h := playbackview.WindowFrame(a.notch.Win.NativeHandle())
 				println("notch frame", int(x), int(y), int(w), int(h))
 			})
 			shot("1-home", a.win)
-			shot("1-notch-idle", a.notch.win)
+			shot("1-notch-idle", a.notch.Win)
 			step(0, func() { a.open(route{Page: pageCharts}) })
 			time.Sleep(time.Second)
 			shot("2-charts", a.win)
@@ -235,14 +236,14 @@ func init() {
 			})
 			time.Sleep(5 * time.Second)
 			shot("4-playing", a.win)
-			shot("4-notch-compact", a.notch.win)
-			step(0, func() { a.notch.open = true; a.notch.lastInside = time.Now().Add(time.Hour) })
+			shot("4-notch-compact", a.notch.Win)
+			step(0, func() { a.notch.Open = true; a.notch.LastInside = time.Now().Add(time.Hour) })
 			time.Sleep(2 * time.Second)
-			shot("5-notch-open", a.notch.win)
+			shot("5-notch-open", a.notch.Win)
 			step(0, func() { a.playbackState.Open = true })
 			time.Sleep(4 * time.Second)
 			shot("6-now-playing", a.win)
-			step(0, func() { a.playbackState.Pane = paneQueue })
+			step(0, func() { a.playbackState.Pane = playbackview.PaneQueue })
 			time.Sleep(2 * time.Second)
 			shot("7-queue", a.win)
 			step(0, func() { a.search("周杰伦") })

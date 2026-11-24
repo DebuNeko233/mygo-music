@@ -20,7 +20,7 @@ func captionSettingsApp(t *testing.T) (*app, *ui.Tester, chan func()) {
 	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	a.captions.Model.Checked = true
 	posts := testPosts(a)
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	showSettingsPage(t, tt, "播客")
 	return a, tt, posts
 }

@@ -206,7 +206,7 @@ func TestMusicLinkRegistrationSetting(t *testing.T) {
 	}
 	musicLinksRegistered = func() bool { return registered }
 	a := musicLinkApp(t)
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	if attempts != 0 {
 		t.Fatal("rendering claimed the protocol")

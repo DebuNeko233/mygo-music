@@ -1,6 +1,7 @@
 package app
 
 import (
+	"netease-music-mygo/internal/netease"
 	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
 )
 
@@ -60,3 +61,14 @@ func (a *app) podcastRecoveryScope() (id int64, home, subscriptions bool) {
 	}
 	return
 }
+
+// These load a podcast and its episodes from NetEase, and subscribe to it,
+// and the podcasts the tab picks and the most popular; tests replace them.
+var (
+	podcastDetail    = netease.PodcastDetail
+	podcastPrograms  = netease.PodcastPrograms
+	subscribePodcast = netease.SubscribePodcast
+
+	recommendedPodcasts = netease.RecommendedPodcasts
+	hotPodcasts         = netease.HotPodcasts
+)

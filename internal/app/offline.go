@@ -8,10 +8,9 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/components"
+	desktopview "netease-music-mygo/internal/desktop/view"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/lyrics"
@@ -280,19 +279,7 @@ func (a *app) offlineNotice(c *ui.Context) {
 	if a.browseCache == nil && !a.network.known {
 		return
 	}
-	ui.Row(c.Key("offline-status")).Absolute().Top(topBar(c) + 4).Right(24).
-		Gap(2).Padding(3).Radius(999).AlignItems(ui.Center).Material(glass.Glass{}).Children(func() {
-		// A reachable network may still have failed resources. Keep the refresh
-		// action, but never display the offline symbol for that online state.
-		if a.network.offline {
-			ui.Box(c.Key("offline-icon")).Size(30, 30).Center().Label("离线").Tooltip("离线，可浏览缓存").Children(func() {
-				ui.Icon(c, components.IconOffline).Size(18, 18).TextColor(a.pal.Muted)
-			})
-		}
-		if components.IconButton(c.Key("refresh-connection"), components.IconReload, 18, a.pal.Muted, "刷新内容").Size(30, 30).Tooltip("刷新内容").Clicked() {
-			a.refreshConnection()
-		}
-	})
+	desktopview.OfflineNotice(c, a.pal, a.network.offline, a.refreshConnection)
 }
 
 func (a *app) clearBrowseCache() {

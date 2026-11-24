@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -59,7 +60,7 @@ func TestPrefetchesNextCover(t *testing.T) {
 			wanted := map[string]bool{url: true, netease.Sized(a.pl.Current().Album.PicURL, 600): true}
 			// This checks requests, not layout. Keep the software-rendered
 			// backdrop small so this fixture is cheap under the race detector.
-			tt := ui.NewTesterWith(a.nowPlayingView, 160, 120, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+			tt := ui.NewTesterWith(a.views.playback.NowPlayingView, 160, 120, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			tt.Frame()
 			for range len(wanted) {
 				if got := wait(t, asked, "cover"); !wanted[got] {
@@ -166,8 +167,8 @@ func TestCoverDirectionAfterShuffleAndWrap(t *testing.T) {
 				step.play()
 				a.pl.SetLyrics(nil)
 				tt.Frame()
-				if a.npCoverState.direction != step.dir {
-					t.Fatalf("direction %v, want %v", a.npCoverState.direction, step.dir)
+				if a.NPCoverState.Direction != step.dir {
+					t.Fatalf("direction %v, want %v", a.NPCoverState.Direction, step.dir)
 				}
 				tt.Advance(time.Second)
 			}
@@ -190,7 +191,7 @@ func TestCoverDirectionAfterQueueReplacement(t *testing.T) {
 	a.pl.Jump(2)
 	a.pl.SetLyrics(nil)
 	tt.Frame()
-	if a.npCoverState.direction != -1 {
+	if a.NPCoverState.Direction != -1 {
 		t.Fatal("selected an earlier song in the new queue, but entered from the right")
 	}
 }
@@ -219,8 +220,8 @@ func TestCoverDirectionWithDuplicateSongs(t *testing.T) {
 			a.pl.Jump(pick.to)
 			a.pl.SetLyrics(nil)
 			tt.Frame()
-			if a.npCoverState.direction != pick.want {
-				t.Fatalf("direction %v, want %v", a.npCoverState.direction, pick.want)
+			if a.NPCoverState.Direction != pick.want {
+				t.Fatalf("direction %v, want %v", a.NPCoverState.Direction, pick.want)
 			}
 			tt.Advance(80 * time.Millisecond)
 			moving, ok := tt.Find("专辑封面")
@@ -244,7 +245,7 @@ func TestCoverDirectionDoesNotReuseOldQueuePositions(t *testing.T) {
 	a.pl.PlayQueue([]netease.Track{q[0], q[2], q[1]}, 1)
 	a.pl.SetLyrics(nil)
 	tt.Frame()
-	if a.npCoverState.direction != 1 {
+	if a.NPCoverState.Direction != 1 {
 		t.Fatal("replacement inferred a backward move from the old song ID")
 	}
 }
@@ -261,9 +262,9 @@ func TestRapidCoverChangesRestartTheEntrance(t *testing.T) {
 				}
 				a.pl.SetLyrics(nil)
 				tt.Frame()
-				cs := &a.npCoverState
-				if a.pl.Current().ID != int64(i+1) || cs.art != arts[i] || cs.previous != arts[i-1] || cs.slide != i || cs.previousSlide != i-1 {
-					t.Fatalf("step %d: playing %d, shown %d, slide %d; entrance was not restarted", i, a.pl.Current().ID, cs.shown, cs.slide)
+				cs := &a.NPCoverState
+				if a.pl.Current().ID != int64(i+1) || cs.Art != arts[i] || cs.Previous != arts[i-1] || cs.Slide != i || cs.PreviousSlide != i-1 {
+					t.Fatalf("step %d: playing %d, shown %d, slide %d; entrance was not restarted", i, a.pl.Current().ID, cs.Shown, cs.Slide)
 				}
 				tt.Advance(80 * time.Millisecond)
 				if dir := os.Getenv("NM_FRAMES"); dir != "" {
@@ -279,7 +280,7 @@ func TestRapidCoverChangesRestartTheEntrance(t *testing.T) {
 				}
 			}
 			tt.Advance(time.Second)
-			if a.npCoverState.previous != nil || a.npCoverState.switching {
+			if a.NPCoverState.Previous != nil || a.NPCoverState.Switching {
 				t.Fatal("kept the outgoing artwork after the slide")
 			}
 		})
@@ -308,15 +309,15 @@ func TestRapidCoverChangesAlwaysMove(t *testing.T) {
 					if pattern == "previous" || pattern == "alternate" && i%2 != 0 {
 						label, dir = "上一首", -1
 					}
-					before := a.npCoverState.slide
-					previous := a.npCoverState.art
+					before := a.NPCoverState.Slide
+					previous := a.NPCoverState.Art
 					if err := tt.Click(label); err != nil {
 						t.Fatal(err)
 					}
 					a.pl.SetLyrics(nil)
 					tt.Frame()
-					cs := &a.npCoverState
-					if cs.slide != before+1 || cs.previousSlide != before || cs.previous != previous {
+					cs := &a.NPCoverState
+					if cs.Slide != before+1 || cs.PreviousSlide != before || cs.Previous != previous {
 						t.Fatalf("step %d did not hand the current layer to a fresh entrance", i)
 					}
 					// Observe motion, rather than only checking a generation counter.
@@ -329,7 +330,7 @@ func TestRapidCoverChangesAlwaysMove(t *testing.T) {
 				}
 				tt.Advance(time.Second)
 				settled, ok := tt.Find("专辑封面")
-				if !ok || abs32(settled.X-rest.X) > 2 || a.npCoverState.switching || a.npCoverState.previous != nil {
+				if !ok || playbackview.Abs32(settled.X-rest.X) > 2 || a.NPCoverState.Switching || a.NPCoverState.Previous != nil {
 					t.Fatal("the latest cover did not settle and release its predecessor")
 				}
 			})
@@ -347,18 +348,18 @@ func TestCoverSwitchAfterHiddenPane(t *testing.T) {
 	}
 	x, y := int(r.X+r.W/2), int(r.Y+r.H/2)
 	covered := tt.Image().RGBAAt(x, y)
-	a.playbackState.Pane = paneStage
+	a.playbackState.Pane = playbackview.PaneStage
 	tt.Frame()
 	a.pl.Next()
 	a.pl.SetLyrics(nil)
 	tt.Frame()
-	a.playbackState.Pane = paneLyrics
+	a.playbackState.Pane = playbackview.PaneLyrics
 	tt.Frame()
 	if got := tt.Image().RGBAAt(x, y); got != covered {
 		t.Fatalf("first frame showed %v, want the held cover %v", got, covered)
 	}
 	tt.Advance(time.Second)
-	if a.npCoverState.switching || a.npCoverState.shown != 2 {
+	if a.NPCoverState.Switching || a.NPCoverState.Shown != 2 {
 		t.Fatal("the new cover did not settle after returning")
 	}
 }
@@ -378,18 +379,18 @@ func TestCoverWaitsForTheLatestArtwork(t *testing.T) {
 	a.pl.Next()
 	a.pl.SetLyrics(nil)
 	tt.Frame()
-	if a.npCoverState.art != arts[0] {
+	if a.NPCoverState.Art != arts[0] {
 		t.Fatal("replaced the last image with a blank card")
 	}
 	q := a.pl.Queue()
 	a.art.add(netease.Sized(q[1].Album.PicURL, 600)+"#backdrop", arts[1])
 	tt.Frame()
-	if a.npCoverState.art != arts[0] {
+	if a.NPCoverState.Art != arts[0] {
 		t.Fatal("showed an obsolete request's cover")
 	}
 	a.art.add(netease.Sized(q[2].Album.PicURL, 600)+"#backdrop", arts[2])
 	tt.Frame()
-	if a.npCoverState.art != arts[2] || a.npCoverState.previous != arts[0] {
+	if a.NPCoverState.Art != arts[2] || a.NPCoverState.Previous != arts[0] {
 		t.Fatal("did not switch from the held image to the latest one")
 	}
 }

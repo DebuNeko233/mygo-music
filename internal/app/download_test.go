@@ -38,7 +38,7 @@ func TestDownloadSettingsIndependentQuality(t *testing.T) {
 	a, _ := downloadTestApp(t)
 	a.settings.DownloadQuality = "standard"
 	a.settings.Quality = "lossless"
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	control, ok := tt.AccessByRole(ui.RolePopUpButton, "默认下载音质")
 	if !ok {
@@ -94,7 +94,7 @@ func TestDownloadSettingsNameFormat(t *testing.T) {
 		<-allow
 		return download.Result{Path: "/tmp/song.flac"}, nil
 	}
-	tt := ui.NewTester(a.settingsView, 780, 720)
+	tt := ui.NewTester(a.views.settings.Build, 780, 720)
 	tt.Frame()
 	control, ok := tt.AccessByRole(ui.RolePopUpButton, "下载文件名格式")
 	if !ok {
@@ -162,7 +162,7 @@ func TestDownloadQueueControls(t *testing.T) {
 	if first.opts.Quality != a.settings.DownloadQuality {
 		t.Fatal("download quality lost")
 	}
-	tt := ui.NewTester(a.settingsView, 780, 720)
+	tt := ui.NewTester(a.views.settings.Build, 780, 720)
 	tt.Frame()
 	if err := tt.Click("取消"); err != nil {
 		t.Fatal(err)
@@ -299,7 +299,7 @@ func TestSongMenusDownloadWithoutPlaying(t *testing.T) {
 				return download.Result{Path: "/tmp/track"}, nil
 			}
 			tr := netease.Track{ID: 71, Name: "下载此曲", Cloud: cloud}
-			tt := ui.NewTester(func(c *ui.Context) { a.songMenu(c, &tr, 18, ui.Hex("#333333")) }, 300, 150)
+			tt := ui.NewTester(func(c *ui.Context) { a.views.songMenu.Button(c, &tr, 18, ui.Hex("#333333")) }, 300, 150)
 			tt.Frame()
 			if err := tt.Click("更多"); err != nil {
 				t.Fatal(err)
@@ -362,7 +362,7 @@ func TestDownloadDirectoryPickerKeepsChoice(t *testing.T) {
 			old := openDownloadDirectory
 			t.Cleanup(func() { openDownloadDirectory = old })
 			openDownloadDirectory = func(mygo.OpenDialogOptions) ([]string, error) { return nil, failure }
-			tt := ui.NewTester(a.settingsView, 780, 640)
+			tt := ui.NewTester(a.views.settings.Build, 780, 640)
 			tt.Frame()
 			if err := tt.Click("选择目录…"); err != nil {
 				t.Fatal(err)
@@ -390,9 +390,9 @@ func TestDownloadBatchMenus(t *testing.T) {
 			}
 			tt := ui.NewTester(func(c *ui.Context) {
 				if page == "playlist" {
-					a.playlistHeader(c, &netease.Playlist{ID: 5, Tracks: tracks})
+					a.views.library.Header(c, &netease.Playlist{ID: 5, Tracks: tracks})
 				} else {
-					a.albumHeader(c, &netease.AlbumProfile{Album: netease.Album{ID: 5}, Songs: tracks})
+					a.views.album.Header(c, &netease.AlbumProfile{Album: netease.Album{ID: 5}, Songs: tracks})
 				}
 			}, 900, 400)
 			tt.Frame()
@@ -481,7 +481,7 @@ func TestDownloadSettingsFrames(t *testing.T) {
 			a.settings = defaultSettings()
 			a.preferences.Section = "download"
 			a.downloads.Jobs = []*downloadsvm.DownloadJob{{Track: netease.Track{Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}}, Status: "正在下载", Received: 28, Total: 100}, {Track: netease.Track{Name: "没有封面的音乐"}, Status: "下载完成", Finished: true, Result: download.Result{Path: "/tmp/a.flac", Quality: "lossless", Warning: "网易云未提供封面"}}, {Track: netease.Track{Name: "下载失败的歌曲"}, Status: "下载失败", Finished: true, Err: errors.New("获取专辑元数据：网络连接失败，请重试")}}
-			tt := ui.NewTester(a.settingsView, size.w, size.h)
+			tt := ui.NewTester(a.views.settings.Build, size.w, size.h)
 			tt.SetDark(dark)
 			tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 78})
 			tt.Frame()

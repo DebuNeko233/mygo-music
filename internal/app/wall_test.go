@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -28,7 +29,7 @@ func wallApp(n, at int) (*app, *ui.Tester) {
 		a.pl.Jump(at)
 	}
 	a.pl.SetLyrics(nil)
-	a.playbackState.Open, a.playbackState.Pane = true, paneWall
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneWall
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Advance(time.Second)
@@ -82,7 +83,7 @@ func TestWallPlaysTheCoverSwaying(t *testing.T) {
 		tt.Advance(500 * time.Millisecond)
 		tt.Frame()
 		r := find(t, tt, "歌005")
-		sway := r.X - (a.wallState.shown.X + a.wallState.pan.X + 5*wallPitch)
+		sway := r.X - (a.WallState.Shown.X + a.WallState.Pan.X + 5*playbackview.WallPitch)
 		if sway > -12 && sway < 12 {
 			continue
 		}
@@ -106,14 +107,14 @@ func TestWallGlidesAndStops(t *testing.T) {
 	a, tt := wallApp(300, 0)
 	// The glide and its bounds are measured in DIPs.
 	tt.SetScale(0.25)
-	ws := &a.wallState
-	from := ws.shown.X
+	ws := &a.WallState
+	from := ws.Shown.X
 	r := find(t, tt, "歌003")
 	drag(tt, r, -240, 0)
 	tt.Advance(2 * time.Second)
 	tt.Frame()
-	if ws.shown.X > from-480 {
-		t.Errorf("thrown 240 DIPs, the wall went from %v to %v", from, ws.shown.X)
+	if ws.Shown.X > from-480 {
+		t.Errorf("thrown 240 DIPs, the wall went from %v to %v", from, ws.Shown.X)
 	}
 	// Thrown hard the other way, it stops with its first column in view.
 	drag(tt, r, 3000, 0)
@@ -195,13 +196,13 @@ func TestRowSwayTargetTurnsEveryHalfPeriod(t *testing.T) {
 		to   float32
 		turn time.Duration
 	}{
-		{base, 0, wallSway, wallSwayHalf},
-		{base, 1, -wallSway, wallSwayHalf},
-		{base.Add(wallSwayHalf), 0, -wallSway, wallSwayHalf},
-		{base.Add(wallSwayHalf), 1, wallSway, wallSwayHalf},
-		{base.Add(wallSwayHalf + 2*time.Second), 2, -wallSway, wallSwayHalf - 2*time.Second},
+		{base, 0, playbackview.WallSway, playbackview.WallSwayHalf},
+		{base, 1, -playbackview.WallSway, playbackview.WallSwayHalf},
+		{base.Add(playbackview.WallSwayHalf), 0, -playbackview.WallSway, playbackview.WallSwayHalf},
+		{base.Add(playbackview.WallSwayHalf), 1, playbackview.WallSway, playbackview.WallSwayHalf},
+		{base.Add(playbackview.WallSwayHalf + 2*time.Second), 2, -playbackview.WallSway, playbackview.WallSwayHalf - 2*time.Second},
 	} {
-		to, turn := rowSwayTarget(c.r, c.at)
+		to, turn := playbackview.RowSwayTarget(c.r, c.at)
 		if to != c.to || turn != c.turn {
 			t.Errorf("row %d at %v: sways to %v, turning in %v; want %v in %v", c.r, c.at, to, turn, c.to, c.turn)
 		}

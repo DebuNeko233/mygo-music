@@ -1,6 +1,8 @@
 package app
 
-import "sync"
+import (
+	"sync"
+)
 
 // appDispatch owns callbacks until they run or their resources are discarded.
 // The mutex protects publication and shutdown, never application state.
@@ -113,11 +115,11 @@ func (a *app) redraw() {
 	if a.win != nil {
 		a.win.Invalidate()
 	}
-	if a.notch != nil && a.notch.win != nil {
-		a.notch.win.Invalidate()
+	if a.notch != nil && a.notch.Win != nil {
+		a.notch.Win.Invalidate()
 	}
-	if a.lyrics != nil && a.lyrics.win != nil {
-		a.lyrics.win.Invalidate()
+	if a.lyrics != nil && a.lyrics.Win != nil {
+		a.lyrics.Win.Invalidate()
 	}
 	if a.settingsWin != nil {
 		a.settingsWin.Invalidate()

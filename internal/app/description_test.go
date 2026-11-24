@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
@@ -46,7 +47,7 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 			if err := view.Click(more); err != nil {
 				t.Fatal(err)
 			}
-			if !a.intro.open || a.intro.title != tc.title || a.intro.text != text || a.intro.scroll.MaxY <= 0 {
+			if !a.intro.Open || a.intro.Title != tc.title || a.intro.Text != text || a.intro.Scroll.MaxY <= 0 {
 				t.Fatal("the complete introduction did not open in a scrolling dialog")
 			}
 			closeButton, ok := view.Find("关闭")
@@ -54,23 +55,23 @@ func TestDetailDescriptionCanReadAndDismissFullText(t *testing.T) {
 				t.Fatal("the introduction dialog has no close button")
 			}
 			view.Scroll(closeButton.X-120, closeButton.Y+120, 0, 10000)
-			if a.intro.scroll.Y != a.intro.scroll.MaxY {
+			if a.intro.Scroll.Y != a.intro.Scroll.MaxY {
 				t.Fatal("scrolling did not reach the end of the introduction")
 			}
 			view.Key(0, ui.KeyEscape)
-			if a.intro.open {
+			if a.intro.Open {
 				t.Fatal("Escape left the introduction open")
 			}
 			if err := view.Click(more); err != nil {
 				t.Fatal(err)
 			}
-			if a.intro.scroll.Y != 0 {
+			if a.intro.Scroll.Y != 0 {
 				t.Fatal("reopening the introduction did not return to its start")
 			}
 			if err := view.Click("关闭"); err != nil {
 				t.Fatal(err)
 			}
-			if a.intro.open {
+			if a.intro.Open {
 				t.Fatal("the close button left the introduction open")
 			}
 		})
@@ -130,7 +131,7 @@ func TestDescriptionMoreInSearchResults(t *testing.T) {
 			if err := view.Click("更多：乙 · " + tc.description); err != nil {
 				t.Fatal(err)
 			}
-			if a.nav.Current != r || !a.intro.open || a.intro.text != long {
+			if a.nav.Current != r || !a.intro.Open || a.intro.Text != long {
 				t.Fatal("More changed the page or opened the wrong description")
 			}
 		})
@@ -153,7 +154,7 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	if err := view.Click("更多：播客名称 · 简介"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.intro.open || a.intro.text != desc || a.nav.Current.Page != pageRecent {
+	if !a.intro.Open || a.intro.Text != desc || a.nav.Current.Page != pageRecent {
 		t.Fatal("More did not open the description over the podcast grid")
 	}
 }
@@ -166,17 +167,17 @@ func TestDescriptionMoreInNowPlaying(t *testing.T) {
 	tr := netease.Track{ID: 1, ProgramID: 2, Name: "节目名称", Description: desc}
 	a.pl.Cue([]netease.Track{tr})
 	a.comments.Track = tr.ID
-	a.playbackState.Pane, a.playbackState.Open = paneProgram, true
+	a.playbackState.Pane, a.playbackState.Open = playbackview.PaneProgram, true
 	view := ui.NewTester(a.view, 1180, 780)
 	view.Advance(time.Second)
 	if err := view.Click("更多：节目名称 · 简介"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.playbackState.Open || !a.intro.open || a.intro.text != desc {
+	if !a.playbackState.Open || !a.intro.Open || a.intro.Text != desc {
 		t.Fatal("the full episode introduction did not open over Now Playing")
 	}
 	view.Key(0, ui.KeyEscape)
-	if a.intro.open || !a.playbackState.Open {
+	if a.intro.Open || !a.playbackState.Open {
 		t.Fatal("Escape should close the description and keep Now Playing open")
 	}
 }

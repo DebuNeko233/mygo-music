@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -44,9 +45,9 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 		return ui.NewBitmap(img), img, 0, nil
 	}
 	a.pl.Cue(q)
-	tt := ui.NewTester(a.playerBar, 1000, 96)
-	tt.Advance(2 * coverFadeDuration)
-	if a.barCover.current != arts[0] {
+	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
+	tt.Advance(2 * playbackview.CoverFadeDuration)
+	if a.BarCover.Current != arts[0] {
 		t.Fatal("bar did not show its initial cover")
 	}
 	if err := tt.Click("下一首"); err != nil {
@@ -56,7 +57,7 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 		t.Fatal("Next did not select the track whose cover is pending")
 	}
 	tt.Frame()
-	if a.barCover.current != arts[0] || a.barCover.previous != nil {
+	if a.BarCover.Current != arts[0] || a.BarCover.Previous != nil {
 		t.Fatal("waiting for a cover changed what was shown")
 	}
 	a.pl.Jump(2)
@@ -65,28 +66,28 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 		t.Fatal("the delayed cover did not reach the cache")
 	}
 	tt.Frame()
-	if a.barCover.current != arts[2] || a.barCover.previous != arts[0] {
+	if a.BarCover.Current != arts[2] || a.BarCover.Previous != arts[0] {
 		t.Fatal("bar did not fade from the held cover to the latest selection")
 	}
 
 	a.pl.Jump(3)
-	tt.Advance(coverFadeDuration / 2)
-	if a.barCover.current != arts[2] || a.barCover.previous != arts[0] {
+	tt.Advance(playbackview.CoverFadeDuration / 2)
+	if a.BarCover.Current != arts[2] || a.BarCover.Previous != arts[0] {
 		t.Fatal("a new selection interrupted the visible blend")
 	}
-	tt.Advance(coverFadeDuration)
-	if a.barCover.current != arts[3] || a.barCover.previous != arts[2] {
+	tt.Advance(playbackview.CoverFadeDuration)
+	if a.BarCover.Current != arts[3] || a.BarCover.Previous != arts[2] {
 		t.Fatal("the fade did not pick up the latest selection")
 	}
-	tt.Advance(coverFadeDuration)
-	if a.barCover.previous != nil || !a.barCover.changedAt.IsZero() {
+	tt.Advance(playbackview.CoverFadeDuration)
+	if a.BarCover.Previous != nil || !a.BarCover.ChangedAt.IsZero() {
 		t.Fatal("finished fade kept its predecessor")
 	}
 
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 	a.pl.Jump(0)
 	tt.Frame()
-	if a.barCover.current != arts[0] || a.barCover.previous != nil {
+	if a.BarCover.Current != arts[0] || a.BarCover.Previous != nil {
 		t.Fatal("reduced motion should show the ready cover immediately")
 	}
 }
@@ -108,8 +109,8 @@ func TestPlayerBarCoverBlendKeepsBothPicturesVisible(t *testing.T) {
 		a.art.add(netease.Sized(q[i].Album.PicURL, barCoverPixels), &artwork{bmp: ui.NewBitmap(img)})
 	}
 	a.pl.Cue(q)
-	tt := ui.NewTester(a.playerBar, 1000, 96)
-	tt.Advance(coverFadeDuration)
+	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
+	tt.Advance(playbackview.CoverFadeDuration)
 	r, ok := tt.Find("打开正在播放")
 	if !ok {
 		t.Fatal("playback info button is missing")
@@ -124,11 +125,11 @@ func TestPlayerBarCoverBlendKeepsBothPicturesVisible(t *testing.T) {
 	}
 	a.pl.Next()
 	tt.Frame()
-	tt.Advance(coverFadeDuration / 2)
+	tt.Advance(playbackview.CoverFadeDuration / 2)
 	if got := center(); got.R < 15 || got.B < 15 || got.G > 15 {
 		t.Fatalf("both images should cover the center during the blend: %v", got)
 	}
-	tt.Advance(coverFadeDuration)
+	tt.Advance(playbackview.CoverFadeDuration)
 	if got := center(); got.B < 240 || got.R > 15 {
 		t.Fatalf("new image did not cover the center: %v", got)
 	}
@@ -155,20 +156,20 @@ func TestPlayerBarCoverFallsBackAfterFailure(t *testing.T) {
 		return nil, nil, 0, errors.New("invalid cover")
 	}
 	a.pl.Cue(q)
-	tt := ui.NewTester(a.playerBar, 1000, 96)
-	tt.Advance(2 * coverFadeDuration)
+	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
+	tt.Advance(2 * playbackview.CoverFadeDuration)
 	a.pl.Next()
 	tt.Frame()
-	if a.barCover.current != oldArt {
+	if a.BarCover.Current != oldArt {
 		t.Fatal("old cover disappeared before the load finished")
 	}
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.barCover.previous != oldArt || a.barCover.current != nil {
+	if a.BarCover.Previous != oldArt || a.BarCover.Current != nil {
 		t.Fatal("the bar did not transition from the old cover to the placeholder")
 	}
-	tt.Advance(2 * coverFadeDuration)
-	if a.barCover.current != nil || a.barCover.previous != nil {
+	tt.Advance(2 * playbackview.CoverFadeDuration)
+	if a.BarCover.Current != nil || a.BarCover.Previous != nil {
 		t.Fatal("the bar held the previous track's cover after the failure")
 	}
 }

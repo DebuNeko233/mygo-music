@@ -46,22 +46,22 @@ func TestRecordingABindingTakesTheKeyPressed(t *testing.T) {
 		a.recordKey(kind, name, ui.InputEvent{Kind: ui.InputKeyDown, Key: key, Mods: mods})
 	}
 
-	a.recording = "inApp/next"
+	a.Recording = "inApp/next"
 	press(kindInApp, "next", ui.Cmd, ui.KeyJ)
 	if got := a.binding(kindInApp, "next"); got != "CmdOrCtrl+j" {
 		t.Fatalf("next took %q, want CmdOrCtrl+j", got)
 	}
-	if a.recording != "" {
+	if a.Recording != "" {
 		t.Errorf("the recording went on after taking a key")
 	}
 
 	// Prev has CmdOrCtrl+Shift+Left, and Cmd+J is next's now.
-	a.recording = "inApp/prev"
+	a.Recording = "inApp/prev"
 	press(kindInApp, "prev", ui.Cmd, ui.KeyJ)
 	if got := a.binding(kindInApp, "prev"); got != "CmdOrCtrl+Shift+Left" {
 		t.Errorf("prev took a key next has: %q", got)
 	}
-	if a.recordingNote == "" {
+	if a.RecordingNote == "" {
 		t.Errorf("nothing said why the key was refused")
 	}
 
@@ -72,7 +72,7 @@ func TestRecordingABindingTakesTheKeyPressed(t *testing.T) {
 
 	// A global key needs a modifier: a bare letter would take that letter
 	// from every other app.
-	a.recording = "global/next"
+	a.Recording = "global/next"
 	press(kindGlobal, "next", 0, ui.KeyJ)
 	if got := a.binding(kindGlobal, "next"); got != "MediaNextTrack" {
 		t.Errorf("a bare letter became a global key: %q", got)
@@ -250,7 +250,7 @@ func TestTheSettingsRecordAShortcut(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.preferences.Section = "keys"
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	if !tt.HasText("Space") {
 		t.Fatalf("the page shows no key of play/pause")
@@ -270,7 +270,7 @@ func TestTheSettingsRecordAShortcut(t *testing.T) {
 	if !tt.HasText(hotkeyLabel("CmdOrCtrl+Alt+k")) {
 		t.Errorf("the settings do not show the key play/pause has")
 	}
-	if a.recording != "" {
+	if a.Recording != "" {
 		t.Errorf("the settings record a key still")
 	}
 }
@@ -283,7 +283,7 @@ func TestTheDefaultKeyComesBack(t *testing.T) {
 	a.settings = defaultSettings()
 	a.preferences.Section = "keys"
 	a.setBinding(kindInApp, "volumeUp", "CmdOrCtrl+Alt+Up")
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	if !a.changedBinding(kindInApp, "volumeUp") {
 		t.Errorf("the settings do not know the key was changed")

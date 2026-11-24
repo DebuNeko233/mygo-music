@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/lyrics"
@@ -107,9 +108,9 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 
 			tt := ui.NewTester(a.view, 1200, 800)
 			tt.Frame()
-			a.trackList.ScrollTo(song, ui.Center)
+			a.tracks.List.ScrollTo(song, ui.Center)
 			tt.Frame()
-			first, _ := a.trackList.Visible()
+			first, _ := a.tracks.List.Visible()
 			y := a.shell.PageScroll.Y
 			if err := tt.Click("取消喜欢 歌曲 050"); err != nil {
 				t.Fatal(err)
@@ -127,7 +128,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			reply <- err
 			refreshPost(t, posts)
 			tt.Frame()
-			if top, _ := a.trackList.Visible(); top != first || a.shell.PageScroll.Y != y {
+			if top, _ := a.tracks.List.Visible(); top != first || a.shell.PageScroll.Y != y {
 				t.Fatal("unlike moved the list")
 			}
 			if a.library.Playlists[pid] == nil || a.library.Loading[pid] {
@@ -390,12 +391,12 @@ func TestStageFrames(t *testing.T) {
 	if dir == "" {
 		t.Skip()
 	}
-	for _, s := range stageStyles {
+	for _, s := range playbackview.StageStyles {
 		name := "stage.png"
-		if s.id != "" {
-			name = "stage-" + s.id + ".png"
+		if s.ID != "" {
+			name = "stage-" + s.ID + ".png"
 		}
-		stageFrames(s.id, filepath.Join(dir, name))
+		stageFrames(s.ID, filepath.Join(dir, name))
 	}
 }
 
@@ -410,7 +411,7 @@ func stageFrames(style, path string) {
 		`[13010,4780](13010,660,0)从(13670,670,0)不(14340,30,0) (14370,480,0)主(14850,610,0)动(15460,30,0) (15490,330,0)示(15820,1070,0)弱
 [17790,1770](17790,170,0)我(17960,450,0)们(18410,290,0)的(18700,470,0)过(19170,390,0)去
 [30560,6580](30560,220,0)曾(30780,430,0)经(31210,340,0)的(31550,350,0)那(31900,470,0)些(32370,400,0)发(32770,320,0)生(33090,470,0)过(33560,30,0) (33590,210,0)的(33800,550,0)开(34350,250,0)心(34600,360,0)和(34960,640,0)难(35600,1500,0)过`))
-	a.playbackState.Open, a.playbackState.Pane = true, paneStage
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.SetDark(true)
 	tt.Advance(time.Second)
@@ -456,7 +457,7 @@ func TestBackdropFrame(t *testing.T) {
 			t.Fatal(err)
 		}
 		art := &artwork{bmp: ui.NewBitmap(img), tint: dominantColor(img)}
-		top, foot := backdropColors(art.tint)
+		top, foot := playbackview.BackdropColors(art.tint)
 		t.Logf("tint %v, backdrop %v to %v", art.tint, top, foot)
 		a.art.art[netease.Sized(tr.Album.PicURL, size)] = art
 		if size == 600 {
@@ -596,8 +597,8 @@ func TestVolumePopoverFrames(t *testing.T) {
 		tt.Click("音量")
 		tt.Advance(time.Second)
 		tt.Frame()
-		if !a.volumeOpen || !tt.HasText("63%") {
-			t.Fatalf("popover not open: %v %q", a.volumeOpen, tt.Texts())
+		if !a.VolumeOpen || !tt.HasText("63%") {
+			t.Fatalf("popover not open: %v %q", a.VolumeOpen, tt.Texts())
 		}
 		img := tt.Image()
 		s := float32(img.Bounds().Dx()) / 1000
@@ -626,7 +627,7 @@ func TestSegmentedFrames(t *testing.T) {
 		a := newTestApp()
 		a.settings = defaultSettings()
 		a.settings.Appearance = "light"
-		tt := ui.NewTester(a.settingsView, 780, 640)
+		tt := ui.NewTester(a.views.settings.Build, 780, 640)
 		tt.SetScale(2)
 		tt.SetDark(dark)
 		tt.Frame()

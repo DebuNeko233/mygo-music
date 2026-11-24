@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -35,7 +36,7 @@ func TestJapaneseLyricsFrames(t *testing.T) {
 	a.pl.SetLyrics(lines)
 	a.pl.Hold(12 * time.Second)
 	a.playbackState.Open = true
-	d := &deskLyrics{a: a}
+	d := &playbackview.DeskLyrics{A: &a.views.playback}
 	a.lyrics = d
 	a.settings.LyricTrans = true
 	a.settings.LyricOutlineWidth = 1.2
@@ -43,13 +44,13 @@ func TestJapaneseLyricsFrames(t *testing.T) {
 		view := a.view
 		switch surface {
 		case "lyrics":
-			a.playbackState.Pane = paneLyrics
+			a.playbackState.Pane = playbackview.PaneLyrics
 		case "stage":
-			a.playbackState.Pane = paneStage
+			a.playbackState.Pane = playbackview.PaneStage
 		case "wall":
-			a.playbackState.Pane = paneWall
+			a.playbackState.Pane = playbackview.PaneWall
 		case "desktop":
-			view = d.view
+			view = d.View
 		}
 		w, h := 1100, 760
 		if surface == "desktop" {

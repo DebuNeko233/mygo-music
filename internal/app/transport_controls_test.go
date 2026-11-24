@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
@@ -19,7 +20,7 @@ func TestTransportShuffleToggle(t *testing.T) {
 			a := newTestApp()
 			a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 			tt := ui.NewTester(func(c *ui.Context) {
-				a.transport(c, white, white.Alpha(0.45), white, size)
+				a.views.playback.Transport(c, playbackview.White, playbackview.White.Alpha(0.45), playbackview.White, size)
 			}, 400, 100)
 			tt.Frame()
 			for i, on := range []bool{false, true, false, true} {
@@ -45,7 +46,7 @@ func TestTransportRepeatCycle(t *testing.T) {
 	a := newTestApp()
 	a.pl.Cue([]netease.Track{{ID: 1}})
 	tt := ui.NewTester(func(c *ui.Context) {
-		a.transport(c, white, white.Alpha(0.45), white, 22)
+		a.views.playback.Transport(c, playbackview.White, playbackview.White.Alpha(0.45), playbackview.White, 22)
 	}, 400, 100)
 	for _, want := range []player.RepeatMode{player.RepeatAll, player.RepeatOne, player.RepeatOff} {
 		if err := tt.Click("循环"); err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
@@ -18,8 +19,8 @@ func TestPlayerBarOpensComments(t *testing.T) {
 		thread string
 		pane   int
 	}{
-		{"song", netease.Track{ID: 13, Name: "歌", Duration: 600000}, "R_SO_4_13", paneStage},
-		{"episode", netease.Track{ID: 13, Name: "节目", ProgramID: 3, Duration: 600000}, "A_DJ_1_3", paneQueue},
+		{"song", netease.Track{ID: 13, Name: "歌", Duration: 600000}, "R_SO_4_13", playbackview.PaneStage},
+		{"episode", netease.Track{ID: 13, Name: "节目", ProgramID: 3, Duration: 600000}, "A_DJ_1_3", playbackview.PaneQueue},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			isolateUserData(t)
@@ -51,7 +52,7 @@ func TestPlayerBarOpensComments(t *testing.T) {
 			}
 			refreshPost(t, posts)
 			tt.Frame()
-			if !a.playbackState.Open || a.playbackState.Pane != paneComments || !a.comments.Loaded || a.comments.Track != tc.track.ID {
+			if !a.playbackState.Open || a.playbackState.Pane != playbackview.PaneComments || !a.comments.Loaded || a.comments.Track != tc.track.ID {
 				t.Fatalf("Now Playing open %v on pane %d, comments %+v", a.playbackState.Open, a.playbackState.Pane, a.comments)
 			}
 			if !tt.HasText("好听") {
@@ -67,14 +68,14 @@ func TestPlayerBarOpensComments(t *testing.T) {
 // The player's comment button does nothing when there is no current track.
 func TestPlayerBarCommentsWithoutTrack(t *testing.T) {
 	a := newTestApp()
-	a.playbackState.Pane = paneQueue
+	a.playbackState.Pane = playbackview.PaneQueue
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.Click("评论"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.playbackState.Open || a.playbackState.Pane != paneQueue || a.comments.Loading {
+	if a.playbackState.Open || a.playbackState.Pane != playbackview.PaneQueue || a.comments.Loading {
 		t.Fatal("opened or loaded comments without a track")
 	}
 }

@@ -41,13 +41,13 @@ func BenchmarkCloudViewFrame(b *testing.B) {
 			a := featurePerfApp(count, 0)
 			tt := ui.NewTester(func(c *ui.Context) {
 				a.pal = paletteFor(c.Theme())
-				a.cloudPage(c)
+				a.views.cloud.Build(c)
 			}, 1000, 700)
 			tt.Frame()
 			i := 0
 			b.ReportAllocs()
 			for b.Loop() {
-				a.trackList.ScrollTo((i*17)%count+1, ui.Center)
+				a.tracks.List.ScrollTo((i*17)%count+1, ui.Center)
 				tt.Frame()
 				i++
 			}
@@ -60,7 +60,7 @@ func BenchmarkDownloadViewFrame(b *testing.B) {
 	for _, count := range []int{0, 100} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			a := featurePerfApp(0, count)
-			tt := ui.NewTester(a.settingsView, 780, 640)
+			tt := ui.NewTester(a.views.settings.Build, 780, 640)
 			tt.Frame()
 			b.ReportAllocs()
 			for b.Loop() {
@@ -117,9 +117,9 @@ func TestFeatureViewsRestWithoutPolling(t *testing.T) {
 				builds++
 				if cloud {
 					a.pal = paletteFor(c.Theme())
-					a.cloudPage(c)
+					a.views.cloud.Build(c)
 				} else {
-					a.settingsView(c)
+					a.views.settings.Build(c)
 				}
 			}, 1000, 700)
 			tt.Frame()

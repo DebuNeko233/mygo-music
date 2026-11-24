@@ -72,7 +72,7 @@ func (a *app) setMenu() {
 				a.playbackState.Open = !a.playbackState.Open && a.pl.Current() != nil
 			})},
 			mygo.Separator(),
-			{Label: "桌面歌词", Accelerator: "CmdOrCtrl+Shift+L", Click: run(a.toggleDeskLyrics)},
+			{Label: "桌面歌词", Accelerator: "CmdOrCtrl+Shift+L", Click: run(a.views.playback.ToggleDeskLyrics)},
 		}},
 		{Label: "窗口", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleMinimize, Label: "最小化"},

@@ -33,12 +33,12 @@ func BenchmarkLocalViewFrame(b *testing.B) {
 	for _, count := range []int{1000, 10000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			a := localPerfApp(count)
-			tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.localPage(c) }, 1000, 700)
+			tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.local.Build(c) }, 1000, 700)
 			tt.Frame()
 			i := 0
 			b.ReportAllocs()
 			for b.Loop() {
-				a.trackList.ScrollTo((i*17)%count+1, ui.Center)
+				a.tracks.List.ScrollTo((i*17)%count+1, ui.Center)
 				tt.Frame()
 				i++
 			}
@@ -68,7 +68,7 @@ func BenchmarkLocalSuggestions(b *testing.B) {
 func TestLocalViewFrameBudget(t *testing.T) {
 	a := localPerfApp(1000)
 	builds := 0
-	tt := ui.NewTester(func(c *ui.Context) { builds++; a.pal = paletteFor(c.Theme()); a.localPage(c) }, 1000, 700)
+	tt := ui.NewTester(func(c *ui.Context) { builds++; a.pal = paletteFor(c.Theme()); a.views.local.Build(c) }, 1000, 700)
 	tt.Frame()
 	tt.Advance(time.Second)
 	before := builds
@@ -99,7 +99,7 @@ func TestLocalLibraryFrames(t *testing.T) {
 				if folders {
 					a.localFoldersView(c)
 				} else {
-					a.localPage(c)
+					a.views.local.Build(c)
 				}
 			}, 1000, 700)
 			tt.SetDark(dark)
@@ -144,7 +144,7 @@ func TestLocalLyricMatchFrames(t *testing.T) {
 				theme := a.settings.uiTheme(c.Theme())
 				c.SetTheme(&theme)
 				a.pal = paletteFor(&theme)
-				a.localLyricMatchDialog(c)
+				a.views.local.LyricMatchDialog(c)
 			}, 780, 600)
 			tt.SetDark(dark)
 			tt.Frame()

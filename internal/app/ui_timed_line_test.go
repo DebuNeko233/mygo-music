@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -24,16 +25,16 @@ func TestWrappedLyricWordAfterBackwardSeek(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		c.Root().Background(ui.RGB(0, 0, 0))
 		w, _ := c.Size()
-		a.paintLyricWords(c, &line, w, linesStyle{size: 30, weight: 800, lineHeight: 1.25})
+		a.views.playback.PaintLyricWords(c, &line, w, playbackview.LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
 	}, 400, 200)
-	initial := a.paintedLyric.layout.Lines()
+	initial := a.PaintedLyric.Layout.Lines()
 	if len(initial) != 1 {
 		t.Fatalf("before resize: got %d visual lines, want 1", len(initial))
 	}
 	// Choose the new width relative to the shaped word so the font cannot
 	// decide whether the test actually exercises wrapping.
 	tt.SetSize(int(math.Ceil(float64(initial[0].Rect.W)*0.6)), 200)
-	wrapped := a.paintedLyric.layout.Lines()
+	wrapped := a.PaintedLyric.Layout.Lines()
 	if len(wrapped) != 2 {
 		t.Fatalf("after resize: got %d visual lines, want 2", len(wrapped))
 	}

@@ -306,9 +306,9 @@ func TestCoverRequestsFollowTheViewport(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		a.art.beginFrame()
 		ui.Scroll(c).Fill().Children(func() {
-			a.cover(c.Key("above"), above, 80, 22, 4)
+			a.views.artwork.Cover(c.Key("above"), above, 80, 22, 4)
 			ui.Box(c).Height(400)
-			a.cover(c.Key("below"), below, 80, 22, 4)
+			a.views.artwork.Cover(c.Key("below"), below, 80, 22, 4)
 		})
 	}, 140, 120)
 	if got := wait(t, requests, "visible cover"); got != netease.Sized(above, 80) || len(a.art.busy) != 1 {

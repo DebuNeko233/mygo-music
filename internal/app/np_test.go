@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -59,10 +60,10 @@ func TestNowPlayingClockTicksEverySecond(t *testing.T) {
 		name string
 		pane int
 	}{
-		{"lyrics", paneLyrics},
-		{"comments", paneComments},
-		{"queue", paneQueue},
-		{"stage", paneStage},
+		{"lyrics", playbackview.PaneLyrics},
+		{"comments", playbackview.PaneComments},
+		{"queue", playbackview.PaneQueue},
+		{"stage", playbackview.PaneStage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newTestApp()
@@ -79,7 +80,7 @@ func TestNowPlayingClockTicksEverySecond(t *testing.T) {
 				builds++
 				a.view(c)
 			}, 1200, 800)
-			tt.Advance(npSettle)
+			tt.Advance(playbackview.NPSettle)
 			before := builds
 			// The silent source stays at zero, so tickTimes schedules its
 			// next build one second plus the 10 ms boundary allowance later.
@@ -100,7 +101,7 @@ func TestQueueStaysAsATrackIsPlayed(t *testing.T) {
 		tracks = append(tracks, netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌%02d", i), Duration: 200000})
 	}
 	a.pl.Cue(tracks)
-	a.playbackState.Open, a.playbackState.Pane = true, paneQueue
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneQueue
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
@@ -124,7 +125,7 @@ func TestQueueStaysAsATrackIsPlayed(t *testing.T) {
 // crashed on start when the choice asked the player what played.
 func TestLyricsPaneBeforePlayer(t *testing.T) {
 	a := &app{settings: settings{LyricsStage: true}}
-	if pane := a.lyricsPaneChosen(); pane != paneStage {
+	if pane := a.LyricsPaneChosen(); pane != playbackview.PaneStage {
 		t.Errorf("pane %d", pane)
 	}
 }
@@ -186,8 +187,8 @@ func TestCmdNumberChoosesTab(t *testing.T) {
 		keys  []int // from 1, 0 for the last tab
 		panes []int
 	}{
-		{netease.Track{ID: 1, Name: "宝船", Duration: 200000}, []int{4, 2, 1}, []int{paneWall, paneStage, paneLyrics}},
-		{netease.Track{ID: 2, Name: "节目", ProgramID: 9, Duration: 200000}, []int{0, 1}, []int{paneComments, paneProgram}},
+		{netease.Track{ID: 1, Name: "宝船", Duration: 200000}, []int{4, 2, 1}, []int{playbackview.PaneWall, playbackview.PaneStage, playbackview.PaneLyrics}},
+		{netease.Track{ID: 2, Name: "节目", ProgramID: 9, Duration: 200000}, []int{0, 1}, []int{playbackview.PaneComments, playbackview.PaneProgram}},
 	} {
 		a := newTestApp()
 		a.settings = defaultSettings()
@@ -198,7 +199,7 @@ func TestCmdNumberChoosesTab(t *testing.T) {
 		tt.Frame()
 		for i, n := range c.keys {
 			if n == 0 {
-				n = len(a.npTabs())
+				n = len(a.views.playback.NPTabs())
 			}
 			tt.Key(ui.Cmd, ui.Key1+ui.Key(n-1))
 			tt.Frame()
@@ -228,23 +229,23 @@ func TestNowPlayingTabsStayPut(t *testing.T) {
 	if !ok {
 		t.Fatal("no 歌词 tab")
 	}
-	for _, tab := range []npTab{{paneStage, "律动"}, {paneQueue, "待播清单"}, {paneWall, "选歌"}, {paneLyrics, "歌词"}} {
-		if err := tt.Click(tab.label); err != nil {
+	for _, tab := range []playbackview.NPTab{{Pane: playbackview.PaneStage, Label: "律动"}, {Pane: playbackview.PaneQueue, Label: "待播清单"}, {Pane: playbackview.PaneWall, Label: "选歌"}, {Pane: playbackview.PaneLyrics, Label: "歌词"}} {
+		if err := tt.Click(tab.Label); err != nil {
 			t.Fatal(err)
 		}
 		settle()
-		if a.playbackState.Pane != tab.pane {
-			t.Fatalf("%s chose pane %d, want %d", tab.label, a.playbackState.Pane, tab.pane)
+		if a.playbackState.Pane != tab.Pane {
+			t.Fatalf("%s chose pane %d, want %d", tab.Label, a.playbackState.Pane, tab.Pane)
 		}
 		r, ok := tt.Find("歌词")
 		if !ok {
-			t.Fatalf("no 歌词 tab on %s", tab.label)
+			t.Fatalf("no 歌词 tab on %s", tab.Label)
 		}
 		if r.X != first.X || r.Y != first.Y {
-			t.Errorf("on %s the 歌词 tab is at %v,%v, was at %v,%v", tab.label, r.X, r.Y, first.X, first.Y)
+			t.Errorf("on %s the 歌词 tab is at %v,%v, was at %v,%v", tab.Label, r.X, r.Y, first.X, first.Y)
 		}
 	}
-	for _, pane := range []int{paneStage, paneLyrics} {
+	for _, pane := range []int{playbackview.PaneStage, playbackview.PaneLyrics} {
 		a.playbackState.Pane = pane
 		a.comments.Loaded, a.comments.Total = true, 0
 		settle()

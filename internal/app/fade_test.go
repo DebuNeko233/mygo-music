@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/components"
+	"netease-music-mygo/internal/desktop/view/components"
 )
 
 // A cover that loads while its place shows fades in; one ready as its

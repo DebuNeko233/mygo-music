@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/preferences"
@@ -34,8 +36,8 @@ func TestActivationRespectsUtilityWindows(t *testing.T) {
 		t.Fatal("folder manager did not keep the Dock available")
 	}
 	a.localView.window = nil
-	a.notch = &notch{a: a}
-	a.lyrics = &deskLyrics{a: a}
+	a.notch = &playbackview.Notch{A: &a.views.playback}
+	a.lyrics = &playbackview.DeskLyrics{A: &a.views.playback}
 	a.activate()
 	if !a.startup.show {
 		t.Fatal("overlay prevented main-window reopening")
@@ -195,12 +197,12 @@ func TestDispatchStartupReentrancy(t *testing.T) {
 func TestLifecyclePartialStartupRelease(t *testing.T) {
 	a := newApp()
 	var events []string
-	a.native.listen(func() { events = append(events, "app") })
+	a.native.Listen(func() { events = append(events, "app") })
 	a.network.stop = func() { events = append(events, "network") }
-	a.notch = &notch{a: a, unwatch: func() { events = append(events, "pointer") }}
-	a.notch.lifetime.listen(func() { events = append(events, "notch") })
-	a.lyrics = &deskLyrics{a: a}
-	a.lyrics.lifetime.listen(func() { events = append(events, "lyrics") })
+	a.notch = &playbackview.Notch{A: &a.views.playback, Unwatch: func() { events = append(events, "pointer") }}
+	a.notch.Lifetime.Listen(func() { events = append(events, "notch") })
+	a.lyrics = &playbackview.DeskLyrics{A: &a.views.playback}
+	a.lyrics.Lifetime.Listen(func() { events = append(events, "lyrics") })
 	a.release()
 	a.release()
 	a.showMain()
@@ -217,15 +219,15 @@ func TestLifecyclePartialStartupRelease(t *testing.T) {
 func TestSettingsClosureKeepsReplacement(t *testing.T) {
 	a := newApp()
 	old, next := new(mygo.Window), new(mygo.Window)
-	a.settingsWin, a.recording = next, "global/playPause"
+	a.settingsWin, a.Recording = next, "global/playPause"
 	a.cacheSettings.Confirm.Open = true
 	a.settingsClosed(old)
-	if a.settingsWin != next || a.recording == "" || !a.cacheSettings.Confirm.Open {
+	if a.settingsWin != next || a.Recording == "" || !a.cacheSettings.Confirm.Open {
 		t.Fatal("old closure reset the replacement")
 	}
 	a.quitting = true // no native Dock in a headless test
 	a.settingsClosed(next)
-	if a.settingsWin != nil || a.recording != "" || a.cacheSettings.Confirm.Open {
+	if a.settingsWin != nil || a.Recording != "" || a.cacheSettings.Confirm.Open {
 		t.Fatal("closed window retained interaction state")
 	}
 }
@@ -285,17 +287,17 @@ func TestLifecycleQuitBeforeReadyPreservesSettings(t *testing.T) {
 func TestNotchCloseRejectsQueuedPoll(t *testing.T) {
 	a := newApp()
 	posts := testPosts(a)
-	n := &notch{a: a}
+	n := &playbackview.Notch{A: &a.views.playback}
 	a.settings.Notch = true
 	old := cursorPoint
 	t.Cleanup(func() { cursorPoint = old })
 	cursorPoint = func() mygo.Point { t.Fatal("closed notch polled the cursor"); return mygo.Point{} }
-	a.dispatch(n.poll, false)
-	n.pollTimer = time.AfterFunc(time.Hour, func() { t.Error("timer survived close") })
-	n.close()
-	n.close()
+	a.dispatch(n.Poll, false)
+	n.PollTimer = time.AfterFunc(time.Hour, func() { t.Error("timer survived close") })
+	n.Close()
+	n.Close()
 	(<-posts)()
-	if n.polling || n.watched || n.win != nil {
+	if n.Polling || n.Watched || n.Win != nil {
 		t.Fatal("notch remained active after close")
 	}
 }

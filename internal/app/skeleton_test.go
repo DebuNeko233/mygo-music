@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 	accountvm "netease-music-mygo/internal/viewmodel/account"
@@ -38,15 +39,15 @@ var skeletonScenes = []struct {
 	}},
 	{"login", func(a *app) { a.account.Login = accountvm.LoginState{Open: true} }},
 	{"comments", func(a *app) {
-		a.playbackState.Open, a.playbackState.Pane = true, paneComments
+		a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneComments
 		a.comments = commentsvm.Comments{Track: 1, Loading: true}
 	}},
 	{"more-comments", func(a *app) {
-		a.playbackState.Open, a.playbackState.Pane = true, paneComments
+		a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneComments
 		a.comments = commentsvm.Comments{Track: 1, Loading: true, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "好听"}}}
 	}},
-	{"lyrics", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, paneLyrics }},
-	{"stage", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, paneStage }},
+	{"lyrics", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics }},
+	{"stage", func(a *app) { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage }},
 }
 
 func skeletonApp(set func(a *app)) *app {

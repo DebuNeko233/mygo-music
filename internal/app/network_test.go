@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
@@ -162,7 +163,7 @@ func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.playbackState.Open = true
-	for _, pane := range []int{paneLyrics, paneStage, paneQueue} {
+	for _, pane := range []int{playbackview.PaneLyrics, playbackview.PaneStage, playbackview.PaneQueue} {
 		a.playbackState.Pane = pane
 		tt.Frame()
 		if _, found := tt.Find("离线"); found {
@@ -186,7 +187,7 @@ func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	if err := tt.Click("刷新内容"); err == nil {
 		t.Fatal("page controls appeared over the closing player")
 	}
-	tt.Advance(npSettle + time.Millisecond)
+	tt.Advance(playbackview.NPSettle + time.Millisecond)
 	tt.Frame()
 	if err := tt.Click("刷新内容"); err != nil {
 		t.Fatal(err)
@@ -230,7 +231,7 @@ func TestNetworkChangesUpdateVisibleComponentStates(t *testing.T) {
 	for a.pl.MetadataLoading() {
 		refreshPost(t, posts)
 	}
-	a.playbackState.Open, a.playbackState.Pane = true, paneLyrics
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 	tt.Frame()
 	tt.Advance(time.Second)
 	tt.Frame()
@@ -250,7 +251,7 @@ func TestNetworkChangesUpdateVisibleComponentStates(t *testing.T) {
 // Clicking lyric recovery in either layout starts one request, removes the
 // action until it finishes, and preserves the selected song and pause state.
 func TestNetworkLyricsRetryAction(t *testing.T) {
-	for _, pane := range []int{paneLyrics, paneStage} {
+	for _, pane := range []int{playbackview.PaneLyrics, playbackview.PaneStage} {
 		a, posts := offlineFixture(t)
 		a.pl = player.New(a.post)
 		a.pl.Cue([]netease.Track{{ID: 7, Name: "Recovery"}})

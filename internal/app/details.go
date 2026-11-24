@@ -1,6 +1,7 @@
 package app
 
 import (
+	"netease-music-mygo/internal/netease"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 	uservm "netease-music-mygo/internal/viewmodel/user"
@@ -82,3 +83,18 @@ func (a *app) loadUser(id int64) {
 	}
 	a.users.Load(id, uid, uservm.UserServices{Post: a.detailPost(), Detail: userDetail, Playlists: userPlaylists, Artists: followedArtists})
 }
+
+// albumDetail loads an album from NetEase; tests replace it.
+var (
+	albumDetail = netease.AlbumDetail
+)
+
+// userDetail and userPlaylists load a user and their playlists from
+// NetEase, and followedArtists and subscribedPodcasts what the listener
+// follows; tests replace them.
+var (
+	userDetail         = netease.UserDetail
+	userPlaylists      = netease.UserPlaylists
+	followedArtists    = netease.FollowedArtists
+	subscribedPodcasts = netease.SubscribedPodcasts
+)

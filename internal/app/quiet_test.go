@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
@@ -59,7 +60,7 @@ func TestQuietComment(t *testing.T) {
 		{45 * s, 2, 4733 * time.Millisecond},
 		{59500 * time.Millisecond, 0, 0},
 	} {
-		cm, next := a.quietComment(&tr, lines, true, c.pos)
+		cm, next := a.views.playback.QuietComment(&tr, lines, true, c.pos)
 		var id int64
 		if cm != nil {
 			id = cm.ID
@@ -70,13 +71,13 @@ func TestQuietComment(t *testing.T) {
 	}
 	// Turned off, nothing shows.
 	a.settings.HotComments = false
-	if cm, _ := a.quietComment(&tr, lines, true, 5*s); cm != nil {
+	if cm, _ := a.views.playback.QuietComment(&tr, lines, true, 5*s); cm != nil {
 		t.Errorf("showed %q turned off", cm.Content)
 	}
 	a.settings.HotComments = true
 	// No hot comments, nothing shows.
 	a.comments.SetHot(nil)
-	if cm, _ := a.quietComment(&tr, lines, true, 5*s); cm != nil {
+	if cm, _ := a.views.playback.QuietComment(&tr, lines, true, 5*s); cm != nil {
 		t.Errorf("showed %q without hot comments", cm.Content)
 	}
 }
@@ -85,13 +86,13 @@ func TestQuietComment(t *testing.T) {
 func TestQuietCommentAfterLyricsRefresh(t *testing.T) {
 	a, tr, lines := quietApp(0)
 	pos := 5 * time.Second
-	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil {
+	if cm, _ := a.views.playback.QuietComment(&tr, lines, true, pos); cm == nil {
 		t.Fatal("expected a comment during the original intro")
 	}
 	refreshed := slices.Clone(lines)
 	refreshed[1].At, refreshed[1].End = 3*time.Second, 9*time.Second
 	a.pl.SetLyrics(refreshed)
-	if cm, _ := a.quietComment(&tr, refreshed, true, pos); cm != nil {
+	if cm, _ := a.views.playback.QuietComment(&tr, refreshed, true, pos); cm != nil {
 		t.Fatal("the comment persisted into the new singing interval")
 	}
 }
@@ -100,10 +101,10 @@ func TestQuietCommentAfterLyricsRefresh(t *testing.T) {
 func TestQuietCommentAfterEmptyLyricsLoad(t *testing.T) {
 	a, tr, _ := quietApp(0)
 	pos := 5 * time.Second
-	if cm, _ := a.quietComment(&tr, nil, false, pos); cm != nil {
+	if cm, _ := a.views.playback.QuietComment(&tr, nil, false, pos); cm != nil {
 		t.Fatal("showed a comment before the lyrics finished loading")
 	}
-	if cm, _ := a.quietComment(&tr, nil, true, pos); cm == nil {
+	if cm, _ := a.views.playback.QuietComment(&tr, nil, true, pos); cm == nil {
 		t.Fatal("no comment after confirming that the song has no lyrics")
 	}
 }
@@ -112,16 +113,16 @@ func TestQuietCommentAfterEmptyLyricsLoad(t *testing.T) {
 func TestQuietCommentAfterHotListReplacement(t *testing.T) {
 	a, tr, lines := quietApp(0)
 	pos := 5 * time.Second
-	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil || cm.ID != 1 {
+	if cm, _ := a.views.playback.QuietComment(&tr, lines, true, pos); cm == nil || cm.ID != 1 {
 		t.Fatal("expected the original hot comment")
 	}
 	a.comments.SetHot([]netease.Comment{
 		{ID: 3},
-		{ID: 4, Content: strings.Repeat("好", quietRunes+1)},
-		{ID: 5, Content: strings.Repeat("好", quietRunes)},
+		{ID: 4, Content: strings.Repeat("好", playbackview.QuietRunes+1)},
+		{ID: 5, Content: strings.Repeat("好", playbackview.QuietRunes)},
 	})
 	a.comments.Hot[2].LikedCount++
-	if cm, _ := a.quietComment(&tr, lines, true, pos); cm == nil || cm.ID != 5 || cm.LikedCount != 1 {
+	if cm, _ := a.views.playback.QuietComment(&tr, lines, true, pos); cm == nil || cm.ID != 5 || cm.LikedCount != 1 {
 		t.Fatalf("wrong replacement hot comment: %+v", cm)
 	}
 }
@@ -129,7 +130,7 @@ func TestQuietCommentAfterHotListReplacement(t *testing.T) {
 // In the quiet, the lyrics pane and the stage show the hot comment, which
 // opens the comments.
 func TestQuietCard(t *testing.T) {
-	for _, pane := range []int{paneLyrics, paneStage} {
+	for _, pane := range []int{playbackview.PaneLyrics, playbackview.PaneStage} {
 		a, _, _ := quietApp(5 * time.Second)
 		a.playbackState.Open, a.playbackState.Pane = true, pane
 		tt := ui.NewTester(a.view, 1000, 640)
@@ -143,7 +144,7 @@ func TestQuietCard(t *testing.T) {
 		if err := tt.Click("查看评论"); err != nil {
 			t.Fatal(err)
 		}
-		if a.playbackState.Pane != paneComments {
+		if a.playbackState.Pane != playbackview.PaneComments {
 			t.Errorf("pane %d: the comment did not open the comments", pane)
 		}
 	}
@@ -151,7 +152,7 @@ func TestQuietCard(t *testing.T) {
 
 // Opening credits stay out of the hot card's entrance and exit in both lyric layouts.
 func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
-	for _, extra := range []int{0, timedListThreshold} {
+	for _, extra := range []int{0, playbackview.TimedListThreshold} {
 		t.Run(fmt.Sprint(extra), func(t *testing.T) {
 			a, _, lines := quietApp(0)
 			a.settings.LyricEdgeFade = true
@@ -160,7 +161,7 @@ func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
 			}
 			a.pl.SetLyrics(lines)
 			tt := ui.NewTester(func(c *ui.Context) {
-				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
+				a.views.playback.LyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
 			}, 320, 360)
 			tt.SetScale(0.25)
 			credit, comment := lines[0].Text, a.comments.QuietHot[0].Content
@@ -193,7 +194,7 @@ func TestStaticLyricsQuietCard(t *testing.T) {
 			a, _, _ := quietApp(0)
 			a.pl.SetLyrics([]lyrics.Line{{At: 10 * time.Second, Text: text}})
 			tt := ui.NewTesterWith(func(c *ui.Context) {
-				a.lyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
+				a.views.playback.LyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
 			}, 320, 360, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			const comment = "刮风这天，我试过握着你手"
 			if tt.HasText(comment) {

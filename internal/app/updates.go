@@ -25,7 +25,7 @@ func (a *app) useUpdater() {
 	a.updates = true
 	// A check or an answer in the update window changes what the settings
 	// show.
-	a.native.listen(updater.OnChange(func() {
+	a.native.Listen(updater.OnChange(func() {
 		if a.settingsWin != nil {
 			a.settingsWin.Invalidate()
 		}

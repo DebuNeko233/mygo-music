@@ -199,7 +199,7 @@ func TestCacheDirectoryAcceptsUnmanagedTargetContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.confirmCacheDirectory(target)
-	tt := ui.NewTester(a.settingsView, 800, 1100)
+	tt := ui.NewTester(a.views.settings.Build, 800, 1100)
 	if err := tt.Click("迁移并更改"); err != nil {
 		t.Fatal(err)
 	}

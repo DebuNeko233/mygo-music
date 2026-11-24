@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
 )
@@ -16,8 +17,8 @@ type playbackCover struct {
 	prefetchPrevious bool
 }
 
-const barCoverPixels = 120
-const nowPlayingCoverPixels = 600
+const barCoverPixels = components.BarCoverPixels
+const nowPlayingCoverPixels = components.NowPlayingCoverPixels
 
 var barCoverRequest = playbackCover{pixels: barCoverPixels, prefetchPrevious: true}
 var nowPlayingCoverRequest = playbackCover{pixels: nowPlayingCoverPixels, backdrop: true}
@@ -39,10 +40,10 @@ func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artwork {
 
 func (a *app) trackCover(c *ui.Context, tr *netease.Track, px int, size, radius float32) ui.Element {
 	if !tr.IsLocal() {
-		return a.cover(c, a.trackArtworkURL(tr), px, size, radius)
+		return a.views.artwork.Cover(c, a.trackArtworkURL(tr), px, size, radius)
 	}
 	if url := a.localArtworkURL(tr, a.playbackLocalSong(tr)); url != "" {
-		return a.cover(c, url, px, size, radius)
+		return a.views.artwork.Cover(c, url, px, size, radius)
 	}
 	return a.coverImage(c, size, radius, func(ui.Element) *artwork { return a.trackArtwork(tr, px, false) })
 }

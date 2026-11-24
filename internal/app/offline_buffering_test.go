@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -41,7 +42,7 @@ func TestOfflinePageRetryKeepsSettledState(t *testing.T) {
 // Offline lyrics in both the normal and stage panes are settled unavailable
 // states, not instrumental results or loading animations.
 func TestOfflineLyricsStopAnimating(t *testing.T) {
-	for _, pane := range []int{paneLyrics, paneStage} {
+	for _, pane := range []int{playbackview.PaneLyrics, playbackview.PaneStage} {
 		a, _ := offlineFixture(t)
 		a.pl.Cue([]netease.Track{{ID: 1, Name: "Offline"}})
 		a.networkChanged(mygo.NetworkStatus{})

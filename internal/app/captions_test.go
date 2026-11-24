@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/speech"
 	captionsvm "netease-music-mygo/internal/viewmodel/captions"
@@ -145,7 +146,7 @@ func TestDownloadModelFromCaptions(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
-	if a.playbackState.Pane != paneProgram {
+	if a.playbackState.Pane != playbackview.PaneProgram {
 		t.Fatalf("pane %d: an episode without captions opens on 简介", a.playbackState.Pane)
 	}
 	if err := tt.Click("字幕"); err != nil {
@@ -183,7 +184,7 @@ func TestCaptionClickSeeks(t *testing.T) {
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	tt.Frame()
-	if a.playbackState.Pane != paneCaptions {
+	if a.playbackState.Pane != playbackview.PaneCaptions {
 		t.Fatalf("pane %d: an episode with captions opens on 字幕", a.playbackState.Pane)
 	}
 	if err := tt.Click("比如说，我的婚姻结束了"); err != nil {

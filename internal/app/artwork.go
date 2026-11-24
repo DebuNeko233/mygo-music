@@ -552,30 +552,6 @@ func dominantColor(img image.Image) ui.Color {
 	return ui.RGB(uint8(sum[best][0]/w*255), uint8(sum[best][1]/w*255), uint8(sum[best][2]/w*255))
 }
 
-func hsv(r, g, b float64) (h, s, v float64) {
-	mx, mn := math.Max(r, math.Max(g, b)), math.Min(r, math.Min(g, b))
-	v = mx
-	if mx == 0 {
-		return 0, 0, 0
-	}
-	s = (mx - mn) / mx
-	d := mx - mn
-	switch {
-	case d == 0:
-		h = 0
-	case mx == r:
-		h = math.Mod((g-b)/d, 6) * 60
-	case mx == g:
-		h = ((b-r)/d + 2) * 60
-	default:
-		h = ((r-g)/d + 4) * 60
-	}
-	if h < 0 {
-		h += 360
-	}
-	return h, s, v
-}
-
 // blurImage returns img shrunk and blurred, more saturated, to fill a
 // backdrop behind what plays, scaled up as smooth as it is.
 func blurImage(img image.Image) *image.RGBA {

@@ -99,7 +99,7 @@ func TestCacheDirectoryControls(t *testing.T) {
 	defer func() { openCacheDirectory = oldOpen }()
 	opens := 0
 	openCacheDirectory = func(mygo.OpenDialogOptions) ([]string, error) { opens++; return []string{target}, nil }
-	tt := ui.NewTester(a.settingsView, 800, 1800)
+	tt := ui.NewTester(a.views.settings.Build, 800, 1800)
 	if err := tt.Click("更改缓存目录"); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestCacheDirectorySameDirectory(t *testing.T) {
 	}
 	for _, target := range targets {
 		openCacheDirectory = func(mygo.OpenDialogOptions) ([]string, error) { return []string{target}, nil }
-		tt := ui.NewTester(a.settingsView, 800, 1800)
+		tt := ui.NewTester(a.views.settings.Build, 800, 1800)
 		if err := tt.Click("更改缓存目录"); err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +171,7 @@ func TestCacheDirectoryDialogCancel(t *testing.T) {
 				}
 				return []string{target}, nil
 			}
-			tt := ui.NewTester(a.settingsView, 800, 1800)
+			tt := ui.NewTester(a.views.settings.Build, 800, 1800)
 			if err := tt.Click("更改缓存目录"); err != nil {
 				t.Fatal(err)
 			}
@@ -227,7 +227,7 @@ func TestCacheDirectoryWithoutMigration(t *testing.T) {
 	posts := testPosts(a)
 	writeCachedSong(t, source)
 	a.confirmCacheDirectory(target)
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	if err := tt.Click("仅更改目录"); err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestCacheDirectoryConfirmationFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.confirmCacheDirectory(target)
-	tt := ui.NewTester(a.settingsView, 640, 420)
+	tt := ui.NewTester(a.views.settings.Build, 640, 420)
 	if err := tt.Click("迁移并更改"); err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestCacheDirectoryFrames(t *testing.T) {
 	}
 	a, _, target := cacheTestApp(t)
 	a.cacheSettings.Moving, a.cacheSettings.Target = true, target
-	tt := ui.NewTester(a.settingsView, 780, 640)
+	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
 	f, err := os.Create(filepath.Join(dir, "cache-directory.png"))
 	if err != nil {

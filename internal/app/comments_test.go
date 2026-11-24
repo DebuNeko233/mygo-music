@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
@@ -58,7 +59,7 @@ func TestEpisodeComments(t *testing.T) {
 	if thread := wait(t, asked, "the comments"); thread != "A_DJ_1_3" {
 		t.Fatalf("asked for the comments of %s", thread)
 	}
-	if a.playbackState.Pane != paneProgram {
+	if a.playbackState.Pane != playbackview.PaneProgram {
 		t.Fatalf("opened on pane %d", a.playbackState.Pane)
 	}
 	if err := tt.Click("评论"); err != nil {
@@ -66,7 +67,7 @@ func TestEpisodeComments(t *testing.T) {
 	}
 	tt.Advance(time.Second)
 	tt.Frame()
-	if a.playbackState.Pane != paneComments {
+	if a.playbackState.Pane != playbackview.PaneComments {
 		t.Errorf("on pane %d", a.playbackState.Pane)
 	}
 }
@@ -86,7 +87,7 @@ func TestLikeComment(t *testing.T) {
 	a.account.Profile = &netease.Profile{UserID: 1}
 	cm := netease.Comment{ID: 9, Content: "好听", LikedCount: 41}
 	a.comments = commentsvm.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true, Total: 1, Hot: []netease.Comment{cm}, Latest: []netease.Comment{cm}}
-	a.playbackState.Pane = paneComments
+	a.playbackState.Pane = playbackview.PaneComments
 	tt.Frame()
 	if err := tt.Click("赞"); err != nil {
 		t.Fatal(err)

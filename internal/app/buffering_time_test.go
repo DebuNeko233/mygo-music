@@ -42,7 +42,7 @@ func TestCachedTrackTimeDoesNotFlashBuffering(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 20000}, {ID: 2, Duration: 10000}})
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() {
-			a.nowPlayingTime(c)
+			a.views.playback.NowPlayingTime(c)
 			ui.Button(c, "下一首").OnClick(a.pl.Next)
 		})
 	}, 300, 70)
@@ -77,7 +77,7 @@ func TestNowPlayingTimeKeepsNonCachedBuffering(t *testing.T) {
 	a := newTestApp()
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 20000}, {ID: 2, Duration: 10000}})
 	a.pl.SuspendCache() // Hold audio loading without a network request or wall-clock timer.
-	tt := ui.NewTester(a.nowPlayingTime, 300, 24)
+	tt := ui.NewTester(a.views.playback.NowPlayingTime, 300, 24)
 	check := func() {
 		t.Helper()
 		if !slices.Contains(tt.Texts(), "正在缓冲…") {

@@ -52,8 +52,8 @@ func TestLocalLyricsMatchAndRestore(t *testing.T) {
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		a.pal = paletteFor(c.Theme())
 		_, h := c.Size()
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
-		a.localLyricMatchDialog(c)
+		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
+		a.views.local.LyricMatchDialog(c)
 	}, 780, 600, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	settleTallLyrics(tt)
 	if err := tt.Click("从网易云匹配歌词"); err != nil {
@@ -207,7 +207,7 @@ func TestLocalLyricsDialogInputAndDismissal(t *testing.T) {
 	t.Cleanup(func() { searchLocalLyrics = old })
 	d := &localvm.LocalLyricMatch{Open: true, Track: a.pl.Current(), Query: "initial"}
 	a.local.LyricMatch = d
-	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.localLyricMatchDialog(c) }, 780, 600)
+	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.local.LyricMatchDialog(c) }, 780, 600)
 	tt.Frame()
 	if err := tt.Click("歌名和歌手"); err != nil {
 		t.Fatal(err)

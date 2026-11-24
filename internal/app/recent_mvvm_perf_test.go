@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	desktopview "netease-music-mygo/internal/desktop/view"
 	"netease-music-mygo/internal/netease"
 	recentvm "netease-music-mygo/internal/viewmodel/recent"
 )
@@ -40,11 +41,11 @@ func recentPerfApp(count int) *app {
 
 // Rendering a recent tab measures stable view builds, including any derived data allocated each frame.
 func BenchmarkRecentViewFrame(b *testing.B) {
-	for tab, name := range recentTabTitles {
+	for tab, name := range desktopview.RecentTabTitles {
 		b.Run(name, func(b *testing.B) {
 			a := recentPerfApp(300)
 			a.recent.Selected = tab
-			tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.recentPage(c) }, 1200, 800)
+			tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.recent.Build(c) }, 1200, 800)
 			tt.Frame()
 			b.ReportAllocs()
 			for b.Loop() {
@@ -56,12 +57,12 @@ func BenchmarkRecentViewFrame(b *testing.B) {
 
 // Resting recent tabs should sleep without polling while their snapshots are fresh.
 func TestRecentIdleFrameBudget(t *testing.T) {
-	for tab, name := range recentTabTitles {
+	for tab, name := range desktopview.RecentTabTitles {
 		t.Run(name, func(t *testing.T) {
 			a := recentPerfApp(10)
 			a.recent.Selected = tab
 			builds := 0
-			tt := ui.NewTester(func(c *ui.Context) { builds++; a.pal = paletteFor(c.Theme()); a.recentPage(c) }, 1200, 800)
+			tt := ui.NewTester(func(c *ui.Context) { builds++; a.pal = paletteFor(c.Theme()); a.views.recent.Build(c) }, 1200, 800)
 			tt.Frame()
 			tt.Advance(time.Second)
 			before := builds
@@ -97,7 +98,7 @@ func TestRecentMVVMFrames(t *testing.T) {
 			case 8:
 				a.recent.SetSongs(nil)
 			}
-			tt := ui.NewTesterWith(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.recentPage(c) }, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}, Dark: dark})
+			tt := ui.NewTesterWith(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.recent.Build(c) }, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}, Dark: dark})
 			tt.Frame()
 			f, err := os.Create(filepath.Join(dir, fmt.Sprintf("recent-scene=%d-dark=%v.png", scene, dark)))
 			if err != nil {

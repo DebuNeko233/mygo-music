@@ -44,7 +44,7 @@ func (a *app) cancelWork() {
 // stopNative runs before the event loop ends. It never waits for a worker
 // which may still be trying to publish a result to that loop.
 func (a *app) stopNative() {
-	if a.native.closed {
+	if a.native.Closed {
 		return
 	}
 	a.quitting = true
@@ -55,10 +55,10 @@ func (a *app) stopNative() {
 	}
 	a.unregisterGlobals()
 	if a.notch != nil {
-		a.notch.close()
+		a.notch.Close()
 	}
 	if a.lyrics != nil {
-		a.lyrics.close()
+		a.lyrics.Close()
 	}
 	if a.tray != nil {
 		a.tray.Destroy()
@@ -68,7 +68,7 @@ func (a *app) stopNative() {
 		a.mix.Close()
 		a.mix = nil
 	}
-	a.native.close()
+	a.native.Close()
 }
 
 // release also handles an error before the main window was created.
@@ -109,7 +109,7 @@ func (a *app) requestQuit(sessionEnding bool) bool {
 	a.settings.Volume = a.playbackState.Volume
 	if a.lyrics != nil {
 		// Where the lyrics were left, before the window goes.
-		a.lyrics.remember()
+		a.lyrics.Remember()
 	}
 	// A write still owed from a key repeat would otherwise land
 	// after this one, with the settings as they were before it.

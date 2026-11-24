@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -26,9 +27,9 @@ func TestLyricBlurIgnoresCanvasPadding(t *testing.T) {
 			c.Root().Background(ui.RGB(0, 0, 0))
 			viewport := ui.Box(c).Fill()
 			viewport.Children(func() {
-				ui.Box(c).Absolute().Bottom(0).Width(64).Height(1).Background(white)
+				ui.Box(c).Absolute().Bottom(0).Width(64).Height(1).Background(playbackview.White)
 			})
-			viewport.Effect(lyricEdgeFade{pass: &pass})
+			viewport.Effect(playbackview.LyricEdgeFade{Pass: &pass})
 		}, 64, 128)
 		return tt.Image()
 	}
@@ -49,11 +50,11 @@ func TestLyricScrollbarGutterStaysClear(t *testing.T) {
 				c.Root().Background(ui.RGB(0, 0, 0))
 				viewport := ui.Box(c).Fill()
 				viewport.Children(func() {
-					ui.Box(c.Key("thumb")).Absolute().Right(3).Top(1).Size(6, 42).Radius(3).Background(white)
-					ui.Box(c.Key("ink")).Absolute().Right(gutter).Top(0).Size(14, 14).Background(white)
+					ui.Box(c.Key("thumb")).Absolute().Right(3).Top(1).Size(6, 42).Radius(3).Background(playbackview.White)
+					ui.Box(c.Key("ink")).Absolute().Right(gutter).Top(0).Size(14, 14).Background(playbackview.White)
 				})
 				if enabled {
-					viewport.Effect(lyricEdgeFade{pass: &pass, browsing: browsing, gutter: gutter})
+					viewport.Effect(playbackview.LyricEdgeFade{Pass: &pass, Browsing: browsing, Gutter: gutter})
 				}
 			}, width, height)
 			plain := tt.Image()
@@ -87,7 +88,7 @@ func TestLyricEdgeFadeCoverage(t *testing.T) {
 			for _, y := range []int{4, 40, 75, 110, 145} {
 				line := ui.Box(c.Key(y)).Absolute().Top(float32(y - 8)).Left(0).Right(0).Height(16).
 					Draw(func(p *ui.Painter, r ui.Rect) {
-						p.Fill(ui.Rect{X: r.X + 16, Y: r.Y + 7, W: 32, H: 2}, white, 0)
+						p.Fill(ui.Rect{X: r.X + 16, Y: r.Y + 7, W: 32, H: 2}, playbackview.White, 0)
 					})
 				if y == 75 {
 					active = line
@@ -95,7 +96,7 @@ func TestLyricEdgeFadeCoverage(t *testing.T) {
 			}
 		})
 		if enabled {
-			viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, nil), pass: &pass})
+			viewport.Effect(playbackview.LyricEdgeFade{ClearBand: playbackview.LyricClearBand(viewport, active, ui.Element{}, nil), Pass: &pass})
 		}
 	}, w, h)
 	for _, scale := range []int{1, 2} {
@@ -157,10 +158,10 @@ func TestLyricBlurRampsFromActiveRow(t *testing.T) {
 		viewport.Children(func() {
 			active = ui.Box(c.Key("active")).Absolute().Top(48).Height(12).Width(64)
 			for _, y := range []int{30, 78} {
-				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
+				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(playbackview.White)
 			}
 		})
-		viewport.Effect(lyricEdgeFade{clearBand: lyricClearBand(viewport, active, ui.Element{}, nil), pass: &pass})
+		viewport.Effect(playbackview.LyricEdgeFade{ClearBand: playbackview.LyricClearBand(viewport, active, ui.Element{}, nil), Pass: &pass})
 	}, 64, 150)
 	frame := tt.Image()
 	if past, upcoming := frame.RGBAAt(32, 30).R, frame.RGBAAt(32, 78).R; past >= upcoming {
@@ -181,7 +182,7 @@ func TestLyricHoverKeepsEdgeFade(t *testing.T) {
 					for _, y := range []int{4, 48, 91} {
 						row := ui.ButtonBase(c.Key(y)).Absolute().Top(float32(y - 3)).Width(64).Height(7).
 							Draw(func(p *ui.Painter, r ui.Rect) {
-								p.Fill(ui.Rect{X: r.X, Y: r.Y + 3, W: r.W, H: 1}, white, 0)
+								p.Fill(ui.Rect{X: r.X, Y: r.Y + 3, W: r.W, H: 1}, playbackview.White, 0)
 							})
 						if y == 48 {
 							active = row
@@ -191,7 +192,7 @@ func TestLyricHoverKeepsEdgeFade(t *testing.T) {
 						}
 					}
 				})
-				a.lyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, nil, browsing, [2]ui.Element{}, 0)
+				a.views.playback.LyricEdges(viewport, active, hovered, ui.Element{}, ui.Element{}, nil, browsing, [2]ui.Element{}, 0)
 			}, 64, 96)
 			before := tt.Image().RGBAAt(32, 4).R
 			tt.Move(32, 4)
@@ -229,14 +230,14 @@ func TestLyricIntroCreditsFadeWhileScrolling(t *testing.T) {
 					for i, top := range []float32{y, y + 9, 91} {
 						row := ui.Box(c.Key(i)).Absolute().Top(top - 2).Width(64).Height(5).
 							Draw(func(p *ui.Painter, r ui.Rect) {
-								p.Fill(ui.Rect{X: r.X, Y: r.Y + 2, W: r.W, H: 1}, white, 0)
+								p.Fill(ui.Rect{X: r.X, Y: r.Y + 2, W: r.W, H: 1}, playbackview.White, 0)
 							})
 						if opening && i < len(credits) {
 							credits[i] = row
 						}
 					}
 				})
-				a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, nil, browsing, credits, 0)
+				a.views.playback.LyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, nil, browsing, credits, 0)
 			}, 64, 96)
 			if tt.Image().RGBAAt(32, 32).R != 255 {
 				t.Fatal("credits should be fully visible away from the edges")
@@ -270,10 +271,10 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 		viewport := ui.Box(c).Fill()
 		viewport.Children(func() {
 			for _, y := range []int{4, 48, 91} {
-				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(white)
+				ui.Box(c.Key(y)).Absolute().Top(float32(y)).Width(64).Height(1).Background(playbackview.White)
 			}
 		})
-		a.lyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, nil, true, [2]ui.Element{}, 0)
+		a.views.playback.LyricEdges(viewport, ui.Element{}, ui.Element{}, ui.Element{}, ui.Element{}, nil, true, [2]ui.Element{}, 0)
 	}, 64, 96)
 	frame := tt.Image()
 	if middle := frame.RGBAAt(32, 48).R; middle != 255 {
@@ -285,7 +286,7 @@ func TestLyricManualEdgeFadeKeepsTextSharp(t *testing.T) {
 			t.Fatalf("expected a faded, sharp stroke at y=%d, got %d", y, stroke)
 		}
 	}
-	if a.lyricBlurPass != nil {
+	if a.LyricBlurPass != nil {
 		t.Fatal("manual scrolling allocated a Gaussian canvas")
 	}
 }
@@ -300,7 +301,7 @@ func TestImmersiveLyricViewportTracksControls(t *testing.T) {
 	var barHeight float32
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		barHeight = topBar(c)
-		a.nowPlayingView(c)
+		a.views.playback.NowPlayingView(c)
 	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for _, size := range [][2]int{{1200, 800}, {880, 580}, {1920, 1080}, {750, 1330}, {880, 580}, {1200, 800}} {
 		tt.SetSize(size[0], size[1])
@@ -320,7 +321,7 @@ func TestImmersiveLyricViewportTracksControls(t *testing.T) {
 		height := float32(size[1])
 		wantTop := barHeight
 		wantBottom := min(max(bottom+extension, height-32), height-16)
-		if abs32(view.Bounds.Y-wantTop) > 1 || abs32(view.Bounds.Y+view.Bounds.H-wantBottom) > 1 {
+		if playbackview.Abs32(view.Bounds.Y-wantTop) > 1 || playbackview.Abs32(view.Bounds.Y+view.Bounds.H-wantBottom) > 1 {
 			t.Fatalf("at %v: lyrics %v, want top %.1f and bottom %.1f", size, view.Bounds, wantTop, wantBottom)
 		}
 	}
@@ -333,17 +334,17 @@ func TestImmersiveLyricReleasesCanvas(t *testing.T) {
 	a.settings.HotComments = false
 	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
 	tt := ui.NewTesterWith(a.view, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-	a.lyricBlurPass = ui.NewCanvas(1, 1)
+	a.LyricBlurPass = ui.NewCanvas(1, 1)
 	a.settings.LyricEdgeFade = false
 	tt.Frame()
-	if a.lyricBlurPass != nil {
+	if a.LyricBlurPass != nil {
 		t.Fatal("canvas was retained after disabling immersive lyrics")
 	}
 	a.settings.LyricEdgeFade = true
-	a.lyricBlurPass = ui.NewCanvas(1, 1)
-	a.playbackState.Pane = paneQueue
+	a.LyricBlurPass = ui.NewCanvas(1, 1)
+	a.playbackState.Pane = playbackview.PaneQueue
 	tt.Frame()
-	if a.lyricBlurPass != nil {
+	if a.LyricBlurPass != nil {
 		t.Fatal("canvas was retained after switching panes")
 	}
 }
@@ -359,22 +360,22 @@ func TestLyricCanvasAcrossTrackChanges(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1, Duration: 60000}})
 	a.pl.SetLyrics(lines)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
-		ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), 180, ui.Rect{}, 0) })
+		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), 180, ui.Rect{}, 0) })
 	}, 160, 180, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for i, text := range []string{lyrics.InstrumentalText, "A short lyric"} {
-		if a.lyricBlurPass == nil {
+		if a.LyricBlurPass == nil {
 			t.Fatal("scrolling lyrics did not allocate a canvas")
 		}
 		a.pl.Cue([]netease.Track{{ID: int64(i) + 2, Duration: 60000}})
 		a.pl.SetLyrics([]lyrics.Line{{Text: text}})
 		tt.Frame()
-		if a.lyricBlurPass != nil {
+		if a.LyricBlurPass != nil {
 			t.Fatalf("canvas was held while displaying %q", text)
 		}
 		a.pl.SetLyrics(lines)
 		tt.Frame()
 	}
-	if a.lyricBlurPass == nil {
+	if a.LyricBlurPass == nil {
 		t.Fatal("canvas was not recreated for scrolling lyrics")
 	}
 }
@@ -394,9 +395,9 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				_, h := c.Size()
 				c.Root().Background(ui.Hex("#22384b"))
-				ui.Column(c).Fill().Children(func() { a.lyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
+				ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
 			}, 280, 320, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-			before := a.lyricScroll.Y
+			before := a.LyricScroll.Y
 			if before <= 0 {
 				t.Fatal("lyrics did not follow playback")
 			}
@@ -423,25 +424,25 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			save("off")
 			a.settings.LyricEdgeFade = true
 			tt.Frame()
-			before = a.lyricScroll.Y
+			before = a.LyricScroll.Y
 			save("on")
 			tt.Scroll(180, 180, 0, 36)
-			if got := a.lyricScroll.Y; got <= before {
+			if got := a.LyricScroll.Y; got <= before {
 				t.Fatalf("could not scroll with the effect enabled: %v -> %v", before, got)
 			}
 			save("manual")
-			manual := a.lyricScroll.Y
-			tt.Advance(lyricBrowseDelay + 100*time.Millisecond)
-			if a.lyricReading.BrowseUntil.IsZero() || a.lyricScroll.Y != manual {
+			manual := a.LyricScroll.Y
+			tt.Advance(playbackview.LyricBrowseDelay + 100*time.Millisecond)
+			if a.lyricReading.BrowseUntil.IsZero() || a.LyricScroll.Y != manual {
 				t.Fatal("paused playback did not preserve the reading position")
 			}
 			tt.Scroll(180, 180, 0, 24)
-			manual = a.lyricScroll.Y
+			manual = a.LyricScroll.Y
 			a.pl.Hold(lines[count/2+1].At)
 			tt.Frame()
 			tt.Advance(3 * time.Second)
-			if a.lyricReading.BrowseUntil.IsZero() || a.lyricScroll.Y != manual {
-				t.Fatalf("a new active line interrupted manual browsing: %v -> %v", manual, a.lyricScroll.Y)
+			if a.lyricReading.BrowseUntil.IsZero() || a.LyricScroll.Y != manual {
+				t.Fatalf("a new active line interrupted manual browsing: %v -> %v", manual, a.LyricScroll.Y)
 			}
 			tt.Scroll(180, 180, 0, 30)
 			tt.Advance(3 * time.Second)
@@ -456,7 +457,7 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 				t.Fatal("clicking the current line did not restore following")
 			}
 			tt.Scroll(180, 180, 0, 30)
-			tt.Advance(lyricBrowseDelay + 100*time.Millisecond)
+			tt.Advance(playbackview.LyricBrowseDelay + 100*time.Millisecond)
 			if !a.lyricReading.BrowseUntil.IsZero() {
 				t.Fatal("following did not resume after scrolling stopped")
 			}
@@ -472,7 +473,7 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 // Songs with scrolling lyrics give the first sung line the same anchor as later lines.
 func TestImmersiveFirstLyricAnchor(t *testing.T) {
 	const h = 180
-	for _, count := range []int{12, timedListThreshold} {
+	for _, count := range []int{12, playbackview.TimedListThreshold} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			lines := make([]lyrics.Line, count)
 			for i := range lines {
@@ -482,14 +483,14 @@ func TestImmersiveFirstLyricAnchor(t *testing.T) {
 			a.settings.LyricEdgeFade = true
 			tt.Frame()
 			first, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text)
-			if !ok || first.Bounds.Y < h*0.3+lyricIntroHeight {
+			if !ok || first.Bounds.Y < h*0.3+playbackview.LyricIntroHeight {
 				t.Fatalf("first lyric did not start below the anchored intro: %+v", first)
 			}
 			for _, i := range []int{0, 1, count - 1} {
 				a.pl.Hold(lines[i].At)
 				tt.Frame()
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[i].Text)
-				if !ok || abs32(row.Bounds.Y-h*0.3) > 1 {
+				if !ok || playbackview.Abs32(row.Bounds.Y-h*0.3) > 1 {
 					t.Fatalf("row %d did not reach the reading position: %+v", i, row)
 				}
 			}

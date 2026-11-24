@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -66,7 +67,7 @@ func stageClock(style string, reduced, playing bool, pos time.Duration) (*app, *
 		} else {
 			a.pl.Seek(pos)
 		}
-		ui.Column(c).Fill().Children(func() { a.stage(c, a.pl.Current(), ui.RGB(255, 100, 100)) })
+		ui.Column(c).Fill().Children(func() { a.views.playback.Stage(c, a.pl.Current(), ui.RGB(255, 100, 100)) })
 	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
 	return a, tt, &builds
 }
@@ -74,9 +75,9 @@ func stageClock(style string, reduced, playing bool, pos time.Duration) (*app, *
 // Reduce Motion used to keep rebuilding at display rate while hand-written
 // word animations continued. All styles now wake only where text changes.
 func TestStageReducedMotionBoundaries(t *testing.T) {
-	for _, style := range stageStyles {
-		t.Run(style.label, func(t *testing.T) {
-			a, tt, builds := stageClock(style.id, true, true, 0)
+	for _, style := range playbackview.StageStyles {
+		t.Run(style.Label, func(t *testing.T) {
+			a, tt, builds := stageClock(style.ID, true, true, 0)
 			for _, step := range []struct {
 				advance time.Duration
 				change  bool
@@ -108,15 +109,15 @@ func TestStageReducedMotionBoundaries(t *testing.T) {
 // The normal stage still moves, a reduced-motion held word or interlude
 // sleeps, and a paused stage asks for no rebuilds under either preference.
 func TestStageMotionFrameBudget(t *testing.T) {
-	for _, style := range stageStyles {
+	for _, style := range playbackview.StageStyles {
 		for _, reduced := range []bool{false, true} {
 			for _, playing := range []bool{false, true} {
 				for _, pos := range []time.Duration{2500 * time.Millisecond, 12 * time.Second} {
-					_, tt, builds := stageClock(style.id, reduced, playing, pos)
+					_, tt, builds := stageClock(style.ID, reduced, playing, pos)
 					before := *builds
 					tt.Advance(time.Second)
 					n := *builds - before
-					t.Logf("%s reduced=%v playing=%v pos=%v: %d builds/s", style.label, reduced, playing, pos, n)
+					t.Logf("%s reduced=%v playing=%v pos=%v: %d builds/s", style.Label, reduced, playing, pos, n)
 					if reduced || !playing {
 						if n != 0 {
 							t.Errorf("stationary stage rebuilt %d times", n)

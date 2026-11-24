@@ -59,7 +59,7 @@ func TestDailyCardPlayPauseKeepsSharedQueue(t *testing.T) {
 	a := homePerfApp(3)
 	a.home.Daily[0].Fee = 1
 	a.pl.SuspendCache()
-	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.dailyCard(c, c.Now()) }, 1200, 300)
+	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.daily.Card(c, c.Now()) }, 1200, 300)
 	if err := tt.Click("播放"); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestDailyPageUsesRefreshedHomeList(t *testing.T) {
 	a.pl.SuspendCache()
 	a.home.Daily[0].Fee = 1
 	a.pl.ToggleShuffle()
-	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.dailyPage(c) }, 1200, 800)
+	tt := ui.NewTester(func(c *ui.Context) { a.pal = paletteFor(c.Theme()); a.views.daily.Build(c) }, 1200, 800)
 	if err := tt.Click("播放全部"); err != nil {
 		t.Fatal(err)
 	}

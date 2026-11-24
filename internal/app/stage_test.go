@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 )
 
@@ -22,9 +23,9 @@ func TestLyricViewsShareSelectedSource(t *testing.T) {
 			a.pl.RefreshLyrics(1, lrc, translation, tc.yrc)
 			a.pl.Hold(26 * time.Second)
 			pane.Frame()
-			stage := ui.NewTesterWith(func(c *ui.Context) { a.stage(c, a.pl.Current(), white) }, 360, 300,
+			stage := ui.NewTesterWith(func(c *ui.Context) { a.views.playback.Stage(c, a.pl.Current(), playbackview.White) }, 360, 300,
 				ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-			desktop := ui.NewTester((&deskLyrics{a: a}).view, 480, 200)
+			desktop := ui.NewTester((&playbackview.DeskLyrics{A: &a.views.playback}).View, 480, 200)
 			for _, view := range []*ui.Tester{pane, stage, desktop} {
 				if !view.HasText(tc.text) || !view.HasText(tc.translated) || view.HasText(tc.omitted) {
 					t.Fatalf("view used the wrong source or lost its translation: %q", view.Texts())
@@ -41,7 +42,7 @@ func TestLyricViewsShareSelectedSource(t *testing.T) {
 // choosing 流光 goes back to the classic.
 func TestStageStyleMenu(t *testing.T) {
 	a, tt, _ := playingApp()
-	a.playbackState.Open, a.playbackState.Pane = true, paneStage
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage
 	a.pl.Seek(2 * time.Second)
 	tt.Frame()
 	for _, c := range []struct{ item, want string }{{"云阶", "partita"}, {"倾诉", "tilt"}, {"流光", ""}} {
@@ -62,7 +63,7 @@ func TestStageStyleMenu(t *testing.T) {
 // the style.
 func TestStageSparksMenu(t *testing.T) {
 	a, tt, _ := playingApp()
-	a.playbackState.Open, a.playbackState.Pane = true, paneStage
+	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage
 	a.settings.StageStyle = "tilt"
 	tt.Frame()
 	for _, want := range []bool{true, false} {
@@ -100,7 +101,7 @@ func TestStageUnits(t *testing.T) {
 		{words("I ", "never ", "show"), [][2]int{{0, 1}, {1, 2}, {2, 3}}},
 		{words("曾", "经", "的", "那", "些", "发", "生", "过"), [][2]int{{0, 4}, {4, 8}}},
 	} {
-		got := stageUnits(c.words)
+		got := playbackview.StageUnits(c.words)
 		if len(got) != len(c.want) {
 			t.Errorf("%v: units %v, want %v", c.words, got, c.want)
 			continue
@@ -118,19 +119,19 @@ func TestStageUnits(t *testing.T) {
 // rather after punctuation than nearest the middle.
 func TestTiltSplitsAtPunctuation(t *testing.T) {
 	ws := words("夜", "空", "中", "最", "亮", "的", "星，", "能", "否", "听", "清")
-	units := stageUnits(ws)
+	units := playbackview.StageUnits(ws)
 	for n := 1; n <= min(4, len(units)); n++ {
-		parts := splitParts(ws, units, n)
-		if len(parts) != n || parts[0].from != 0 || parts[n-1].to != len(ws) {
+		parts := playbackview.SplitParts(ws, units, n)
+		if len(parts) != n || parts[0].From != 0 || parts[n-1].To != len(ws) {
 			t.Fatalf("%d parts: %+v", n, parts)
 		}
 		for i := 1; i < n; i++ {
-			if parts[i].from != parts[i-1].to || parts[i].from >= parts[i].to {
+			if parts[i].From != parts[i-1].To || parts[i].From >= parts[i].To {
 				t.Fatalf("%d parts: %+v", n, parts)
 			}
 		}
 	}
-	if parts := splitParts(ws, units, 2); parts[0].to != 7 {
-		t.Errorf("split at %d, not after 星，", parts[0].to)
+	if parts := playbackview.SplitParts(ws, units, 2); parts[0].To != 7 {
+		t.Errorf("split at %d, not after 星，", parts[0].To)
 	}
 }

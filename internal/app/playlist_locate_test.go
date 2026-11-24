@@ -271,7 +271,7 @@ func TestPlaylistLocateFollowsHeaderChanges(t *testing.T) {
 			if _, shown := tt.Find("定位正在播放的歌曲"); shown {
 				t.Fatal("locate shown before header grows")
 			}
-			first, last := a.trackList.Visible()
+			first, last := a.tracks.List.Visible()
 			offset := a.shell.PageScroll.Y
 			name, description := pl.Name, pl.Description
 			if field == "name" {
@@ -286,7 +286,7 @@ func TestPlaylistLocateFollowsHeaderChanges(t *testing.T) {
 			}
 			// The taller header can shrink the last partially visible row.
 			// It must not shift the current row or scroll the list.
-			if lo, hi := a.trackList.Visible(); lo != first || hi > last || a.shell.PageScroll.Y != offset {
+			if lo, hi := a.tracks.List.Visible(); lo != first || hi > last || a.shell.PageScroll.Y != offset {
 				t.Fatalf("fixture changed the visible rows or scroll offset: %d/%d -> %d/%d, %g -> %g", first, last, lo, hi, offset, a.shell.PageScroll.Y)
 			}
 			if _, shown := tt.Find("定位正在播放的歌曲"); !shown {

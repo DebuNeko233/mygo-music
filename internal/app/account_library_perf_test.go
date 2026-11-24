@@ -23,9 +23,9 @@ func BenchmarkAccountSurfaceFrame(b *testing.B) {
 			tt := ui.NewTester(func(c *ui.Context) {
 				a.pal = paletteFor(c.Theme())
 				if dialog {
-					a.loginDialog(c)
+					a.views.account.Login(c)
 				} else {
-					a.accountRow(c)
+					a.views.account.Row(c)
 				}
 			}, 800, 600)
 			tt.Frame()

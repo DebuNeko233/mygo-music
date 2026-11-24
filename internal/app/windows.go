@@ -5,6 +5,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	playbackview "netease-music-mygo/internal/desktop/view/playback"
 )
 
 // shotHook, when set, drives the app to check its design.
@@ -76,9 +78,7 @@ func (a *app) openMainWindow() {
 		}
 	}
 	a.postMu.Unlock()
-	if setupNativeRowBars != nil {
-		setupNativeRowBars(a)
-	}
+	a.views.playback.SetupNativeRowBars()
 	// The view the window laid out as it was made asked for pictures
 	// before there was a window to read them back into.
 	a.flushKept()
@@ -94,20 +94,20 @@ func (a *app) openAuxiliaryPlayers() {
 	// The notch player is macOS's, over its menu bar: elsewhere it would
 	// hang at the top of the screen as a black box.
 	if runtime.GOOS == "darwin" {
-		a.notch = newNotch(a)
+		a.notch = playbackview.NewNotch(&a.views.playback)
 	}
 	// The lyrics' own window is every platform's, hidden until the
 	// listener asks for it.
-	a.lyrics = newDeskLyrics(a)
+	a.lyrics = playbackview.NewDeskLyrics(&a.views.playback)
 	// From the menu bar alone, the Dock icon shows while the window
 	// does.
 	a.syncDock()
-	a.native.listen(a.win.OnShow(a.syncDock))
-	a.native.listen(a.win.OnHide(a.syncDock))
-	a.native.listen(a.win.OnHide(func() { a.recoveryFrame(false) }))
+	a.native.Listen(a.win.OnShow(a.syncDock))
+	a.native.Listen(a.win.OnHide(a.syncDock))
+	a.native.Listen(a.win.OnHide(func() { a.recoveryFrame(false) }))
 	// Shown or switched to the morning after, it shows the new day's.
-	a.native.listen(a.win.OnFocus(a.freshenHome))
-	a.native.listen(a.win.OnFocus(func() {
+	a.native.Listen(a.win.OnFocus(a.freshenHome))
+	a.native.Listen(a.win.OnFocus(func() {
 		if a.nav.Current.Page == pageLocal {
 			a.refreshLocalSongs()
 		}
@@ -116,7 +116,7 @@ func (a *app) openAuxiliaryPlayers() {
 	// Closing the window hides it: music plays on, and the Dock icon
 	// or the tray's brings it back. A Linux desktop without a tray
 	// has neither, so there closing it quits.
-	a.native.listen(a.win.OnClose(func(e *mygo.CloseEvent) {
+	a.native.Listen(a.win.OnClose(func(e *mygo.CloseEvent) {
 		if a.quitting {
 			return
 		}
