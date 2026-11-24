@@ -149,7 +149,7 @@ func (a *app) trackSkeleton(c *ui.Context, s shimmer, covers bool, header func(c
 	w, h := c.Size()
 	wide := w-sidebarWidth > 820
 	top, bottom := a.insets(c)
-	a.underTop, a.underBottom = false, true
+	a.shell.UnderTop, a.shell.UnderBottom = false, true
 	ui.Column(c.Key("skeleton")).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).Children(func() {
 		a.startMark(c)
 		header(c)

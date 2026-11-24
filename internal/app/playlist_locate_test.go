@@ -163,7 +163,7 @@ func TestPlaylistLocateFollowsVisibleArea(t *testing.T) {
 	clickLocate(t, tt)
 	name := pl.Tracks[99].Name
 	original := locatedRow(t, tt, name, 760)
-	offset := a.pageScroll.Y
+	offset := a.shell.PageScroll.Y
 	// Match the platform bar insets in this headless fixture.
 	top := float32(buttonsHeight)
 	for _, tc := range []struct {
@@ -179,7 +179,7 @@ func TestPlaylistLocateFollowsVisibleArea(t *testing.T) {
 		{"back again", original.Y, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a.pageScroll.Y = offset + original.Y - tc.y
+			a.shell.PageScroll.Y = offset + original.Y - tc.y
 			tt.Frame()
 			_, shown := tt.Find("定位正在播放的歌曲")
 			if shown != tc.shown {
@@ -189,7 +189,7 @@ func TestPlaylistLocateFollowsVisibleArea(t *testing.T) {
 		})
 	}
 	// A larger window can expose a row previously hidden below the player.
-	a.pageScroll.Y = offset + original.Y - (760 - playerBarHeight + 20)
+	a.shell.PageScroll.Y = offset + original.Y - (760 - playerBarHeight + 20)
 	tt.Frame()
 	tt.SetSize(1100, 980)
 	tt.Frame()
@@ -272,7 +272,7 @@ func TestPlaylistLocateFollowsHeaderChanges(t *testing.T) {
 				t.Fatal("locate shown before header grows")
 			}
 			first, last := a.trackList.Visible()
-			offset := a.pageScroll.Y
+			offset := a.shell.PageScroll.Y
 			name, description := pl.Name, pl.Description
 			if field == "name" {
 				pl.Name = longName
@@ -286,8 +286,8 @@ func TestPlaylistLocateFollowsHeaderChanges(t *testing.T) {
 			}
 			// The taller header can shrink the last partially visible row.
 			// It must not shift the current row or scroll the list.
-			if lo, hi := a.trackList.Visible(); lo != first || hi > last || a.pageScroll.Y != offset {
-				t.Fatalf("fixture changed the visible rows or scroll offset: %d/%d -> %d/%d, %g -> %g", first, last, lo, hi, offset, a.pageScroll.Y)
+			if lo, hi := a.trackList.Visible(); lo != first || hi > last || a.shell.PageScroll.Y != offset {
+				t.Fatalf("fixture changed the visible rows or scroll offset: %d/%d -> %d/%d, %g -> %g", first, last, lo, hi, offset, a.shell.PageScroll.Y)
 			}
 			if _, shown := tt.Find("定位正在播放的歌曲"); !shown {
 				t.Fatal("locate remained hidden after header covered current row")

@@ -42,7 +42,7 @@ func (a *app) syncTrackViewport(c *ui.Context, header trackHeaderKey, at int) {
 		song = current.Key()
 	}
 	next := trackViewport{
-		y: a.pageScroll.Y, width: w, height: h,
+		y: a.shell.PageScroll.Y, width: w, height: h,
 		playlist: a.nav.Current.ID, page: a.nav.Current.Page, song: song, index: at,
 		header: header,
 	}

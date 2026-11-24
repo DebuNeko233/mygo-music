@@ -226,7 +226,7 @@ func (a *app) bindInApp(c *ui.Context, root ui.Element) {
 	// search can be given K to play, but then there is no typing k in it.
 	// Only this window's search is bound here, so no other field of this
 	// view needs to be kept out.
-	typing := c.Focused(a.searchBox)
+	typing := c.Focused(a.shell.SearchBox)
 	for _, h := range hotkeys {
 		mods, key, ok := parseAccelerator(a.binding(kindInApp, h.name))
 		if !ok {

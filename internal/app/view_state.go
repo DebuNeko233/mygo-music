@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/desktop/components"
+	"netease-music-mygo/internal/desktop/shell"
 	"netease-music-mygo/internal/desktop/theme"
 )
 
@@ -28,13 +29,10 @@ type mainViewState struct {
 	localView      localViewState
 	trackArt       trackArtworkState
 
-	pageScroll ui.ScrollState
-	navScroll  ui.ScrollState
-	scrolled   route // the page trackList and pageScroll are of
+	shell    shell.State
+	scrolled route // the page trackList and shell.PageScroll are of
 
-	locateViewport                                 trackViewport
-	mineCollapsed, savedCollapsed, albumsCollapsed bool
-	searchBox                                      ui.Handle
+	locateViewport trackViewport
 
 	npOpen         bool      // Now Playing as it last showed: open or not
 	npChangedAt    time.Time // when it last opened or closed
@@ -62,8 +60,7 @@ type mainViewState struct {
 	volumeScroll     float64 // precise scroll DIPs saved toward the next ten-percent step
 	volumeScrollDown bool    // the direction those DIPs were going
 
-	rowBars               components.BarState
-	underTop, underBottom bool
+	rowBars components.BarState
 
 	barScrub              scrubState
 	barCover              coverFadeState

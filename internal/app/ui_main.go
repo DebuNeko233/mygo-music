@@ -1,18 +1,21 @@
 package app
 
 import (
-	"runtime"
-	"time"
-
-	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/components"
+	"netease-music-mygo/internal/desktop/shell"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 )
 
-const sidebarWidth = 232
+// Shared geometry remains available to feature views during their gradual migration.
+const (
+	sidebarWidth    = shell.SidebarWidth
+	playerBarHeight = shell.PlayerBarHeight
+	pageGap         = shell.PageGap
+	buttonsHeight   = shell.ButtonsHeight
+	topBarHeight    = shell.TopBarHeight
+)
 
 func (a *app) view(c *ui.Context) {
 	t := a.settings.uiTheme(c.Theme())
@@ -33,57 +36,23 @@ func (a *app) view(c *ui.Context) {
 	a.wasBehind = !active
 	a.retryLibraryRefresh()
 
-	if c.Vibrancy() {
-		c.Root().Background(ui.Transparent)
-	}
-	root := ui.Box(c).Fill()
-	// The keys the listener gave the actions, Space for play and pause by
-	// default, work wherever the focus is: on the container around
-	// everything they come before a button the pointer focused, which would
-	// take Space as a click, and on the window where nothing has the focus,
-	// as once Now Playing covers the button that had it.
-	a.bindInApp(c, root)
 	npOpen, npSettled := a.npState(c)
 	a.art.pageFrame(a.nav.Current, !npOpen)
-	// The pictures the listener chose for the home page, painted behind
-	// it: it stands on them, over its own colour, as deep as they asked.
 	home := a.pictures(a.settings.BackdropHome)
-	root.Children(func() {
-		if pic := backdropShown(home, a.pl.Current()); pic != nil {
+	var backdrop func(*ui.Context)
+	if pic := backdropShown(home, a.pl.Current()); pic != nil {
+		backdrop = func(c *ui.Context) {
 			ui.Box(c.Key("backdrop")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().
 				Draw(func(painter *ui.Painter, r ui.Rect) {
 					drawPicture(painter, r, pic, float32(a.settings.BackdropHomeOpacity))
 				})
 		}
-		page := ui.Row(c).Fill().AlignItems(ui.Stretch)
-		page.Children(func() {
-			if npOpen && npSettled {
-				// Covered by Now Playing: not built, which would cost each
-				// of its frames as much again as the stage itself. Where
-				// it is scrolled is the app's (pageScroll, navScroll,
-				// trackList), so it shows again as it was.
-				return
-			}
-			side := ui.Column(c).Width(sidebarWidth)
-			if !c.Vibrancy() && len(home) == 0 {
-				side.Background(p.Sidebar)
-			}
-			side.Children(func() { a.sidebar(c) })
-			// Keyed, so that a popover of the sidebar opening or closing
-			// keeps what the page and its bars hold, their edges' fades.
-			content := ui.Box(c.Key("main")).Grow(1).BorderWidth(0, 0, 0, 1).BorderColor(p.Hairline)
-			if len(home) == 0 {
-				content.Background(p.Background)
-			}
-			content.Children(func() {
-				a.content(c)
-				// The bars float over the page, which scrolls under them:
-				// positioned, they paint over it.
-				a.pageTop(c)
-				a.playerBar(c)
-			})
-		})
-		a.nowPlayingLayer(c, npOpen, npSettled)
+	}
+	a.shell.Build(c, shell.Layout{
+		Palette: p, HasBackdrop: len(home) > 0, Covered: npOpen && npSettled,
+		Navigation: a.shellNavigation(), BindRoot: a.bindInApp, Backdrop: backdrop,
+		Sidebar: a.sidebar, Page: a.content, Player: a.playerBar,
+		NowPlaying: func(c *ui.Context) { a.nowPlayingLayer(c, npOpen, npSettled) },
 	})
 	a.loginDialog(c)
 	a.playlistNameDialog(c)
@@ -112,7 +81,7 @@ func (a *app) shortcuts(c *ui.Context) {
 	c.OnShortcut(ui.Cmd, ui.KeyBracketRight, a.goForward)
 	c.OnShortcut(ui.Cmd, ui.KeyF, func() {
 		a.playbackState.Open = false
-		a.searchBox.Focus(c)
+		a.shell.SearchBox.Focus(c)
 	})
 	if a.playbackState.Open {
 		c.OnShortcut(0, ui.KeyEscape, func() { a.playbackState.Open = false })
@@ -213,168 +182,35 @@ func (a *app) goForward() {
 	}
 }
 
+func (a *app) shellNavigation() shell.Navigation {
+	return shell.Navigation{Current: a.nav.Current, LastSearch: &a.searches.Last,
+		Playing: a.playbackState.Open, CanBack: len(a.nav.History) > 0, CanForward: len(a.nav.Forward) > 0,
+		Open: a.open, Back: a.back, Forward: a.goForward}
+}
 func (a *app) sidebar(c *ui.Context) {
-	// Under the window buttons where they sit over the sidebar, as the
-	// traffic lights do; elsewhere, as close to the top as to the sides.
-	top := float32(14)
-	if c.TitleBar().Left > 0 {
-		top = topBar(c) + 4
-	}
-	// Where nothing in it takes the press, the sidebar moves the window, as
-	// the title bar it reaches up into would.
-	ui.Column(c).Fill().Padding(top, 14, 14, 14).Gap(4).DragWindow().Children(func() {
-		a.searchField(c)
-
-		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
-			a.navItem(c, components.IconHome, "为你推荐", route{Page: pageHome})
-			a.navItem(c, components.IconDaily, "每日推荐", route{Page: pageDaily})
-			a.navItem(c, components.IconHistory, "最近播放", route{Page: pageRecent})
-			a.navItem(c, components.IconRadio, "私人 FM", route{Page: pageFM})
-			a.navItem(c, components.IconCharts, "排行榜", route{Page: pageCharts})
-			a.navItem(c, components.IconPodcast, "播客", route{Page: pagePodcasts})
-			a.navItem(c, components.IconNote, "本地歌曲", route{Page: pageLocal})
-			a.navItem(c, components.IconCloud, "音乐网盘", route{Page: pageCloud})
-			if a.searches.Last.Query != "" {
-				a.navItem(c, components.IconSearch, "搜索结果", a.searches.Last)
-			}
-			a.myPlaylists(c, "我的歌单", a.library.Mine, true, &a.mineCollapsed)
-			a.myPlaylists(c, "收藏的歌单", a.library.Saved, false, &a.savedCollapsed)
-			a.myAlbums(c, a.library.SubAlbums, &a.albumsCollapsed)
-		})
-
-		a.accountRow(c)
+	a.shell.Sidebar(c, a.pal, a.shellNavigation(), shell.Sidebar{
+		Search: a.searchField, Account: a.accountRow,
+		Library: func(c *ui.Context) {
+			a.myPlaylists(c, "我的歌单", a.library.Mine, true, &a.shell.MineCollapsed)
+			a.myPlaylists(c, "收藏的歌单", a.library.Saved, false, &a.shell.SavedCollapsed)
+			a.myAlbums(c, a.library.SubAlbums, &a.shell.AlbumsCollapsed)
+		},
 	})
 }
-
-func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
-	p := a.pal
-	selected := a.nav.Current.Page == r.Page && !a.playbackState.Open
-	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
-	bg := ui.Transparent
-	switch {
-	case selected:
-		bg = p.Press
-	case b.Hovered():
-		bg = p.Hover
-	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	color := p.Text
-	if selected {
-		color = p.Accent
-	}
-	b.Children(func() {
-		ui.Icon(c, icon).Size(17, 17).TextColor(color)
-		ui.Text(c, label).FontSize(13.5).FontWeight(500).TextColor(p.Text)
-	})
-	if b.Clicked() {
-		a.open(r)
-	}
-}
-
-// playerBarHeight is the height of the player along the foot of the pages.
-const playerBarHeight = 84
-
-// pageGap is the room between the bar over a page and its content.
-const pageGap = 12
-
-// insets returns the room the bars over a page take at its top and its
-// bottom: pages pad their content by it, and scroll under the bars.
-func (a *app) insets(c *ui.Context) (top, bottom float32) {
-	top = topBar(c)
-	if runtime.GOOS == "darwin" {
-		// The edge reaches a little below the traffic lights' strip.
-		top += topEdgePad
-	}
-	return top, playerBarHeight
-}
-
-// topEdgePad is the room the edge over a page leaves below the strip, on
-// macOS.
-const topEdgePad = 6
-
-// buttonsHeight is the height of the window buttons off macOS, which fill
-// the edge over a page.
-const buttonsHeight = topBarHeight + topEdgePad
-
-// topBar returns the height of the strip along the top of the window, as
-// tall as the window buttons and the room above and below them, which
-// what sits in it centers on.
-func topBar(c *ui.Context) float32 {
-	if runtime.GOOS != "darwin" {
-		// The whole edge, which the buttons fill: what sits in the strip
-		// centers on their glyphs.
-		return buttonsHeight
-	}
-	return max(c.TitleBar().Height, topBarHeight)
-}
-
-// topBarHeight is the least height of the strip along the top.
-const topBarHeight = 40
-
-// startMark marks where a page's content starts, first in what scrolls:
-// once it has moved up, content is under the bar at the top.
-func (a *app) startMark(c *ui.Context) {
-	b := ui.Box(c.Key("start-mark")).Height(0).Bounds()
-	if b.W > 0 {
-		top, _ := a.insets(c)
-		a.underTop = b.Y < top+pageGap-0.5
-	}
-}
-
-// endMark marks where a page's content ends, last in what scrolls: while it
-// is below the top of the player, content is under the player.
-func (a *app) endMark(c *ui.Context) {
-	b := ui.Box(c.Key("end-mark")).Height(0).Bounds()
-	if b.W > 0 {
-		_, h := c.Size()
-		_, bottom := a.insets(c)
-		a.underBottom = b.Y > h-bottom+0.5
-	}
-}
-
-// edgeShown returns how much of a scroll edge shows over el: fully while
-// content is under its bar, and none at rest, as AppKit shows its edges.
-func edgeShown(el ui.Element, under bool) float32 {
-	target := float32(0)
-	if under {
-		target = 1
-	}
-	return el.AnimateTo("shown", target, ui.Animation{Duration: 180 * time.Millisecond})
-}
-
-// pageTop is the strip over the top of a page, frosting what scrolls under
-// it as macOS 26's hard scroll edge does: it drags the window, and holds
-// the back button once there is a page to go back to.
-func (a *app) pageTop(c *ui.Context) {
-	top, _ := a.insets(c)
-	edge := ui.Box(c.Key("top-edge")).Absolute().Top(0).Left(0).Right(0).Height(top).DragWindow().
-		Material(glass.ScrollEdge{Hard: true, Background: a.pal.Background})
-	edge.Opacity(edgeShown(edge, a.underTop))
-	if len(a.nav.History) > 0 || len(a.nav.Forward) > 0 {
-		ui.Row(c).Absolute().Top(0).Left(20).Height(topBar(c)).AlignItems(ui.Center).Children(func() {
-			back := components.IconButton(c.Key("back"), components.IconBack, 18, a.pal.Muted, "返回").Disabled(len(a.nav.History) == 0)
-			if len(a.nav.History) == 0 {
-				back.Opacity(0.35)
-			}
-			if back.Clicked() {
-				a.back()
-			}
-			if len(a.nav.Forward) > 0 && components.IconButton(c.Key("forward"), components.IconForward, 18, a.pal.Muted, "前进").Clicked() {
-				a.goForward()
-			}
-		})
-	}
-}
-
+func (a *app) insets(c *ui.Context) (float32, float32) { return shell.Insets(c) }
+func topBar(c *ui.Context) float32                     { return shell.TopBar(c) }
+func (a *app) startMark(c *ui.Context)                 { a.shell.StartMark(c) }
+func (a *app) endMark(c *ui.Context)                   { a.shell.EndMark(c) }
+func edgeShown(el ui.Element, under bool) float32      { return shell.EdgeShown(el, under) }
 func (a *app) content(c *ui.Context) {
 	// A new page starts at its top. Not as it is opened: a control in a
 	// list, as a page's tabs in its header, opens it as the list builds.
 	if a.scrolled != a.nav.Current {
-		a.trackList, a.pageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.nav.Current
+		a.trackList, a.shell.PageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.nav.Current
 		a.trackRowsCache = trackRowsCache{}
 	}
 	// Pages mark where their content is, as they scroll.
-	a.underTop, a.underBottom = false, false
+	a.shell.UnderTop, a.shell.UnderBottom = false, false
 	switch a.nav.Current.Page {
 	case pageHome:
 		a.homePage(c)
@@ -407,20 +243,8 @@ func (a *app) content(c *ui.Context) {
 	}
 }
 
-// centered shows a message, with a retry button if retry is set: what a
-// page shows in place of what failed to load.
-func (a *app) centered(c *ui.Context, err string, retry func()) {
-	top, bottom := a.insets(c)
-	ui.Column(c).Grow(1).Padding(top, 0, bottom, 0).Center().Gap(12).Children(func() {
-		if a.network.offline {
-			ui.Icon(c, components.IconOffline).Size(24, 24).TextColor(a.pal.Muted)
-			err = "暂无缓存内容"
-		}
-		ui.Text(c, err).TextColor(a.pal.Muted).FontSize(13)
-		if retry != nil && components.IconButton(c.Key("retry"), components.IconReload, 18, a.pal.Muted, "重新加载内容").Tooltip("重新加载内容").Clicked() {
-			retry()
-		}
-	})
+func (a *app) centered(c *ui.Context, message string, retry func()) {
+	shell.Centered(c, a.pal, a.network.offline, message, retry)
 }
 
 // Loading what the pages show.

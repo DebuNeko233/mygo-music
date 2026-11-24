@@ -86,7 +86,7 @@ func TestSidebarSavedAlbums(t *testing.T) {
 	if _, ok := tt.Find("城市"); ok {
 		t.Error("the collapsed albums still show")
 	}
-	if !a.albumsCollapsed || len(a.library.SubAlbums) != 2 {
+	if !a.shell.AlbumsCollapsed || len(a.library.SubAlbums) != 2 {
 		t.Error("collapsing the albums changed which are saved")
 	}
 }
@@ -102,7 +102,7 @@ func TestNewPlaylistInCollapsedSidebar(t *testing.T) {
 		}
 		tt.Frame()
 	}
-	if !a.mineCollapsed || !a.savedCollapsed {
+	if !a.shell.MineCollapsed || !a.shell.SavedCollapsed {
 		t.Fatal("the sections did not collapse independently")
 	}
 	if err := tt.Click("新建歌单"); err != nil {
@@ -112,7 +112,7 @@ func TestNewPlaylistInCollapsedSidebar(t *testing.T) {
 	if !a.library.Naming.Open {
 		t.Error("the plus did not open the naming dialog")
 	}
-	if !a.mineCollapsed || !a.savedCollapsed {
+	if !a.shell.MineCollapsed || !a.shell.SavedCollapsed {
 		t.Error("the plus also toggled a playlist section")
 	}
 }

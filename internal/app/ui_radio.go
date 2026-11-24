@@ -53,7 +53,7 @@ func (a *app) startHeartMode() {
 func (a *app) fmPage(c *ui.Context) {
 	p := a.pal
 	top, bottom := a.insets(c)
-	ui.Scroll(c.Key("fm")).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pagePad, bottom+48, pagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
+	ui.Scroll(c.Key("fm")).TrackScroll(&a.shell.PageScroll).Grow(1).Padding(top+pageGap, pagePad, bottom+48, pagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		a.startMark(c)
 		defer a.endMark(c)
 		// The mode the FM plays in, if it plays, taken from the radio when the

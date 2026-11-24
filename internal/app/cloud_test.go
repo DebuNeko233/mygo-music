@@ -646,7 +646,7 @@ func TestCloudAutomaticallyLoadsPagesAndRetries(t *testing.T) {
 	results <- reply{page: &netease.CloudPage{Tracks: next, Count: 202, NextOffset: 200, HasMore: true}}
 	refreshPost(t, posts)
 	tt.Frame()
-	if len(a.cloud.Tracks) != 200 || !a.cloud.Loading() || a.pageScroll.Y != 0 {
+	if len(a.cloud.Tracks) != 200 || !a.cloud.Loading() || a.shell.PageScroll.Y != 0 {
 		t.Fatal("background loading failed to continue or moved the list")
 	}
 	if a.pl.Current().ID != 999 || len(a.pl.Queue()) != 1 {
@@ -811,7 +811,7 @@ func TestCloudLocateDiscardsPreviousSongTarget(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || len(calls) != 0 || a.pageScroll.Y != 0 || a.pl.Current().ID != 999 {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || len(calls) != 0 || a.shell.PageScroll.Y != 0 || a.pl.Current().ID != 999 {
 		t.Fatal("stale locate continued or moved the new song")
 	}
 }
@@ -850,7 +850,7 @@ func TestCloudLocateDoesNotScrollAnotherPage(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.nav.Current != (route{Page: pagePlaylist, ID: 7}) {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || a.shell.PageScroll.Y != 0 || a.nav.Current != (route{Page: pagePlaylist, ID: 7}) {
 		t.Fatal("old cloud locate affected the new page")
 	}
 }
@@ -887,7 +887,7 @@ func TestCloudLocateStaysCancelledAfterReturning(t *testing.T) {
 	unblock()
 	refreshPost(t, posts)
 	tt.Frame()
-	if a.cloud.Locate != 0 || a.cloud.Loading() || a.pageScroll.Y != 0 || a.nav.Current.Page != pageCloud {
+	if a.cloud.Locate != 0 || a.cloud.Loading() || a.shell.PageScroll.Y != 0 || a.nav.Current.Page != pageCloud {
 		t.Fatal("returning revived the old locate action")
 	}
 }

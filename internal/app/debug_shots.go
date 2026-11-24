@@ -209,7 +209,7 @@ func init() {
 				step(0, func() { a.open(route{Page: pageUser, ID: a.account.Profile.UserID}) })
 				time.Sleep(4 * time.Second)
 				shot("p-profile", a.win)
-				step(0, func() { a.pageScroll.ScrollTo(0, 100000, ui.Smooth) })
+				step(0, func() { a.shell.PageScroll.ScrollTo(0, 100000, ui.Smooth) })
 				time.Sleep(2 * time.Second)
 				shot("p-follows", a.win)
 				mygo.RunOnMain(mygo.App.Quit)

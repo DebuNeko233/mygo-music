@@ -17,7 +17,7 @@ import (
 func (a *app) searchField(c *ui.Context) {
 	p := a.pal
 	field := ui.Row(c).Height(32).PaddingX(10).Gap(7).Radius(9).AlignItems(ui.Center).Margin(0, 0, 14, 0)
-	if c.Focused(a.searchBox) {
+	if c.Focused(a.shell.SearchBox) {
 		field.Background(p.Background).Shadow(0, 0, 0, 3, p.Accent.Alpha(0.25)).Border(1, p.Accent.Alpha(0.6))
 	} else {
 		field.Background(p.Hover).Border(1, p.Hairline)
@@ -25,7 +25,7 @@ func (a *app) searchField(c *ui.Context) {
 	field.Children(func() {
 		ui.Icon(c, components.IconSearch).Size(14, 14).TextColor(p.Muted)
 		cb := ui.ComboboxBase(c.Key("search"), &a.searches.Query)
-		in := cb.Input.Bind(&a.searchBox).Grow(1).MinWidth(0).
+		in := cb.Input.Bind(&a.shell.SearchBox).Grow(1).MinWidth(0).
 			Placeholder("搜索/链接").FontSize(13).Label("搜索")
 		if a.searches.Query != "" {
 			clear := ui.ButtonBase(c.Key("clear-query")).Size(20, 20).Shrink(0).Margin(0, -4, 0, 0).
@@ -40,7 +40,7 @@ func (a *app) searchField(c *ui.Context) {
 				a.searches.Query = ""
 				a.dismissSuggestions()
 				cb.SetOpen(false)
-				a.searchBox.Focus(c)
+				a.shell.SearchBox.Focus(c)
 			}
 		}
 		q := strings.TrimSpace(a.searches.Query)

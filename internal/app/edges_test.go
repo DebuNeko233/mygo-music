@@ -21,20 +21,20 @@ func TestScrollEdgesFollowContent(t *testing.T) {
 	}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
-	if a.underTop {
+	if a.shell.UnderTop {
 		t.Error("top edge shows before scrolling")
 	}
-	if !a.underBottom {
+	if !a.shell.UnderBottom {
 		t.Error("no bottom edge over a long page")
 	}
 	tt.Scroll(800, 400, 0, 100000)
 	tt.Advance(time.Second)
 	tt.Frame()
 	tt.Frame()
-	if !a.underTop {
+	if !a.shell.UnderTop {
 		t.Error("no top edge after scrolling")
 	}
-	if a.underBottom {
+	if a.shell.UnderBottom {
 		t.Error("bottom edge shows at the end of the page")
 	}
 }

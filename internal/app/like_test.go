@@ -110,7 +110,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			a.trackList.ScrollTo(song, ui.Center)
 			tt.Frame()
 			first, _ := a.trackList.Visible()
-			y := a.pageScroll.Y
+			y := a.shell.PageScroll.Y
 			if err := tt.Click("取消喜欢 歌曲 050"); err != nil {
 				t.Fatal(err)
 			}
@@ -127,7 +127,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			reply <- err
 			refreshPost(t, posts)
 			tt.Frame()
-			if top, _ := a.trackList.Visible(); top != first || a.pageScroll.Y != y {
+			if top, _ := a.trackList.Visible(); top != first || a.shell.PageScroll.Y != y {
 				t.Fatal("unlike moved the list")
 			}
 			if a.library.Playlists[pid] == nil || a.library.Loading[pid] {
@@ -156,7 +156,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 			detailReply <- &remote
 			refreshPost(t, posts)
 			tt.Frame()
-			if a.library.Playlists[pid].PlayCount != 1 || a.pageScroll.Y != y {
+			if a.library.Playlists[pid].PlayCount != 1 || a.shell.PageScroll.Y != y {
 				t.Fatal("the background refresh did not apply in place")
 			}
 			req := a.cacheRequest("playlist/5")

@@ -8,11 +8,13 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/desktop/components"
+	homeview "netease-music-mygo/internal/desktop/home"
+	"netease-music-mygo/internal/desktop/shell"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
 
-const pagePad = 40
+const pagePad = shell.PagePad
 
 const trackPagePad = pagePad - 12
 
@@ -21,114 +23,28 @@ func trackPageWidth(c *ui.Context) float32 {
 	return w - sidebarWidth - 1 - 2*trackPagePad // the content's left border also takes one DIP
 }
 
-// columns returns how many cards of at least min DIPs fit across the page.
-func (a *app) columns(c *ui.Context, min float32) int {
-	w, _ := c.Size()
-	inner := w - sidebarWidth - 2*pagePad
-	return max(2, int((inner+20)/(min+20)))
-}
-
-func (a *app) heading(c *ui.Context, title, sub string) {
-	ui.Column(c).Gap(4).Margin(0, 0, 18, 0).Children(func() {
-		if sub != "" {
-			ui.Text(c, sub).FontSize(12).FontWeight(600).TextColor(a.pal.Muted).LetterSpacing(0.4)
-		}
-		ui.Text(c, title).FontSize(30).FontWeight(700).LetterSpacing(-0.6)
-	})
-}
-
-func (a *app) section(c *ui.Context, title string) ui.Element {
-	return ui.Text(c, title).FontSize(19).FontWeight(700).LetterSpacing(-0.3).Margin(34, 0, 14, 0)
-}
-
-func (a *app) homePage(c *ui.Context) {
-	loading := len(a.home.Featured) == 0 && len(a.home.Charts) == 0
-	if loading && (!a.home.Loading || a.home.Error != "") {
-		a.centered(c, a.home.Error, a.loadHome)
-		return
+func (a *app) columns(c *ui.Context, min float32) int         { return shell.Columns(c, min) }
+func (a *app) heading(c *ui.Context, title, sub string)       { components.Heading(c, a.pal, title, sub) }
+func (a *app) section(c *ui.Context, title string) ui.Element { return components.Section(c, title) }
+func (a *app) showHome(c *ui.Context, charts bool) {
+	v := homeview.View{Model: &a.home, Palette: a.pal, Offline: a.network.offline,
+		Retry: a.loadHome, DailyCard: a.dailyCard, PlaylistCard: a.playlistCard, ChartCard: a.chartCard,
+		HomeSkeleton:      func(c *ui.Context) { a.homeSkeleton(c, a.pageShimmer(c)) },
+		ChartsSkeleton:    func(c *ui.Context) { a.chartCardsSkeleton(c, a.pageShimmer(c)) },
+		PlaylistsSkeleton: func(c *ui.Context) { a.playlistCardsSkeleton(c, a.pageShimmer(c), shell.Columns(c, 150)*2, 150, true) },
 	}
-	now := c.Now()
-	top, bottom := a.insets(c)
-	ui.Scroll(c.Key("home")).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pagePad, bottom+48, pagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
-		a.startMark(c)
-		defer a.endMark(c)
-		hello := components.Greeting(now)
-		if a.account.Profile != nil {
-			hello += "，" + a.account.Profile.Nickname
-		}
-		a.heading(c, hello, fmt.Sprintf("%d月%d日 %s", now.Month(), now.Day(), weekday(now)))
-		if loading {
-			a.homeSkeleton(c, a.pageShimmer(c))
-			return
-		}
-		a.dailyCard(c, now)
-
-		if len(a.home.Recommended) > 0 {
-			a.section(c, "今日为你推荐")
-			ui.Grid(c).Columns(a.columns(c, 168)).GapX(20).GapY(28).Children(func() {
-				for i := range a.home.Recommended[:min(len(a.home.Recommended), a.columns(c, 168)*2)] {
-					a.playlistCard(c.Key(a.home.Recommended[i].ID), &a.home.Recommended[i])
-				}
-			})
-		}
-
-		a.section(c, "官方榜单")
-		a.officialChartGrid(c)
-
-		a.section(c, "推荐歌单")
-		ui.Grid(c).Columns(a.columns(c, 168)).GapX(20).GapY(28).Children(func() {
-			for i := range a.home.Featured {
-				a.playlistCard(c.Key(a.home.Featured[i].ID), &a.home.Featured[i])
-			}
-		})
-	})
-}
-
-// officialChartGrid shows the leading charts on the home and charts pages.
-func (a *app) officialChartGrid(c *ui.Context) {
-	official := a.home.Charts[:min(4, len(a.home.Charts))]
-	cols := min(4, max(2, a.columns(c, 260)))
-	ui.Grid(c).Columns(cols).Gap(20).Children(func() {
-		for i := range official {
-			a.chartCard(c.Key(official[i].ID), &official[i])
-		}
-	})
-}
-
-func weekday(t time.Time) string {
-	return [...]string{"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"}[t.Weekday()]
-}
-
-func (a *app) chartsPage(c *ui.Context) {
-	loading := len(a.home.Charts) == 0
-	if loading && (!a.home.Loading || a.home.Error != "") {
-		a.centered(c, a.home.Error, a.loadHome)
-		return
+	if a.account.Profile != nil {
+		v.Nickname = a.account.Profile.Nickname
 	}
-	top, bottom := a.insets(c)
-	ui.Scroll(c.Key("charts")).TrackScroll(&a.pageScroll).Grow(1).Padding(top+pageGap, pagePad, bottom+48, pagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
-		a.startMark(c)
-		defer a.endMark(c)
-		a.heading(c, "排行榜", "每日更新")
-		if loading {
-			s := a.pageShimmer(c)
-			a.chartCardsSkeleton(c, s)
-			a.section(c, "全部榜单")
-			a.playlistCardsSkeleton(c, s, a.columns(c, 150)*2, 150, true)
-			return
-		}
-		a.officialChartGrid(c)
-		if len(a.home.Charts) > 4 {
-			a.section(c, "全部榜单")
-			rest := a.home.Charts[4:]
-			ui.Grid(c).Columns(a.columns(c, 150)).GapX(20).GapY(28).Children(func() {
-				for i := range rest {
-					a.playlistCard(c.Key(rest[i].ID), &rest[i])
-				}
-			})
-		}
-	})
+	if charts {
+		v.Charts(c, &a.shell)
+	} else {
+		v.Home(c, &a.shell)
+	}
 }
+func (a *app) homePage(c *ui.Context)   { a.showHome(c, false) }
+func (a *app) chartsPage(c *ui.Context) { a.showHome(c, true) }
+func weekday(t time.Time) string        { return homeview.Weekday(t) }
 
 // playlistCard is a square cover with the playlist's name below: it lifts
 // under the pointer, where a play button shows on it.
@@ -368,7 +284,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 	top, bottom := a.insets(c)
 	// Rows out of view are not built, their marks with them: a list
 	// scrolled away from its start or end has content under the bars.
-	a.underTop, a.underBottom = true, true
+	a.shell.UnderTop, a.shell.UnderBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
 	list := ui.List(c.Key(a.nav.Current), &a.trackList, rows)
 	if pid != 0 || a.nav.Current.Page == pageCloud || a.nav.Current.Page == pageLocal {
@@ -492,7 +408,7 @@ func (a *app) trackRowsMeta(c *ui.Context, tracks []netease.Track, covers bool, 
 		}
 	}).Grow(1).Padding(top+pageGap, trackPagePad, bottom+32, trackPagePad).ScrollbarInsets(top, 0, bottom, 0)
 	if a.nav.Current.Page == pagePlaylist || a.nav.Current.Page == pageCloud || a.nav.Current.Page == pageLocal {
-		list.TrackScroll(&a.pageScroll)
+		list.TrackScroll(&a.shell.PageScroll)
 	}
 	return playingVisible
 }

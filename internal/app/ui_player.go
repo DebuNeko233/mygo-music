@@ -407,7 +407,7 @@ func (a *app) playerBar(c *ui.Context) {
 	// it, with a hairline along the top.
 	edge := ui.Box(c.Key("bottom-edge")).Absolute().Left(0).Right(0).Bottom(0).Height(playerBarHeight).
 		Material(glass.ScrollEdge{Hard: true, Bottom: true, Background: p.Background})
-	edge.Opacity(edgeShown(edge, a.underBottom))
+	edge.Opacity(edgeShown(edge, a.shell.UnderBottom))
 	// The controls keep the middle, between sides that share what is left:
 	// narrower, the middle gives up to 140 DIPs, and what plays keeps room
 	// for its cover, some of its title and its heart.
