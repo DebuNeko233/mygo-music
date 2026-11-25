@@ -545,9 +545,7 @@ func (d *deskLyrics) view(c *ui.Context) {
 			// Windows handles resize natively via WS_THICKFRAME; no manual
 			// edge tracking needed. Unlocked, anything of the window drags it:
 			// the lines take no pointer themselves, so the window does.
-			if !dragLyrics(c.Root(), d.win) {
-				c.Root().DragWindow()
-			}
+			c.Root().DragWindow()
 			ui.Row(c).Absolute().Top(8).WidthPercent(100).Justify(ui.Center).Gap(10).Children(func() { d.controls(c) })
 		}
 	}
