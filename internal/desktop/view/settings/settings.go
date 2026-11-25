@@ -537,6 +537,10 @@ func (a *View) sections(c *ui.Context, p components.Palette) []settingsSection {
 	}
 
 	add("sidebar", "侧边栏", components.IconHome, func(row Row, block Block) {
+		block("选择在侧边栏显示的页面", func() {
+			ui.Text(c, "选择在侧边栏显示的页面").Padding(12, 16).
+				FontSize(12.5).TextColor(p.Muted).LineHeight(1.4).Wrap()
+		})
 		a.sidebarSettings(c, row)
 	})
 

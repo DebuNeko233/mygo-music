@@ -20,7 +20,7 @@ func (a *View) sidebarSettings(c *ui.Context, row Row) {
 		{"local", "本地歌曲", &hidden.Local},
 		{"cloud", "音乐网盘", &hidden.Cloud},
 	} {
-		row(item.label, "在侧边栏显示此入口", func() {
+		row(item.label, "", func() {
 			visible := !*item.hidden
 			// Commit the inverse binding after input; rebuilding a local bool
 			// before Changed is observed would otherwise discard the toggle.
