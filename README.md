@@ -2,7 +2,7 @@
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方音乐桌面客户端，原生界面，无 WebView。
 
-本项目由 [DebuNeko233/mygo-music](https://github.com/DebuNeko233/mygo-music) 独立维护，`main` 为正式开发主线。版本、更新和字幕库资源由本仓库发布，不再跟随原项目自动同步。业务音源限定为网易云音乐，另支持本地音频。
+本项目由 [DebuNeko233/mygo-music](https://github.com/DebuNeko233/mygo-music) 独立维护，`main` 为正式开发主线。版本、更新和字幕库资源由本仓库发布，不再跟随原项目自动同步。业务音源限定为单一音源，另支持本地音频。
 
 ## 安装
 
