@@ -22,6 +22,7 @@ type loginState struct {
 	scanner  string
 	avatar   string
 	err      string
+	keyring  bool // the save failed because the system has no keyring at all
 	finished bool
 }
 
@@ -60,8 +61,12 @@ func (a *app) saveLogin(onSaved func()) {
 			if dialog {
 				a.login.finished = false
 				a.login.err = message
+				a.login.keyring = netease.IsNoKeyring(err)
 			} else if homeGen == a.homeGen {
 				a.toast = message
+				if netease.IsNoKeyring(err) {
+					a.toast += "；系统未启用钥匙串，请查看登录窗口中的设置帮助"
+				}
 			}
 		})
 	}()
@@ -399,6 +404,27 @@ func (a *app) loginDialog(c *ui.Context) {
 			})
 		})
 		ui.Text(c, "登录后，每日推荐与歌单将根据你的口味生成").FontSize(11.5).TextColor(p.faint).Margin(16, 0, 0, 0)
+		if l.keyring {
+			ui.Column(c).Width(284).Padding(14, 14, 12, 14).Gap(8).Margin(12, 0, 0, 0).
+				Radius(12).Background(p.hover).Border(1, p.hairline).Children(func() {
+				ui.Text(c, "需要启用系统钥匙串").FontSize(13).FontWeight(600).TextColor(p.warn)
+				ui.Text(c, "系统没有可用的凭据存储服务，应用无法保存登录状态。安装并启用 GNOME Keyring、KWallet 或 KeePassXC 后，重新登录即可长期保持登录。").
+					FontSize(12).TextColor(p.text)
+				ui.Text(c, "Linux 桌面通常自带其中一种；复制帮助可查看安装、启用和验证步骤。").FontSize(11.5).TextColor(p.muted)
+				ui.Row(c).Gap(8).Children(func() {
+					if pillButton(c.Key("copy-keyring-help"), iconCopy, "复制设置帮助", p.accent, p.onAccent).Clicked() {
+						if copyText(netease.KeyringHelp) == nil {
+							a.toast = "钥匙串设置帮助已复制"
+						} else {
+							a.toast = "复制失败，请重试"
+						}
+					}
+					if pillButton(c.Key("retry-login"), iconRepeat, "重试登录", p.press, p.text).Clicked() {
+						a.openLogin()
+					}
+				})
+			})
+		}
 	})
 }
 

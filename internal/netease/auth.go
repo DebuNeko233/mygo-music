@@ -3,6 +3,7 @@ package netease
 import (
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -18,6 +19,13 @@ import (
 	"github.com/egoist/mygo"
 )
 
+// KeyringHelp explains, in Markdown, how to install and enable a Secret
+// Service keyring on each desktop so that the session persists across
+// restarts. The login dialog offers to copy it when there is no store.
+//
+//go:embed keyring_help.md
+var KeyringHelp string
+
 // The listener's session is NetEase's login cookie, MUSIC_U, which every
 // request carries once signed in. The app keeps it in the system's
 // keychain. Development builds keep it in a private file instead: each
@@ -25,6 +33,19 @@ import (
 // them read it.
 
 const sessionSecret = "netease-session"
+
+// ErrNoKeyring wraps a session save failure when the system has no
+// credential store at all, rather than a store that refused one write.
+// On Linux that means no Secret Service: no keyring daemon such as
+// GNOME Keyring, KWallet or KeePassXC answers org.freedesktop.secrets.
+// The login keeps working for this run; the listener just has to sign
+// in again after a restart until a keyring is installed and running.
+var ErrNoKeyring = errors.New("no credential store")
+
+func IsNoKeyring(err error) bool {
+	return errors.Is(err, ErrNoKeyring) ||
+		(errors.Is(err, errors.ErrUnsupported) && !errors.Is(err, mygo.ErrSecretNotFound))
+}
 
 // A pending save must finish before sign-out removes its credentials.
 var sessionMu sync.Mutex
@@ -116,7 +137,13 @@ func SaveSession() error {
 	if len(parts) == 0 {
 		return errors.New("no session cookie")
 	}
-	return writeSession([]byte(strings.Join(parts, "; ")))
+	if err := writeSession([]byte(strings.Join(parts, "; "))); err != nil {
+		if IsNoKeyring(err) {
+			return fmt.Errorf("netease: save session: %w: %v", ErrNoKeyring, err)
+		}
+		return err
+	}
+	return nil
 }
 
 // ClearSession forgets the session, here and in the keychain.

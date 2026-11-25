@@ -84,6 +84,34 @@ func TestLoginSaveFailureStaysVisible(t *testing.T) {
 	}
 }
 
+// A missing system keyring explains how to make the next login persistent.
+func TestLoginWithoutKeyringOffersSetupHelp(t *testing.T) {
+	save, copy := saveLoginSession, copyText
+	t.Cleanup(func() { saveLoginSession, copyText = save, copy })
+	saveLoginSession = func() error { return netease.ErrNoKeyring }
+	copied := ""
+	copyText = func(text string) error { copied = text; return nil }
+	a := newTestApp()
+	posts := testPosts(a)
+	a.login = loginState{open: true, gen: 1, finished: true}
+	a.saveLogin(func() { a.login.open = false })
+	wait(t, posts, "the session save without a keyring")()
+	if !a.login.keyring || a.login.finished || !a.login.open {
+		t.Fatalf("missing keyring did not produce setup guidance: %+v", a.login)
+	}
+	tt := ui.NewTester(a.loginDialog, 800, 760)
+	tt.Frame()
+	if err := tt.Click("复制设置帮助"); err != nil {
+		t.Fatal(err)
+	}
+	if copied != netease.KeyringHelp || copied == "" {
+		t.Fatal("the setup button did not copy the keyring instructions")
+	}
+	if a.toast != "钥匙串设置帮助已复制" {
+		t.Fatalf("copying the instructions gave no confirmation: %q", a.toast)
+	}
+}
+
 // A failed save for the current account is visible without a QR dialog.
 func TestLoginSaveFailureWithoutDialogShowsToast(t *testing.T) {
 	save := saveLoginSession
