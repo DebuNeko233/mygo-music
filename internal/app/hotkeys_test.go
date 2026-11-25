@@ -23,7 +23,7 @@ func TestTheKeysTheSettingsKeepRunTheActions(t *testing.T) {
 	if a.playbackState.Volume != 0.55 {
 		t.Fatalf("CmdOrCtrl+Shift+Up made the volume %v, want 0.55", a.playbackState.Volume)
 	}
-	a.setBinding(kindInApp, "volumeUp", "CmdOrCtrl+Alt+Up")
+	a.setBinding(shortcuts.InApp, "volumeUp", "CmdOrCtrl+Alt+Up")
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyUp)
 	tt.Frame()
@@ -43,14 +43,14 @@ func TestTheKeysTheSettingsKeepRunTheActions(t *testing.T) {
 func TestRecordingABindingTakesTheKeyPressed(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	press := func(kind keyKind, name string, mods ui.Modifiers, key ui.Key) {
+	press := func(kind string, name string, mods ui.Modifiers, key ui.Key) {
 		t.Helper()
 		a.views.settings.RecordKey(string(kind), name, ui.InputEvent{Kind: ui.InputKeyDown, Key: key, Mods: mods})
 	}
 
 	a.Recording = "inApp/next"
-	press(kindInApp, "next", ui.Cmd, ui.KeyJ)
-	if got := a.binding(kindInApp, "next"); got != "CmdOrCtrl+j" {
+	press(shortcuts.InApp, "next", ui.Cmd, ui.KeyJ)
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.InApp, "next"); got != "CmdOrCtrl+j" {
 		t.Fatalf("next took %q, want CmdOrCtrl+j", got)
 	}
 	if a.Recording != "" {
@@ -59,28 +59,28 @@ func TestRecordingABindingTakesTheKeyPressed(t *testing.T) {
 
 	// Prev has CmdOrCtrl+Shift+Left, and Cmd+J is next's now.
 	a.Recording = "inApp/prev"
-	press(kindInApp, "prev", ui.Cmd, ui.KeyJ)
-	if got := a.binding(kindInApp, "prev"); got != "CmdOrCtrl+Shift+Left" {
+	press(shortcuts.InApp, "prev", ui.Cmd, ui.KeyJ)
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.InApp, "prev"); got != "CmdOrCtrl+Shift+Left" {
 		t.Errorf("prev took a key next has: %q", got)
 	}
 	if a.RecordingNote == "" {
 		t.Errorf("nothing said why the key was refused")
 	}
 
-	press(kindInApp, "prev", 0, ui.KeyBackspace)
-	if got := a.binding(kindInApp, "prev"); got != "" {
+	press(shortcuts.InApp, "prev", 0, ui.KeyBackspace)
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.InApp, "prev"); got != "" {
 		t.Errorf("Backspace left prev with %q", got)
 	}
 
 	// A global key needs a modifier: a bare letter would take that letter
 	// from every other app.
 	a.Recording = "global/next"
-	press(kindGlobal, "next", 0, ui.KeyJ)
-	if got := a.binding(kindGlobal, "next"); got != "MediaNextTrack" {
+	press(shortcuts.Global, "next", 0, ui.KeyJ)
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.Global, "next"); got != "MediaNextTrack" {
 		t.Errorf("a bare letter became a global key: %q", got)
 	}
-	press(kindGlobal, "next", ui.Cmd|ui.Alt, ui.KeyJ)
-	if got := a.binding(kindGlobal, "next"); got != "CmdOrCtrl+Alt+j" {
+	press(shortcuts.Global, "next", ui.Cmd|ui.Alt, ui.KeyJ)
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.Global, "next"); got != "CmdOrCtrl+Alt+j" {
 		t.Errorf("next took %q as its global key, want CmdOrCtrl+Alt+j", got)
 	}
 }
@@ -100,16 +100,16 @@ func TestGlobalKeysAreClaimedAndGivenBack(t *testing.T) {
 	}()
 
 	a.registerGlobals()
-	for _, h := range hotkeys {
-		if !state.holds(h.global) {
-			t.Errorf("%s did not claim %s", h.label, h.global)
+	for _, h := range shortcuts.Actions() {
+		if !state.holds(h.Global) {
+			t.Errorf("%s did not claim %s", h.Label, h.Global)
 		}
 	}
 
 	// An action that loses its key gives the system's back, and keeps it no
 	// longer.
 	state.held, state.released = nil, nil
-	a.setBinding(kindGlobal, "next", "")
+	a.setBinding(shortcuts.Global, "next", "")
 	a.registerGlobals()
 	if state.holds("MediaNextTrack") {
 		t.Errorf("next kept MediaNextTrack after losing it")
@@ -117,8 +117,8 @@ func TestGlobalKeysAreClaimedAndGivenBack(t *testing.T) {
 	if !contains(state.released, "MediaNextTrack") {
 		t.Errorf("next did not give MediaNextTrack back: %v", state.released)
 	}
-	if len(state.held) != len(hotkeys)-1 {
-		t.Errorf("claimed %d keys, want %d: %v", len(state.held), len(hotkeys)-1, state.held)
+	if len(state.held) != len(shortcuts.Actions())-1 {
+		t.Errorf("claimed %d keys, want %d: %v", len(state.held), len(shortcuts.Actions())-1, state.held)
 	}
 
 	// A key another app holds is not claimed, and the settings say so.
@@ -165,39 +165,6 @@ func (s *keySystem) holds(acc string) bool {
 	return contains(s.held, acc)
 }
 
-// The keys the settings hold as empty, or as something the set cannot take,
-// give way to the action's own.
-func TestTheShortcutSettingsFillInTheDefaults(t *testing.T) {
-	filled := fillShortcutKeys(shortcutKeys{})
-	if len(filled.InApp) != len(hotkeys) || len(filled.Global) != len(hotkeys) {
-		t.Fatalf("filled %d in-app and %d global keys, want %d each",
-			len(filled.InApp), len(filled.Global), len(hotkeys))
-	}
-	next := hotkey{}
-	for _, h := range hotkeys {
-		if h.name == "next" {
-			next = h
-		}
-	}
-
-	kept := fillShortcutKeys(shortcutKeys{
-		InApp:  map[string]string{"playPause": "", "next": "Bogus+Q"},
-		Global: map[string]string{"next": "J", "prev": ""},
-	})
-	if kept.InApp["playPause"] != "" {
-		t.Errorf("a key the listener took away came back as %q", kept.InApp["playPause"])
-	}
-	if kept.InApp["next"] != next.inApp {
-		t.Errorf("a key the app cannot take was kept: %q", kept.InApp["next"])
-	}
-	if kept.Global["next"] != next.global {
-		t.Errorf("a global key without a modifier was kept: %q", kept.Global["next"])
-	}
-	if kept.Global["prev"] != "" {
-		t.Errorf("a global key the listener took away came back as %q", kept.Global["prev"])
-	}
-}
-
 // contains reports whether a holds s.
 func contains(a []string, s string) bool {
 	for _, v := range a {
@@ -230,7 +197,7 @@ func TestTheSettingsRecordAShortcut(t *testing.T) {
 	}
 	tt.Key(ui.Cmd|ui.Alt, ui.KeyK)
 	tt.Frame()
-	if got := a.binding(kindInApp, "playPause"); got != "CmdOrCtrl+Alt+k" {
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.InApp, "playPause"); got != "CmdOrCtrl+Alt+k" {
 		t.Fatalf("play/pause took %q, want CmdOrCtrl+Alt+k", got)
 	}
 	if !tt.HasText(shortcuts.Label("CmdOrCtrl+Alt+k")) {
@@ -248,20 +215,20 @@ func TestTheDefaultKeyComesBack(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.preferences.Section = "keys"
-	a.setBinding(kindInApp, "volumeUp", "CmdOrCtrl+Alt+Up")
+	a.setBinding(shortcuts.InApp, "volumeUp", "CmdOrCtrl+Alt+Up")
 	tt := ui.NewTester(a.views.settings.Build, 780, 640)
 	tt.Frame()
-	if !a.changedBinding(kindInApp, "volumeUp") {
+	if !shortcuts.Changed(a.settings.Shortcuts, shortcuts.InApp, "volumeUp") {
 		t.Errorf("the settings do not know the key was changed")
 	}
 	if err := tt.Click("恢复默认"); err != nil {
 		t.Fatalf("clicking the button giving the default back: %v", err)
 	}
 	tt.Frame()
-	if got := a.binding(kindInApp, "volumeUp"); got != "CmdOrCtrl+Shift+Up" {
+	if got := shortcuts.Binding(a.settings.Shortcuts, shortcuts.InApp, "volumeUp"); got != "CmdOrCtrl+Shift+Up" {
 		t.Fatalf("volumeUp has %q after the default came back, want CmdOrCtrl+Shift+Up", got)
 	}
-	if a.changedBinding(kindInApp, "volumeUp") {
+	if shortcuts.Changed(a.settings.Shortcuts, shortcuts.InApp, "volumeUp") {
 		t.Errorf("the settings still think the key was changed")
 	}
 	if err := tt.Click("恢复默认"); err == nil {

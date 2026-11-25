@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
@@ -23,7 +25,7 @@ func (a *app) openLocalLyricMatch() {
 		return
 	}
 	a.views.local.LyricScroll = ui.ScrollState{}
-	a.local.OpenLyricMatch(track, trackQuery(track), a.localLyricsServices())
+	a.local.OpenLyricMatch(track, strings.TrimSpace(track.Name+" "+track.ArtistNames()), a.localLyricsServices())
 }
 
 func (a *app) findLocalLyricMatches(d *localvm.LocalLyricMatch) {

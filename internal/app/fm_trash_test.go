@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
 // Rejecting an FM song skips it immediately and reports a failed preference save only to its account.
@@ -23,7 +24,7 @@ func TestFMTrashFailureFeedback(t *testing.T) {
 			a.settings = defaultSettings()
 			a.pl.Cue([]netease.Track{{ID: 42, Name: "FM song"}})
 			fed := 0
-			a.pl.AttachRadio(fmRadio(netease.FMDefault), func(func([]netease.Track)) { fed++ })
+			a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(func([]netease.Track)) { fed++ })
 			old := fmTrash
 			t.Cleanup(func() { fmTrash = old })
 			requested := make(chan int64, 1)
@@ -59,7 +60,7 @@ func TestFMTrashSuccess(t *testing.T) {
 	posts := testPosts(a)
 	a.pl.Cue([]netease.Track{{ID: 42}})
 	fed := 0
-	a.pl.AttachRadio(fmRadio(netease.FMDefault), func(func([]netease.Track)) { fed++ })
+	a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(func([]netease.Track)) { fed++ })
 	old := fmTrash
 	t.Cleanup(func() { fmTrash = old })
 	done := make(chan int64, 1)

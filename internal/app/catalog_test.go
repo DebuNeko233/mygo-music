@@ -471,29 +471,6 @@ func TestPodcastCard(t *testing.T) {
 	}
 }
 
-// A page of popular podcasts lists only those not listed yet, and the next
-// starts past all of it. NetEase's pages overlap: the tab listed podcasts
-// twice, two cards under one key sharing their state.
-func TestHotPodcastsOverlap(t *testing.T) {
-	pods := func(ids ...int64) []netease.Podcast {
-		var out []netease.Podcast
-		for _, id := range ids {
-			out = append(out, netease.Podcast{ID: id})
-		}
-		return out
-	}
-	var tab podcastvm.PodcastHome
-	tab.AddHot(pods(1, 2, 3))
-	tab.AddHot(pods(4, 2, 5))
-	var ids []int64
-	for _, p := range tab.Hot {
-		ids = append(ids, p.ID)
-	}
-	if !slices.Equal(ids, []int64{1, 2, 3, 4, 5}) || tab.HotAt != 6 {
-		t.Fatalf("listed %v, next from %d", ids, tab.HotAt)
-	}
-}
-
 // A song row's album opens its page, not playing the song as the row's
 // click would.
 func TestAlbumLinkInRow(t *testing.T) {

@@ -108,8 +108,8 @@ func TestNetworkRefreshIcon(t *testing.T) {
 	accountAsk = func() (*netease.Profile, error) { calls.Add(1); return &netease.Profile{UserID: 7}, nil }
 	saveLoginSession = func() error { return nil }
 	loginIdentity = func() string { return "" }
-	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.listsNow(), a.listsNow()
-	a.playlistRequest(9).At = a.listsNow()
+	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.library.Now(), a.library.Now()
+	a.playlistRequest(9).At = a.library.Now()
 	tt := ui.NewTester(a.view, 1100, 800)
 	tt.Frame()
 	if err := tt.Click("刷新内容"); err != nil {

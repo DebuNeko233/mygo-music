@@ -331,20 +331,3 @@ func TestDeskLyricsAlignInstrumentalNotice(t *testing.T) {
 		}
 	}
 }
-
-// A font setting uses the selected system family, or the default family
-// when no family is selected.
-func TestTheFamiliesAFontSettingStandsFor(t *testing.T) {
-	if got := playbackview.LyricFamily(playbackview.LyricFontSystem); got != "" {
-		t.Errorf("the system's own stands for %q", got)
-	}
-	if got := playbackview.LyricFamily(""); got != "" {
-		t.Errorf("no choice stands for %q", got)
-	}
-	names := playbackview.LyricFontNames()
-	if len(names) > 1 {
-		if got := playbackview.LyricFamily(names[1]); got != names[1] {
-			t.Errorf("the system's font %q stands for %q", names[1], got)
-		}
-	}
-}

@@ -145,7 +145,7 @@ func TestDescriptionMoreInPodcastGrid(t *testing.T) {
 	a.account.Profile = &netease.Profile{UserID: 1}
 	a.nav.Current, a.recent.Selected = route{Page: pageRecent}, recentvm.RecentPodcasts
 	for i := range a.recent.Tabs {
-		a.recent.Tabs[i].At = a.listsNow()
+		a.recent.Tabs[i].At = a.library.Now()
 	}
 	a.recent.Tabs[recentvm.RecentPodcasts].Shown = true
 	desc := strings.Repeat("播客介绍", 12)

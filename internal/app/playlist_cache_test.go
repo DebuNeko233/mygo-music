@@ -19,12 +19,12 @@ func TestPlaylistCacheWaitsForPendingOfflineSnapshot(t *testing.T) {
 		t.Cleanup(a.browseCache.Close)
 		snapshot := netease.Playlist{ID: 1, Name: "Newest"}
 		req := a.cacheRequest("playlist/1")
-		req.Store.Put(req.Scope, req.Key, cacheBytes(netease.Playlist{ID: 1, Name: "Older"}), req.Epoch)
+		req.Store.Put(req.Scope, req.Key, diskcache.Encode(netease.Playlist{ID: 1, Name: "Older"}), req.Epoch)
 		unblock := make(chan struct{})
 		defer close(unblock)
 		a.savePlaylistSnapshot(req, func() []byte {
 			<-unblock
-			return cacheBytes(snapshot)
+			return diskcache.Encode(snapshot)
 		})
 		for id := int64(1); id <= 3; id++ {
 			a.library.Playlists[id] = &netease.Playlist{ID: id, Tracks: make([]netease.Track, 8000)}

@@ -53,12 +53,9 @@ type View struct {
 	ImagesUsed  *int64
 
 	AppIcons          []Choice
-	Qualities         []Choice
 	Hotkeys           []Choice
 	Accents           []Choice
 	LyricColors       []Choice
-	NameFormats       []Choice
-	CacheLimits       []CacheLimit
 	PictureExtensions []string
 	SystemFontLabel   string
 
@@ -105,10 +102,8 @@ type View struct {
 	ClearCache                func()
 	ClearBrowseCache          func()
 	ClearImageCache           func()
-	CacheUsage                func() string
 	CacheDirectoryDescription func() string
 	DownloadDirectory         func() string
-	CacheMoveLabel            func() string
 	ConfirmCacheDirectory     func(string)
 	SubmitCacheDirectory      func(bool)
 	CancelCacheChange         func()
@@ -769,16 +764,16 @@ func (a *View) sections(c *ui.Context, p components.Palette) []settingsSection {
 			})
 		}
 		row("歌曲缓存大小", "设置歌曲缓存的空间上限", func() {
-			labels := make([]string, len(a.CacheLimits))
-			chosen := a.CacheLimits[2].Label
-			for i, l := range a.CacheLimits {
+			labels := make([]string, len(cacheLimits))
+			chosen := cacheLimits[2].Label
+			for i, l := range cacheLimits {
 				labels[i] = l.Label
 				if l.MB == s.CacheMB {
 					chosen = l.Label
 				}
 			}
 			if ui.Select(c.Key("cache"), &chosen, labels).Label("歌曲缓存大小").Width(150).Disabled(a.Cache.Moving).Changed() {
-				for _, l := range a.CacheLimits {
+				for _, l := range cacheLimits {
 					if l.Label == chosen {
 						s.CacheMB = l.MB
 					}
@@ -787,7 +782,7 @@ func (a *View) sections(c *ui.Context, p components.Palette) []settingsSection {
 				a.ApplyCacheLimit()
 			}
 		})
-		row("歌曲缓存", "听过的歌曲可离线播放；"+a.CacheUsage(), func() {
+		row("歌曲缓存", "听过的歌曲可离线播放；"+a.cacheUsage(), func() {
 			if ui.Button(c.Key("clear-cache"), "清除歌曲缓存").Disabled(a.Cache.Used <= 0 || a.Cache.Moving).Clicked() {
 				a.ClearCache()
 			}
@@ -900,9 +895,9 @@ func (a *View) sections(c *ui.Context, p components.Palette) []settingsSection {
 
 // Playback and downloads share choices while persisting separate preferences.
 func (a *View) qualitySelect(c *ui.Context, level *string, label string) bool {
-	labels := make([]string, len(a.Qualities))
-	chosen := a.Qualities[2].Label
-	for i, q := range a.Qualities {
+	labels := make([]string, len(qualities))
+	chosen := qualities[2].Label
+	for i, q := range qualities {
 		labels[i] = q.Label
 		if q.Value == *level {
 			chosen = q.Label
@@ -911,7 +906,7 @@ func (a *View) qualitySelect(c *ui.Context, level *string, label string) bool {
 	if !ui.Select(c, &chosen, labels).Label(label).Width(150).Changed() {
 		return false
 	}
-	for _, q := range a.Qualities {
+	for _, q := range qualities {
 		if chosen == q.Label {
 			*level = q.Value
 			return true
@@ -933,4 +928,22 @@ func pictureList(paths []string) string {
 		return fmt.Sprintf("已选 %d 张：%s 等", len(names), strings.Join(names[:3], "、"))
 	}
 	return "已选：" + strings.Join(names, "、")
+}
+
+// qualityLevel is the stream level NetEase names a quality by.
+var qualities = []Choice{
+	{"standard", "标准（128k）"},
+	{"higher", "较高（192k）"},
+	{"exhigh", "极高（320k）"},
+	{"lossless", "无损（FLAC）"},
+	{"hires", "Hi-Res"},
+}
+
+// cacheLimits are the sizes the song cache may take, in megabytes.
+var cacheLimits = []CacheLimit{
+	{0, "关闭"},
+	{1024, "1 GB"},
+	{2048, "2 GB"},
+	{5120, "5 GB"},
+	{10240, "10 GB"},
 }

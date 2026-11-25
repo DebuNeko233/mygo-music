@@ -33,8 +33,6 @@ func (a *app) artistServices() artistvm.ArtistServices {
 	}
 }
 
-func (a *app) artist(id int64) *artistvm.ArtistPage { return a.artists.Page(id) }
-
 func (a *app) loadArtist(id int64) {
 	if !a.artists.NeedsLoad(id) {
 		a.artists.Pages.Get(id)
@@ -52,7 +50,7 @@ func (a *app) loadAlbums(id int64) { a.artists.LoadAlbums(id, a.artistServices()
 func (a *app) loadEvents(id int64) { a.artists.LoadEvents(id, a.artistServices()) }
 
 func (a *app) toggleFollow(id int64) {
-	d := a.artist(id)
+	d := a.artists.Page(id)
 	if d.Profile == nil || d.Following {
 		return
 	}
@@ -97,4 +95,25 @@ var (
 	userPlaylists      = netease.UserPlaylists
 	followedArtists    = netease.FollowedArtists
 	subscribedPodcasts = netease.SubscribedPodcasts
+)
+
+// openPage opens a page in the main window, from wherever a link to it
+// shows: over Now Playing, which closes, or the notch.
+func (a *app) openPage(r route) {
+	a.open(r)
+	a.showMain()
+	a.redraw()
+}
+
+// openArtist opens an artist's page in the main window.
+func (a *app) openArtist(id int64) { a.openPage(route{Page: pageArtist, ID: id}) }
+
+// These load an artist, their songs, albums and events from NetEase, and
+// follow them; tests replace them.
+var (
+	artistDetail      = netease.ArtistDetail
+	artistLatestSongs = netease.ArtistLatestSongs
+	albumsBy          = netease.ArtistAlbums
+	accountEvents     = netease.Events
+	followArtist      = netease.FollowArtist
 )

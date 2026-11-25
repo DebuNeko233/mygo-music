@@ -5,14 +5,6 @@ import (
 	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
-const heartRadio = radiovm.HeartRadio
-
-var fmModes = radiovm.FMModes
-
-func fmRadio(mode string) string { return radiovm.FMRadio(mode) }
-
-func radioLabel(name string) string { return radiovm.RadioLabel(name) }
-
 var personalFM = netease.PersonalFM
 
 var fmTrash = netease.FMTrash
@@ -32,7 +24,9 @@ func (a *app) radioFeed(name string) func(func([]netease.Track)) {
 	return a.radio.Feed(name, a.radioServices())
 }
 
-func (a *app) playFM() { a.radio.StartFM(fmRadio(fmModes[a.radio.Mode].Mode), a.radioServices()) }
+func (a *app) playFM() {
+	a.radio.StartFM(radiovm.FMRadio(radiovm.FMModes[a.radio.Mode].Mode), a.radioServices())
+}
 
 func (a *app) exitRadio() { a.radio.Exit(a.radioServices()) }
 

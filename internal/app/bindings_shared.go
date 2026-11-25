@@ -1,6 +1,8 @@
 package app
 
 import (
+	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	desktopview "netease-music-mygo/internal/desktop/view"
@@ -34,3 +36,5 @@ func (a *app) bindSharedViews() {
 	a.intro.Page = p
 	p.Image = func(url string, blur bool) components.Image { return viewImage(a.art.Get(url, blur)) }
 }
+
+var copyText = func(text string) error { return mygo.Clipboard.Write(transfer.TextData(text)) }

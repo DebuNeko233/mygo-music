@@ -5,7 +5,7 @@
 | 包 | 职责 |
 | --- | --- |
 | `internal/app` | 依赖接线、跨功能命令、账号生命周期、UI 线程分发和资源释放 |
-| `internal/desktop/artwork`、`shortcuts`、`lifetime` | 图片解码与缓存、快捷键解析、桌面订阅释放 |
+| `internal/desktop/artwork`、`shortcuts`、`lifetime` | 图片解码/缓存/封面匹配、快捷键定义与绑定规则、桌面订阅释放 |
 | `internal/sessionstore` | 播放队列快照、进度文件和后台写入 |
 | `internal/desktop/view` | 布局、控件、焦点、滚动、动画和图形状态 |
 | `internal/viewmodel/<feature>` | 功能数据、命令、加载、错误、重试和请求代次 |
@@ -61,3 +61,62 @@ App 中搜索协调集中在 `search.go`，播放入口和来源在 `play_comman
 `internal/testutil` 只保存跨包共用的拖拽、动画稳定和帧数统计工具，禁止生产代码导入。包内专用夹具留在原包，图片和音频样本放在所属包的 `testdata/`。
 
 修改接线或命令后，先运行相关行为测试，再运行 `CGO_ENABLED=0 go test ./...` 和 `go tool mygo vet .`。新 UI 测试按 `AGENTS.md` 连续运行五次；修改共享状态时运行 race 检查。涉及视觉或平台行为的变更还需对应的截图或原生验证。
+
+## App 文件归属清单
+
+本轮逐项检查生产文件，按职责迁出或合并，未新增包层级。App 由 63 个生产 Go 文件、5582 行整理为 55 个文件、5180 行（含注释和平台文件）。文件数量不是验收条件：涉及原生资源、账号生命周期或多个功能的协调应继续留在 App。下面覆盖当前全部生产文件；测试文件另按所测行为归属。
+
+| 文件（相对 `internal/app`） | 处理 | 留在 App 的职责与迁出边界 |
+| --- | --- | --- |
+| `app.go` | 保留 | 组合根状态：持有各功能模型、视图和应用资源；不承载功能算法。 |
+| `runtime.go` | 合并后保留 | 应用构造、原生事件注册、启动时文件/链接意图与会话恢复的协调；吸收 startup.go。 |
+| `shutdown.go` | 保留 | 停任务、关窗口、释放资源、完成持久化的应用退出顺序。 |
+| `dispatch.go` | 保留 | 向 UI 线程发布结果，以及退出时拒绝更新并释放资源。 |
+| `windows.go` | 合并后保留 | 主窗口和辅助播放器的创建、激活、关闭及同步；吸收 window_sync.go。 |
+| `settings_window.go` | 保留 | 设置窗口生命周期，将设置变动应用到主窗口、刘海和歌词窗口。 |
+| `view.go` | 保留 | 主窗口组合、路由分发、页面进入/离开时加载与清理；实际页面布局在视图包。 |
+| `view_state.go`、`view_bindings.go` | 保留 | App 所有的主/设置窗口状态与地址稳定的视图集合、接线入口。 |
+| `bindings_shared.go` | 合并后保留 | 公共页面、曲目列表、图片和点赞组件的接线；剪贴板平台适配器由 clipboard.go 并入。 |
+| `bindings_browse.go`、`bindings_library.go`、`bindings_playback.go`、`bindings_settings.go` | 保留 | 按功能组接线；回调读取当前账号/设置，而不是在绑定时冻结它们。 |
+| `account.go` | 保留 | 账号切换时重置其他功能、重新绑定歌词来源、停止下载与上报、恢复离线身份。 |
+| `appearance.go` | 保留 | 跨首页/播放页的背景资源生命周期、异步读取的过期检查和应用主题；图片解码已在 artwork。 |
+| `settings.go` | 部分迁出后保留 | 设置路径、原生外观适配和 preferences 类型转换；绑定规则归 shortcuts，展示选项归 settings 视图。 |
+| `hotkeys.go` | 部分迁出后保留 | 动作 ID 到应用命令的映射、原生注册释放、窗口焦点策略、保存和刷新；定义、查找、冲突和恢复规则归 shortcuts。 |
+| `menu.go`、`tray.go` | 保留 | 原生菜单、托盘、Dock/激活策略以及系统图标选择；组合多个功能的命令。 |
+| `updates.go` | 保留 | 把原生更新器接入窗口、设置和应用退出。 |
+| `fileassoc.go`、`fileassoc_other.go`、`fileassoc_windows.go` | 保留 | 应用启动时修复安装路径与操作系统文件关联；平台构建标签保持分文件。 |
+| `cache.go` | 部分迁出后保留 | 创建各缓存、账号 scope/epoch、接入播放器、清理和统计结果发布；歌词读写/过期刷新归 lyrics，容量展示归 settings 视图。 |
+| `cache_directory.go` | 保留 | 目录选择、迁移恢复、设置提交、播放器/缓存切换与退出协调；搬运事务在 cachemove 和 settings ViewModel。 |
+| `playlist_cache.go` | 合并后保留 | 账号缓存写入预约、异步写入和读取等待、按可见页面裁剪；从 offline.go 接收持久化入口，快照复制与脏标记聚合归 Library。 |
+| `recovery.go` | 收拢后保留 | 原 offline.go 中的可见页面恢复、网络/账号/播放器/图片联合重试与定时器生命周期。缓存创建和快照算法已移出。 |
+| `network.go` | 保留 | 系统连通性通知驱动 API、播放器、封面和页面恢复。 |
+| `track_artwork.go` | 部分迁出后保留 | 当前曲目、账号缓存键、嵌入封面选择、快速切歌和过期结果发布；标签归一化、文件名标签和候选匹配归 artwork。 |
+| `playback_artwork.go` | 保留 | 从当前播放、本地曲库、下载缓存和图片缓存选择封面，协调不同窗口尺寸和预取。 |
+| `play_commands.go` | 合并后保留 | 页面来源与播放队列、网盘队列追踪，以及播放器/系统混音器接线；吸收 volume.go。 |
+| `play_report.go` | 保留 | 实际播放事件与当前登录会话的关联、每次登录有序发送、退出时收尾；协议请求在 netease。 |
+| `session.go` | 保留 | 会话保存时机、恢复播放器、窗口设置与启动意图；文件格式、快照和写入排序在 sessionstore。 |
+| `pickup.go` | 部分迁出后保留 | 登录后请求最近播放、确认空队列、恢复播放器和展示提示；最近一段收听记录的筛选归 Playback ViewModel。 |
+| `library_commands.go`、`library_refresh.go` | 保留 | 登录保护、账号代次、可见歌单和播放/导航回调注入；增删改、刷新及数据状态归 Library ViewModel。 |
+| `search.go` | 部分迁出后保留 | 搜索与链接打开、当前页曲目来源、导航和播放的协调及设置保存；历史去重归 Search ViewModel。 |
+| `details.go` | 合并后保留 | 歌手/专辑/用户页面的账号作用域接线与打开主窗口；吸收 artist_navigation.go。 |
+| `home.go` | 合并后保留 | 首页服务接线和账号状态下的页面组合；合并 home_cache.go 与 view_home.go。 |
+| `cloud.go` | 合并后保留 | 账号绑定的网盘服务、播放队列联动、当前歌曲定位与页面滚动；吸收 cloud_locate.go。 |
+| `music_links.go` | 保留 | 音乐链接的系统协议注册、启动意图、账号作用域与播放/导航协调；解析由 netease 和 Links ViewModel 完成。 |
+| `recent.go`、`podcast.go`、`radio.go`、`comments.go` | 保留 | 各功能与账号、播放器、导航/滚动状态的适配；功能状态与业务规则由对应 ViewModel 管理。 |
+| `local_music.go` | 保留 | 本地曲库初始化、播放器的本地文件解析和功能服务接线。 |
+| `local_open.go` | 保留 | 系统打开文件事件/文件菜单与启动、资源释放和临时播放的协调。 |
+| `local_lyrics.go` | 保留 | 当前歌曲、转写/歌词状态、搜索对话框和本地歌词保存/重载的接线。 |
+| `local_window.go` | 保留 | 本地目录窗口、原生文件选择以及本地曲目与播放队列菜单的组合。 |
+| `download.go` | 合并后保留 | 从应用设置组装下载选项、原生目录选择、账号退出与下载服务接线；吸收 download_dialog.go，显示选项归 settings 视图。 |
+| `captions.go` | 保留 | 播放器、模型安装、转写服务、应用缓存路径和设置窗口之间的适配。 |
+| `debug_shots.go`、`cputime_unix.go`、`cputime_windows.go` | 保留 | 通过 NM_SHOTS/NM_SCENE 驱动整个应用场景的开发截图与性能采样；依赖完整应用，不放入单个功能。 |
+
+## 规则提取后的接口约束
+
+- `artwork.FindTrack` 接收曲目和搜索函数，负责标签与时长匹配；`FilenameTags` 仅补充缺失标签。它们不读取播放器、账号或网络状态。App 仍选择缓存 scope，并在曲目变化后拒绝过期封面发布。
+- `shortcuts` 保存动作定义和两套绑定规则。App 的动作映射只负责执行，绑定变更后仍由 App 保存设置、重新注册全局快捷键和刷新窗口。设置视图直接持有自己的音质、文件名与容量展示选项。
+- `lyrics.Cache` 捕获 Store、Scope 和 Fetch，负责读取、七天过期刷新及写入。`Load` 在工作线程运行；`Publish` 由 App 分发回 UI 线程并检查账号 scope 与缓存 epoch。播放器继续负责歌曲请求有效性。
+- `Library.TakeSnapshots` 在所属线程聚合脏标记，等全部编辑成功或回滚后才返回复制的数据。App 在同一线程预约写入，再将编码交给工作线程；歌单读取仍等待最近一次已接受的快照写入。账号有效性和缓存 epoch 不下放给纯快照构造。
+- `Playback.LastStretch` 选择可续播的一段收听记录；`Search.RememberQuery` 去重并限制历史长度。App 负责请求、播放和设置持久化。
+
+本轮将封面匹配/裁剪、网盘去重、播客去重、字体解析、时间格式、续播筛选、设置持久化和歌词磁盘读取的测试迁到各自所有者。快照隔离、重叠编辑、歌词后台刷新和快捷键冲突/恢复在能力包直接测试；账号切换与缓存清理拒绝歌词回调、全局快捷键注册、跨页面搜索和播放仍在 App 测试。迁移保留原有断言；混合测试中的显示格式断言拆到视图测试，不让 ViewModel 测试依赖桌面代码。

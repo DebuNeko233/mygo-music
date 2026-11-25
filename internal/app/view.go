@@ -149,7 +149,7 @@ func (a *app) load(r route) {
 	case pagePodcasts:
 		a.loadPodcastTab()
 	case pageCloud:
-		if !a.cloud.Loading() && a.cloud.Failure == nil && (!a.cloud.Loaded || viewmodel.ListDue(a.cloud.At, a.listsNow())) {
+		if !a.cloud.Loading() && a.cloud.Failure == nil && (!a.cloud.Loaded || viewmodel.ListDue(a.cloud.At, a.library.Now())) {
 			a.refreshCloud()
 		}
 	case pageLocal:

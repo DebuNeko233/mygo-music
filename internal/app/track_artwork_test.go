@@ -19,28 +19,6 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-// A close recording is eligible, while conflicting editions or different
-// artists don't silently supply the cover.
-func TestLocalArtworkMatchesRecording(t *testing.T) {
-	song := netease.Track{Name: "Ｓｏｎｇ", Duration: 180000, Artists: []netease.Artist{{Name: "Band"}}}
-	studio := netease.Track{Name: "Song", Duration: 180600, Artists: song.Artists, Album: netease.Album{Name: "Studio", PicURL: "studio"}}
-	live := studio
-	live.Duration, live.Album = 224000, netease.Album{Name: "Live", PicURL: "live"}
-	cover := studio
-	cover.Artists, cover.Album.PicURL = []netease.Artist{{Name: "Other"}}, "cover"
-	if got := chooseTrackArtwork(&song, []netease.Track{live, cover, studio}); got != "studio" {
-		t.Fatalf("matched %q, want the studio version", got)
-	}
-	live.Duration = 180100
-	if got := chooseTrackArtwork(&song, []netease.Track{live, studio}); got != "" {
-		t.Fatalf("picked %q for two versions with nearly identical times", got)
-	}
-	song.Album.Name = "Studio"
-	if got := chooseTrackArtwork(&song, []netease.Track{live, studio}); got != "studio" {
-		t.Fatalf("matched %q with an exact album tag", got)
-	}
-}
-
 // A missing cover waits for connectivity and reuses its cached match on
 // restart. An embedded cover bypasses matching.
 func TestLocalArtworkSearchAndOfflineReuse(t *testing.T) {

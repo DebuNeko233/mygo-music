@@ -27,9 +27,9 @@ func (a *app) cancelWork() {
 	a.cacheSettings.Cancel()
 	a.account.CloseLogin()
 	a.cancelMusicLink()
-	a.cancelCloudLoad()
-	a.cancelDownloads()
-	a.cancelModelDownload()
+	a.cloud.Stop()
+	a.downloads.CancelAll()
+	a.captions.CancelModelDownload()
 	a.captions.Pause()
 	a.radio.CancelPending()
 	if a.recovery.timer != nil {
@@ -97,7 +97,7 @@ func (a *app) requestQuit(sessionEnding bool) bool {
 	// Logout/shutdown cannot be prevented by the OS. Still cancel producers
 	// and save the latest committed state instead of skipping final snapshots.
 	if !sessionEnding {
-		cache, downloads := a.deferCacheQuit(), a.deferDownloadQuit()
+		cache, downloads := a.deferCacheQuit(), a.downloads.DeferQuit()
 		if cache || downloads {
 			return false
 		}

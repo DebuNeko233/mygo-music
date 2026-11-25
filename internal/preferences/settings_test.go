@@ -38,3 +38,77 @@ func TestSettingsStoragePathIsNotJSON(t *testing.T) {
 		t.Fatal("leaked internal path into persisted schema")
 	}
 }
+
+// A transactional settings save must not be overwritten by an older queued slider change.
+func TestSettingsSaveSupersedesPendingChanges(t *testing.T) {
+	Flush()
+	s := Default()
+	s.Path = filepath.Join(t.TempDir(), "settings.json")
+	s.CacheDir = "old"
+	s.SaveSoon()
+	s.CacheDir = "new"
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	Flush()
+	b, err := os.ReadFile(s.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved Settings
+	if err := json.Unmarshal(b, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.CacheDir != "new" {
+		t.Fatalf("saved cache directory %q, want the committed new directory", saved.CacheDir)
+	}
+}
+
+// Turning immersive lyrics off must survive a reload with the feature enabled by default.
+func TestSaveKeepsImmersiveLyricsDisabled(t *testing.T) {
+	s := Default()
+	s.Path = filepath.Join(t.TempDir(), "settings.json")
+	s.LyricEdgeFade = false
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(s.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded := Default()
+	if err := json.Unmarshal(b, &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.LyricEdgeFade {
+		t.Fatal("immersive lyrics were re-enabled after saving them as disabled")
+	}
+}
+
+// TestSaveSoonKeepsTheLastOfABurst checks that settings kept off the drawing
+// goroutine still reach the disk, and as they stand when the last one is taken:
+// holding a shortcut that steps the lyric size takes them on every repeat.
+func TestSaveSoonKeepsTheLastOfABurst(t *testing.T) {
+	s := Default()
+	s.Path = filepath.Join(t.TempDir(), "settings.json")
+
+	s.LyricSize = 28
+	s.SaveSoon()
+	s.LyricSize = 30
+	s.SaveSoon()
+	s.LyricSize = 32
+	s.SaveSoon()
+	Flush()
+
+	b, err := os.ReadFile(s.Path)
+	if err != nil {
+		t.Fatalf("read the settings back: %v", err)
+	}
+	var kept Settings
+	if err := json.Unmarshal(b, &kept); err != nil {
+		t.Fatalf("decode the settings back: %v", err)
+	}
+	if kept.LyricSize != 32 {
+		t.Fatalf("lyric size %v, for the last one set: 32", kept.LyricSize)
+	}
+}

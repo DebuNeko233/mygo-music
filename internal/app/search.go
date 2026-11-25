@@ -65,18 +65,8 @@ func (a *app) moreResults(r route, d *searchvm.SearchPage) {
 	a.searches.LoadMore(r, d, a.searchServices())
 }
 
-// searchHistoryLimit is how many searches the history keeps.
-const searchHistoryLimit = 20
-
-// rememberSearch puts q first in the history of searches, once.
 func (a *app) rememberSearch(q string) {
-	history := []string{q}
-	for _, s := range a.settings.SearchHistory {
-		if s != q && len(history) < searchHistoryLimit {
-			history = append(history, s)
-		}
-	}
-	a.settings.SearchHistory = history
+	a.settings.SearchHistory = searchvm.RememberQuery(a.settings.SearchHistory, q)
 	a.settings.saveSoon()
 }
 

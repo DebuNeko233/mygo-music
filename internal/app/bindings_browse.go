@@ -19,7 +19,7 @@ func (a *app) bindBrowseViews() {
 	a.views.user = desktopview.User{Page: p, Model: &a.users, Account: &a.account, Library: &a.library, Podcasts: &a.podcasts, Count: components.Count, Load: a.loadUser, Open: a.open}
 	a.views.recent = desktopview.Recent{Page: p, Model: &a.recent, Account: &a.account, Load: a.loadRecent, LoadTab: a.loadRecentTab, PlayedAt: components.PlayedAt, Play: func(tracks []netease.Track) { a.pl.PlayQueue(tracks, 0) }}
 	a.views.search = searchview.View{History: &a.settings.SearchHistory, Dismiss: a.searches.DismissSuggestions, ClearHistory: a.clearSearchHistory, Suggest: a.suggest, Search: a.search, Choose: a.choose, TrackSuggestions: a.trackSuggestions, Page: p, Model: &a.searches, More: a.moreResults, Show: a.show, Open: a.open, LoadPlaylist: a.loadPlaylist}
-	a.views.artist = artistview.View{Page: p, Model: &a.artists, Lookup: a.artist, Load: a.loadArtist, LoadAlbums: a.loadAlbums, LoadEvents: a.loadEvents, LoadLatest: a.loadLatest, ToggleFollow: a.toggleFollow, OpenPage: a.openPage, Count: components.Count, Play: a.playPageTracksMode}
+	a.views.artist = artistview.View{Page: p, Model: &a.artists, Lookup: a.artists.Page, Load: a.loadArtist, LoadAlbums: a.loadAlbums, LoadEvents: a.loadEvents, LoadLatest: a.loadLatest, ToggleFollow: a.toggleFollow, OpenPage: a.openPage, Count: components.Count, Play: a.playPageTracksMode}
 	syncViewport := func(c *ui.Context, name, description string, tracks, at int) {
 		a.views.tracks.SyncViewport(c, tracklist.Header{Name: name, Description: description, Tracks: tracks}, at)
 	}

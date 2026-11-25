@@ -10,6 +10,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/userdata"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
 )
 
@@ -371,7 +372,7 @@ func TestMusicLinkColdStartSurvivesAccountRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeUserData(path, data); err != nil {
+	if err := userdata.Write(path, data); err != nil {
 		t.Fatal(err)
 	}
 	a.startup.waiting = true

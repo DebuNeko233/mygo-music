@@ -95,13 +95,10 @@ func (a *app) enqueueReport(send func(playReporter)) {
 	}
 }
 
-// reportPlayStopped closes a session on account changes and application exit.
-func (a *app) reportPlayStopped() { a.pl.Finish() }
-
 // stopPlayReports detaches the current login's queue. Its worker drains
 // independently, using the login captured when the queue was started.
 func (a *app) stopPlayReports() <-chan struct{} {
-	a.reportPlayStopped()
+	a.pl.Finish()
 	queue, done := a.reportQueue, a.reportDone
 	if queue != nil {
 		a.reportQueue, a.reportDone = nil, nil

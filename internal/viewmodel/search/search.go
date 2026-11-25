@@ -62,3 +62,14 @@ func (m *Search) LoadMore(r navigation.Route, d *SearchPage, s SearchServices) {
 		})
 	}()
 }
+
+// RememberQuery keeps the latest twenty queries, putting this one first once.
+func RememberQuery(previous []string, query string) []string {
+	history := []string{query}
+	for _, s := range previous {
+		if s != query && len(history) < 20 {
+			history = append(history, s)
+		}
+	}
+	return history
+}

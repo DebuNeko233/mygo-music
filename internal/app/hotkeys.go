@@ -10,48 +10,6 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 )
 
-// keyKind is one of the two sets of shortcuts: the ones that work while the
-// app's window has the focus, and the ones that work wherever it is.
-type keyKind string
-
-const (
-	kindInApp  keyKind = "inApp"
-	kindGlobal keyKind = "global"
-)
-
-// hotkey is an action the listener can give a key to, in the app and out of it.
-type hotkey struct {
-	name  string
-	label string
-	// inApp and global are the keys the action has until the listener gives
-	// it others. A global key needs a modifier, or a media or function key,
-	// as it is taken from every other app.
-	inApp, global string
-	run           func(*app)
-}
-
-// hotkeys are the actions that take a key, in the order the settings show
-// them. The playback keys are the systems' own media keys, which every
-// system sends to the app playing.
-var hotkeys = []hotkey{
-	{name: "playPause", label: "播放/暂停", inApp: "Space", global: "MediaPlayPause",
-		run: func(a *app) { a.pl.TogglePlay() }},
-	{name: "prev", label: "上一首", inApp: "CmdOrCtrl+Shift+Left", global: "MediaPreviousTrack",
-		run: func(a *app) { a.pl.Prev() }},
-	{name: "next", label: "下一首", inApp: "CmdOrCtrl+Shift+Right", global: "MediaNextTrack",
-		run: func(a *app) { a.pl.Next() }},
-	{name: "deskLyrics", label: "桌面歌词", inApp: "CmdOrCtrl+Shift+L", global: "CmdOrCtrl+Alt+L",
-		run: func(a *app) { a.views.playback.ToggleDeskLyrics() }},
-	{name: "lyricBigger", label: "歌词字号变大", inApp: "CmdOrCtrl+Shift+=", global: "CmdOrCtrl+Alt+Up",
-		run: func(a *app) { a.stepLyricSize(2) }},
-	{name: "lyricSmaller", label: "歌词字号变小", inApp: "CmdOrCtrl+Shift+-", global: "CmdOrCtrl+Alt+Down",
-		run: func(a *app) { a.stepLyricSize(-2) }},
-	{name: "volumeUp", label: "音量增大", inApp: "CmdOrCtrl+Shift+Up", global: "CmdOrCtrl+Alt+Right",
-		run: func(a *app) { a.stepVolumeBy(0.05) }},
-	{name: "volumeDown", label: "音量减小", inApp: "CmdOrCtrl+Shift+Down", global: "CmdOrCtrl+Alt+Left",
-		run: func(a *app) { a.stepVolumeBy(-0.05) }},
-}
-
 // stepVolumeBy turns the volume up or down by d, as the shortcut keys do.
 func (a *app) stepVolumeBy(d float64) {
 	a.setVolume(math.Round(min(1, max(0, a.playbackState.Volume+d))*100) / 100)
@@ -72,89 +30,26 @@ func (a *app) stepLyricSize(d float64) {
 	a.redraw()
 }
 
-// binding is the accelerator the action has in one of the sets, empty when
-// the listener gave it none.
-func (a *app) binding(kind keyKind, name string) string {
-	keys := a.settings.Shortcuts.InApp
-	if kind == kindGlobal {
-		keys = a.settings.Shortcuts.Global
-	}
-	if acc, ok := keys[name]; ok {
-		return acc
-	}
-	for _, h := range hotkeys {
-		if h.name == name {
-			if kind == kindGlobal {
-				return h.global
-			}
-			return h.inApp
-		}
-	}
-	return ""
-}
-
 // setBinding gives the action acc as its key, empty for none, and keeps it.
-func (a *app) setBinding(kind keyKind, name, acc string) {
-	keys := &a.settings.Shortcuts.InApp
-	if kind == kindGlobal {
-		keys = &a.settings.Shortcuts.Global
-	}
-	if *keys == nil {
-		*keys = map[string]string{}
-	}
-	(*keys)[name] = acc
+func (a *app) setBinding(kind string, name, acc string) {
+	shortcuts.Set(&a.settings.Shortcuts, kind, name, acc)
 	a.settings.saveSoon()
-	if kind == kindGlobal {
+	if kind == shortcuts.Global {
 		a.registerGlobals()
 	}
 	a.redraw()
-}
-
-// changedBinding reports whether the action has a key other than the one it
-// comes with, as the settings offer to give the default back.
-func (a *app) changedBinding(kind keyKind, name string) bool {
-	for _, h := range hotkeys {
-		if h.name != name {
-			continue
-		}
-		own := h.inApp
-		if kind == kindGlobal {
-			own = h.global
-		}
-		return shortcuts.Canonical(a.binding(kind, name)) != shortcuts.Canonical(own)
-	}
-	return false
 }
 
 // restoreBinding gives the action the key it comes with, forgetting the one
 // the settings kept for it.
-func (a *app) restoreBinding(kind keyKind, name string) {
-	keys := &a.settings.Shortcuts.InApp
-	if kind == kindGlobal {
-		keys = &a.settings.Shortcuts.Global
-	}
-	delete(*keys, name)
+func (a *app) restoreBinding(kind string, name string) {
+	shortcuts.Restore(&a.settings.Shortcuts, kind, name)
 	a.settings.saveSoon()
-	if kind == kindGlobal {
+	if kind == shortcuts.Global {
 		a.registerGlobals()
 	}
 	a.Recording, a.RecordingNote = "", ""
 	a.redraw()
-}
-
-// taken reports whether another action of the set already has acc, and whose.
-func (a *app) taken(kind keyKind, name, acc string) (string, bool) {
-	canonical := shortcuts.Canonical(acc)
-	for _, h := range hotkeys {
-		if h.name == name {
-			continue
-		}
-		other := a.binding(kind, h.name)
-		if other != "" && shortcuts.Canonical(other) == canonical {
-			return h.label, true
-		}
-	}
-	return "", false
 }
 
 // globalRegister and globalUnregister are the system's shortcuts: the tests
@@ -183,15 +78,15 @@ func (a *app) registerGlobals() {
 		a.hotkeyErrs = map[string]string{}
 	}
 	clear(a.hotkeyErrs)
-	for _, h := range hotkeys {
-		acc := a.binding(kindGlobal, h.name)
+	for _, h := range shortcuts.Actions() {
+		acc := shortcuts.Binding(a.settings.Shortcuts, shortcuts.Global, h.Name)
 		if acc == "" {
 			continue
 		}
-		if err := globalRegister(acc, func() { a.runHotkey(h) }); err != nil {
+		if err := globalRegister(acc, func() { a.runHotkey(h.Name) }); err != nil {
 			// The system keeps the key for another app, or another action of
 			// this one asked for it first: the settings say so.
-			a.hotkeyErrs[h.name] = "被其他程序占用"
+			a.hotkeyErrs[h.Name] = "被其他程序占用"
 			continue
 		}
 		a.globalKeys = append(a.globalKeys, acc)
@@ -207,9 +102,9 @@ func (a *app) unregisterGlobals() {
 }
 
 // runHotkey runs the action a key was given to, on the window's thread.
-func (a *app) runHotkey(h hotkey) {
+func (a *app) runHotkey(name string) {
 	a.post(func() {
-		h.run(a)
+		hotkeyActions[name](a)
 		a.redraw()
 	})
 }
@@ -228,8 +123,8 @@ func (a *app) bindInApp(c *ui.Context, root ui.Element) {
 	// Only this window's search is bound here, so no other field of this
 	// view needs to be kept out.
 	typing := c.Focused(a.shell.SearchBox)
-	for _, h := range hotkeys {
-		mods, key, ok := shortcuts.Parse(a.binding(kindInApp, h.name))
+	for _, h := range shortcuts.Actions() {
+		mods, key, ok := shortcuts.Parse(shortcuts.Binding(a.settings.Shortcuts, shortcuts.InApp, h.Name))
 		if !ok {
 			continue
 		}
@@ -237,10 +132,21 @@ func (a *app) bindInApp(c *ui.Context, root ui.Element) {
 			continue
 		}
 		run := func() {
-			h.run(a)
+			hotkeyActions[h.Name](a)
 			a.redraw()
 		}
 		root.OnShortcut(mods, key, run)
 		c.OnShortcut(mods, key, run)
 	}
+}
+
+var hotkeyActions = map[string]func(*app){
+	"playPause":    func(a *app) { a.pl.TogglePlay() },
+	"prev":         func(a *app) { a.pl.Prev() },
+	"next":         func(a *app) { a.pl.Next() },
+	"deskLyrics":   func(a *app) { a.views.playback.ToggleDeskLyrics() },
+	"lyricBigger":  func(a *app) { a.stepLyricSize(2) },
+	"lyricSmaller": func(a *app) { a.stepLyricSize(-2) },
+	"volumeUp":     func(a *app) { a.stepVolumeBy(0.05) },
+	"volumeDown":   func(a *app) { a.stepVolumeBy(-0.05) },
 }

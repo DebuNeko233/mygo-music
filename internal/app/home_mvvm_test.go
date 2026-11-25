@@ -18,9 +18,9 @@ func TestHomeRepliesRespectSameUserNewLogin(t *testing.T) {
 	dir := t.TempDir()
 	a.browseCache = diskcache.New(dir, 1<<20)
 	for _, key := range []string{"featured", "charts", "recommended"} {
-		a.browseCache.Put("7", key, cacheBytes([]netease.Playlist{{ID: 1}}), a.browseCache.Epoch())
+		a.browseCache.Put("7", key, diskcache.Encode([]netease.Playlist{{ID: 1}}), a.browseCache.Epoch())
 	}
-	a.browseCache.Put("7", "daily", cacheBytes([]netease.Track{{ID: 1}}), a.browseCache.Epoch())
+	a.browseCache.Put("7", "daily", diskcache.Encode([]netease.Track{{ID: 1}}), a.browseCache.Epoch())
 	oldFeatured, oldCharts, oldDaily, oldRecommended := featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists
 	t.Cleanup(func() {
 		featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists = oldFeatured, oldCharts, oldDaily, oldRecommended

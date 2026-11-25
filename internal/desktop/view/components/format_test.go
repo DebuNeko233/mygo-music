@@ -3,6 +3,8 @@ package components
 import (
 	"testing"
 	"time"
+
+	"netease-music-mygo/internal/netease"
 )
 
 // A length reads as minutes and seconds, and a play count the way people
@@ -35,6 +37,36 @@ func TestRecentPlaysSayWhen(t *testing.T) {
 	for _, c := range cases {
 		if got := PlayedAt(c.at, c.device, now); got != c.want {
 			t.Errorf("PlayedAt(%v, %q) = %q, want %q", c.at, c.device, got, c.want)
+		}
+	}
+}
+
+// A recent play identifies when and on which device it was heard.
+func TestRecentPlayDevice(t *testing.T) {
+	now := time.Date(2026, 10, 26, 22, 0, 0, 0, time.Local)
+	last := netease.Play{At: now.Add(-3 * time.Minute), Device: "android"}
+	if got := HeardAt(last, now); got != "3分钟前在手机上听过" {
+		t.Errorf("heard %q", got)
+	}
+}
+
+// A comment's time reads as its age: minutes ago, then the hour, then the
+// day or the date it goes back to.
+func TestCommentTime(t *testing.T) {
+	now := time.Date(2026, 10, 25, 22, 0, 0, 0, time.Local)
+	for _, c := range []struct {
+		t    time.Time
+		want string
+	}{
+		{now.Add(-20 * time.Second), "刚刚"},
+		{now.Add(-42 * time.Minute), "42分钟前"},
+		{now.Add(-5 * time.Hour), "17:00"},
+		{now.Add(-23 * time.Hour), "昨天 23:00"},
+		{time.Date(2026, 3, 8, 9, 0, 0, 0, time.Local), "3月8日"},
+		{time.Date(2021, 4, 10, 9, 0, 0, 0, time.Local), "2021年4月10日"},
+	} {
+		if got := CommentTime(c.t, now); got != c.want {
+			t.Errorf("%v: %q, want %q", c.t, got, c.want)
 		}
 	}
 }

@@ -1,12 +1,35 @@
 package app
 
 import (
+	"time"
+
 	"github.com/egoist/mygo/ui"
 
 	homeview "netease-music-mygo/internal/desktop/view"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/desktop/view/shell"
+	"netease-music-mygo/internal/netease"
+	homevm "netease-music-mygo/internal/viewmodel/home"
 )
+
+var featuredPlaylists = func() ([]netease.Playlist, error) { return netease.FeaturedPlaylists(30) }
+
+var homeCharts = netease.Charts
+
+var dailySongs = netease.DailySongs
+
+var recommendedPlaylists = netease.RecommendedPlaylists
+
+func (a *app) homeServices() homevm.HomeServices {
+	generation := a.account.Generation
+	return homevm.HomeServices{
+		Personal: a.account.Profile != nil, Cache: a.cacheRequest(""), Now: time.Now,
+		Featured: featuredPlaylists, Charts: homeCharts, Daily: dailySongs, Recommended: recommendedPlaylists,
+		Post: a.post, Valid: func() bool { return a.account.Generation == generation },
+	}
+}
+
+func (a *app) loadHome() { a.home.Load(a.homeServices()) }
 
 const pagePad = shell.PagePad
 
@@ -32,5 +55,7 @@ func (a *app) showHome(c *ui.Context, charts bool) {
 		v.Home(c, &a.shell)
 	}
 }
-func (a *app) homePage(c *ui.Context)   { a.showHome(c, false) }
+
+func (a *app) homePage(c *ui.Context) { a.showHome(c, false) }
+
 func (a *app) chartsPage(c *ui.Context) { a.showHome(c, true) }

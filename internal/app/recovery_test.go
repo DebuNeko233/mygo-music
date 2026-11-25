@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 
 	artcache "netease-music-mygo/internal/desktop/artwork"
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
@@ -48,7 +49,7 @@ func TestPermanentFailureStopsRetry(t *testing.T) {
 func TestRecoverySkipsHiddenArtistTab(t *testing.T) {
 	a, _ := offlineFixture(t)
 	a.nav.Current = route{Page: pageArtist, ID: 9}
-	d := a.artist(9)
+	d := a.artists.Page(9)
 	d.Profile = &netease.ArtistProfile{}
 	d.LatestError, d.LatestFailure = "failed", netease.ErrOffline
 	if a.needsRecovery() {
@@ -77,7 +78,7 @@ func TestCacheSerializationFailurePreservesSnapshot(t *testing.T) {
 		Private string
 		Invalid chan int
 	}{"session-secret", make(chan int)}
-	b := cacheBytes(bad)
+	b := diskcache.Encode(bad)
 	req.Keep(b)
 	write := req.Store.Prepare(req.Scope, req.Key, req.Epoch)
 	write(b) // Prepared library snapshots use this separate path.
@@ -131,7 +132,7 @@ func TestRecoveryDoesNotCascadeIntoPermanentArtistTab(t *testing.T) {
 	artistLatestSongs = func(int64, int) ([]netease.Track, error) { calls++; return nil, netease.ErrNotLoggedIn }
 	a.nav.Current = route{Page: pageArtist, ID: 9}
 	a.artists.Tab = artistvm.ArtistLatest
-	d := a.artist(9)
+	d := a.artists.Page(9)
 	d.Error, d.Failure = "profile failed", netease.ErrOffline
 	d.LatestError, d.LatestFailure = "songs refused", netease.ErrNotLoggedIn
 	a.recoverLoads()
@@ -164,7 +165,7 @@ func TestManualArtworkRefreshIncludesPermanentFailures(t *testing.T) {
 func TestRecoveryIgnoresHiddenArtistLoads(t *testing.T) {
 	a, _ := offlineFixture(t)
 	a.nav.Current = route{Page: pageArtist, ID: 9}
-	d := a.artist(9)
+	d := a.artists.Page(9)
 	d.Profile = &netease.ArtistProfile{}
 	d.LatestLoading = true
 	a.recovery.active = true

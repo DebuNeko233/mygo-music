@@ -12,7 +12,7 @@ func TestDetailUserRepliesRespectAccountGeneration(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.account.Profile = &netease.Profile{UserID: 7}
-	a.library.Refresh.Albums.At = a.listsNow()
+	a.library.Refresh.Albums.At = a.library.Now()
 	oldUser, oldLists, oldArtists, oldPodcasts := userDetail, userPlaylists, followedArtists, subscribedPodcasts
 	t.Cleanup(func() {
 		userDetail, userPlaylists, followedArtists, subscribedPodcasts = oldUser, oldLists, oldArtists, oldPodcasts
@@ -47,7 +47,7 @@ func TestDetailFollowReplyRespectsAccountGeneration(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
 	a.account.Profile = &netease.Profile{UserID: 7}
-	d := a.artist(12)
+	d := a.artists.Page(12)
 	d.Profile = &netease.ArtistProfile{Artist: netease.Artist{ID: 12}}
 	old := followArtist
 	t.Cleanup(func() { followArtist = old })

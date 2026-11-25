@@ -86,7 +86,7 @@ func TestRecentRepliesRespectSameUserNewLogin(t *testing.T) {
 			if cached {
 				a.browseCache = diskcache.New(t.TempDir(), 1<<20)
 				defer a.browseCache.Close()
-				a.browseCache.Put("7", "recent", cacheBytes(recentvm.RecentSnapshot{Songs: []netease.Play{{Track: netease.Track{ID: 42}}}}), a.browseCache.Epoch())
+				a.browseCache.Put("7", "recent", diskcache.Encode(recentvm.RecentSnapshot{Songs: []netease.Play{{Track: netease.Track{ID: 42}}}}), a.browseCache.Epoch())
 				count = 1
 			}
 			a.loadRecent()

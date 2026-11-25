@@ -8,6 +8,7 @@ import (
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/mixvol"
+	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	playbackvm "netease-music-mygo/internal/viewmodel/playback"
 	settingsvm "netease-music-mygo/internal/viewmodel/settings"
@@ -107,5 +108,42 @@ func (a *app) start() {
 	}
 	if a.startup.show {
 		a.showMain()
+	}
+}
+
+// Startup keeps one opening intent across account and queue restoration.
+// A newer file or link supersedes either kind of older request.
+type startupState struct {
+	waiting bool
+	show    bool
+	pending *openingIntent
+}
+
+type openingIntent struct {
+	file string
+	link netease.MusicLink
+}
+
+func (s *startupState) queue(intent openingIntent) { s.pending = &intent }
+
+func (s *startupState) take() *openingIntent {
+	s.waiting = false
+	intent := s.pending
+	s.pending = nil
+	return intent
+}
+
+func (a *app) finishStartup() {
+	if a.quitting || !a.restored || a.pl == nil {
+		return
+	}
+	intent := a.startup.take()
+	if intent == nil {
+		return
+	}
+	if intent.file != "" {
+		a.openTemporaryAudio(intent.file)
+	} else {
+		a.openMusicLink(intent.link)
 	}
 }

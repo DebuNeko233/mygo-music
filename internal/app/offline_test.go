@@ -11,6 +11,7 @@ import (
 
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
+	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
@@ -56,7 +57,7 @@ func TestOfflineAlbumRetainsSongsAcrossRestart(t *testing.T) {
 // survives its failure, then refreshes in place without touching playback.
 func TestOfflinePlaylistRecoversWithoutRestart(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.browseCache.Put("7", "playlist/9", cacheBytes(&netease.Playlist{ID: 9, Name: "Cached", Tracks: []netease.Track{{ID: 1}}}), 0)
+	a.browseCache.Put("7", "playlist/9", diskcache.Encode(&netease.Playlist{ID: 9, Name: "Cached", Tracks: []netease.Track{{ID: 1}}}), 0)
 	release := make(chan struct{})
 	playlistDetail = func(id int64) (*netease.Playlist, error) { <-release; return nil, netease.ErrOffline }
 	a.nav.Current = route{Page: pagePlaylist, ID: 9}
@@ -82,7 +83,7 @@ func TestOfflinePlaylistRecoversWithoutRestart(t *testing.T) {
 // become the current user's playlist.
 func TestOfflinePlaylistAccountIsolation(t *testing.T) {
 	a, posts := offlineFixture(t)
-	a.browseCache.Put("8", "playlist/9", cacheBytes(&netease.Playlist{ID: 9, Name: "Private"}), 0)
+	a.browseCache.Put("8", "playlist/9", diskcache.Encode(&netease.Playlist{ID: 9, Name: "Private"}), 0)
 	playlistDetail = func(id int64) (*netease.Playlist, error) { return &netease.Playlist{ID: id, Name: "Late"}, nil }
 	a.loadPlaylist(9, false)
 	a.account.Generation++
@@ -136,7 +137,7 @@ func TestOfflineAccountConfirmationRecoversInPlace(t *testing.T) {
 	loginIdentity = func() string { return "session-digest" }
 	original := &netease.Playlist{ID: 9, Name: "Keep"}
 	a.library.Playlists[9] = original
-	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.listsNow(), a.listsNow()
+	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.library.Now(), a.library.Now()
 	a.account.Pending = true
 	accountAsk = func() (*netease.Profile, error) { return nil, errors.New("DNS failed") }
 	a.confirmAccount()
@@ -183,7 +184,7 @@ func TestOfflineAccountScheduledRetriesRecover(t *testing.T) {
 	}
 	original := &netease.Playlist{ID: 9, Name: "Cached"}
 	a.library.Playlists[9] = original
-	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.listsNow(), a.listsNow()
+	a.library.Refresh.Mine.At, a.library.Refresh.Likes.At = a.library.Now(), a.library.Now()
 	a.recovery.active, a.account.Pending = true, true
 	gen := a.account.Generation
 	a.confirmAccount()
@@ -221,22 +222,6 @@ func TestOfflineIdleFrameBudget(t *testing.T) {
 	}
 }
 
-// Cached lyrics are available without any successful request to the lyrics service.
-func TestOfflineLyricsFromDisk(t *testing.T) {
-	a, _ := offlineFixture(t)
-	old := lyricsRequest
-	t.Cleanup(func() { lyricsRequest = old })
-	lyricsRequest = func(int64) (string, string, string, error) {
-		t.Error("requested cached lyrics")
-		return "", "", "", netease.ErrOffline
-	}
-	a.browseCache.Put("7", "lyrics/1", cacheBytes(keptLyrics{Original: "[00:01]Cached", Translation: "translation", Words: "words"}), 0)
-	l, tr, w, err := a.cachedLyricsFor("7")(1, nil)
-	if err != nil || l != "[00:01]Cached" || tr != "translation" || w != "words" {
-		t.Fatal("did not restore all lyric formats")
-	}
-}
-
 func fakeOfflineHome(t *testing.T) {
 	t.Helper()
 	f, c, d, r := featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists
@@ -268,12 +253,12 @@ func TestOfflineBootUsesBoundIdentity(t *testing.T) {
 			accountAsk = func() (*netease.Profile, error) { <-release; return nil, netease.ErrOffline }
 			userPlaylists = func(int64) ([]netease.Playlist, []netease.Playlist, error) { return nil, nil, netease.ErrOffline }
 			likedIDs = func(int64) ([]int64, error) { return nil, netease.ErrOffline }
-			profile := cacheBytes(a.account.Profile)
+			profile := diskcache.Encode(a.account.Profile)
 			if tc.malformed {
 				profile = []byte(`{"userId":7,"nickname":123}`)
 			}
 			a.identityCache.Put("bound", "profile", profile, 0)
-			a.browseCache.Put("7", "mine", cacheBytes(library.Lists{Mine: []netease.Playlist{{ID: 9, Name: "Offline list"}}}), 0)
+			a.browseCache.Put("7", "mine", diskcache.Encode(library.Lists{Mine: []netease.Playlist{{ID: 9, Name: "Offline list"}}}), 0)
 			a.account.Profile = nil
 			a.boot()
 			refreshPost(t, posts)
@@ -379,14 +364,58 @@ func TestOfflineArtistRestoresCachedPages(t *testing.T) {
 	a, posts := offlineFixture(t)
 	old := albumsBy
 	t.Cleanup(func() { albumsBy = old })
-	a.browseCache.Put("7", "artist-albums/1/0", cacheBytes(artistvm.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
-	a.browseCache.Put("7", "artist-albums/1/1", cacheBytes(artistvm.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
+	a.browseCache.Put("7", "artist-albums/1/0", diskcache.Encode(artistvm.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 10}}, More: true}), 0)
+	a.browseCache.Put("7", "artist-albums/1/1", diskcache.Encode(artistvm.KeptArtistAlbums{Albums: []netease.AlbumProfile{{ID: 11}}, More: false}), 0)
 	albumsBy = func(int64, int, int) ([]netease.AlbumProfile, bool, error) { return nil, false, netease.ErrOffline }
 	a.loadAlbums(1)
 	refreshPost(t, posts)
 	refreshPost(t, posts)
-	d := a.artist(1)
+	d := a.artists.Page(1)
 	if len(d.Albums) != 2 || d.Albums[1].ID != 11 || !d.AlbumsFailed || d.AlbumsPage.More {
 		t.Fatal("cached pages beyond failed first page became inaccessible")
+	}
+}
+
+// A background lyric replacement reaches only the account and cache epoch
+// that requested it; switching accounts or clearing cache retires the update.
+func TestOfflineLyricsRefreshRejectsRetiredScope(t *testing.T) {
+	for _, retire := range []string{"none", "account", "cache"} {
+		t.Run(retire, func(t *testing.T) {
+			a, posts := offlineFixture(t)
+			old := lyricsRequest
+			t.Cleanup(func() { lyricsRequest = old })
+			lyricsRequest = func(int64) (string, string, string, error) { return "[00:01]Fresh", "", "", nil }
+			a.browseCache.Put("7", "lyrics/1", diskcache.Encode(lyrics.Text{Original: "[00:01]Cached"}), 0)
+			_, at := a.browseCache.Read("7", "lyrics/1")
+			source := a.cachedLyricsFor("7")
+			source.Now = func() time.Time { return at.Add(8 * 24 * time.Hour) }
+			calls := 0
+			_, _, _, err := source.Load(1, func([]lyrics.Line, lyrics.Display) { calls++ })
+			if err != nil {
+				t.Fatal(err)
+			}
+			var update func()
+			select {
+			case update = <-posts:
+			case <-time.After(5 * time.Second):
+				t.Fatal("missing refresh")
+			}
+			switch retire {
+			case "account":
+				a.account.Profile = &netease.Profile{UserID: 8}
+			case "cache":
+				done := make(chan struct{})
+				a.browseCache.Clear("", func() { close(done) })
+				wait(t, done, "cache clear")
+			}
+			update()
+			want := 0
+			if retire == "none" {
+				want = 1
+			}
+			if calls != want {
+				t.Fatalf("refresh calls=%d, want %d for %s", calls, want, retire)
+			}
+		})
 	}
 }

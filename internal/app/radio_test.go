@@ -6,30 +6,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/netease"
+	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
-
-// A comment's time reads as its age: minutes ago, then the hour, then the
-// day or the date it goes back to.
-func TestCommentTime(t *testing.T) {
-	now := time.Date(2026, 10, 25, 22, 0, 0, 0, time.Local)
-	for _, c := range []struct {
-		t    time.Time
-		want string
-	}{
-		{now.Add(-20 * time.Second), "刚刚"},
-		{now.Add(-42 * time.Minute), "42分钟前"},
-		{now.Add(-5 * time.Hour), "17:00"},
-		{now.Add(-23 * time.Hour), "昨天 23:00"},
-		{time.Date(2026, 3, 8, 9, 0, 0, 0, time.Local), "3月8日"},
-		{time.Date(2021, 4, 10, 9, 0, 0, 0, time.Local), "2021年4月10日"},
-	} {
-		if got := components.CommentTime(c.t, now); got != c.want {
-			t.Errorf("%v: %q, want %q", c.t, got, c.want)
-		}
-	}
-}
 
 // Heart mode playing, its card and Now Playing offer to leave it, which
 // keeps the song playing.
@@ -38,7 +17,7 @@ func TestExitHeartMode(t *testing.T) {
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "听众"}
 	a.pl.Cue([]netease.Track{{ID: 1, Name: "晚风"}, {ID: 2, Name: "推荐的歌"}})
-	a.pl.AttachRadio(heartRadio, func(got func([]netease.Track)) {})
+	a.pl.AttachRadio(radiovm.HeartRadio, func(got func([]netease.Track)) {})
 	a.nav.Current = route{Page: pageFM}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -53,7 +32,7 @@ func TestExitHeartMode(t *testing.T) {
 		t.Errorf("card still on: %q", tt.Texts())
 	}
 
-	a.pl.AttachRadio(heartRadio, func(got func([]netease.Track)) {})
+	a.pl.AttachRadio(radiovm.HeartRadio, func(got func([]netease.Track)) {})
 	a.playbackState.Open = true
 	tt.Advance(time.Second)
 	tt.Frame()

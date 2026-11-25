@@ -523,7 +523,7 @@ func TestLibraryRefreshRetryFailureStops(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	a.freshenLikes()
-	if calls.Load() != 2 || a.library.Refresh.Likes.Retry || viewmodel.ListDue(a.library.Refresh.Likes.At, a.listsNow()) {
+	if calls.Load() != 2 || a.library.Refresh.Likes.Retry || viewmodel.ListDue(a.library.Refresh.Likes.At, a.library.Now()) {
 		t.Fatal("failed follow-up kept retrying")
 	}
 }

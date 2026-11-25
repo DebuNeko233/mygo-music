@@ -693,8 +693,8 @@ func TestSongLikeOnlyPersistsChangedSnapshots(t *testing.T) {
 	store := diskcache.New(dir, 1<<20)
 	defer store.Close()
 	a.browseCache = store
-	store.Put("7", "mine", cacheBytes(library.Lists{Mine: a.library.Mine}), store.Epoch())
-	store.Put("7", "albums", cacheBytes(a.library.SubAlbums), store.Epoch())
+	store.Put("7", "mine", diskcache.Encode(library.Lists{Mine: a.library.Mine}), store.Epoch())
+	store.Put("7", "albums", diskcache.Encode(a.library.SubAlbums), store.Epoch())
 	_, mineAt := store.Read("7", "mine")
 	_, albumsAt := store.Read("7", "albums")
 	if mineAt.IsZero() || albumsAt.IsZero() {

@@ -87,7 +87,7 @@ func BenchmarkDownloadEnqueue(b *testing.B) {
 	<-started
 	b.Cleanup(func() {
 		a.quitting = true
-		a.cancelDownloads()
+		a.downloads.CancelAll()
 		select {
 		case post := <-posts:
 			post()

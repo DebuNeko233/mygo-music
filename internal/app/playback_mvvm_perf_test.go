@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
 // Playback and FM views reuse player facts rather than copying audio or queue state into the ViewModel.
@@ -44,7 +45,7 @@ func TestPlaybackMVVMFrames(t *testing.T) {
 		a := catalogApp()
 		a.nav.Current = route{Page: pageFM}
 		a.pl.Cue([]netease.Track{{ID: 7, Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 180000}})
-		a.pl.AttachRadio(fmRadio(netease.FMDefault), func(got func([]netease.Track)) { got(nil) })
+		a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(got func([]netease.Track)) { got(nil) })
 		tt := ui.NewTester(a.view, 1200, 800)
 		tt.SetDark(dark)
 		tt.Advance(time.Second)

@@ -104,3 +104,27 @@ func coverView(t *testing.T) (*View, *ui.Tester, ui.Rect) {
 	}
 	return v, tt, r
 }
+
+// A picture covers the page it stands on, centred, keeping its own shape:
+// what is outside the page is cut off, never squeezed in.
+func TestCoverSourceKeepsTheShape(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		page ui.Rect
+		w, h float32
+		want ui.Rect
+	}{
+		{"a wide picture in a tall page", ui.Rect{W: 100, H: 400}, 200, 100, ui.Rect{X: 87.5, W: 25, H: 100}},
+		{"a wide picture in a wide page", ui.Rect{W: 400, H: 100}, 200, 100, ui.Rect{Y: 25, W: 200, H: 50}},
+		{"the same shape", ui.Rect{W: 200, H: 100}, 200, 100, ui.Rect{W: 200, H: 100}},
+	} {
+		src := CoverSource(tc.page, tc.w, tc.h)
+		if src != tc.want {
+			t.Errorf("%s: source %+v, want %+v", tc.name, src, tc.want)
+		}
+		// The part taken is as wide for its height as the page it fills.
+		if got, want := src.W/src.H, tc.page.W/tc.page.H; got-want > 0.001 || want-got > 0.001 {
+			t.Errorf("%s: source %v:1 in a page %v:1", tc.name, got, want)
+		}
+	}
+}

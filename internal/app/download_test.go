@@ -249,7 +249,7 @@ func TestDownloadsCancelOnAccountChange(t *testing.T) {
 	}
 	a.enqueueDownloads([]netease.Track{cloudTrack(1, "一"), cloudTrack(2, "二")})
 	wait(t, started, "download start")
-	a.cancelDownloads()
+	a.downloads.CancelAll()
 	refreshPost(t, posts)
 	if a.downloads.Busy() || len(started) != 0 || !a.downloads.Jobs[1].Finished {
 		t.Fatal("private download survived account transition")
@@ -273,7 +273,7 @@ func TestDownloadQuitWaitsForCleanup(t *testing.T) {
 	quitAfterDownload = func() { quits++ }
 	a.enqueueDownloads([]netease.Track{{ID: 1}, {ID: 2}})
 	wait(t, started, "active download")
-	if !a.deferDownloadQuit() || quits != 0 {
+	if !a.downloads.DeferQuit() || quits != 0 {
 		t.Fatal("quit did not defer")
 	}
 	a.enqueueDownloads([]netease.Track{{ID: 3}})
@@ -282,7 +282,7 @@ func TestDownloadQuitWaitsForCleanup(t *testing.T) {
 	}
 	close(cleaned)
 	refreshPost(t, posts)
-	if quits != 1 || a.downloads.Busy() || a.deferDownloadQuit() {
+	if quits != 1 || a.downloads.Busy() || a.downloads.DeferQuit() {
 		t.Fatal("cleanup did not finish quit")
 	}
 }
@@ -446,8 +446,8 @@ func TestDownloadProgressAndPendingCancellation(t *testing.T) {
 	if active.Received != 20 || active.Total != 100 || active.Status != "test-stage" {
 		t.Fatal("dispatched progress was lost")
 	}
-	a.cancelDownload(pending)
-	a.cancelDownload(active)
+	a.downloads.Cancel(pending)
+	a.downloads.Cancel(active)
 	status := active.Status
 	progress("late-stage", 90, 100)
 	refreshPost(t, posts)

@@ -220,7 +220,7 @@ func TestRecentLoadsSnapshotOffTheUIThread(t *testing.T) {
 	store := diskcache.New(t.TempDir(), 1<<20)
 	defer store.Close()
 	a.browseCache = store
-	store.Put("7", "recent", cacheBytes(recentvm.RecentSnapshot{
+	store.Put("7", "recent", diskcache.Encode(recentvm.RecentSnapshot{
 		Songs: []netease.Play{{Track: netease.Track{ID: 42}}},
 	}), store.Epoch())
 	posts := testPosts(a)

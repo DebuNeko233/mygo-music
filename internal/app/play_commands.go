@@ -2,8 +2,10 @@ package app
 
 import (
 	"netease-music-mygo/internal/desktop/view/tracklist"
+	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	playbackvm "netease-music-mygo/internal/viewmodel/playback"
 )
 
 // playPageTracks starts an album or playlist at its first playable song in order.
@@ -57,3 +59,13 @@ func (a *app) playTrackQueue(tracks []netease.Track, at int) {
 		a.cloud.FollowQueue(a.pl.QueueRevision())
 	}
 }
+
+func (a *app) volumeServices() playbackvm.VolumeServices {
+	return playbackvm.VolumeServices{Player: a.pl, Mixer: a.mix}
+}
+
+func (a *app) setVolume(v float64) { a.playbackState.SetVolume(v, a.volumeServices()) }
+
+func (a *app) syncVolume() { a.playbackState.SyncVolume(a.volumeServices()) }
+
+func (a *app) systemVolume(s mixvol.State) { a.playbackState.SystemVolume(s, a.volumeServices()) }

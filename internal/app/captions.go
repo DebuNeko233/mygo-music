@@ -51,8 +51,6 @@ func (a *app) captionsOn() bool { return a.settings.Captions && a.captionsShown(
 
 func (a *app) startModelDownload() { a.captions.StartModelDownload(a.captionServices()) }
 
-func (a *app) cancelModelDownload() { a.captions.CancelModelDownload() }
-
 func (a *app) deleteModel() { a.captions.DeleteModel(a.captionServices()) }
 
 func (a *app) syncCaptions() { a.captions.Sync(a.captionServices()) }

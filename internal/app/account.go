@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 	accountvm "netease-music-mygo/internal/viewmodel/account"
 	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
@@ -35,7 +36,7 @@ func (a *app) accountServices() accountvm.AccountServices {
 		Verified: func(prof *netease.Profile, identity string) {
 			a.bindOfflineLyrics()
 			if identity != "" {
-				a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
+				a.identityCache.Queue(identity, "profile", diskcache.Encode(prof), a.identityCache.Epoch())
 			}
 			a.freshenLibrary()
 		},
@@ -62,7 +63,7 @@ func (a *app) discardAccount() {
 }
 
 func (a *app) signedIn(prof *netease.Profile) {
-	a.cancelDownloads()
+	a.downloads.CancelAll()
 	a.stopPlayReports()
 	if a.recovery.timer != nil {
 		a.recovery.timer.Stop()
@@ -80,7 +81,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.library.Reset()
 	a.bindOfflineLyrics()
 	if identity := loginIdentity(); identity != "" && prof != nil {
-		a.identityCache.Queue(identity, "profile", cacheBytes(prof), a.identityCache.Epoch())
+		a.identityCache.Queue(identity, "profile", diskcache.Encode(prof), a.identityCache.Epoch())
 	}
 	a.home.Reset()
 	// Playback picks up where it was left, once the session that lets
@@ -89,7 +90,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 
 	// What another listener played is not what this one played.
 	a.recent.Reset()
-	a.cancelCloudLoad()
+	a.cloud.Stop()
 	a.cloud = cloudvm.Cloud{}
 
 	// What the listener may play, and follows, changed: load the pages

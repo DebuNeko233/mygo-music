@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"fmt"
+
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
@@ -57,11 +59,23 @@ func (a *View) CacheNotice(c *ui.Context) {
 	}
 	ui.Row(c.Key("cache-move-progress")).Absolute().Top(shell.TopBar(c)+4).Left(shell.SidebarWidth+24).
 		Padding(8, 12).Gap(12).Radius(12).AlignItems(ui.Center).Material(glass.Glass{}).Children(func() {
-		ui.Text(c, a.CacheMoveLabel()).FontSize(12).TextColor(a.Palette.Text)
+		ui.Text(c, a.Cache.Label()).FontSize(12).TextColor(a.Palette.Text)
 		if a.Cache.Cancelable() && !a.Cache.Cancelling {
 			if ui.Button(c.Key("cancel-cache-move"), "取消迁移").Clicked() {
 				a.CancelCacheChange()
 			}
 		}
 	})
+}
+
+// cacheUsage says how much the cache takes, once measured.
+func (a *View) cacheUsage() string {
+	switch n := a.Cache.Used; {
+	case n < 0:
+		return "正在计算已用空间…"
+	case n >= 1<<30:
+		return fmt.Sprintf("已用 %.1f GB", float64(n)/(1<<30))
+	default:
+		return fmt.Sprintf("已用 %d MB", n>>20)
+	}
 }

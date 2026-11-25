@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/desktop/view/components"
+	"netease-music-mygo/internal/download"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -25,16 +26,16 @@ func (a *View) DownloadSettings(c *ui.Context, p components.Palette, row Row, bl
 		ui.Button(c.Key("download-directory"), "选择目录…").OnClick(func() { a.ChooseDownloadDirectory() })
 	})
 	row("文件名格式", "对新加入下载队列的歌曲生效", func() {
-		labels := make([]string, len(a.NameFormats))
-		chosen := a.NameFormats[0].Label
-		for i, f := range a.NameFormats {
+		labels := make([]string, len(nameFormats))
+		chosen := nameFormats[0].Label
+		for i, f := range nameFormats {
 			labels[i] = f.Label
 			if s.DownloadNameFormat == f.Value {
 				chosen = f.Label
 			}
 		}
 		if ui.Select(c.Key("download-name-format"), &chosen, labels).Label("下载文件名格式").Width(150).Changed() {
-			for _, f := range a.NameFormats {
+			for _, f := range nameFormats {
 				if chosen == f.Label {
 					s.DownloadNameFormat = f.Value
 					break
@@ -77,7 +78,7 @@ func (a *View) DownloadJobs(c *ui.Context, p components.Palette) {
 						status += fmt.Sprintf(" %d%%", j.Received*100/j.Total)
 					}
 					if j.Result.Quality != "" {
-						for _, q := range a.Qualities {
+						for _, q := range qualities {
 							if q.Value == j.Result.Quality {
 								label, _, _ := strings.Cut(q.Label, "（")
 								status += " · " + label
@@ -113,4 +114,10 @@ func downloadTitle(tr netease.Track) string {
 		return tr.Name + " · " + artists
 	}
 	return tr.Name
+}
+
+var nameFormats = []Choice{
+	{download.NameArtistTitle, "歌手 - 歌名"},
+	{download.NameTitleArtist, "歌名 - 歌手"},
+	{download.NameTitle, "仅歌名"},
 }

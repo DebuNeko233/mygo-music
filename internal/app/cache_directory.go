@@ -138,7 +138,7 @@ func (a *app) cacheDirectoryDescription() string {
 	}
 	desc := dir
 	if a.cacheSettings.Moving {
-		desc += "\n" + a.cacheMoveLabel()
+		desc += "\n" + a.cacheSettings.Label()
 	}
 	if a.cacheSettings.Error != "" {
 		desc += "\n" + a.cacheSettings.Error
@@ -191,8 +191,6 @@ func (a *app) deferCacheQuit() bool {
 	}
 	return deferred
 }
-
-func (a *app) cacheMoveLabel() string { return a.cacheSettings.Label() }
 
 func (a *app) cacheServices() settingsvm.CacheServices {
 	return settingsvm.CacheServices{Post: a.post, PostResource: a.postResource, Player: a.pl, Browse: a.browseCache, Images: a.imageCache,

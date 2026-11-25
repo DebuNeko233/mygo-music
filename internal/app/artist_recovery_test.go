@@ -20,7 +20,7 @@ func TestArtistEventsRecovery(t *testing.T) {
 			posts := testPosts(a)
 			a.nav.Current = route{Page: pageArtist, ID: 9}
 			a.artists.Tab = artistvm.ArtistEvents
-			d := a.artist(9)
+			d := a.artists.Page(9)
 			d.Profile = &netease.ArtistProfile{ID: 9, AccountID: 42}
 			old := accountEvents
 			t.Cleanup(func() { accountEvents = old })

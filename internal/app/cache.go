@@ -7,6 +7,9 @@ import (
 	"github.com/egoist/mygo"
 
 	"netease-music-mygo/internal/cachemove"
+	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/lyrics"
+	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
 
@@ -94,14 +97,77 @@ func (a *app) clearCache() {
 	}
 }
 
-// cacheUsage says how much the cache takes, once measured.
-func (a *app) cacheUsage() string {
-	switch n := a.cacheSettings.Used; {
-	case n < 0:
-		return "正在计算已用空间…"
-	case n >= 1<<30:
-		return fmt.Sprintf("已用 %.1f GB", float64(n)/(1<<30))
-	default:
-		return fmt.Sprintf("已用 %d MB", n>>20)
+// A snapshot belongs to the account that requested it. It is serialized on
+// the worker but committed only after the UI accepts its generation/revision.
+func (a *app) cacheRequest(key string) diskcache.Snapshot {
+	return diskcache.Snapshot{Store: a.browseCache, Scope: fmt.Sprint(a.listenerID()), Key: key, Epoch: a.browseCache.Epoch()}
+}
+
+func (a *app) initOffline() {
+	if paths, err := cachePaths(a.settings); err == nil {
+		a.browseCache = diskcache.New(paths.Browse, 64<<20)
+		a.imageCache = netease.NewArtworkStore(paths.Artwork, 256<<20)
+		netease.UseImageCache(a.imageCache, func(url string, change netease.ImageChange) {
+			a.post(func() { a.art.ImageChanged(url, change) })
+		})
 	}
+	if root, err := mygo.App.Path(mygo.PathUserData); err == nil {
+		a.identityCache = diskcache.New(filepath.Join(root, "offline-account"), 64<<10)
+	}
+	a.bindOfflineLyrics()
+}
+
+var lyricsRequest = netease.Lyrics
+
+func (a *app) cachedLyricsFor(scope string) lyrics.Cache {
+	store := a.browseCache
+	return lyrics.Cache{Store: store, Scope: scope, Fetch: lyricsRequest,
+		Publish: func(epoch uint64, update func()) {
+			a.post(func() {
+				if fmt.Sprint(a.listenerID()) == scope && store.Epoch() == epoch {
+					update()
+				}
+			})
+		},
+	}
+}
+
+// Bind the loader on the main thread when the account changes; the player
+// captures it when choosing a track, rather than reading UI state on a worker.
+func (a *app) bindOfflineLyrics() {
+	a.pl.FetchCachedLyrics = a.cachedLyricsFor(fmt.Sprint(a.listenerID())).Load
+}
+
+func (a *app) clearBrowseCache() {
+	if a.cacheSettings.Moving {
+		return
+	}
+	a.browseCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
+}
+
+func (a *app) clearImageCache() {
+	if a.cacheSettings.Moving {
+		return
+	}
+	a.imageCache.Clear("", func() { a.post(func() { a.measureOfflineCache() }) })
+}
+
+func (a *app) measureOfflineCache() {
+	browse, images := a.browseCache, a.imageCache
+	browseEpoch, imageEpoch := browse.Epoch(), images.Epoch()
+	if browse == nil && images == nil {
+		return
+	}
+	go func() {
+		b, i := browse.Size(), images.Size()
+		a.post(func() {
+			if a.cacheSettings.Moving || a.browseCache != browse || a.imageCache != images || browse.Epoch() != browseEpoch || images.Epoch() != imageEpoch {
+				return
+			}
+			a.browseUsed, a.imagesUsed = b, i
+			if a.settingsWin != nil {
+				a.settingsWin.Invalidate()
+			}
+		})
+	}()
 }

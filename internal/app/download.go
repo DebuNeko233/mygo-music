@@ -18,12 +18,6 @@ var saveDownload = download.Save
 
 var quitAfterDownload = mygo.App.Quit
 
-var downloadNameFormats = []struct{ value, label string }{
-	{download.NameArtistTitle, "歌手 - 歌名"},
-	{download.NameTitleArtist, "歌名 - 歌手"},
-	{download.NameTitle, "仅歌名"},
-}
-
 func (a *app) downloadDirectory() string {
 	if a.settings.DownloadDirectory != "" {
 		return a.settings.DownloadDirectory
@@ -52,12 +46,11 @@ func (a *app) enqueueDownloads(tracks []netease.Track) {
 	if !slices.Contains(netease.Levels, level) {
 		level = "exhigh"
 	}
-	nameFormat := download.NameArtistTitle
-	for _, f := range downloadNameFormats {
-		if f.value == a.settings.DownloadNameFormat {
-			nameFormat = f.value
-			break
-		}
+	nameFormat := a.settings.DownloadNameFormat
+	switch nameFormat {
+	case download.NameTitleArtist, download.NameTitle:
+	default:
+		nameFormat = download.NameArtistTitle
 	}
 
 	options := download.Options{Directory: directory, Quality: level, NameFormat: nameFormat, Sidecar: a.settings.DownloadSidecar}
@@ -90,8 +83,30 @@ func (a *app) retryDownload(j *downloadsvm.DownloadJob) {
 	}
 }
 
-func (a *app) cancelDownload(j *downloadsvm.DownloadJob) { a.downloads.Cancel(j) }
+var openDownloadDirectory = mygo.Dialog.Open
 
-func (a *app) cancelDownloads() { a.downloads.CancelAll() }
+var revealDownload = mygo.Shell.ShowItemInFolder
 
-func (a *app) deferDownloadQuit() bool { return a.downloads.DeferQuit() }
+func (a *app) chooseDownloadDirectory() bool {
+	paths, err := openDownloadDirectory(mygo.OpenDialogOptions{
+		Parent: a.downloadParent(), Title: "选择下载目录", Directory: true, CreateDirectories: true,
+	})
+	if err != nil {
+		a.downloads.Err = err.Error()
+		return false
+	}
+	if len(paths) == 0 {
+		return false
+	}
+	a.settings.DownloadDirectory = paths[0]
+	a.settings.saveSoon()
+	a.downloads.Err = ""
+	return true
+}
+
+func (a *app) downloadParent() *mygo.Window {
+	if a.settingsWin != nil {
+		return a.settingsWin
+	}
+	return a.win
+}

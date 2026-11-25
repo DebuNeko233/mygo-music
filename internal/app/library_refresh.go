@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"time"
 
 	"netease-music-mygo/internal/desktop/view/tracklist"
 	"netease-music-mygo/internal/netease"
@@ -106,5 +105,3 @@ func (a *app) loadSubscribedAlbums(uid int64) {
 		a.library.LoadAlbums(uid, a.libraryServices())
 	}
 }
-
-func (a *app) listsNow() time.Time { return a.library.Now() }

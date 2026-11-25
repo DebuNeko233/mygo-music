@@ -1,10 +1,9 @@
-package app
+package playback
 
 import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -24,7 +23,7 @@ func TestLastStretch(t *testing.T) {
 		play(2, 30*time.Minute, "android", 0),
 		play(1, 70*time.Minute, "android", 0), // after a break
 	}
-	songs, last, ok := lastStretch(plays, now)
+	songs, last, ok := LastStretch(plays, now)
 	var ids []int64
 	for _, s := range songs {
 		ids = append(ids, s.ID)
@@ -32,19 +31,16 @@ func TestLastStretch(t *testing.T) {
 	if !ok || len(ids) != 3 || ids[0] != 2 || ids[1] != 3 || ids[2] != 5 || last.Track.ID != 5 {
 		t.Fatalf("picked %v, last %d", ids, last.Track.ID)
 	}
-	if got := components.HeardAt(last, now); got != "3分钟前在手机上听过" {
-		t.Errorf("heard %q", got)
-	}
 
 	plays[1] = play(4, 6*time.Minute, "osx", 0)
-	if songs, _, _ := lastStretch(plays, now); len(songs) != 1 || songs[0].ID != 5 {
+	if songs, _, _ := LastStretch(plays, now); len(songs) != 1 || songs[0].ID != 5 {
 		t.Errorf("crossed devices: %v", songs)
 	}
 	plays[0] = play(5, 4, "android", 1)
-	if songs, last, _ := lastStretch(plays[:1], now); len(songs) != 0 || last.Track.ID != 0 {
+	if songs, last, _ := LastStretch(plays[:1], now); len(songs) != 0 || last.Track.ID != 0 {
 		t.Errorf("picked a song that may not play: %v", songs)
 	}
-	if _, _, ok := lastStretch([]netease.Play{play(1, 8*24*time.Hour, "iphone", 0)}, now); ok {
+	if _, _, ok := LastStretch([]netease.Play{play(1, 8*24*time.Hour, "iphone", 0)}, now); ok {
 		t.Error("picked up a week-old song")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
 // TestFMKeepsTheModeChosenWhileItStarts checks that the mode the listener
@@ -19,7 +20,7 @@ func TestFMKeepsTheModeChosenWhileItStarts(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.nav.Current = route{Page: pageFM}
-	a.pl.AttachRadio(fmRadio(netease.FMDefault), func(got func([]netease.Track)) {})
+	a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(got func([]netease.Track)) {})
 
 	asked := make(chan string, 4)
 	release := make(chan struct{})
@@ -64,7 +65,7 @@ func TestFMKeepsTheModeChosenWhileItStarts(t *testing.T) {
 	tt.Advance(time.Second)
 	tt.Frame()
 	tt.Frame()
-	if radio := a.pl.Radio(); radio != fmRadio(netease.FMDefault) {
+	if radio := a.pl.Radio(); radio != radiovm.FMRadio(netease.FMDefault) {
 		t.Fatalf("radio %q, for the mode clicked last", radio)
 	}
 	if a.radio.Mode != 0 {
