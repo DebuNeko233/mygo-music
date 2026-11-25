@@ -1,14 +1,14 @@
 # 独立维护、依赖与外部修复
 
-本项目由 `DebuNeko233/mygo-music` 独立维护，`main` 为正式开发主线。原项目只作为历史来源和可选择参考的代码来源，不再是自动同步、版本或发行的权威。独立维护不意味着删除历史作者、许可证或第三方依赖。
+本项目由 `DebuNeko233/nyago-music` 独立维护，`main` 为正式开发主线。原项目只作为历史来源和可选择参考的代码来源，不再是自动同步、版本或发行的权威。独立维护不意味着删除历史作者、许可证或第三方依赖。
 
 ## 1. 项目边界与事实来源
 
 | 项目 | 当前状态 | 核对来源 |
 | --- | --- | --- |
-| 正式仓库与开发主线 | `DebuNeko233/mygo-music` / `main` | 实际 remote 与 GitHub 默认分支 |
+| 正式仓库与开发主线 | `DebuNeko233/nyago-music` / `main` | 实际 remote 与 GitHub 默认分支 |
 | 原项目 | `zhangnjsd/mygo-music`，保留来源致谢与历史 | README、Git 历史、许可证 |
-| 应用更新源 | `DebuNeko233/mygo-music` | [mygo.json](../mygo.json) |
+| 应用更新源 | `DebuNeko233/nyago-music` | [mygo.json](../mygo.json) |
 | 更新签名 | 本项目独立 Ed25519 公钥与对应 Actions Secret | mygo.json / `MYGO_UPDATER_PRIVATE_KEY` |
 | 字幕原生库资源 | 本仓库 `sherpa-onnx-2.0.1` 资源发行 | [生成器](../scripts/sherpa/main.go)、[生成清单](../internal/speech/natives.go) |
 | MyGo require | `github.com/egoist/mygo v0.10.0` | [go.mod](../go.mod) |

@@ -2,27 +2,27 @@
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方音乐桌面客户端，原生界面，无 WebView。
 
-本项目由 [DebuNeko233/mygo-music](https://github.com/DebuNeko233/mygo-music) 独立维护，`main` 为正式开发主线。版本、更新和字幕库资源由本仓库发布，不再跟随原项目自动同步。业务音源限定为单一音源，另支持本地音频。
+本项目由 [DebuNeko233/nyago-music](https://github.com/DebuNeko233/nyago-music) 独立维护，`main` 为正式开发主线。版本、更新和字幕库资源由本仓库发布，不再跟随原项目自动同步。业务音源限定为单一音源，另支持本地音频。
 
 ## 安装
 
-独立版本从[本仓库 Releases](https://github.com/DebuNeko233/mygo-music/releases)下载。旧预览版不包含本次主线改动；首次独立正式发行前，请自行构建或使用 Actions 构建产物。下面的 `latest` 安装命令在正式版本发布后可用。
+独立版本从[本仓库 Releases](https://github.com/DebuNeko233/nyago-music/releases)下载。首个独立正式版本为 `v0.3.0`；旧预览版不包含本次主线改动。安装时请选择正式版本，字幕运行库资源发行不包含应用安装包。
 
 原项目安装的版本不会自动切换到本项目：首次迁移需手动安装本仓库版本，此后使用本仓库的更新源和签名。应用标识暂时保留以兼容已有配置与登录，不支持两者并行独立保存数据。
 
 Windows 上为当前用户安装，再次运行即升级，会先退出正在运行的版本：
 
 ```powershell
-irm https://github.com/DebuNeko233/mygo-music/releases/latest/download/install.ps1 | iex
+irm https://github.com/DebuNeko233/nyago-music/releases/latest/download/install.ps1 | iex
 ```
 
 Linux 上装在 ~/.local，不需要 root：
 
 ```sh
-curl -fsSL https://github.com/DebuNeko233/mygo-music/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/DebuNeko233/nyago-music/releases/latest/download/install.sh | sh
 ```
 
-macOS 上从 [最新版本页面](https://github.com/DebuNeko233/mygo-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
+macOS 上从 [最新版本页面](https://github.com/DebuNeko233/nyago-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
 
 ## 桌面体验与扩展功能
 

@@ -1,6 +1,6 @@
 # 独立发行
 
-正式仓库是 `DebuNeko233/mygo-music`，开发主线是 `main`。应用更新、安装脚本与字幕库资源由本仓库提供。普通贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目边界见[独立维护与依赖](docs/dependencies-and-upstream.md)。
+正式仓库是 `DebuNeko233/nyago-music`，开发主线是 `main`。应用更新、安装脚本与字幕库资源由本仓库提供。普通贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目边界见[独立维护与依赖](docs/dependencies-and-upstream.md)。
 
 本指南用于已授权的发行操作；主线转正或普通推送不会自动创建应用版本标签。应用发行与字幕库资源发行分别管理。
 
@@ -23,7 +23,7 @@ GitHub fork 网络脱离可能影响平台元数据。执行前核对已存在�
 
 ```sh
 go tool mygo keygen -o signing-local/standalone-updates
-gh secret set MYGO_UPDATER_PRIVATE_KEY --repo DebuNeko233/mygo-music \
+gh secret set MYGO_UPDATER_PRIVATE_KEY --repo DebuNeko233/nyago-music \
   < signing-local/standalone-updates/mygo-update.key
 ```
 
@@ -71,8 +71,8 @@ go tool mygo build -platform darwin/arm64,darwin/amd64 -sign - -skip-notarize
 `-upload` 会实际创建/修改远端发行，只有在本次发行授权内使用。先检查草稿中的安装包、SHA256SUMS、安装脚本、各平台 update manifest、签名与 changelog；测试安装和升级路径后再公开草稿并设为 latest。
 
 ```sh
-gh release edit v0.3.0 --repo DebuNeko233/mygo-music --draft=false --latest
-curl -fsSL https://github.com/DebuNeko233/mygo-music/releases/latest/download/SHA256SUMS
+gh release edit v0.3.0 --repo DebuNeko233/nyago-music --draft=false --latest
+curl -fsSL https://github.com/DebuNeko233/nyago-music/releases/latest/download/SHA256SUMS
 ```
 
 正式发行前 `releases/latest` 可能不存在；不能让 README 的安装步骤回退到原项目。已公开的发行故障需要明确修复策略，不静默覆盖相同版本的已下载字节。
@@ -90,7 +90,7 @@ go run ./scripts/sherpa -sign - -out build/sherpa
 上传到本仓库的资源发行，设置 prerelease 且 latest=false，使其不参与应用更新：
 
 ```sh
-gh release create sherpa-onnx-2.0.1 --repo DebuNeko233/mygo-music \
+gh release create sherpa-onnx-2.0.1 --repo DebuNeko233/nyago-music \
   --target main --prerelease --latest=false \
   --title 'sherpa-onnx 2.0.1 runtime assets' \
   --notes-file /path/to/reviewed-runtime-notes.md build/sherpa/*
