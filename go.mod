@@ -36,3 +36,6 @@ require (
 	go.digitalxero.dev/rpm v0.3.4 // indirect
 	golang.org/x/net v0.63.0 // indirect
 )
+
+// Retained lyric layers and macOS frame-ready fixes, pinned to a tested commit.
+replace github.com/egoist/mygo => github.com/DebuNeko233/mygo v0.10.1-0.20261120193717-667973527550

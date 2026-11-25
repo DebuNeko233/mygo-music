@@ -132,6 +132,8 @@ App 中搜索协调集中在 `search.go`，播放入口和来源在 `play_comman
 | 登录设置帮助、复制与重试按钮 | `desktop/view/account.go`；App 仅注入剪贴板与通知回调 |
 | Wayland 绑定反馈与 Hyprland 空触发器处理 | `app/hotkeys.go`；定义与绑定规则仍属于 `desktop/shortcuts` |
 | Linux 歌词窗口隐藏菜单、持续提交解锁点击区域 | `desktop/view/playback/desklyrics.go` |
-| 官方 MyGo 的歌词图层接口 | `desktop/view/playback/lyric_edges.go` 使用 `Draw` |
+| 歌词图层绘制 | `desktop/view/playback/lyric_edges.go` 保留 fork 的 `DrawCached`，复用内容未变的中间图层 |
 
-依赖与上游一致，使用官方 `github.com/egoist/mygo v0.10.0`，取消此前的 fork replace。快捷键注册附带代次：重新绑定、注销或退出后，旧 portal 结果不能覆盖当前错误状态。新增错误分类和登录状态测试分别放在 API 与 Account ViewModel 旁；界面交互放在视图旁，剪贴板接线和系统快捷键注册保留 App 集成测试。
+MyGo 依赖是本分支与上游的有意差异：保留 `github.com/egoist/mygo v0.10.0` 的模块接口，通过 `replace` 固定到 `github.com/DebuNeko233/mygo v0.10.1-0.20261120193717-667973527550`。该 fork 提供歌词图层像素缓存、图片版本感知的重绘判断和 macOS Metal/主线程唤醒优化。官方版本尚未包含这些补丁，后续同步上游时应保留此替换和 `DrawCached` 调用；待官方覆盖相应能力并完成原生渲染性能对照后，再移除替换。软件渲染测试及跨平台构建不能替代原生 Metal 或 Wayland 验证。
+
+上游 0.2.16 的业务与平台改动继续保留。快捷键注册附带代次：重新绑定、注销或退出后，旧 portal 结果不能覆盖当前错误状态。新增错误分类和登录状态测试分别放在 API 与 Account ViewModel 旁；界面交互放在视图旁，剪贴板接线和系统快捷键注册保留 App 集成测试。
