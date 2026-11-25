@@ -187,8 +187,9 @@ func newDeskLyrics(a *app) *deskLyrics {
 	}
 	x, y := lyricWindowPlace(s.LyricX, s.LyricY, w, h, lyricWindowArea(s.LyricX, s.LyricY, w, h, mygo.Screen.Displays()))
 	d.win = mygo.NewWindow(mygo.WindowOptions{
-		Title:  mygo.App.Name() + "桌面歌词",
-		Hidden: true,
+		Title:           mygo.App.Name() + "桌面歌词",
+		Hidden:          true,
+		AutoHideMenuBar: true,
 		// Frameless, so that the window draws nothing of itself: no frame, no
 		// shadow. Its edges still take the pointer to resize it.
 		Frameless:     true,
@@ -479,8 +480,11 @@ func (d *deskLyrics) view(c *ui.Context) {
 				d.win.SetIgnoreMouseEvents(!hot)
 				d.win.SetHasShadow(false)
 				clearFrame(d.win)
-				d.win.Invalidate()
 			}
+			// Keep drawing while a locked overlay watches the pointer. On
+			// Wayland the input shape is applied by the next surface commit,
+			// so an idle frame would leave the padlock click-through.
+			d.win.Invalidate()
 			c.After(lyricPoll)
 		}
 	}
