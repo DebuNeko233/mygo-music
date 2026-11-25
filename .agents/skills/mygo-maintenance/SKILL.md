@@ -1,37 +1,33 @@
 ---
 name: mygo-maintenance
-description: Maintain Go applications using github.com/egoist/mygo, including UI changes, crash fixes, and dependency upgrades. Apply MyGo-specific lifetime, identity, threading, and testing practices.
+description: Maintain this MyGO Rev. desktop music repository, including features, MyGo UI fixes, architecture changes, tests, and dependency or upstream updates. Use the repository docs for ownership, UI lifetimes, verification, and delivery rules.
 ---
 
-# MyGo app maintenance
+# MyGO Rev. 维护
 
-Check the app's pinned MyGo version and existing conventions before changing APIs. Locate its source with `go list -m -f '{{.Dir}}' github.com/egoist/mygo`; read `ui/doc.go` and relevant implementation comments. Read `docs/ui/migration.md` only for major-version upgrades, including minor-version bumps while on `0.x` (for example, `0.2.x` to `0.3.x`, or `1.x` to `2.x`). Confirm API availability against the pinned source.
+本技能是仓库文档的任务路由，不维护独立规则副本。路径均相对本文件；仓库根目录是 `../../..`。
 
-The native UI rules below apply where the app uses package `ui`; preserve a web app's frontend and typed Go/TypeScript bindings.
+## 执行顺序
 
-## UI lifetime and identity
+1. 确认实际仓库、Git 状态、目标分支和用户已有授权。
+2. 阅读 [AGENTS.md](../../../AGENTS.md)及[文档入口](../../../docs/README.md)，按任务补读下面的主题。
+3. 从现有实现确认所有者和行为，再修改代码；具体约束遵循所链接的文档。
+4. 按[测试手册](../../../docs/testing.md)完成相应验证，审查最终 diff，按已授权方式交付并报告限制。
 
-- Views receive a stable `*ui.Context` for their window. `Children(func())` shares it and changes its parent scope during the callback. Keep Context out of app state and workers; capture `c.Services()` for persistent clipboard/URL callbacks and background redraws.
-- Constructors return checked `ui.Element` values. Elements and custom parts expire before the next build pass, including another pass in the same frame. Store app data, widget state and `ui.Handle`, never an element or parts. Zero elements are safe and `Valid()` is a quiet check; stale operations panic in development/Tester and become empty results or no-ops in production. Fix the ownership rather than relying on validity guards or recovery.
-- Bind persistent identity with `.Bind(&handle)`. `handle.Focused(c)` and `FocusWithin(c)` read committed focus independently of construction order. `handle.Focus(c)` requests focus and waits while hidden; `CancelFocus(c)` cancels it. Handles support several windows; select one with its Context, and keep widget state separate per window.
-- Use `.FocusBind(&a.pane, files)` when app data should request focus. The field holds desired focus; `ui.FocusedValue(c, &a.pane)` reads actual focus while a hidden target waits. Use a comparable field, unique target values and its zero value for no focus.
-- Use `handle.Bounds(c)` for committed geometry in input callbacks. `c.Resolve(handle)` returns only the current build's element. Do not capture an element in a later input callback to query its bounds.
-- Give controls stable, unique identity before construction with `c.Key(key)`, including stateful widgets. Container `.Key(key)` must precede children and local state. Configure fluent lists before `.Rows`; use `.ItemKey` for stable item identity and `ui.ListRow.Selected()`/`ListFocused()` for row styling.
+## 按任务加载
 
-## Input and actions
+| 任务 | 阅读 |
+| --- | --- |
+| 结构、功能落点与接线 | [架构](../../../docs/architecture.md)、[新增功能](../../../docs/adding-features.md) |
+| 控件、窗口、动画、焦点和 UI 崩溃 | [界面开发](../../../docs/ui-development.md) |
+| 异步、账号、缓存、存储和资源释放 | [数据生命周期](../../../docs/data-lifecycle.md) |
+| 播放、歌词、本地音乐、下载或浏览 | [功能索引](../../../docs/features/README.md)中的对应手册 |
+| 编码与文件简介 | [代码规范](../../../docs/coding-standards.md) |
+| 环境与原生验证 | [开发环境](../../../docs/development.md) |
+| MyGo 升级、切换官方或同步上游 | [依赖与上游](../../../docs/dependencies-and-upstream.md) |
+| 文档或技能规则更新 | [文档维护](../../../docs/documentation.md) |
+| 工作区、权限、提交和推送 | [代理工作约定](../../../docs/agent-workflow.md) |
 
-- Bound values update after construction and configuration. `Changed`/`Submitted` notices appear in the following build pass. Bind directly to persistent model fields when possible. A local value recomputed each pass loses the edit before its notice; write derived checkbox or segmented values back in `OnClick`, after that build's bound input updates them.
-- `OnClick`/`OnShortcut` run after construction and bound input; `OnChange`/`OnSubmit` observe the rebuilt view's notices. Prefer deferred actions when changing a collection being built. `Clicked()` and shortcut queries remain supported for local interactions.
-- Declare scoped commands with `handle.OnShortcut(c, mods, key, fn)`, before or after Bind. Only an enabled control present in the current build takes its command. Use `c.OnShortcut` for commands in the current parent scope.
+使用框架 API 前，以 `go.mod` 的实际替换和 `go list -m -f '{{.Dir}}' github.com/egoist/mygo` 定位源码。不要凭 require 行假定正在使用官方实现；不要将新版本文档直接套到固定版本。
 
-## State, work, and rendering
-
-- Views may rebuild several times for one event. Trigger external side effects through handled actions or explicit guarded jobs, not unconditional rendering code.
-- Keep slow I/O and expensive computation off the UI thread. Publish results through `Window.Update`; it is asynchronous. `Invalidate` requests redraws without synchronizing model writes. Cancel obsolete jobs or reject stale results after source changes or window closure.
-- Keep drawing callbacks limited to painting; they can run repeatedly. Prefer MyGo widgets/base widgets to preserve keyboard, focus, disabled, and accessibility behavior. Follow the app's theme and sizing conventions.
-
-## Verification
-
-- Reproduce UI failures with `ui.NewTester`. Exercise extra frames while elements disappear and return, plus relevant focus, typing, and shortcut behavior.
-- Run targeted regression tests, `go tool mygo vet .` for stored build values and goroutine captures, and `CGO_ENABLED=0 go test ./...`. Use race checks when changing shared state, and inspect rendered output or the native app when changing layout/platform behavior, respecting the user's verification preferences.
-- For upgrades, preview with `go tool mygo migrate-ui .`, apply with `-write`, and review persistent identity/services, separately assigned keys and derived bound values manually. Verify affected API/lifecycle assumptions against the new pinned source and rerun relevant UI tests. Report remaining platform-specific verification limits.
+发生文档与源码冲突时核对事实并更新对应 docs，不在技能里新增临时例外。需要报告验证不足时说明实际未覆盖范围；不得用“编译通过”替代原生运行或性能证据。

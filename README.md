@@ -76,7 +76,7 @@ go tool mygo build   # 打包到 build/
 go test ./...        # 运行测试
 ```
 
-目录职责、依赖方向和状态生命周期见 [项目架构](docs/architecture.md)。
+参与开发请从 [贡献指南](CONTRIBUTING.md) 和 [开发文档](docs/README.md) 开始。文档包含架构、功能与代码索引、新增功能流程、测试、代码规范及文档维护规则。
 
 ## 致谢
 

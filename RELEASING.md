@@ -1,9 +1,12 @@
 # Releasing
 
-This repository, `zhangnjsd/mygo-music`, is where the app is released and
-where installed apps look for updates: the repository the app came from was
-deleted, and `mygo.json`'s `updates.github` points here. There is no other
-remote to sync with.
+The app's configured release and update source is `zhangnjsd/mygo-music`,
+as specified by `updates.github` in `mygo.json`. This checkout may be a fork;
+the steps below describe an authorized release to the configured source,
+not an ordinary contribution or feature-branch push. A fork release needs
+its own explicitly chosen update source and signing setup. See
+[dependencies and upstream](docs/dependencies-and-upstream.md) for that
+boundary, and [CONTRIBUTING.md](CONTRIBUTING.md) for normal contributions.
 
 1. Commit pending work, and run the tests:
 
