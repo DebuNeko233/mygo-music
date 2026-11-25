@@ -363,3 +363,31 @@ func TestAccountMenuFrames(t *testing.T) {
 		f.Close()
 	}
 }
+
+// A missing system keyring explains how to make the next login persistent.
+func TestLoginWithoutKeyringOffersSetupHelp(t *testing.T) {
+	save, copy := saveLoginSession, copyText
+	t.Cleanup(func() { saveLoginSession, copyText = save, copy })
+	saveLoginSession = func() error { return netease.ErrNoKeyring }
+	copied := ""
+	copyText = func(text string) error { copied = text; return nil }
+	a := newTestApp()
+	posts := testPosts(a)
+	a.account.Login = accountvm.LoginState{Open: true, Generation: 1, Finished: true}
+	a.account.SaveLogin(func() { a.account.Login.Open = false }, a.accountServices())
+	wait(t, posts, "the session save without a keyring")()
+	if !a.account.Login.Keyring || a.account.Login.Finished || !a.account.Login.Open {
+		t.Fatalf("missing keyring did not produce setup guidance: %+v", a.account.Login)
+	}
+	tt := ui.NewTester(a.views.account.Login, 800, 760)
+	tt.Frame()
+	if err := tt.Click("复制设置帮助"); err != nil {
+		t.Fatal(err)
+	}
+	if copied != netease.KeyringHelp || copied == "" {
+		t.Fatal("the setup button did not copy the keyring instructions")
+	}
+	if a.toast == "" {
+		t.Fatalf("copying the instructions gave no confirmation: %q", a.toast)
+	}
+}

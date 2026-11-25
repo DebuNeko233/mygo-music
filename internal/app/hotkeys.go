@@ -2,6 +2,9 @@ package app
 
 import (
 	"math"
+	"os"
+	"runtime"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -55,13 +58,20 @@ func (a *app) restoreBinding(kind string, name string) {
 // globalRegister and globalUnregister are the system's shortcuts: the tests
 // put their own in their place, as there is no system to claim keys from.
 var (
-	globalRegister   = func(acc string, fn func()) error { return mygo.GlobalShortcut.Register(acc, fn) }
+	globalRegister = func(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
+		return mygo.GlobalShortcut.RegisterWith(acc, opts, fn)
+	}
 	globalUnregister = func(acc string) { mygo.GlobalShortcut.Unregister(acc) }
 )
 
 // sysKeys says whether the app has a system to claim keys from: it needs a
 // window, and the tests, which have none, put their own answer in its place.
 var sysKeys = func(a *app) bool { return a.win != nil }
+
+// Hyprland accepts requested accelerators while reporting an empty trigger.
+var hyprlandDesktop = func() bool {
+	return runtime.GOOS == "linux" && strings.Contains(strings.ToLower(os.Getenv("XDG_CURRENT_DESKTOP")), "hyprland")
+}
 
 // registerGlobals claims the keys the global bindings ask for, and gives back
 // the ones they no longer do: the system lets one app take a key, so what a
@@ -70,10 +80,8 @@ func (a *app) registerGlobals() {
 	if !sysKeys(a) {
 		return
 	}
-	for _, acc := range a.globalKeys {
-		globalUnregister(acc)
-	}
-	a.globalKeys = a.globalKeys[:0]
+	a.unregisterGlobals()
+	generation := a.globalKeyGeneration
 	if a.hotkeyErrs == nil {
 		a.hotkeyErrs = map[string]string{}
 	}
@@ -83,7 +91,21 @@ func (a *app) registerGlobals() {
 		if acc == "" {
 			continue
 		}
-		if err := globalRegister(acc, func() { a.runHotkey(h.Name) }); err != nil {
+		opts := mygo.GlobalShortcutOptions{Description: h.Label, OnKeys: func(keys string) {
+			a.post(func() {
+				// Portal answers can arrive after rebinding or closing the application.
+				if a.quitting || a.globalKeyGeneration != generation {
+					return
+				}
+				if keys == "" && !hyprlandDesktop() {
+					a.hotkeyErrs[h.Name] = "快捷键未生效，请检查系统的应用权限和快捷键设置"
+				} else {
+					delete(a.hotkeyErrs, h.Name)
+				}
+				a.redraw()
+			})
+		}}
+		if err := globalRegister(acc, opts, func() { a.runHotkey(h.Name) }); err != nil {
 			// The system keeps the key for another app, or another action of
 			// this one asked for it first: the settings say so.
 			a.hotkeyErrs[h.Name] = "被其他程序占用"
@@ -95,6 +117,7 @@ func (a *app) registerGlobals() {
 
 // unregisterGlobals gives the system back every key the app claimed.
 func (a *app) unregisterGlobals() {
+	a.globalKeyGeneration++
 	for _, acc := range a.globalKeys {
 		globalUnregister(acc)
 	}

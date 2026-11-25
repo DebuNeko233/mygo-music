@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/desktop/shortcuts"
@@ -142,7 +143,7 @@ type keySystem struct {
 	refuse         string
 }
 
-func (s *keySystem) register(acc string, fn func()) error {
+func (s *keySystem) register(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
 	if acc == s.refuse {
 		return errKeyHeld
 	}
@@ -233,5 +234,99 @@ func TestTheDefaultKeyComesBack(t *testing.T) {
 	}
 	if err := tt.Click("恢复默认"); err == nil {
 		t.Errorf("the settings still offer a default to give back")
+	}
+}
+
+// A Wayland portal that binds no key explains the failure instead of
+// blaming another application, and a later successful answer clears it.
+func TestWaylandShortcutBindingResultIsVisible(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	posts := testPosts(a)
+	oldSysKeys, oldRegister, oldUnregister := sysKeys, globalRegister, globalUnregister
+	oldHyprland := hyprlandDesktop
+	t.Cleanup(func() {
+		sysKeys, globalRegister, globalUnregister = oldSysKeys, oldRegister, oldUnregister
+		hyprlandDesktop = oldHyprland
+	})
+	hyprlandDesktop = func() bool { return false }
+	sysKeys = func(*app) bool { return true }
+	globalUnregister = func(string) {}
+	var bound mygo.GlobalShortcutOptions
+	globalRegister = func(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
+		if acc == "CmdOrCtrl+Alt+L" {
+			bound = opts
+		}
+		return nil
+	}
+	a.registerGlobals()
+	if bound.Description == "" || bound.OnKeys == nil {
+		t.Fatalf("the portal was not told what the shortcut does: %+v", bound)
+	}
+	bound.OnKeys("")
+	wait(t, posts, "the portal's unbound shortcut")()
+	if got := a.hotkeyErrs["deskLyrics"]; got == "" || got == "被其他程序占用" {
+		t.Fatalf("unbound portal shortcut reported %q", got)
+	}
+	bound.OnKeys("Ctrl+Alt+L")
+	wait(t, posts, "the portal's bound shortcut")()
+	if got := a.hotkeyErrs["deskLyrics"]; got != "" {
+		t.Fatalf("a bound shortcut kept its error %q", got)
+	}
+	hyprlandDesktop = func() bool { return true }
+	bound.OnKeys("")
+	wait(t, posts, "Hyprland's accepted shortcut")()
+	if got := a.hotkeyErrs["deskLyrics"]; got != "" {
+		t.Fatalf("Hyprland's empty trigger reported an error %q", got)
+	}
+}
+
+// An old portal answer cannot overwrite the current binding after re-registration,
+// unregistering or exit, even when it was queued before that lifetime ended.
+func TestGlobalShortcutResultsIgnoreRetiredRegistration(t *testing.T) {
+	for _, retire := range []string{"rebind", "unregister", "quit"} {
+		t.Run(retire, func(t *testing.T) {
+			a := newTestApp()
+			posts := testPosts(a)
+			oldSysKeys, oldRegister, oldUnregister, oldHyprland := sysKeys, globalRegister, globalUnregister, hyprlandDesktop
+			t.Cleanup(func() {
+				sysKeys, globalRegister, globalUnregister, hyprlandDesktop = oldSysKeys, oldRegister, oldUnregister, oldHyprland
+			})
+			sysKeys = func(*app) bool { return true }
+			hyprlandDesktop = func() bool { return false }
+			globalUnregister = func(string) {}
+			var bound mygo.GlobalShortcutOptions
+			globalRegister = func(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
+				if acc == "CmdOrCtrl+Alt+L" {
+					bound = opts
+				}
+				return nil
+			}
+			a.registerGlobals()
+			old := bound
+			old.OnKeys("")
+			switch retire {
+			case "rebind":
+				a.registerGlobals()
+			case "unregister":
+				a.unregisterGlobals()
+			case "quit":
+				a.quitting = true
+			}
+			a.hotkeyErrs["deskLyrics"] = "current result"
+			wait(t, posts, "queued stale binding")()
+			old.OnKeys("Ctrl+Alt+L")
+			wait(t, posts, "late stale binding")()
+			if a.hotkeyErrs["deskLyrics"] != "current result" {
+				t.Fatal("retired portal result changed the current binding")
+			}
+			if retire == "rebind" {
+				bound.OnKeys("Ctrl+Alt+L")
+				wait(t, posts, "current binding")()
+				if a.hotkeyErrs["deskLyrics"] != "" {
+					t.Fatal("current portal result was discarded")
+				}
+			}
+		})
 	}
 }

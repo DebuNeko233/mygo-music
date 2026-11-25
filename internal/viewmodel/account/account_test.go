@@ -176,3 +176,39 @@ func TestAccountQRSaveSurvivesProfileResolution(t *testing.T) {
 		})
 	}
 }
+
+// Only a missing credential service opens setup guidance; an ordinary save
+// failure remains retryable without misdiagnosing the user's desktop.
+func TestLoginSaveClassifiesMissingKeyring(t *testing.T) {
+	for _, missing := range []bool{true, false} {
+		m := Account{Login: LoginState{Open: true, Generation: 1, Finished: true}}
+		posts := make(chan func(), 1)
+		saveErr := errors.New("permission denied")
+		if missing {
+			saveErr = netease.ErrNoKeyring
+		}
+		s := AccountServices{Post: func(fn func()) { posts <- fn }, Save: func() error { return saveErr }}
+		closed := false
+		m.SaveLogin(func() { closed = true }, s)
+		testutil.Wait(t, posts, "save failure")()
+		if closed || !m.Login.Open || m.Login.Finished || m.Login.Err == "" || m.Login.Keyring != missing {
+			t.Fatalf("incorrect persistence failure state: %+v", m.Login)
+		}
+	}
+}
+
+// A missing-keyring result from an earlier login must not add setup guidance to
+// a replacement dialog or send a notification into a different account.
+func TestMissingKeyringResultRespectsAccountLifetime(t *testing.T) {
+	m := Account{Login: LoginState{Open: true, Generation: 1}}
+	posts := make(chan func(), 1)
+	s := AccountServices{Post: func(fn func()) { posts <- fn }, Save: func() error { return netease.ErrNoKeyring }, Notify: func(string) { t.Fatal("retired save notified the new account") }}
+	m.SaveLogin(func() { t.Fatal("failed save was accepted") }, s)
+	update := testutil.Wait(t, posts, "retired keyring failure")
+	m.Accept(&netease.Profile{UserID: 2})
+	m.Login = LoginState{Open: true, Generation: 2}
+	update()
+	if m.Login.Keyring || m.Login.Err != "" {
+		t.Fatal("retired save changed replacement dialog")
+	}
+}

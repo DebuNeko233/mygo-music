@@ -120,3 +120,18 @@ App 中搜索协调集中在 `search.go`，播放入口和来源在 `play_comman
 - `Playback.LastStretch` 选择可续播的一段收听记录；`Search.RememberQuery` 去重并限制历史长度。App 负责请求、播放和设置持久化。
 
 本轮将封面匹配/裁剪、网盘去重、播客去重、字体解析、时间格式、续播筛选、设置持久化和歌词磁盘读取的测试迁到各自所有者。快照隔离、重叠编辑、歌词后台刷新和快捷键冲突/恢复在能力包直接测试；账号切换与缓存清理拒绝歌词回调、全局快捷键注册、跨页面搜索和播放仍在 App 测试。迁移保留原有断言；混合测试中的显示格式断言拆到视图测试，不让 ViewModel 测试依赖桌面代码。
+
+## 上游 0.2.16 同步
+
+同步 `zhangnjsd/mygo-music` 的 `8b41312649a6963ddfe94dd8b5f8d69af7209caf`，共同基线为 `163f1dccfed37893d63c3044a7e305eeb74295f7`。合并提交保留上游父提交，后续同步可以继续沿用 Git 的共同基线；上游已撤回的歌词拖动改动不重复引入。
+
+| 上游改动 | 当前架构中的位置 |
+| --- | --- |
+| 缺少钥匙串的错误识别与帮助内容 | `netease/auth.go`、`netease/keyring_help.md` |
+| 登录持久化失败状态与账号代次检查 | `viewmodel/account` |
+| 登录设置帮助、复制与重试按钮 | `desktop/view/account.go`；App 仅注入剪贴板与通知回调 |
+| Wayland 绑定反馈与 Hyprland 空触发器处理 | `app/hotkeys.go`；定义与绑定规则仍属于 `desktop/shortcuts` |
+| Linux 歌词窗口隐藏菜单、持续提交解锁点击区域 | `desktop/view/playback/desklyrics.go` |
+| 官方 MyGo 的歌词图层接口 | `desktop/view/playback/lyric_edges.go` 使用 `Draw` |
+
+依赖与上游一致，使用官方 `github.com/egoist/mygo v0.10.0`，取消此前的 fork replace。快捷键注册附带代次：重新绑定、注销或退出后，旧 portal 结果不能覆盖当前错误状态。新增错误分类和登录状态测试分别放在 API 与 Account ViewModel 旁；界面交互放在视图旁，剪贴板接线和系统快捷键注册保留 App 集成测试。

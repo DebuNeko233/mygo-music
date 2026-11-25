@@ -19,6 +19,7 @@ type LoginState struct {
 	Status               int
 	Scanner, Avatar, Err string
 	Finished             bool
+	Keyring              bool // the system has no credential store
 }
 type QRLoginAttempt interface {
 	Check(string) (netease.QRStatus, error)
@@ -149,11 +150,15 @@ func (m *Account) SaveLogin(onSaved func(), s AccountServices) {
 				}
 				return
 			}
-			const message = "登录凭据保存失败，本次登录仅在应用运行期间有效"
+			message := "登录凭据保存失败，本次登录仅在应用运行期间有效"
 			if dialog {
 				m.Login.Finished = false
 				m.Login.Err = message
+				m.Login.Keyring = netease.IsNoKeyring(err)
 			} else {
+				if netease.IsNoKeyring(err) {
+					message += "；系统未启用钥匙串，请查看登录窗口中的设置帮助"
+				}
 				s.Notify(message)
 			}
 		})

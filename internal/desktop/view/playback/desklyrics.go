@@ -190,8 +190,9 @@ func NewDeskLyrics(a *View) *DeskLyrics {
 	}
 	x, y := LyricWindowPlace(s.LyricX, s.LyricY, w, h, LyricWindowArea(s.LyricX, s.LyricY, w, h, mygo.Screen.Displays()))
 	d.Win = mygo.NewWindow(mygo.WindowOptions{
-		Title:  mygo.App.Name() + "桌面歌词",
-		Hidden: true,
+		Title:           mygo.App.Name() + "桌面歌词",
+		Hidden:          true,
+		AutoHideMenuBar: true,
 		// Frameless, so that the window draws nothing of itself: no frame, no
 		// shadow. Its edges still take the pointer to resize it.
 		Frameless:     true,
@@ -489,8 +490,10 @@ func (d *DeskLyrics) View(c *ui.Context) {
 				d.Win.SetIgnoreMouseEvents(!hot)
 				d.Win.SetHasShadow(false)
 				clearFrame(d.Win)
-				d.Win.Invalidate()
 			}
+			// Wayland applies the input shape on the next surface commit. Keep
+			// committing while locked so the unlock button cannot stay click-through.
+			d.Win.Invalidate()
 			c.After(lyricPoll)
 		}
 	}

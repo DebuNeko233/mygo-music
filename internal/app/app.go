@@ -117,7 +117,8 @@ type app struct {
 	mix *mixvol.Mixer
 	// globalKeys are the keys the system holds for the app, which they give
 	// back when the bindings change and when the app quits.
-	globalKeys []string
+	globalKeys          []string
+	globalKeyGeneration uint64
 	// hotkeyErrs says which of the global bindings the system refused, by
 	// action: another app holds them.
 	hotkeyErrs map[string]string

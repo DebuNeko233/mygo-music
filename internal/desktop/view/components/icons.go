@@ -51,6 +51,7 @@ var (
 	IconPlus    = strokeIcon(`<path d="M12 5v14"/><path d="M5 12h14"/>`)
 	IconCheck   = strokeIcon(`<path d="m5 12 4 4L19 6"/>`)
 	IconX       = strokeIcon(`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`)
+	IconCopy    = strokeIcon(`<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`)
 	IconMore    = fillIcon(`<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>`)
 )
 

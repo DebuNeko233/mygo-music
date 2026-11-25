@@ -21,6 +21,8 @@ type Account struct {
 	Open                         func(navigation.Route)
 	Avatar                       func(*ui.Context, string, float32, ui.Color)
 	AvatarImage                  func(string) *ui.Bitmap
+	CopyText                     func(string) error
+	Notify                       func(string)
 }
 
 // loginDialog shows the QR code to scan with the NetEase app on a phone.
@@ -79,6 +81,27 @@ func (a *Account) Login(c *ui.Context) {
 			})
 		})
 		ui.Text(c, "登录后，每日推荐与歌单将根据你的口味生成").FontSize(11.5).TextColor(p.Faint).Margin(16, 0, 0, 0)
+		if l.Keyring {
+			ui.Column(c).Width(284).Padding(14, 14, 12, 14).Gap(8).Margin(12, 0, 0, 0).
+				Radius(12).Background(p.Hover).Border(1, p.Hairline).Children(func() {
+				ui.Text(c, "需要启用系统钥匙串").FontSize(13).FontWeight(600).TextColor(p.Warn)
+				ui.Text(c, "系统没有可用的凭据存储服务，应用无法保存登录状态。安装并启用 GNOME Keyring、KWallet 或 KeePassXC 后，重新登录即可长期保持登录。").
+					FontSize(12).TextColor(p.Text)
+				ui.Text(c, "Linux 桌面通常自带其中一种；复制帮助可查看安装、启用和验证步骤。").FontSize(11.5).TextColor(p.Muted)
+				ui.Row(c).Gap(8).Children(func() {
+					if components.PillButton(c.Key("copy-keyring-help"), components.IconCopy, "复制设置帮助", p.Accent, p.OnAccent).Clicked() {
+						if a.CopyText(netease.KeyringHelp) == nil {
+							a.Notify("钥匙串设置帮助已复制")
+						} else {
+							a.Notify("复制失败，请重试")
+						}
+					}
+					if components.PillButton(c.Key("retry-login"), components.IconRepeat, "重试登录", p.Press, p.Text).Clicked() {
+						a.OpenLogin()
+					}
+				})
+			})
+		}
 	})
 	if !l.Open {
 		a.Model.CloseLogin()

@@ -1,11 +1,15 @@
 package netease
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo"
 )
 
 // A confirmed QR attempt can read its new profile while normal requests still use the old session.
@@ -65,5 +69,24 @@ func TestQRLoginStagesSessionUntilCommitted(t *testing.T) {
 	checkAccount(2)
 	if token := csrf(); token != "new-csrf" {
 		t.Errorf("the confirmed session did not publish its CSRF token")
+	}
+}
+
+// Unsupported secret storage is a missing keyring, while a missing item or
+// ordinary access failure must not advise replacing the credential service.
+func TestMissingKeyringErrorClassification(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{nil, false}, {ErrNoKeyring, true}, {errors.ErrUnsupported, true},
+		{fmt.Errorf("wrapped: %w", errors.ErrUnsupported), true},
+		{mygo.ErrSecretNotFound, false},
+		{errors.Join(errors.ErrUnsupported, mygo.ErrSecretNotFound), false},
+		{errors.New("access denied"), false},
+	} {
+		if got := IsNoKeyring(tc.err); got != tc.want {
+			t.Errorf("IsNoKeyring(%v)=%v, want %v", tc.err, got, tc.want)
+		}
 	}
 }
