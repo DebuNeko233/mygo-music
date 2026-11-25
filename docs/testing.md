@@ -122,11 +122,11 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 | 工作流 | 当前内容 | 不能据此声称 |
 | --- | --- | --- |
 | [test.yml](../.github/workflows/test.yml) / Test | Linux 构建、Go/MyGo vet、非 App internal 测试、两片 App 测试、非 App race 与选定 App 并发测试 | 已完整运行所有 App race 或所有平台原生界面 |
-| [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main push、指定仓库定时、手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
+| [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main push、本仓库定时、手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
 | [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物 | 全部软件行为和签名运行已实测 |
 | [release.yml](../.github/workflows/release.yml) / Release | 版本检查、更新签名、草稿发行和上传 | 普通开发可以直接触发发行 |
 
-Test 与 Build 的分支 push 还受工作流中的 fork/main 条件控制。CI 并发策略可能取消旧 SHA 的任务。按本次完整 SHA、事件和目标仓库检查，不能引用旧提交的绿色结果；Test 不覆盖 `scripts/sherpa` 的全部测试，因此本地全量 `./...` 有额外价值。
+Test 与 Build 覆盖所有分支 push 和 PR，不依赖 GitHub fork 状态。CI 并发策略可能取消旧 SHA 的任务。按本次完整 SHA、事件和目标仓库检查，不能引用旧提交的绿色结果；Test 不覆盖 `scripts/sherpa` 的全部测试，因此本地全量 `./...` 有额外价值。
 
 ## 10. 交付报告
 

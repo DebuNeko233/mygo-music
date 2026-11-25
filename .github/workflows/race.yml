@@ -21,7 +21,7 @@ permissions:
 jobs:
   race:
     name: Race detector (${{ matrix.shard }})
-    if: ${{ github.event_name != 'schedule' || github.repository == 'zhangnjsd/mygo-music' }}
+    if: ${{ github.event_name != 'schedule' || github.repository == 'DebuNeko233/mygo-music' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -21,14 +21,14 @@ go list -m github.com/egoist/mygo
 
 ## 分支与工作树
 
-延续已有功能、PR 或用户指定分支时，在其原来源分支继续。当前重构架构维护分支为 `refactor/app-feature-boundaries`；本地工作分支可以有别名，推送目标必须按任务和远端确认。
+延续已有功能、PR 或用户指定分支时，在其原来源分支继续。正式开发主线为 `origin/main`；`refactor/app-feature-boundaries` 是已转正架构的历史开发分支，不再作为新功能默认基线。
 
-新任务从**准备贡献的目标分支**开始。不能一律基于 `upstream/main`，否则可能丢失本分支架构。独立向上游贡献时才选择上游目标基线。
+新任务默认从本仓库最新 `origin/main` 开始；已有任务另有明确目标时按目标继续。本项目独立维护，不把原项目 main 作为默认开发或同步基线。
 
 ```sh
 git fetch origin
 # 基线按本次贡献目标替换。
-git worktree add -b feat/example ../mygo-example origin/refactor/app-feature-boundaries
+git worktree add -b feat/example ../mygo-example origin/main
 cd ../mygo-example
 git status --short --branch
 ```

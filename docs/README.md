@@ -17,7 +17,7 @@
 | 修改下载、离线、缓存迁移 | [下载与缓存](features/download-cache.md) |
 | 修改登录、首页、搜索、歌单、播客或 FM | [浏览、账号与资料库](features/browsing-library.md) |
 | 修改设置、侧栏、快捷键、窗口和托盘 | [桌面与设置](features/desktop-settings.md) |
-| 更新依赖或同步上游 | [依赖与上游同步](dependencies-and-upstream.md) |
+| 更新依赖或引入外部修复 | [独立维护与依赖](dependencies-and-upstream.md) |
 | 新增、移动或修订文档 | [文档维护](documentation.md) |
 | 由代码代理执行工作 | [代理工作约定](agent-workflow.md)，从根目录 [AGENTS.md](../AGENTS.md)进入 |
 

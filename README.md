@@ -2,25 +2,29 @@
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方音乐桌面客户端，原生界面，无 WebView。
 
-本仓库不考虑加入其它平台作为音源。
+本项目由 [DebuNeko233/mygo-music](https://github.com/DebuNeko233/mygo-music) 独立维护，`main` 为正式开发主线。版本、更新和字幕库资源由本仓库发布，不再跟随原项目自动同步。业务音源限定为网易云音乐，另支持本地音频。
 
 ## 安装
+
+独立版本从[本仓库 Releases](https://github.com/DebuNeko233/mygo-music/releases)下载。旧预览版不包含本次主线改动；首次独立正式发行前，请自行构建或使用 Actions 构建产物。下面的 `latest` 安装命令在正式版本发布后可用。
+
+原项目安装的版本不会自动切换到本项目：首次迁移需手动安装本仓库版本，此后使用本仓库的更新源和签名。应用标识暂时保留以兼容已有配置与登录，不支持两者并行独立保存数据。
 
 Windows 上为当前用户安装，再次运行即升级，会先退出正在运行的版本：
 
 ```powershell
-irm https://github.com/zhangnjsd/mygo-music/releases/latest/download/install.ps1 | iex
+irm https://github.com/DebuNeko233/mygo-music/releases/latest/download/install.ps1 | iex
 ```
 
 Linux 上装在 ~/.local，不需要 root：
 
 ```sh
-curl -fsSL https://github.com/zhangnjsd/mygo-music/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/DebuNeko233/mygo-music/releases/latest/download/install.sh | sh
 ```
 
-macOS 上从 [最新版本页面](https://github.com/zhangnjsd/mygo-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
+macOS 上从 [最新版本页面](https://github.com/DebuNeko233/mygo-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
 
-## 本分支新增功能与改进
+## 桌面体验与扩展功能
 
 - 主题颜色与播放页、主页面背景图片自定义
 - 播放页与主页面分别设置背景透明度，支持预加载背景图并在重启后保留主页面背景
@@ -49,7 +53,7 @@ macOS 上从 [最新版本页面](https://github.com/zhangnjsd/mygo-music/releas
 - 账号菜单支持“我的主页”，登录态支持网络异常重试
 - macOS 支持刘海播放器、菜单栏与通知区域托盘图标；窗口打开时可通过 Dock 和 Command-Tab 切换
 
-## 上游功能
+## 音乐功能
 
 - 扫码登录，登录态保存在系统凭据存储中
 - 每日推荐、推荐歌单、排行榜、我的歌单
@@ -68,7 +72,7 @@ macOS 上从 [最新版本页面](https://github.com/zhangnjsd/mygo-music/releas
 
 ## 构建
 
-需要 Go 1.27+。
+工具链版本以 `go.mod` 为准，当前要求 Go 1.27.4。
 
 ```bash
 go tool mygo dev     # 开发模式运行
@@ -79,6 +83,8 @@ go test ./...        # 运行测试
 参与开发请从 [贡献指南](CONTRIBUTING.md) 和 [开发文档](docs/README.md) 开始。文档包含架构、功能与代码索引、新增功能流程、测试、代码规范及文档维护规则。
 
 ## 致谢
+
+本项目基于 [zhangnjsd/mygo-music](https://github.com/zhangnjsd/mygo-music) 演进，保留历史提交、许可证与原作者贡献。独立维护不改变已有开源许可。
 
 - [MyGo](https://github.com/egoist/mygo)：原生 UI 与应用框架
 - [NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)：eapi 加密与登录流程的参考

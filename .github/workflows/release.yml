@@ -17,6 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Check the independent release configuration
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: |
+          test "$(jq -r .updates.github mygo.json)" = "$GITHUB_REPOSITORY"
+          if [ -z "$MYGO_UPDATER_PRIVATE_KEY" ]; then
+            echo "Configure this repository's MYGO_UPDATER_PRIVATE_KEY before releasing." >&2
+            exit 1
+          fi
       # mygo build uploads to the release of mygo.json's version, whichever
       # tag started the workflow.
       - name: Check the version

@@ -16,8 +16,8 @@
     {"ext": ["3g2"], "name": "3GPP2 音频", "mimeType": "audio/3gpp2", "role": "Viewer"}
   ],
   "updates": {
-    "publicKey": "I4d3vfue5JdMTLh3Gar9BkwxhjhcvhOuEVTJ3lgJUA0=",
-    "github": "zhangnjsd/mygo-music"
+    "publicKey": "vQcwBoFXWKyjsHC1GmgrtfGsVfks/+hUyeA4zauEIJ8=",
+    "github": "DebuNeko233/mygo-music"
   },
   "macos": {
     "entitlements": "macos.entitlements.plist",

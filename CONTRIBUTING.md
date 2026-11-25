@@ -24,7 +24,7 @@
 
 ## 3. 准备工作区和分支
 
-先检查工作区状态、当前分支、HEAD 和 remote。基线可能是 main，也可能是维护者指定的功能分支；使用实际约定目标，不盲目切回 main。
+先检查工作区状态、当前分支、HEAD 和 remote。新贡献默认以本仓库最新 main 为基线；已有任务可使用维护者指定的功能分支。
 
 ```sh
 git status --short
@@ -51,7 +51,7 @@ go list -m -json github.com/egoist/mygo
 - 给新增代码文件写符合语言语法的多行简介；生成文件遵循生成器规则。
 - 同步相关测试和功能手册，不保留已无调用的旧接线或临时兼容包装。
 
-MyGo 生命周期和输入顺序见[界面开发](docs/ui-development.md)，后台工作见[数据生命周期](docs/data-lifecycle.md)。依赖升级和上游同步必须阅读[专门流程](docs/dependencies-and-upstream.md)，特别注意当前 MyGo fork。
+MyGo 生命周期和输入顺序见[界面开发](docs/ui-development.md)，后台工作见[数据生命周期](docs/data-lifecycle.md)。依赖升级和选择性引入外部修复必须阅读[专门流程](docs/dependencies-and-upstream.md)，特别注意当前 MyGo fork。
 
 ## 5. 验证修改
 
@@ -108,4 +108,4 @@ PR 或直接交付说明可用以下结构，简单改动用几句话即可：
 
 发现潜在敏感问题时避免把可用凭据或用户数据贴进公开 issue；先移除公开材料中的敏感内容，并通过维护者提供的合适渠道报告。
 
-正式发行是独立流程，见 [RELEASING.md](RELEASING.md)。当前 fork 与上游更新源的关系见[依赖文档](docs/dependencies-and-upstream.md)；不要因贡献代码自动修改发布仓库、密钥、版本或用户更新路径。
+正式发行是独立流程，见 [RELEASING.md](RELEASING.md)。本项目的独立更新源、签名及原项目关系见[依赖文档](docs/dependencies-and-upstream.md)；不要因贡献代码自动修改发布仓库、密钥、版本或用户更新路径。
