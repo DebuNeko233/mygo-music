@@ -11,25 +11,6 @@ import (
 	"netease-music-mygo/internal/preferences"
 )
 
-// Ambiguous Han retains the region's Chinese or Japanese glyph preference.
-func TestHanLyricLanguage(t *testing.T) {
-	for locale, want := range map[string]string{
-		"zh-CN":      "zh-Hans",
-		"zh-Hans-HK": "zh-Hans",
-		"zh_TW":      "zh-Hant",
-		"zh-Hant":    "zh-Hant",
-		"zh-Hant-HK": "zh-Hant-HK",
-		"yue-HK":     "zh-Hant-HK",
-		"ja-JP":      "ja",
-		"ko-KR":      "",
-		"en-US":      "zh-Hans",
-	} {
-		if got := playbackview.HanLyricLanguage(locale); got != want {
-			t.Errorf("Han lyrics in %q use %q, want %q", locale, got, want)
-		}
-	}
-}
-
 // The two font controls save independently and resetting one restores its own automatic choice.
 func TestSettingsFontChoicesApplyIndependently(t *testing.T) {
 	names := playbackview.LyricFontNames()

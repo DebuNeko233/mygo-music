@@ -8,6 +8,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	artcache "netease-music-mygo/internal/desktop/artwork"
+	"netease-music-mygo/internal/lyrics"
+	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
 
@@ -34,19 +36,39 @@ func testPosts(a *app) chan func() {
 	return posts
 }
 
-// drag drags from the middle of r by dx, over a few frames, and lets go
-// after hold, still.
-func drag(tt *ui.Tester, r ui.Rect, dx float32, hold time.Duration) {
-	x, y := r.X+r.W/2, r.Y+r.H/2
-	tt.Press(x, y)
-	for i := 1; i <= 6; i++ {
-		tt.Advance(16 * time.Millisecond)
-		tt.Move(x+dx*float32(i)/6, y)
-	}
-	if hold > 0 {
-		tt.Advance(hold)
-	}
-	tt.Release(x+dx, y)
-	tt.Advance(time.Second)
+func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.settings.LyricEdgeFade = false
+	a.settings.HotComments = false
+	a.pl.Cue([]netease.Track{{ID: 1, Duration: 200000}})
+	a.pl.SetLyrics(lines)
+	a.pl.Hold(0)
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		_, height := c.Size()
+		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), height, ui.Rect{}, 0) })
+	}, w, h, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	return a, tt
+}
+
+// coverApp is Now Playing showing the second of three songs.
+func coverApp(t *testing.T) (*app, *ui.Tester, ui.Rect) {
+	t.Helper()
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.pl.Cue([]netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
+	a.pl.Next()
+	a.pl.SetLyrics(nil)
+	a.playbackState.Open = true
+	tt := ui.NewTester(a.view, 860, 560)
+	// Without the tilt and the swing, which the CPU draws slowly in depth:
+	// the gestures do as they would.
+	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 	tt.Frame()
+	tt.Advance(500 * time.Millisecond)
+	r, ok := tt.Find("专辑封面")
+	if !ok {
+		t.Fatal("no cover")
+	}
+	return a, tt, r
 }

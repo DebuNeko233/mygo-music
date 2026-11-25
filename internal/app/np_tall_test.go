@@ -14,8 +14,10 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	"netease-music-mygo/internal/desktop/view/shell"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/testutil"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
@@ -36,15 +38,6 @@ func tallLyricsApp(t *testing.T) *app {
 	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	return a
-}
-
-func settleTallLyrics(tt *ui.Tester) {
-	tt.Frame()
-	for range 2 {
-		tt.Advance(time.Second)
-		tt.Frame()
-		tt.Frame()
-	}
 }
 
 // Instrumental credits use the same reading area when immersive lyrics is toggled.
@@ -298,7 +291,7 @@ func TestLyricsFillATallWindow(t *testing.T) {
 		t.Run(fmt.Sprintf("%dx%d", w, h), func(t *testing.T) {
 			a := tallLyricsApp(t)
 			tt := ui.NewTester(a.view, w, h)
-			settleTallLyrics(tt)
+			testutil.Settle(tt)
 			checkTallLyricsPosition(t, tt, w, h)
 			if dir := os.Getenv("NM_FRAMES"); dir != "" {
 				f, err := os.Create(filepath.Join(dir, fmt.Sprintf("lyrics-%dx%d.png", w, h)))
@@ -320,12 +313,12 @@ func TestLyricsFillATallWindow(t *testing.T) {
 func TestLyricsReflowWhenWindowResizes(t *testing.T) {
 	a := tallLyricsApp(t)
 	tt := ui.NewTester(a.view, 1200, 800)
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	first := checkTallLyricsPosition(t, tt, 1200, 800)
 	for _, size := range [][2]int{{750, 1330}, {600, 1400}, {1200, 800}} {
 		w, h := size[0], size[1]
 		tt.SetSize(w, h)
-		settleTallLyrics(tt)
+		testutil.Settle(tt)
 		got := checkTallLyricsPosition(t, tt, w, h)
 		if w == 1200 && (got.Y < first.Y-1 || got.Y > first.Y+1) {
 			t.Fatalf("landscape line moved from %.1f to %.1f after resizing back", first.Y, got.Y)
@@ -338,17 +331,17 @@ func TestLyricsReflowWhenWindowResizes(t *testing.T) {
 func TestLyricsManualScrollStaysAfterResize(t *testing.T) {
 	a := tallLyricsApp(t)
 	tt := ui.NewTester(a.view, 1200, 800)
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	tt.SetSize(750, 1330)
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	before := checkTallLyricsPosition(t, tt, 750, 1330)
 	tt.Scroll(620, 600, 0, 220)
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	scrolled, ok := tt.Find("第15句")
 	if !ok || scrolled.Y > before.Y-40 {
 		t.Fatal("manual scroll was reset by the unchanged current line")
 	}
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	held, _ := tt.Find("第15句")
 	if held.Y < scrolled.Y-1 || held.Y > scrolled.Y+1 {
 		t.Fatal("lyrics re-centered after manual scrolling")
@@ -365,7 +358,7 @@ func TestLyricsWidthResizeSchedulesFollowUp(t *testing.T) {
 	}
 	a.pl.SetLyrics(lines)
 	tt := ui.NewTester(a.view, 1200, 800)
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	before, ok := tt.AccessByRole(ui.RoleButton, lines[15].Text)
 	if !ok || before.Offscreen {
 		t.Fatal("current line not visible before resize")
@@ -377,5 +370,63 @@ func TestLyricsWidthResizeSchedulesFollowUp(t *testing.T) {
 	after, ok := tt.AccessByRole(ui.RoleButton, lines[15].Text)
 	if !ok || after.Offscreen || math.Abs(float64(after.Bounds.Y-before.Bounds.Y)) > 3 {
 		t.Fatalf("resize lost current line: %+v -> %+v", before.Bounds, after.Bounds)
+	}
+}
+
+// The immersive lyric viewport stays out of the window controls and extends below the volume row.
+func TestImmersiveLyricViewportTracksControls(t *testing.T) {
+	a := tallLyricsApp(t)
+	a.settings.LyricEdgeFade = true
+	a.settings.HotComments = false
+	// One line exercises the same viewport without paying for the blur in the test.
+	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
+	var barHeight float32
+	tt := ui.NewTesterWith(func(c *ui.Context) {
+		barHeight = shell.TopBar(c)
+		a.views.playback.NowPlayingView(c)
+	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	for _, size := range [][2]int{{1200, 800}, {880, 580}, {1920, 1080}, {750, 1330}, {880, 580}, {1200, 800}} {
+		tt.SetSize(size[0], size[1])
+		volume, okVolume := tt.AccessByRole(ui.RoleSlider, "音量")
+		view, okView := tt.AccessByRole(ui.RoleScroll, "歌词")
+		if !okVolume || !okView {
+			t.Fatalf("at %v: missing volume (%v) or lyric viewport (%v)", size, okVolume, okView)
+		}
+		// The slider and its speaker share a center, and the speaker's
+		// hit area sets the height of the volume row.
+		speaker, ok := tt.AccessByRole(ui.RoleButton, "静音")
+		if !ok {
+			t.Fatal("missing volume speaker")
+		}
+		bottom := max(volume.Bounds.Y+volume.Bounds.H, speaker.Bounds.Y+speaker.Bounds.H)
+		const extension = 16
+		height := float32(size[1])
+		wantTop := barHeight
+		wantBottom := min(max(bottom+extension, height-32), height-16)
+		if playbackview.Abs32(view.Bounds.Y-wantTop) > 1 || playbackview.Abs32(view.Bounds.Y+view.Bounds.H-wantBottom) > 1 {
+			t.Fatalf("at %v: lyrics %v, want top %.1f and bottom %.1f", size, view.Bounds, wantTop, wantBottom)
+		}
+	}
+}
+
+// Turning off immersive lyrics or leaving the pane releases its intermediate canvas.
+func TestImmersiveLyricReleasesCanvas(t *testing.T) {
+	a := tallLyricsApp(t)
+	a.settings.LyricEdgeFade = true
+	a.settings.HotComments = false
+	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
+	tt := ui.NewTesterWith(a.view, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
+	a.LyricBlurPass = ui.NewCanvas(1, 1)
+	a.settings.LyricEdgeFade = false
+	tt.Frame()
+	if a.LyricBlurPass != nil {
+		t.Fatal("canvas was retained after disabling immersive lyrics")
+	}
+	a.settings.LyricEdgeFade = true
+	a.LyricBlurPass = ui.NewCanvas(1, 1)
+	a.playbackState.Pane = playbackview.PaneQueue
+	tt.Frame()
+	if a.LyricBlurPass != nil {
+		t.Fatal("canvas was retained after switching panes")
 	}
 }

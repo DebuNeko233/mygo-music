@@ -94,3 +94,24 @@ func TestCaptionTranscriptLoadIdentity(t *testing.T) {
 		t.Fatal("latest transcript did not load")
 	}
 }
+
+// Caption language follows new text and out-of-order segments while duplicate segments leave the list alone.
+func TestCaptionLanguageAfterAppendAndInsert(t *testing.T) {
+	work := &CaptionWork{Program: 42}
+	captions := Captions{Program: 42, Transcript: &captionstore.Transcript{}, Work: work}
+	english := speech.Segment{Start: 5 * time.Second, End: 7 * time.Second, Text: "First caption"}
+	japanese := speech.Segment{Start: 8 * time.Second, End: 10 * time.Second, Text: "次のことば"}
+	captions.Said(work, english)
+	if captions.Language != "" || len(captions.Lines) != 1 {
+		t.Fatal("first caption did not keep the default language")
+	}
+	captions.Said(work, japanese)
+	captions.Said(work, japanese)
+	if got := captions; got.Language != "ja" || len(got.Lines) != 2 {
+		t.Fatalf("append or duplicate corrupted transcript: %q, %v", got.Language, got.Lines)
+	}
+	captions.Said(work, speech.Segment{Start: time.Second, End: 3 * time.Second, Text: "Earlier"})
+	if got := captions.Lines; len(got) != 3 || got[0].Text != "Earlier" || captions.Language != "ja" {
+		t.Fatalf("out-of-order insert corrupted transcript: %v", got)
+	}
+}

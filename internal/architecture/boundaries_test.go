@@ -49,6 +49,9 @@ func TestPackageBoundaries(t *testing.T) {
 				continue
 			}
 			target := strings.TrimPrefix(dep, prefix)
+			if inPackage(target, "testutil") || (strings.HasSuffix(target, "/internal/testutil") || strings.Contains(target, "/internal/testutil/")) {
+				t.Errorf("%s imports test helper %s; keep test fixtures out of production", path, dep)
+			}
 			if layer != "app" && inPackage(target, "app") {
 				t.Errorf("%s imports %s; app owns composition", path, dep)
 			}

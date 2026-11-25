@@ -14,6 +14,7 @@ import (
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/testutil"
 )
 
 // wallApp is an app showing the wall of a queue of n songs, the at-th
@@ -54,7 +55,7 @@ func find(t *testing.T, tt *ui.Tester, s string) ui.Rect {
 func TestWallPlaysTheCoverClicked(t *testing.T) {
 	a, tt := wallApp(300, 0)
 	r := find(t, tt, "歌003")
-	drag(tt, r, -300, 200*time.Millisecond)
+	testutil.Drag(tt, r, -300, 200*time.Millisecond)
 	if got := a.pl.Current().Name; got != "歌000" {
 		t.Fatalf("a drag played %s", got)
 	}
@@ -111,14 +112,14 @@ func TestWallGlidesAndStops(t *testing.T) {
 	ws := &a.WallState
 	from := ws.Shown.X
 	r := find(t, tt, "歌003")
-	drag(tt, r, -240, 0)
+	testutil.Drag(tt, r, -240, 0)
 	tt.Advance(2 * time.Second)
 	tt.Frame()
 	if ws.Shown.X > from-480 {
 		t.Errorf("thrown 240 DIPs, the wall went from %v to %v", from, ws.Shown.X)
 	}
 	// Thrown hard the other way, it stops with its first column in view.
-	drag(tt, r, 3000, 0)
+	testutil.Drag(tt, r, 3000, 0)
 	tt.Advance(2 * time.Second)
 	tt.Frame()
 	if first := find(t, tt, "歌000"); first.X < 0 || first.X > 100 {

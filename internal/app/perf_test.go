@@ -1,232 +1,19 @@
 package app
 
 import (
-	"bytes"
-	"fmt"
 	"image"
 	"math"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/desktop/view/components"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/testutil"
 )
-
-// An ending word can finish before the next regular highlight tick without rebuilding the view.
-func TestLyricWordFinishesBeforeRegularTick(t *testing.T) {
-	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 8000}})
-	line := lyrics.Line{Text: "Quick", Words: []lyrics.Word{
-		{Text: "Quick", Start: time.Second, End: 1050 * time.Millisecond},
-	}}
-	a.pl.Hold(1030 * time.Millisecond)
-	builds := 0
-	tt := ui.NewTester(func(c *ui.Context) {
-		builds++
-		c.Root().Background(ui.RGB(0, 0, 0))
-		a.views.playback.PaintLyricWords(c, &line, 200, playbackview.LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
-	}, 200, 65)
-	partial := tt.Image()
-	before := builds
-
-	a.pl.Hold(line.Words[0].End)
-	// The last 20 ms of the word should schedule its own paint even
-	// though the regular tick is 40 ms away.
-	tt.Advance(25 * time.Millisecond)
-	finished := tt.Image()
-	if builds != before || !pixelsLowerInBand(finished, partial, 0, 65) {
-		t.Fatal("the word did not finish on a paint-only frame near its end")
-	}
-	tt.Frame()
-	if settled := tt.Image(); !bytes.Equal(finished.Pix, settled.Pix) {
-		t.Fatal("the deadline frame still showed a partially lit word")
-	}
-}
-
-// Word colors repaint without rebuilding the view, and a gap needs no periodic frame.
-func TestLyricWordPaintBudget(t *testing.T) {
-	line := lyrics.Line{Text: "Alpha Beta", Words: []lyrics.Word{
-		{Text: "Alpha ", Start: time.Second, End: 1500 * time.Millisecond},
-		{Text: "Beta", Start: 3 * time.Second, End: 3500 * time.Millisecond},
-	}}
-	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 8000}})
-	a.pl.Hold(900 * time.Millisecond)
-	builds := 0
-	tt := ui.NewTester(func(c *ui.Context) {
-		builds++
-		c.Root().Background(ui.RGB(0, 0, 0))
-		a.views.playback.PaintLyricWords(c, &line, 240, playbackview.LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
-	}, 240, 70)
-	brightness := func(r image.Rectangle) int {
-		img := tt.Image()
-		total := 0
-		for y := r.Min.Y; y < r.Max.Y; y++ {
-			for x := r.Min.X; x < r.Max.X; x++ {
-				total += int(img.RGBAAt(x, y).R)
-			}
-		}
-		return total
-	}
-	left, right := image.Rect(0, 0, 82, 70), image.Rect(100, 0, 240, 70)
-	dimLeft, dimRight, before := brightness(left), brightness(right), builds
-	if dimLeft == 0 || dimRight == 0 {
-		t.Fatal("dim words were not drawn")
-	}
-	a.pl.Hold(1300 * time.Millisecond)
-	tt.Advance(145 * time.Millisecond)
-	if got := brightness(left); got <= dimLeft {
-		t.Fatalf("word did not brighten: %d -> %d", dimLeft, got)
-	}
-	if brightness(right) != dimRight || builds != before {
-		t.Fatal("highlight changed a later word or rebuilt the view")
-	}
-	a.pl.Hold(1600 * time.Millisecond)
-	tt.Advance(45 * time.Millisecond)
-	a.pl.Hold(3400 * time.Millisecond)
-	tt.Advance(800 * time.Millisecond)
-	if brightness(right) != dimRight {
-		t.Fatal("periodic highlight updated during the silent gap")
-	}
-	tt.Advance(2 * time.Second)
-	if brightness(right) <= dimRight || builds != before {
-		t.Fatal("the next word did not repaint after the gap")
-	}
-}
-
-func lyricScrollFixture(n int) (*ui.Tester, *int, func(time.Duration)) {
-	a := newTestApp()
-	tr := netease.Track{ID: 1, Duration: int64(n * 2000)}
-	a.pl.Cue([]netease.Track{tr})
-	lines := make([]lyrics.Line, n)
-	for i := range lines {
-		lines[i] = lyrics.Line{
-			At: time.Duration(i) * 2 * time.Second, Text: fmt.Sprintf("第 %d 句歌词", i),
-			Translation: "Translation of the lyrics",
-		}
-	}
-	a.pl.SetLyrics(lines)
-	pos := time.Duration(n/2) * 2 * time.Second
-	a.pl.Seek(pos)
-	builds := 0
-	var seekAt time.Duration
-	var seekTime time.Time
-	tt := ui.NewTester(func(c *ui.Context) {
-		builds++
-		if !seekTime.IsZero() {
-			if left := seekTime.Sub(c.Now()); left > 0 {
-				c.After(left)
-			} else {
-				a.pl.Seek(seekAt)
-				seekTime = time.Time{}
-			}
-		}
-		a.views.playback.LyricsPane(c, a.pl.Current(), 520, ui.Rect{}, 0)
-	}, 480, 520)
-	tt.Advance(2 * time.Second)
-	seek := func(pos time.Duration) {
-		seekAt, seekTime = pos, tt.Now().Add(20*time.Millisecond)
-		tt.Frame()
-	}
-	return tt, &builds, seek
-}
-
-// Following a new line keeps sliding without rebuilding the lyrics at each refresh.
-func TestLyricsScrollFrameBudget(t *testing.T) {
-	tt, builds, seek := lyricScrollFixture(120)
-	line := func() ui.Rect {
-		t.Helper()
-		info, ok := tt.AccessByRole(ui.RoleButton, "第 61 句歌词")
-		if !ok {
-			t.Fatal("next line not laid out")
-		}
-		return info.Bounds
-	}
-	start := line()
-	seek(122 * time.Second)
-	before := *builds
-	tt.Advance(150 * time.Millisecond)
-	mid := line()
-	tt.Advance(1850 * time.Millisecond)
-	end := line()
-	if mid.Y >= start.Y-5 || mid.Y <= end.Y+5 || math.Abs(float64(end.Y-520*0.3)) > 1 {
-		t.Fatalf("line did not glide to the upper third: start %v, mid %v, end %v", start, mid, end)
-	}
-	if n := *builds - before; n > 6 {
-		t.Fatalf("one automatic glide rebuilt the view %d times", n)
-	}
-}
-
-// Opening and resizing a long transcript should only measure rows near the reader.
-func TestLongCaptionMeasurementBudget(t *testing.T) {
-	a := captionsTestApp(t, true)
-	cs := &a.captions
-	cs.Program = a.pl.Current().ProgramID
-	cs.Transcript = &transcript{Spans: []span{{0, a.pl.Duration()}}}
-	const count = 2000
-	for i := range count {
-		cs.Lines = append(cs.Lines, lyrics.Line{
-			At:   time.Duration(i) * 250 * time.Millisecond,
-			Text: fmt.Sprintf("第 %04d 句，%s", i, strings.Repeat("这段播客字幕会换行", 4)),
-		})
-	}
-	const active = count / 2
-	a.pl.Seek(cs.Lines[active].At)
-	tt := ui.NewTester(func(c *ui.Context) {
-		_, h := c.Size()
-		a.views.playback.CaptionsPane(c, a.pl.Current(), h)
-	}, 640, 460)
-
-	for _, width := range []int{640, 485, 340} {
-		tt.SetSize(width, 460)
-		tt.Advance(time.Second)
-		row, ok := tt.AccessByRole(ui.RoleButton, cs.Lines[active].Text)
-		if !ok || row.Offscreen || math.Abs(float64(row.Bounds.Y-460*0.3)) > 2 {
-			t.Fatalf("width %d: active caption lost its reading position: %+v", width, row.Bounds)
-		}
-		measured := 0
-		for _, done := range a.TimedList.Measured {
-			if done {
-				measured++
-			}
-		}
-		if measured > 80 {
-			t.Fatalf("width %d: measured %d rows to show one viewport", width, measured)
-		}
-	}
-}
-
-// Manual scrolling during a glide picks up where the lyrics are painted.
-func TestLyricsManualScrollInterruptsGlide(t *testing.T) {
-	for _, n := range []int{30, 120} {
-		t.Run(fmt.Sprint(n), func(t *testing.T) {
-			tt, _, seek := lyricScrollFixture(n)
-			y := func() float32 {
-				t.Helper()
-				line, ok := tt.AccessByRole(ui.RoleButton, fmt.Sprintf("第 %d 句歌词", n/2))
-				if !ok {
-					t.Fatal("the anchor line is missing")
-				}
-				return line.Bounds.Y
-			}
-			seek(time.Duration(n+4) * time.Second)
-			tt.Advance(100 * time.Millisecond)
-			before := y()
-			tt.Scroll(260, 170, 0, 32)
-			tt.Advance(2 * time.Second)
-			if got := y(); math.Abs(float64(got-(before-32))) > 24 {
-				t.Fatalf("manual scroll jumped to the automatic destination: %.1f -> %.1f", before, got)
-			}
-		})
-	}
-}
 
 // The player bar cover asks for frames while fading, then rests.
 func TestPlayerBarCoverFrameBudget(t *testing.T) {
@@ -306,24 +93,6 @@ func playingApp() (*app, *ui.Tester, *int) {
 	return a, tt, &builds
 }
 
-// framesAt counts the frames the view asks for over a second, at 60 a
-// second, with playback held at pos.
-func framesAt(a *app, tt *ui.Tester, pos time.Duration) int {
-	a.pl.Seek(pos)
-	tt.Frame()
-	tt.Advance(time.Second)
-	tt.Frame()
-	asked := 0
-	for range 60 {
-		tt.Advance(time.Second / 60)
-		if tt.FramePending() {
-			asked++
-			tt.Frame()
-		}
-	}
-	return asked
-}
-
 // Now Playing asks for frames only as fast as what it shows changes. The
 // Tester runs timers as it settles a frame, so this counts only what does
 // not change for a while: a frame log of the app (MYGO_FRAME_STATS) measures
@@ -332,16 +101,16 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 	a, tt, _ := playingApp()
 	// Keep the desktop layout and frame cadence while reducing software raster work.
 	tt.SetScale(0.25)
-	if n := framesAt(a, tt, 12*time.Second); n > 3 {
+	if n := testutil.FramesAt(a.pl, tt, 12*time.Second); n > 3 {
 		t.Errorf("a page under the player: %d frames a second", n)
 	}
 	// Its rows still, the wall asks for no more than the lyrics beside it
 	// do: it moves only as it is moved.
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
-	lyricsFrames := framesAt(a, tt, 12*time.Second)
+	lyricsFrames := testutil.FramesAt(a.pl, tt, 12*time.Second)
 	a.playbackState.Pane = playbackview.PaneWall
-	if n := framesAt(a, tt, 12*time.Second); n > lyricsFrames+3 {
+	if n := testutil.FramesAt(a.pl, tt, 12*time.Second); n > lyricsFrames+3 {
 		t.Errorf("the wall, still: %d frames a second, the lyrics %d", n, lyricsFrames)
 	}
 	tt.SetPreferences(ui.Preferences{})
@@ -349,7 +118,7 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 	a.settings.StageSparks = true
 	for _, s := range playbackview.StageStyles {
 		a.settings.StageStyle = s.ID
-		if n := framesAt(a, tt, 18*time.Second); n > 12 {
+		if n := testutil.FramesAt(a.pl, tt, 18*time.Second); n > 12 {
 			t.Errorf("the stage between lines, in %s: %d frames a second", s.Label, n)
 		}
 	}
@@ -373,35 +142,6 @@ func TestBackdropFadeEnds(t *testing.T) {
 	tt.Frame()
 	if a.BackdropCache.Before != nil {
 		t.Error("the last song's backdrop still fades after the fade")
-	}
-}
-
-// Turning fog off discards its speed and bass immediately: the old easing
-// state repainted the static background for about two seconds after a switch.
-func TestStaticBackdropStopsFog(t *testing.T) {
-	a := newTestApp()
-	a.settings = defaultSettings()
-	a.settings.Fog = true
-	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
-	// Tester uses software rendering, so seed the moving GPU fog's state
-	// before switching modes; no audio device or wall-clock phase is needed.
-	bd := &a.BackdropCache
-	bd.Speed, bd.Last = 1, time.Unix(1, 0)
-	bd.Level.Step(bd.Last, [player.Bands]float32{1}, true)
-	a.settings.Fog = false
-	tt.Frame()
-	at, canvas := bd.At, bd.Canvas
-	for range 120 {
-		tt.Advance(playbackview.BackdropFrame)
-		tt.Frame()
-		// FramePending alone misses delayed Painter.After callbacks, so
-		// also verify that the cache and paint timestamp never change.
-		if bd.At != at || bd.Canvas != canvas || bd.Speed != 0 || bd.Level != (components.BarState{}) || !bd.Last.IsZero() {
-			t.Fatal("static background kept the fog's animation state or repainted")
-		}
-		if tt.FramePending() {
-			t.Fatal("static background requested another frame")
-		}
 	}
 }
 
@@ -432,40 +172,6 @@ func TestPlaylistLocateFrameBudget(t *testing.T) {
 		if asked > 1 {
 			t.Fatalf("%s idle locate requested %d frames", stage, asked)
 		}
-	}
-}
-
-// Centering short lyrics must settle after layout, rather than asking for
-// another measurement frame throughout playback or after a resize.
-func TestShortLyricsFrameBudget(t *testing.T) {
-	lines := []lyrics.Line{{Text: "纯音乐，请欣赏"}}
-	a, tt := shortLyricsApp(lines, 420, 600)
-	tt.SetPreferences(ui.Preferences{})
-	for _, size := range [][2]int{{420, 600}, {280, 350}, {420, 600}} {
-		tt.SetSize(size[0], size[1])
-		if n := framesAt(a, tt, 30*time.Second); n > 3 {
-			t.Fatalf("%v: short lyrics requested %d idle frames", size, n)
-		}
-	}
-}
-
-// Whole-line highlighting stays idle between two LRC timestamps.
-func TestImmersiveLRCStaysIdleBetweenLines(t *testing.T) {
-	lines := lyrics.Build("[00:00.00]First line\n[00:10.00]Second line\n[00:20.00]Third line", "", "")
-	a := newTestApp()
-	a.settings.LyricEdgeFade = true
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 30000}})
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(2 * time.Second)
-	paints := 0
-	tt := ui.NewTesterWith(func(c *ui.Context) {
-		c.Root().Draw(func(*ui.Painter, ui.Rect) { paints++ })
-		a.views.playback.LyricsPane(c, a.pl.Current(), 110, ui.Rect{}, 0)
-	}, 180, 110, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-	before := paints
-	tt.Advance(time.Second)
-	if paints != before {
-		t.Fatalf("a settled LRC line triggered %d extra paints", paints-before)
 	}
 }
 

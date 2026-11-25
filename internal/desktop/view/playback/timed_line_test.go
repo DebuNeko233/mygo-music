@@ -1,4 +1,4 @@
-package app
+package playback
 
 import (
 	"image"
@@ -9,7 +9,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -19,13 +18,13 @@ func TestWrappedLyricWordAfterBackwardSeek(t *testing.T) {
 	// Latin glyphs keep this test independent of the runner's CJK fonts.
 	text := strings.Repeat("m", 8)
 	line := lyrics.Line{Text: text, Words: []lyrics.Word{{Text: text, Start: time.Second, End: 2 * time.Second}}}
-	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 8000}})
-	a.pl.Seek(2 * time.Second)
+	a := newTestView(t)
+	a.Player().Cue([]netease.Track{{ID: 1, Duration: 8000}})
+	a.Player().Seek(2 * time.Second)
 	tt := ui.NewTester(func(c *ui.Context) {
 		c.Root().Background(ui.RGB(0, 0, 0))
 		w, _ := c.Size()
-		a.views.playback.PaintLyricWords(c, &line, w, playbackview.LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
+		a.PaintLyricWords(c, &line, w, LinesStyle{Size: 30, Weight: 800, LineHeight: 1.25})
 	}, 400, 200)
 	initial := a.PaintedLyric.Layout.Lines()
 	if len(initial) != 1 {
@@ -39,10 +38,10 @@ func TestWrappedLyricWordAfterBackwardSeek(t *testing.T) {
 		t.Fatalf("after resize: got %d visual lines, want 2", len(wrapped))
 	}
 	lit := tt.Image()
-	a.pl.Seek(1500 * time.Millisecond)
+	a.Player().Seek(1500 * time.Millisecond)
 	tt.Frame()
 	half := tt.Image()
-	a.pl.Seek(0)
+	a.Player().Seek(0)
 	tt.Frame()
 	dim := tt.Image()
 	for i, line := range wrapped {

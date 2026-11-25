@@ -1,4 +1,4 @@
-package app
+package playback
 
 import (
 	"fmt"
@@ -9,27 +9,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/testutil"
 )
 
-func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
-	a := newTestApp()
-	a.settings = defaultSettings()
-	a.settings.LyricEdgeFade = false
-	a.settings.HotComments = false
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 200000}})
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(0)
-	tt := ui.NewTesterWith(func(c *ui.Context) {
-		_, height := c.Size()
-		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), height, ui.Rect{}, 0) })
-	}, w, h, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-	return a, tt
-}
-
-func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.Line, h int) {
+func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *View, lines []lyrics.Line, h int) {
 	t.Helper()
 	first, ok := tt.Find(lines[0].Text)
 	if !ok {
@@ -42,11 +27,11 @@ func checkShortLyricsCenter(t *testing.T, tt *ui.Tester, a *app, lines []lyrics.
 	// Find returns painted bounds. Undo the inactive rows' emphasis scale
 	// to check the layout, including when font metrics make a row taller.
 	top, bottom := first.Y, last.Y+last.H
-	const unscale = (1/playbackview.InactiveTimedLyricScale - 1) / 2
-	if a.lyricReading.At != 0 {
+	const unscale = (1/InactiveTimedLyricScale - 1) / 2
+	if a.Reading.At != 0 {
 		top -= first.H * unscale
 	}
-	if a.lyricReading.At != len(lines)-1 {
+	if a.Reading.At != len(lines)-1 {
 		bottom += last.H * unscale
 	}
 	if center := (top + bottom) / 2; math.Abs(float64(center-float32(h)/2)) > 2 {
@@ -66,16 +51,16 @@ func TestShortLyricsCenterAndSeek(t *testing.T) {
 		{{Text: "春日影", Translation: strings.Repeat("这是一句会换行的翻译", 3)}, {At: 10 * time.Second, Text: "次の歌詞", Translation: "下一句歌词"}},
 	} {
 		t.Run(lines[0].Text, func(t *testing.T) {
-			a, tt := shortLyricsApp(lines, 420, 600)
-			settleTallLyrics(tt)
+			a, tt := lyricPaneView(t, lines, 420, 600)
+			testutil.Settle(tt)
 			checkShortLyricsCenter(t, tt, a, lines, 600)
 			last := lines[len(lines)-1]
 			if err := tt.Click(last.Text); err != nil {
 				t.Fatal(err)
 			}
-			settleTallLyrics(tt)
-			if a.pl.Position() != last.At {
-				t.Fatalf("click sought to %v, want %v", a.pl.Position(), last.At)
+			testutil.Settle(tt)
+			if a.Player().Position() != last.At {
+				t.Fatalf("click sought to %v, want %v", a.Player().Position(), last.At)
 			}
 			checkShortLyricsCenter(t, tt, a, lines, 600)
 		})
@@ -89,16 +74,16 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	for i := range lines {
 		lines[i] = lyrics.Line{At: time.Duration(i) * 10 * time.Second, Text: fmt.Sprintf("%d %s", i, strings.Repeat("歌词需要按实际高度判断", 4)), Translation: strings.Repeat("翻译也占用高度", 3)}
 	}
-	a, tt := shortLyricsApp(lines, 800, 900)
-	settleTallLyrics(tt)
+	a, tt := lyricPaneView(t, lines, 800, 900)
+	testutil.Settle(tt)
 	checkShortLyricsCenter(t, tt, a, lines, 900)
 	tt.SetSize(260, 300)
 	tt.Advance(2 * time.Second)
 	if a.LyricScroll.MaxY <= 0 {
 		t.Fatal("wrapped lyrics did not become scrollable")
 	}
-	a.pl.Hold(lines[len(lines)-1].At)
-	settleTallLyrics(tt)
+	a.Player().Hold(lines[len(lines)-1].At)
+	testutil.Settle(tt)
 	last, ok := tt.Find(lines[len(lines)-1].Text)
 	if !ok || last.Y < -1 || last.Y > 300*0.3+2 {
 		t.Fatalf("last line not followed: %+v", last)
@@ -107,11 +92,11 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	tt.Advance(2 * time.Second)
 	checkShortLyricsCenter(t, tt, a, lines, 900)
 	// Metadata may replace lyrics while the track and current index stay the same.
-	a.pl.Hold(0)
-	a.pl.SetLyrics([]lyrics.Line{{Text: "替换后的单行歌词"}})
+	a.Player().Hold(0)
+	a.Player().SetLyrics([]lyrics.Line{{Text: "替换后的单行歌词"}})
 	tt.Frame()
 	tt.Advance(2 * time.Second)
-	replaced, _ := a.pl.Lyrics()
+	replaced, _ := a.Player().Lyrics()
 	checkShortLyricsCenter(t, tt, a, replaced, 900)
 }
 
@@ -119,8 +104,8 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 func TestNowPlayingEmptyLyricNotice(t *testing.T) {
 	for _, immersive := range []bool{false, true} {
 		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
-			a, tt := shortLyricsApp(nil, 320, 240)
-			a.settings.LyricEdgeFade = immersive
+			a, tt := lyricPaneView(t, nil, 320, 240)
+			a.Config.LyricEdgeFade = immersive
 			for _, tc := range []struct{ source, want, other string }{
 				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
 				{"[00:00.00]暂无歌词", lyrics.UnavailableText, lyrics.InstrumentalText},
@@ -128,7 +113,7 @@ func TestNowPlayingEmptyLyricNotice(t *testing.T) {
 				{"暂无歌词\n[00:01]作曲：A", lyrics.UnavailableText, lyrics.InstrumentalText},
 				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
 			} {
-				a.pl.RefreshLyrics(1, tc.source, "", "")
+				a.Player().RefreshLyrics(1, tc.source, "", "")
 				tt.Frame()
 				if !tt.HasText(tc.want) || tt.HasText(tc.other) {
 					t.Fatalf("lyrics source %q: expected %q alone, got %q", tc.source, tc.want, tt.Texts())
@@ -143,13 +128,13 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 	for _, immersive := range []bool{false, true} {
 		t.Run(fmt.Sprint(immersive), func(t *testing.T) {
 			const w, h = 480, 360
-			a, tt := shortLyricsApp(nil, w, h)
-			a.settings.LyricEdgeFade = immersive
-			a.pl.RefreshLyrics(1, "[00:00.00]作曲 : A\n[00:05.00]纯音乐，请欣赏\n[01:47.50]指挥 Conductor : C", "", "")
+			a, tt := lyricPaneView(t, nil, w, h)
+			a.Config.LyricEdgeFade = immersive
+			a.Player().RefreshLyrics(1, "[00:00.00]作曲 : A\n[00:05.00]纯音乐，请欣赏\n[01:47.50]指挥 Conductor : C", "", "")
 			tt.Frame()
 			first, ok := tt.Find(lyrics.InstrumentalText)
 			last, lastOK := tt.Find("指挥 Conductor : C")
-			if !ok || !lastOK || first.Y >= last.Y || playbackview.Abs32((first.Y+last.Y+last.H)/2-h/2) > 3 {
+			if !ok || !lastOK || first.Y >= last.Y || Abs32((first.Y+last.Y+last.H)/2-h/2) > 3 {
 				t.Fatalf("static credits did not center together: %v, %v", first, last)
 			}
 			if _, ok := tt.AccessByRole(ui.RoleButton, "作曲 : A"); ok {
@@ -162,10 +147,10 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 			if scrolled.Y >= before.Y {
 				t.Fatalf("credits did not scroll: %v -> %v", before, scrolled)
 			}
-			a.pl.Hold(110 * time.Second)
+			a.Player().Hold(110 * time.Second)
 			tt.Frame()
 			held, _ := tt.Find("指挥 Conductor : C")
-			if playbackview.Abs32(held.Y-scrolled.Y) > 1 {
+			if Abs32(held.Y-scrolled.Y) > 1 {
 				t.Fatalf("static block followed playback: %v -> %v", scrolled, held)
 			}
 		})
@@ -176,9 +161,9 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	const w, h = 230, 164
 	const last = "マスタリング：最後の担当者"
-	a, tt := shortLyricsApp(nil, w, h)
+	a, tt := lyricPaneView(t, nil, w, h)
 	long := "Lead Guitar: " + strings.Repeat("Long Performer Name / ", 6)
-	a.pl.RefreshLyrics(1, "[00:00.00]和声编写：A\n[00:01.00]"+long+
+	a.Player().RefreshLyrics(1, "[00:00.00]和声编写：A\n[00:01.00]"+long+
 		"\n[00:02.00]作曲／編曲：C\n[01:30.00]"+last, "", "")
 	tt.Frame()
 	if title, ok := tt.Find(lyrics.InstrumentalText); !ok || title.Y < 16 || title.Y+title.H >= h {
@@ -193,11 +178,11 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	if !ok || end.Y < 0 || end.Y+end.H > h+1 {
 		t.Fatalf("last credit was clipped at the end of the scroll: %+v", end)
 	}
-	a.pl.Cue([]netease.Track{{ID: 2}})
-	a.pl.SetLyrics(nil)
+	a.Player().Cue([]netease.Track{{ID: 2}})
+	a.Player().SetLyrics(nil)
 	tt.Frame()
 	title, ok := tt.Find(lyrics.InstrumentalText)
-	if !ok || a.LyricScroll.Y != 0 || playbackview.Abs32(title.Y+title.H/2-h/2) > 2 {
+	if !ok || a.LyricScroll.Y != 0 || Abs32(title.Y+title.H/2-h/2) > 2 {
 		t.Fatalf("next track inherited the scroll position: %+v, offset %.1f", title, a.LyricScroll.Y)
 	}
 }
@@ -226,10 +211,10 @@ func TestShortLyricsDoNotFlashAtTop(t *testing.T) {
 func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, last string, immersive bool) {
 	t.Helper()
 	const w, h = 300, 360
-	a := newTestApp()
-	a.settings.LyricEdgeFade = immersive
-	a.pl.Cue([]netease.Track{{ID: 1}})
-	a.pl.SetLyrics(nil)
+	a := newTestView(t)
+	a.Config.LyricEdgeFade = immersive
+	a.Player().Cue([]netease.Track{{ID: 1}})
+	a.Player().SetLyrics(nil)
 	var tt *ui.Tester
 	checkTop := func() {
 		t.Helper()
@@ -248,16 +233,16 @@ func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, la
 			checkTop()
 		}
 		c.Root().Background(ui.RGB(0, 0, 0))
-		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
+		ui.Column(c).Fill().Children(func() { a.LyricsPane(c, a.Player().Current(), h, ui.Rect{}, 0) })
 	}, w, h)
 
-	a.pl.Cue([]netease.Track{{ID: 2}})
-	a.pl.SetLyrics(lines)
+	a.Player().Cue([]netease.Track{{ID: 2}})
+	a.Player().SetLyrics(lines)
 	tt.Frame()
 	checkTop()
 	top, topOK := tt.Find(first)
 	bottom, bottomOK := tt.Find(last)
-	if !topOK || !bottomOK || playbackview.Abs32((top.Y+bottom.Y+bottom.H)/2-h/2) > 2 {
+	if !topOK || !bottomOK || Abs32((top.Y+bottom.Y+bottom.H)/2-h/2) > 2 {
 		t.Fatalf("the lyric block did not appear centered: %+v, %+v", top, bottom)
 	}
 }
@@ -268,21 +253,21 @@ func TestImmersiveLyricsFollowAfterRefresh(t *testing.T) {
 	for i := range lines {
 		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Before %02d", i)}
 	}
-	a, tt := shortLyricsApp(lines, 240, 180)
-	a.settings.LyricEdgeFade = true
-	a.pl.Hold(8 * time.Second)
+	a, tt := lyricPaneView(t, lines, 240, 180)
+	a.Config.LyricEdgeFade = true
+	a.Player().Hold(8 * time.Second)
 	tt.Frame()
 	tt.Scroll(160, 100, 0, 240)
-	if a.lyricReading.BrowseUntil.IsZero() {
+	if a.Reading.BrowseUntil.IsZero() {
 		t.Fatal("manual scrolling did not enter browsing mode")
 	}
 	for i := range lines {
 		lines[i].Text = fmt.Sprintf("After %02d", i)
 	}
-	a.pl.SetLyrics(lines)
+	a.Player().SetLyrics(lines)
 	tt.Frame()
 	row, ok := tt.AccessByRole(ui.RoleButton, lines[8].Text)
-	if !ok || row.Offscreen || !a.lyricReading.BrowseUntil.IsZero() || a.lyricReading.At != 8 {
-		t.Fatalf("refreshed lyrics did not follow the current line: row=%+v, index=%d", row, a.lyricReading.At)
+	if !ok || row.Offscreen || !a.Reading.BrowseUntil.IsZero() || a.Reading.At != 8 {
+		t.Fatalf("refreshed lyrics did not follow the current line: row=%+v, index=%d", row, a.Reading.At)
 	}
 }

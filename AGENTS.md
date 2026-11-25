@@ -20,7 +20,9 @@ Only write a test for behaviour that can actually break. If the code under test 
 
 **How:**
 
-- Build views with `ui.NewTester` and set up the app with `newTestApp` (in `internal/app/helpers_test.go`). Find elements by their accessibility label, then `Click`, `RightClick`, `Press`/`Move`/`Release` or `Key`, and check the app's state afterwards.
+- Keep tests beside the package whose behavior they exercise. Split mixed files by test function: model behavior belongs with the ViewModel, independent interactions with the view, and cross-feature wiring with App.
+- Build views with `ui.NewTester`. Use `newTestApp` (in `internal/app/helpers_test.go`) for App integration; independent playback tests use the small fixture in `internal/desktop/view/playback/helpers_test.go`. Find elements by their accessibility label, then `Click`, `RightClick`, `Press`/`Move`/`Release` or `Key`, and check the resulting state or action.
+- Keep fixtures and helpers local to their test package. Put genuinely shared test mechanics in `internal/testutil`; production code must not import test helpers. Put file fixtures in the owning package's `testdata/`.
 - Swap out the network and the clipboard through package variables such as `likeSong` and `copyText`, and restore the real one with `defer`.
 - Live tests that call NetEase skip unless `LIVE` is set.
 - Look at visuals instead of asserting on them. The `NM_FRAMES` tests save PNGs into that directory and skip when it isn't set. Check pixels only for coverage, such as whether a layer still covers the window.

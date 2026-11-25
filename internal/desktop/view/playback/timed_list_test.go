@@ -1,4 +1,4 @@
-package app
+package playback
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	"netease-music-mygo/internal/captionstore"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/speech"
 	captionsvm "netease-music-mygo/internal/viewmodel/captions"
@@ -21,8 +21,8 @@ func TestLongLyricsWindow(t *testing.T) {
 	for i := range lines {
 		lines[i] = lyrics.Line{At: time.Second + time.Duration(i)*200*time.Millisecond, Text: fmt.Sprintf("第 %d 句", i), Translation: strings.Repeat("这句歌词翻译会根据窗口宽度换行", 3)}
 	}
-	a, tt := shortLyricsApp(lines, 480, 520)
-	a.pl.Hold(lines[480].At)
+	a, tt := lyricPaneView(t, lines, 480, 520)
+	a.Player().Hold(lines[480].At)
 	tt.Frame()
 	tt.Advance(time.Second)
 	check := func(height float32) {
@@ -39,11 +39,11 @@ func TestLongLyricsWindow(t *testing.T) {
 	tt.SetSize(300, 400)
 	tt.Advance(time.Second)
 	check(400)
-	if err := tt.Click(lines[481].Text); err != nil || a.pl.Position() != lines[481].At {
-		t.Fatalf("a wrapped visible row could not seek: %v, position %v", err, a.pl.Position())
+	if err := tt.Click(lines[481].Text); err != nil || a.Player().Position() != lines[481].At {
+		t.Fatalf("a wrapped visible row could not seek: %v, position %v", err, a.Player().Position())
 	}
 	last := lines[len(lines)-1]
-	a.pl.Seek(last.At)
+	a.Player().Seek(last.At)
 	tt.Frame()
 	tt.Advance(time.Second)
 	if got, ok := tt.AccessByRole(ui.RoleButton, last.Text); !ok || got.Offscreen || got.Bounds.Y > 400*0.3+1 {
@@ -51,7 +51,7 @@ func TestLongLyricsWindow(t *testing.T) {
 	}
 	// Back before the first lyric: its translation must already have room
 	// after reflow, even though there is no active line to measure.
-	a.pl.Seek(0)
+	a.Player().Seek(0)
 	tt.Frame()
 	tt.Advance(time.Second)
 	if got, ok := tt.AccessByRole(ui.RoleButton, lines[0].Text); !ok || got.Offscreen || a.LyricScroll.Y != 0 || got.Bounds.H < 80 {
@@ -66,15 +66,15 @@ func TestLongLyricsKeepAnchorWhenTogglingImmersive(t *testing.T) {
 		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Line %d", i)}
 	}
 	const height = 240
-	a, tt := shortLyricsApp(lines, 200, height)
+	a, tt := lyricPaneView(t, lines, 200, height)
 	active := lines[len(lines)/2]
-	a.pl.Hold(active.At)
+	a.Player().Hold(active.At)
 	for _, immersive := range []bool{false, true, false} {
-		a.settings.LyricEdgeFade = immersive
+		a.Config.LyricEdgeFade = immersive
 		tt.Frame()
 		tt.Advance(time.Second)
 		row, ok := tt.AccessByRole(ui.RoleButton, active.Text)
-		if !ok || row.Offscreen || playbackview.Abs32(row.Bounds.Y-height*0.3) > 2 {
+		if !ok || row.Offscreen || Abs32(row.Bounds.Y-height*0.3) > 2 {
 			t.Fatalf("immersive=%v: active lyric lost its reading position: %+v", immersive, row)
 		}
 	}
@@ -102,17 +102,17 @@ func TestTimedListMeasuresOnlyRenderedWordText(t *testing.T) {
 			line.Timed = tc.timed
 			rows := []lyrics.Line{line}
 			ui.NewTester(func(c *ui.Context) {
-				st := playbackview.LinesStyle{Size: 22, Weight: 600, LineHeight: 1.25, CenterShort: tc.lyric, Immersive: tc.immersive}
-				var layout playbackview.TimedListLayout
+				st := LinesStyle{Size: 22, Weight: 600, LineHeight: 1.25, CenterShort: tc.lyric, Immersive: tc.immersive}
+				var layout TimedListLayout
 				layout.Reset(c, rows, width, st, 0)
 				layout.Measure(rows, 0, len(rows), st)
 				text := line.Text
 				if tc.wantWordHeight {
 					text = line.Words[0].Text
 				}
-				_, height := playbackview.ShapeLyric(text, playbackview.LyricFont(c, st), width, c.Direction()).Size()
-				want := height + 2*playbackview.TimedLineInsetY + playbackview.TimedLineGap
-				if got := layout.Offsets[1]; playbackview.Abs32(got-want) > 0.5 {
+				_, height := ShapeLyric(text, LyricFont(c, st), width, c.Direction()).Size()
+				want := height + 2*TimedLineInsetY + TimedLineGap
+				if got := layout.Offsets[1]; Abs32(got-want) > 0.5 {
 					t.Fatalf("row height = %.1f, want %.1f for the displayed text", got, want)
 				}
 			}, 200, 220)
@@ -122,15 +122,15 @@ func TestTimedListMeasuresOnlyRenderedWordText(t *testing.T) {
 
 // A long transcript can seek to a distant caption and still click the nearby lines.
 func TestLongCaptionsWindow(t *testing.T) {
-	a := captionsTestApp(t, true)
-	cs := &a.captions
+	a := captionView(t)
+	cs := a.Captions
 	cs.Program = 42
-	cs.Transcript = &transcript{Spans: []span{{0, 600 * sec}}}
+	cs.Transcript = &captionstore.Transcript{Spans: []captionstore.Span{{0, 600 * time.Second}}}
 	for i := range 300 {
-		cs.Lines = append(cs.Lines, lyrics.Line{At: time.Duration(i) * sec, Text: fmt.Sprintf("第 %d 句字幕", i)})
+		cs.Lines = append(cs.Lines, lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("第 %d 句字幕", i)})
 	}
-	tt := ui.NewTester(func(c *ui.Context) { a.views.playback.CaptionsPane(c, a.pl.Current(), 520) }, 440, 520)
-	a.pl.Seek(250 * sec)
+	tt := ui.NewTester(func(c *ui.Context) { a.CaptionsPane(c, a.Player().Current(), 520) }, 440, 520)
+	a.Player().Seek(250 * time.Second)
 	tt.Frame()
 	tt.Advance(time.Second)
 	if got, ok := tt.Access("第 250 句字幕"); !ok || got.Offscreen {
@@ -139,27 +139,27 @@ func TestLongCaptionsWindow(t *testing.T) {
 	if _, ok := tt.Access("第 10 句字幕"); ok {
 		t.Fatal("built a distant caption")
 	}
-	if err := tt.Click("第 251 句字幕"); err != nil || a.pl.Position() != 251*sec {
-		t.Fatalf("caption could not seek: %v, position %v", err, a.pl.Position())
+	if err := tt.Click("第 251 句字幕"); err != nil || a.Player().Position() != 251*time.Second {
+		t.Fatalf("caption could not seek: %v, position %v", err, a.Player().Position())
 	}
 }
 
 // Resizing after manual scrolling rewraps the visible captions around the same row.
 func TestCaptionResizeKeepsManualPosition(t *testing.T) {
-	a := captionsTestApp(t, true)
-	cs := &a.captions
+	a := captionView(t)
+	cs := a.Captions
 	cs.Program = 42
-	cs.Transcript = &transcript{Spans: []span{{0, 600 * sec}}}
+	cs.Transcript = &captionstore.Transcript{Spans: []captionstore.Span{{0, 600 * time.Second}}}
 	for i := range 600 {
 		cs.Lines = append(cs.Lines, lyrics.Line{
-			At:   time.Duration(i) * sec,
+			At:   time.Duration(i) * time.Second,
 			Text: fmt.Sprintf("第 %d 句字幕，缩窄窗口后应该可以继续阅读这段需要换行的内容", i),
 		})
 	}
-	a.pl.Seek(250 * sec)
+	a.Player().Seek(250 * time.Second)
 	tt := ui.NewTester(func(c *ui.Context) {
 		_, h := c.Size()
-		a.views.playback.CaptionsPane(c, a.pl.Current(), h)
+		a.CaptionsPane(c, a.Player().Current(), h)
 	}, 520, 460)
 	tt.Scroll(200, 220, 0, 900)
 	tt.Advance(time.Second)
@@ -187,21 +187,21 @@ func TestCaptionResizeKeepsManualPosition(t *testing.T) {
 
 // While reading ahead, new captions keep the scrolled row reachable, even as the list starts windowing.
 func TestCaptionAppendKeepsManualPosition(t *testing.T) {
-	for _, count := range []int{playbackview.TimedListThreshold - 1, 300} {
+	for _, count := range []int{TimedListThreshold - 1, 300} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
-			a := captionsTestApp(t, true)
+			a := captionView(t)
 			work := &captionsvm.CaptionWork{Program: 42}
-			cs := &a.captions
-			cs.Program, cs.Transcript, cs.Work = 42, &transcript{}, work
+			cs := a.Captions
+			cs.Program, cs.Transcript, cs.Work = 42, &captionstore.Transcript{}, work
 			add := func(i int) {
 				at := time.Duration(i) * time.Second
-				a.captions.Said(work, speech.Segment{Start: at, End: at + 500*time.Millisecond, Text: fmt.Sprintf("Caption %03d", i)})
+				a.Captions.Said(work, speech.Segment{Start: at, End: at + 500*time.Millisecond, Text: fmt.Sprintf("Caption %03d", i)})
 			}
 			for i := range count {
 				add(i)
 			}
-			a.pl.Seek(20 * time.Second)
-			tt := ui.NewTester(func(c *ui.Context) { a.views.playback.CaptionsPane(c, a.pl.Current(), 460) }, 440, 460)
+			a.Player().Seek(20 * time.Second)
+			tt := ui.NewTester(func(c *ui.Context) { a.CaptionsPane(c, a.Player().Current(), 460) }, 440, 460)
 			tt.Advance(2 * time.Second)
 			anchor := func() ui.Rect {
 				t.Helper()
@@ -224,31 +224,9 @@ func TestCaptionAppendKeepsManualPosition(t *testing.T) {
 			if after := anchor(); math.Abs(float64(after.Y-scrolled.Y)) > 2 {
 				t.Fatalf("appending moved the row being read: %.1f -> %.1f", scrolled.Y, after.Y)
 			}
-			if err := tt.Click("Caption 024"); err != nil || a.pl.Position() != 24*time.Second {
-				t.Fatalf("scrolled caption could not seek: %v, position %v", err, a.pl.Position())
+			if err := tt.Click("Caption 024"); err != nil || a.Player().Position() != 24*time.Second {
+				t.Fatalf("scrolled caption could not seek: %v, position %v", err, a.Player().Position())
 			}
 		})
-	}
-}
-
-// Caption language follows new text and out-of-order segments while duplicate segments leave the list alone.
-func TestCaptionLanguageAfterAppendAndInsert(t *testing.T) {
-	a := newTestApp()
-	work := &captionsvm.CaptionWork{Program: 42}
-	a.captions = captionsvm.Captions{Program: 42, Transcript: &transcript{}, Work: work}
-	english := speech.Segment{Start: 5 * sec, End: 7 * sec, Text: "First caption"}
-	japanese := speech.Segment{Start: 8 * sec, End: 10 * sec, Text: "次のことば"}
-	a.captions.Said(work, english)
-	if a.captions.Language != "" || len(a.captions.Lines) != 1 {
-		t.Fatal("first caption did not keep the default language")
-	}
-	a.captions.Said(work, japanese)
-	a.captions.Said(work, japanese)
-	if got := a.captions; got.Language != "ja" || len(got.Lines) != 2 {
-		t.Fatalf("append or duplicate corrupted transcript: %q, %v", got.Language, got.Lines)
-	}
-	a.captions.Said(work, speech.Segment{Start: sec, End: 3 * sec, Text: "Earlier"})
-	if got := a.captions.Lines; len(got) != 3 || got[0].Text != "Earlier" || a.captions.Language != "ja" {
-		t.Fatalf("out-of-order insert corrupted transcript: %v", got)
 	}
 }

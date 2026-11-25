@@ -13,6 +13,7 @@ import (
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/testutil"
 	localvm "netease-music-mygo/internal/viewmodel/local"
 )
 
@@ -55,7 +56,7 @@ func TestLocalLyricsMatchAndRestore(t *testing.T) {
 		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), h, ui.Rect{}, 0) })
 		a.views.local.LyricMatchDialog(c)
 	}, 780, 600, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
-	settleTallLyrics(tt)
+	testutil.Settle(tt)
 	if err := tt.Click("从网易云匹配歌词"); err != nil {
 		t.Fatal(err)
 	}
