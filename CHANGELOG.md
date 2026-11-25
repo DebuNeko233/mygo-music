@@ -1,5 +1,20 @@
 # 更新日志
 
+## 0.2.16
+
+### What's Changed
+* perf: 缩短 PR 和 fork 预检的 CI 耗时 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/177
+* fix: 修复窗口还原后歌词回退顶部 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/178
+* perf: 缩短 Full UI Race 的执行时间 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/179
+* feat: 支持音乐网盘浏览播放并统一音频格式处理 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/181
+* feat: 支持歌曲下载、内嵌封面与双语歌词 by @DebuNeko233 in https://github.com/zhangnjsd/mygo-music/pull/182
+* fix: 为系统钥匙串缺失提供登录设置指引 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/185
+* fix: 显示 Wayland 全局快捷键绑定结果 by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/186
+* fix(linux): hide lyrics menu and keep unlock hit area live by @zhangnjsd in https://github.com/zhangnjsd/mygo-music/pull/189
+
+
+**Full Changelog**: https://github.com/zhangnjsd/mygo-music/compare/v0.2.15...v0.2.16
+
 ## 0.2.15
 
 ### What's Changed
