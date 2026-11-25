@@ -1,3 +1,7 @@
+/*
+实现网易云桌面 EAPI 请求封装、设备信息与请求加密。
+*/
+
 package netease
 
 import (

@@ -1,3 +1,7 @@
+/*
+验证 AAC 和 MP4 增量解码不阻塞其他歌曲，并正确处理取消和不完整帧。
+*/
+
 package player
 
 import (

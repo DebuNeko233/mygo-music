@@ -1,3 +1,7 @@
+/*
+绘制封面占位图，并处理图片加载完成时的淡入显示。
+*/
+
 package components
 
 import (

@@ -1,3 +1,7 @@
+/*
+使用 WAV 音源验证本地识别输出的文本和片段时间。
+*/
+
 package speech
 
 import (

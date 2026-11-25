@@ -1,3 +1,7 @@
+/*
+验证歌词原文语言与文字系统识别不受翻译和共用标点干扰。
+*/
+
 package lyrics
 
 import "testing"

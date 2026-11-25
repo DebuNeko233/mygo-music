@@ -1,3 +1,7 @@
+/*
+读取 Windows 进程的累计 CPU 时间，供性能观测使用。
+*/
+
 package app
 
 import "syscall"

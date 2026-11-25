@@ -1,3 +1,7 @@
+/*
+提供图标、播放和圆形等共享按钮，以及按压动画。
+*/
+
 package components
 
 import (

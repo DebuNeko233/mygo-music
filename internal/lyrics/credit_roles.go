@@ -1,3 +1,7 @@
+/*
+建立歌词署名角色词典，区分制作人员字段与可能被演唱的内容。
+*/
+
 package lyrics
 
 import "strings"

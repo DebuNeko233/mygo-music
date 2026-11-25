@@ -1,3 +1,7 @@
+/*
+记录歌单使用情况并按预算裁剪详情缓存，保护可见或正在编辑的歌单。
+*/
+
 package library
 
 // Bound cached details and track records; a visible or edited playlist may exceed the budget.

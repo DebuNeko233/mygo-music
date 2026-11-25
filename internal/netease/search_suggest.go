@@ -1,3 +1,7 @@
+/*
+查询搜索联想并保留服务端对各类建议的排序。
+*/
+
 package netease
 
 import "net/url"

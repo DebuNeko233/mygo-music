@@ -1,3 +1,7 @@
+/*
+呈现下载偏好和任务列表，连接队列控制与目标目录设置。
+*/
+
 package settings
 
 import (

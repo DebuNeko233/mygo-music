@@ -1,3 +1,7 @@
+/*
+验证并发会话保存保留最新队列，并拒绝与快照不匹配的检查点。
+*/
+
 package sessionstore
 
 import (

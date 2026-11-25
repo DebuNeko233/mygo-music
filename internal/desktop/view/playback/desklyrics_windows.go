@@ -1,5 +1,9 @@
 //go:build windows
 
+/*
+移除 Windows 桌面歌词窗口的原生圆角和阴影，保持透明覆盖层外观。
+*/
+
 package playback
 
 import (

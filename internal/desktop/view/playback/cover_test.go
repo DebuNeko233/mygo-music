@@ -1,3 +1,7 @@
+/*
+验证封面甩动、滑动切歌、回弹及封面形状保持。
+*/
+
 package playback
 
 import (

@@ -1,3 +1,7 @@
+/*
+缓存最近访问页面的数据，在容量限制内淘汰旧页面并保留待完成加载。
+*/
+
 package pagecache
 
 import "slices"

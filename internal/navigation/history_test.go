@@ -1,3 +1,7 @@
+/*
+验证导航分支保留规则，以及删除页面后前后历史的回退行为。
+*/
+
 package navigation
 
 import "testing"

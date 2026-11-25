@@ -1,3 +1,7 @@
+/*
+定义配置结构与默认值，校正输入并通过批量写入保存用户设置。
+*/
+
 package preferences
 
 import (

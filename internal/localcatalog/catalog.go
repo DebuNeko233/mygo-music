@@ -1,3 +1,7 @@
+/*
+定义并加载本地曲库，维护稳定歌曲身份及查询所需的派生状态。
+*/
+
 package localcatalog
 
 import (

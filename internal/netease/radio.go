@@ -1,3 +1,7 @@
+/*
+提供私人 FM、心动模式与不喜欢接口，并封装评论读取和点赞操作。
+*/
+
 package netease
 
 import (

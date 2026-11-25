@@ -1,3 +1,7 @@
+/*
+映射 sherpa-onnx C 接口的结构与函数，校验并加载对应平台的原生库。
+*/
+
 package speech
 
 import (

@@ -1,3 +1,7 @@
+/*
+使用 Linux 文件发布机制避免覆盖已有下载目标。
+*/
+
 package download
 
 import (

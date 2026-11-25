@@ -1,3 +1,7 @@
+/*
+验证 HTTP 错误处理、完整歌单补全、歌曲顺序和播放权限判断。
+*/
+
 package netease
 
 import (

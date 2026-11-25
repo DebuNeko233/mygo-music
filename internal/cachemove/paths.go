@@ -1,3 +1,7 @@
+/*
+定义缓存路径并解析目录身份，验证源与目标目录不存在危险重叠。
+*/
+
 // Package cachemove transfers managed caches with writers and audio handles
 // stopped, publishing copies before saving settings and retiring originals.
 package cachemove

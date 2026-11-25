@@ -1,3 +1,7 @@
+/*
+提供不同舞台歌词样式，处理分词、标点布局和样式选择。
+*/
+
 package playback
 
 import (

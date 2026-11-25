@@ -1,5 +1,9 @@
 //go:build darwin && !ios
 
+/*
+通过 macOS 原生图层更新歌曲行电平，避免为电平动画重绘整个窗口。
+*/
+
 package playback
 
 import (

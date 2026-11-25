@@ -1,3 +1,7 @@
+/*
+绘制等宽分段选择控件，并连接当前选项与点击操作。
+*/
+
 package components
 
 import (

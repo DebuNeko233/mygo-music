@@ -1,5 +1,9 @@
 //go:build darwin
 
+/*
+读取 macOS 刘海和菜单栏几何信息，并提供窗口置顶与指针监听适配。
+*/
+
 package playback
 
 import (

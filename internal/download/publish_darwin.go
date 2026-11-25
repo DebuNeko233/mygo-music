@@ -1,3 +1,7 @@
+/*
+使用 macOS 不覆盖目标的文件重命名发布下载结果。
+*/
+
 package download
 
 import (

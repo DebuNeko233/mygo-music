@@ -1,3 +1,7 @@
+/*
+验证页面缓存保留近期内容，且未完成加载不会挤掉新打开的页面。
+*/
+
 package pagecache
 
 import "testing"

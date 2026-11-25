@@ -1,3 +1,7 @@
+/*
+提供主窗口内的错误占位和卡片列布局。
+*/
+
 package shell
 
 import (

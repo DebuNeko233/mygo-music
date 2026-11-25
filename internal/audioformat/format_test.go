@@ -1,3 +1,7 @@
+/*
+验证格式探测跳过完整 ID3 标签，并拒绝从不完整标签推断格式。
+*/
+
 package audioformat
 
 import (

@@ -1,3 +1,7 @@
+/*
+实现本地曲库目录增删、歌曲移除和文件重定位。
+*/
+
 package localcatalog
 
 import (

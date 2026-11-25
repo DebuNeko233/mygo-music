@@ -1,3 +1,7 @@
+/*
+提供共享封面、图片和头像控件，统一占位、填充与圆角显示。
+*/
+
 package components
 
 import (

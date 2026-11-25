@@ -1,3 +1,7 @@
+/*
+验证播放日志的字段、来源省略规则及会话凭据隔离。
+*/
+
 package netease
 
 import (

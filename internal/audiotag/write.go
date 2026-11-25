@@ -1,3 +1,7 @@
+/*
+在不转码音频内容的前提下写入元数据，并限制标签处理的并发内存开销。
+*/
+
 // Package audiotag writes metadata without transcoding the audio payload.
 package audiotag
 

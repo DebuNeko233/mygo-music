@@ -1,3 +1,7 @@
+/*
+定义应用配色，并根据明暗外观和用户强调色生成主题颜色。
+*/
+
 package components
 
 import (

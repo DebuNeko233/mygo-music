@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Exercise audio tagging and decoding under macOS Hardened Runtime."""
+"""
+在 macOS Hardened Runtime 下检查音频标签写入与解码，验证签名构建的兼容性。
+"""
 
 import argparse
 import json

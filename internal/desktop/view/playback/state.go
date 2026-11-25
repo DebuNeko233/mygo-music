@@ -1,3 +1,7 @@
+/*
+保存主播放视图的控件与动画状态，复用共享播放器数据。
+*/
+
 package playback
 
 import (

@@ -1,3 +1,7 @@
+/*
+连接播放器与系统应用音量，串行处理音量写入并管理混音器生命周期。
+*/
+
 // Package mixvol links the app's own volume to the system's mixer, so that
 // the volume it shows is the volume the system shows for it: the slider the
 // Windows volume mixer gives this app, PulseAudio's or PipeWire's volume for

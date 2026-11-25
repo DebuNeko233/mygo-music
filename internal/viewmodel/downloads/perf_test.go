@@ -1,3 +1,7 @@
+/*
+基准测量重复下载入队的去重与分配开销，不启动网络任务。
+*/
+
 package downloads
 
 import (

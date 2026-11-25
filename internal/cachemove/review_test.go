@@ -1,3 +1,7 @@
+/*
+验证缓存迁移在取消、进程退出和发布冲突后的恢复与文件保护。
+*/
+
 package cachemove
 
 import (

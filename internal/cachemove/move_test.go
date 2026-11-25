@@ -1,3 +1,7 @@
+/*
+验证完整歌曲迁移、跨卷复制、失败回滚和不安全目标拒绝。
+*/
+
 package cachemove
 
 import (

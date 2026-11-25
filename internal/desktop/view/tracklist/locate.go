@@ -1,3 +1,7 @@
+/*
+跟踪歌曲列表可见区域，定位当前播放歌曲并协调浮动定位入口。
+*/
+
 package tracklist
 
 import (

@@ -1,3 +1,7 @@
+/*
+生成应用图标的分层矢量资源与平台位图，包括正式和开发版本。
+*/
+
 // Command icon draws the app icons: the layers of AppIcon.icon, the Icon
 // Composer document that macOS 26 and later render in Liquid Glass, and
 // resources/icon.png, the same icon as macOS draws it, on the grid of older

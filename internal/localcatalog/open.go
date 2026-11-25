@@ -1,3 +1,7 @@
+/*
+准备临时打开的本地音频，返回可用于播放的歌曲信息。
+*/
+
 package localcatalog
 
 import (

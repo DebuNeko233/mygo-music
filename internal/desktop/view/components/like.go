@@ -1,3 +1,7 @@
+/*
+绘制喜欢按钮与粒子反馈，并将歌曲或节目的喜欢操作交给调用方。
+*/
+
 package components
 
 import (

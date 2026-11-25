@@ -1,3 +1,7 @@
+/*
+验证 macOS 文件不可删除或时间戳更新失败时，缓存统计与淘汰仍保持一致。
+*/
+
 package player
 
 import (

@@ -1,5 +1,9 @@
 //go:build !darwin
 
+/*
+为非 macOS 平台提供刘海播放器几何和原生窗口能力的回退实现。
+*/
+
 package playback
 
 func notchSize() (w, h float64, ok bool) { return 0, 0, false }

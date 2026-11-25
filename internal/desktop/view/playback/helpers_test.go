@@ -1,3 +1,7 @@
+/*
+为独立播放视图测试提供最小播放器、歌词和字幕夹具。
+*/
+
 package playback
 
 import (

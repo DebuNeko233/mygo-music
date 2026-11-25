@@ -1,3 +1,7 @@
+/*
+验证连续设置修改合并写入、定期落盘及刷新时保留最新变更。
+*/
+
 package preferences
 
 import (

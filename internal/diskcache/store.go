@@ -1,3 +1,7 @@
+/*
+实现有容量上限的磁盘快照缓存，协调异步写入、失效、淘汰和目录迁移。
+*/
+
 // Package diskcache stores disposable, bounded snapshots. Call Read and Put
 // off the UI thread; Queue only schedules a write of immutable bytes.
 package diskcache

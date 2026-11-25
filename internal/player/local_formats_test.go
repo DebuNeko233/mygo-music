@@ -1,3 +1,7 @@
+/*
+验证本地音频格式的解码与定位，并对照 PCM 样本检查结果。
+*/
+
 package player
 
 import (

@@ -1,5 +1,9 @@
 //go:build windows
 
+/*
+验证 Windows 文件关联注册写入所需配置。
+*/
+
 package app
 
 import (

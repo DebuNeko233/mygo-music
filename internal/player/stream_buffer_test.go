@@ -1,3 +1,7 @@
+/*
+验证 MP3 缓冲解码保持 PCM 一致，并支持下载未完成时播放和失败传播。
+*/
+
 package player
 
 import (

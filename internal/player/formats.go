@@ -1,3 +1,7 @@
+/*
+为 WAV、Ogg 和通用解码器提供统一音频流接口及定位能力。
+*/
+
 package player
 
 import (

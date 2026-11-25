@@ -1,3 +1,7 @@
+/*
+保存本地歌曲的在线歌词匹配，并在曲库提交后清理已删除歌曲的歌词文件。
+*/
+
 package localcatalog
 
 import (

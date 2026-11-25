@@ -1,3 +1,7 @@
+/*
+在 Windows 加载语音识别 DLL 并查找导出符号。
+*/
+
 package speech
 
 import "syscall"

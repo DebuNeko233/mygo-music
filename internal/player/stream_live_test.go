@@ -1,3 +1,7 @@
+/*
+提供显式启用的真实歌曲流读取测试。
+*/
+
 package player
 
 import (

@@ -1,3 +1,7 @@
+/*
+将多声道音频转换为识别所需的单声道采样率，并执行滤波重采样。
+*/
+
 package speech
 
 import "math"

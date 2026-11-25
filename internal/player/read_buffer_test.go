@@ -1,3 +1,7 @@
+/*
+验证缓冲读取的偏移、EOF、并发和错误传播，并测量文件读取开销。
+*/
+
 package player
 
 import (

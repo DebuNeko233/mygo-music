@@ -1,3 +1,7 @@
+/*
+验证关闭本地 M4A 流时同时释放其 HE-AAC 解码器。
+*/
+
 package player
 
 import (

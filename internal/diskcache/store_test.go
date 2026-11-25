@@ -1,3 +1,7 @@
+/*
+验证快照持久化、账号隔离、写入顺序、损坏清理和容量淘汰。
+*/
+
 package diskcache
 
 import (

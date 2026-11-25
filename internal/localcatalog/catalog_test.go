@@ -1,3 +1,7 @@
+/*
+验证本地扫描的身份与元数据复用、格式支持及歌词持久化兼容性。
+*/
+
 package localcatalog
 
 import (

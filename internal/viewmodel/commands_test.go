@@ -1,3 +1,7 @@
+/*
+验证后台任务仅在所属线程发布状态，并在下载清理发布后推进队列。
+*/
+
 package viewmodel_test
 
 import (

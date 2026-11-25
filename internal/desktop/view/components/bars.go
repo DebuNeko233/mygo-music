@@ -1,3 +1,7 @@
+/*
+平滑频段电平并绘制均衡器条形，供不同播放视图复用。
+*/
+
 package components
 
 import (

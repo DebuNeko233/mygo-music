@@ -1,3 +1,7 @@
+/*
+筛选已完整保存的歌曲，并为缓存文件复制提供进度统计。
+*/
+
 package cachemove
 
 import (

@@ -1,5 +1,9 @@
 //go:build windows
 
+/*
+通过 Windows 音频会话接口查找应用会话并同步音量，管理 COM 对象生命周期。
+*/
+
 package mixvol
 
 import (

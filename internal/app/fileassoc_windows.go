@@ -1,5 +1,9 @@
 //go:build windows
 
+/*
+向 Windows 注册当前用户的音频文件类型和打开方式。
+*/
+
 package app
 
 import (

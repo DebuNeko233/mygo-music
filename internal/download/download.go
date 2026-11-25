@@ -1,3 +1,7 @@
+/*
+导出完整歌曲副本，按实际音频格式生成文件名并在补全元数据后发布。
+*/
+
 // Package download exports songs through the existing transport and format
 // detection, enriching an independent copy before publishing it to the user.
 package download

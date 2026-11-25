@@ -1,3 +1,7 @@
+/*
+验证缓慢的磁盘图片查询不会阻塞其他独立图片请求。
+*/
+
 package netease
 
 import (

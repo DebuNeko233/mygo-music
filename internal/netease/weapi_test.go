@@ -1,3 +1,7 @@
+/*
+验证喜欢歌曲使用正确的普通歌曲接口。
+*/
+
 package netease
 
 import (

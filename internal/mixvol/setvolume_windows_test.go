@@ -1,5 +1,9 @@
 //go:build windows
 
+/*
+验证 Windows 混音器无响应时音量设置仍能返回。
+*/
+
 package mixvol
 
 import (

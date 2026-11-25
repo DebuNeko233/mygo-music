@@ -1,3 +1,7 @@
+/*
+连接语音活动检测与本地识别器，将音频转成带时间范围的文字片段。
+*/
+
 // Package speech transcribes speech on the device, for podcasts' captions:
 // Silero's voice activity detection cuts the audio into what is said, and
 // Qwen3-ASR, through sherpa-onnx, writes each of those down, with

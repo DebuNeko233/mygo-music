@@ -1,3 +1,7 @@
+/*
+使用 Windows 文件操作发布下载结果并避免覆盖已有文件。
+*/
+
 package download
 
 import (

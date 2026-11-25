@@ -1,3 +1,7 @@
+/*
+基准测量索引元数据更新，避免容量充足时重复扫描图片文件。
+*/
+
 package diskcache
 
 import (

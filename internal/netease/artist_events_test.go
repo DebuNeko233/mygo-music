@@ -1,3 +1,7 @@
+/*
+验证动态内嵌 JSON、旧版歌曲结构及转发内容的解析。
+*/
+
 package netease
 
 import "testing"

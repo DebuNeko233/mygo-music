@@ -1,3 +1,7 @@
+/*
+验证音量设置不会等待阻塞的混音器写入。
+*/
+
 package mixvol
 
 import (

@@ -1,3 +1,7 @@
+/*
+验证频谱填充、跳转混合、暂停恢复及轮廓和色调平滑。
+*/
+
 package playback
 
 import (

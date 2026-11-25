@@ -1,3 +1,7 @@
+/*
+扫描音乐目录和文件变更，仅重新读取大小或时间戳改变的音频元数据。
+*/
+
 package localcatalog
 
 import (

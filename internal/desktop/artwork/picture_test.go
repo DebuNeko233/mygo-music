@@ -1,3 +1,7 @@
+/*
+验证不同背景图片格式的读取及最大尺寸限制。
+*/
+
 package artwork
 
 import (

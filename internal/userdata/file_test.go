@@ -1,3 +1,7 @@
+/*
+验证数据提交失败时保留原文件并清理暂存文件。
+*/
+
 package userdata
 
 import (

@@ -1,3 +1,7 @@
+/*
+压缩并加密桌面统计日志，将记录封装为 NCBL 上传格式。
+*/
+
 package netease
 
 import (

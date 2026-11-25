@@ -1,3 +1,7 @@
+/*
+验证时长、播放计数、评论时间及最近播放来源的展示格式。
+*/
+
 package components
 
 import (

@@ -1,3 +1,7 @@
+/*
+验证向后跳转后跨行歌词词语的各部分都能重新绘制。
+*/
+
 package playback
 
 import (

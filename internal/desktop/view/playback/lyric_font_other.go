@@ -1,5 +1,9 @@
 //go:build !windows
 
+/*
+提供非 Windows 平台的歌词文档字体选择。
+*/
+
 package playback
 
 import (

@@ -1,3 +1,7 @@
+/*
+读取本地音频的描述标签、内嵌封面与歌词。
+*/
+
 package localmedia
 
 import (

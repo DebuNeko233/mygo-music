@@ -1,3 +1,7 @@
+/*
+协调 LRC、YRC 和翻译来源，选择可用时间线并对齐正文、译文与署名。
+*/
+
 package lyrics
 
 import (

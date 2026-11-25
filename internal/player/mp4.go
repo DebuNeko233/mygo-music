@@ -1,3 +1,7 @@
+/*
+将 MP4 解码器接入统一流接口，并显式管理 AAC 编解码器的释放。
+*/
+
 package player
 
 import (

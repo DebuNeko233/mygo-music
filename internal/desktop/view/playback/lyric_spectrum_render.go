@@ -1,3 +1,7 @@
+/*
+将频谱轮廓编码为纹理，绘制频谱填充、亮度和外沿辉光。
+*/
+
 package playback
 
 import (

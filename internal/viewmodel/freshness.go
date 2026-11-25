@@ -1,3 +1,7 @@
+/*
+定义列表刷新间隔，并判断已缓存内容是否需要重新验证。
+*/
+
 package viewmodel
 
 import (

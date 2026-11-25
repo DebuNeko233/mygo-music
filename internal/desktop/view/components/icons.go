@@ -1,3 +1,7 @@
+/*
+定义桌面界面使用的描边与填充图标路径。
+*/
+
 package components
 
 import (

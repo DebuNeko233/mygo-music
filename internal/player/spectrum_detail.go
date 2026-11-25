@@ -1,3 +1,7 @@
+/*
+计算 64 频段的 mel 频谱布局与高频补偿，供细节可视化使用。
+*/
+
 package player
 
 import "math"

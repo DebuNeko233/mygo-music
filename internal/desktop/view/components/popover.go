@@ -1,3 +1,7 @@
+/*
+保存弹出层配色，并根据当前外观生成弹出层颜色。
+*/
+
 package components
 
 import (

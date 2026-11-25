@@ -1,3 +1,7 @@
+/*
+为真实收听上报验证读取服务端播放计数。
+*/
+
 package netease
 
 import ()

@@ -1,3 +1,7 @@
+/*
+绘制虚拟歌曲列表与表头，维护行状态并连接歌曲操作。
+*/
+
 package tracklist
 
 import (

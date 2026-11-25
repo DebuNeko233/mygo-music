@@ -1,3 +1,7 @@
+/*
+提供播放器测试使用的音频 HTTP 服务、请求计数和异步播放推进夹具。
+*/
+
 package player
 
 import (

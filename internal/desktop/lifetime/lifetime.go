@@ -1,3 +1,7 @@
+/*
+管理界面线程持有的原生订阅，并在关闭时按逆序释放一次。
+*/
+
 package lifetime
 
 // Subscriptions belongs to the UI thread. Each owner releases its native

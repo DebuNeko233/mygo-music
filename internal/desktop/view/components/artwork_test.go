@@ -1,3 +1,7 @@
+/*
+验证封面加载后的淡入，以及首次呈现时已有图片的直接显示。
+*/
+
 package components
 
 import (

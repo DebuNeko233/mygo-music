@@ -1,3 +1,7 @@
+/*
+合并封面请求并缓存图片内容和元数据，处理 HTTP 校验、尺寸复用及更新通知。
+*/
+
 package netease
 
 import (

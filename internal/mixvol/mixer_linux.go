@@ -1,5 +1,9 @@
 //go:build linux
 
+/*
+通过 PulseAudio 或 PipeWire 命令接入应用音量，轮询状态并异步写入。
+*/
+
 package mixvol
 
 import (

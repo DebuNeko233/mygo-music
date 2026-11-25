@@ -1,3 +1,7 @@
+/*
+验证字幕分句、长句拆分及行时间计算。
+*/
+
 package speech
 
 import (

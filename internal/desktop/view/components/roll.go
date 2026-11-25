@@ -1,3 +1,7 @@
+/*
+维护数字滚动状态，测量并绘制计数值切换动画。
+*/
+
 package components
 
 import (

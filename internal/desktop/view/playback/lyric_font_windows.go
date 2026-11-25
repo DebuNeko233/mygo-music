@@ -1,3 +1,7 @@
+/*
+通过 Windows 字体接口选择歌词文档字体，并管理相关原生对象。
+*/
+
 package playback
 
 import (

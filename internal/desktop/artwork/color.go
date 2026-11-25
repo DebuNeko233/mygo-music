@@ -1,3 +1,7 @@
+/*
+提供封面配色使用的 HSV 颜色表示与颜色转换。
+*/
+
 package artwork
 
 import (

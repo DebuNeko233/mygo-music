@@ -1,3 +1,7 @@
+/*
+根据 NM_SHOTS 环境变量驱动界面巡览，并保存窗口截图以检查设计。
+*/
+
 package app
 
 import (

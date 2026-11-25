@@ -1,3 +1,7 @@
+/*
+验证订阅逆序释放、重复关闭及关闭后新增订阅的处理。
+*/
+
 package lifetime
 
 import (

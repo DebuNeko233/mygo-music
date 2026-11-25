@@ -1,3 +1,7 @@
+/*
+验证设置路径隔离、显式保存优先级及延迟保存保留最终值。
+*/
+
 package preferences
 
 import (

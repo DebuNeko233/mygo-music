@@ -1,3 +1,7 @@
+/*
+验证续播片段按设备和收听间隔截断，并保持原播放顺序。
+*/
+
 package playback
 
 import (

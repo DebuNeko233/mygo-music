@@ -1,3 +1,7 @@
+/*
+定义视图共享的只读图片接口，暴露位图、背景和色调等呈现信息。
+*/
+
 package components
 
 import (

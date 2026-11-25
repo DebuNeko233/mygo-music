@@ -1,3 +1,7 @@
+/*
+绘制加载骨架和扫光效果，提供页面、播放器、评论及歌词占位内容。
+*/
+
 package components
 
 import (

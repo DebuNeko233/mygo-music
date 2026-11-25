@@ -1,3 +1,7 @@
+/*
+说明功能模型的状态、命令和线程约定，以及服务与视图之间的职责边界。
+*/
+
 // Package viewmodel defines loading state and refresh timing shared by features.
 // Feature presentation state and commands live in its named subpackages.
 //

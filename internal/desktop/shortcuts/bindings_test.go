@@ -1,3 +1,7 @@
+/*
+验证快捷键默认值补全、冲突拒绝和恢复操作。
+*/
+
 package shortcuts
 
 import (

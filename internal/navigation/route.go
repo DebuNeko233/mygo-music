@@ -1,3 +1,7 @@
+/*
+定义应用页面种类和导航目标的数据结构。
+*/
+
 package navigation
 
 import "netease-music-mygo/internal/netease"

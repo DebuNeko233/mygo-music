@@ -1,3 +1,7 @@
+/*
+维护用户共享的喜欢、歌单和专辑集合，并提供保留旧快照的编辑操作。
+*/
+
 // Package library owns the listener's shared collections, independently of windows.
 package library
 

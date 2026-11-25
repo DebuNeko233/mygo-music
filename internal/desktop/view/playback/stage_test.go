@@ -1,3 +1,7 @@
+/*
+验证舞台歌词按空格、标点及文本单位拆分的规则。
+*/
+
 package playback
 
 import (

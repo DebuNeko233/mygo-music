@@ -1,3 +1,7 @@
+/*
+验证快捷键录制、恢复、全局注册与释放，并隔离失效的 Wayland 注册结果。
+*/
+
 package app
 
 import (

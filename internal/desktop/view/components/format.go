@@ -1,3 +1,7 @@
+/*
+格式化播放时长、计数、评论时间和最近播放来源等展示文本。
+*/
+
 package components
 
 import (

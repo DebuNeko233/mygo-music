@@ -1,3 +1,7 @@
+/*
+呈现等待续播的跨设备播放记录及其来源信息。
+*/
+
 package playback
 
 // PickedUp is the song a login picked up, while it waits to play.

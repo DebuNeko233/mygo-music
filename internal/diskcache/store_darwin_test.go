@@ -1,3 +1,7 @@
+/*
+验证 macOS 文件时间戳更新失败时仍按最近读取记录保护缓存。
+*/
+
 package diskcache
 
 import (

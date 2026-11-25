@@ -1,3 +1,7 @@
+/*
+绘制播放栏封面，并连接封面加载与切换过渡。
+*/
+
 package playback
 
 import (

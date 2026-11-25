@@ -1,3 +1,7 @@
+/*
+通过同目录暂存和原子替换写入用户数据文件及 JSON 内容。
+*/
+
 package userdata
 
 import (

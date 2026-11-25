@@ -1,3 +1,7 @@
+/*
+维护页面导航历史，处理打开、前进、后退和已删除页面清理。
+*/
+
 package navigation
 
 import "slices"

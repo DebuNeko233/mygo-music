@@ -1,5 +1,9 @@
 //go:build darwin || linux
 
+/*
+在 macOS 和 Linux 加载语音识别动态库并查找符号。
+*/
+
 package speech
 
 import "github.com/ebitengine/purego"

@@ -1,3 +1,7 @@
+/*
+绘制菜单栏与托盘图标，生成透明模板和对应预览资源。
+*/
+
 // Command tray draws internal/app/tray/tray-template.png, the app's icon in
 // the macOS menu bar: the record and tonearm of the app's icon, black on
 // transparent for macOS to tint, the tonearm knocked out of the record

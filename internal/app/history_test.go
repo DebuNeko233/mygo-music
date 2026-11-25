@@ -1,3 +1,7 @@
+/*
+验证页面导航的后退与前进操作。
+*/
+
 package app
 
 import (

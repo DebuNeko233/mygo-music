@@ -1,3 +1,7 @@
+/*
+提供应用集成测试使用的静音音频流与播放器音源。
+*/
+
 package app
 
 import "github.com/egoist/mygo/audio"

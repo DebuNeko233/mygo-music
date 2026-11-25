@@ -1,3 +1,7 @@
+/*
+实现网易云网页 WEAPI 请求封装和加密，供网页协议接口调用。
+*/
+
 package netease
 
 import (

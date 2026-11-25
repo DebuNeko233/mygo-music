@@ -1,3 +1,7 @@
+/*
+验证用户歌单接口读取全部分页，而非仅返回第一页。
+*/
+
 package netease
 
 import (

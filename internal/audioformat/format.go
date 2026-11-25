@@ -1,3 +1,7 @@
+/*
+统一音频容器名称与扩展名，并探测跳过 ID3 标签后的实际音频格式。
+*/
+
 // Package audioformat names the audio formats shared by playback, import and cache maintenance.
 package audioformat
 

@@ -1,3 +1,7 @@
+/*
+保存设置页的内存导航状态，不持有原生控件句柄。
+*/
+
 package settings
 
 // Preferences holds in-memory settings navigation. Native widget handles remain in the view.

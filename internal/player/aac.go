@@ -1,3 +1,7 @@
+/*
+实现 AAC 与 HE-AAC 解码及 ADTS 流读取，管理解码器回退、定位和资源释放。
+*/
+
 package player
 
 import (

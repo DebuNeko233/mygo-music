@@ -1,3 +1,7 @@
+/*
+提供图片覆盖矩形和数值范围转换等共享几何辅助方法。
+*/
+
 package components
 
 import (

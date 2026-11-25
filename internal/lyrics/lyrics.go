@@ -1,3 +1,7 @@
+/*
+解析 LRC 与 YRC 歌词，构建逐行逐字时间、语言信息及间歇区间。
+*/
+
 package lyrics
 
 import (

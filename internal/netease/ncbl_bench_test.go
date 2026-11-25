@@ -1,3 +1,7 @@
+/*
+验证并发复用 NCBL 压缩编码器的正确性，并测量压缩开销。
+*/
+
 package netease
 
 import (

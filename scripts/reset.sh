@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Clears what the app keeps about the listener, so it opens as on first use:
-# its settings, where playback was left, its window and its login. The
-# songs it cached stay unless --songs is given.
+# 重置账号、设置、窗口位置与播放会话，使应用恢复首次使用状态。
+# 默认保留已缓存歌曲；传入 --songs 时一并清理。
+# 通过 --keep-login 可保留登录状态。
 #
 #   scripts/reset.sh              the development build (mygo dev)
 #   scripts/reset.sh --release    the installed build (mygo build)

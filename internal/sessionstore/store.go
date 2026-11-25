@@ -1,3 +1,7 @@
+/*
+原子保存和恢复播放队列快照，通过关联检查点记录后续播放位置。
+*/
+
 package sessionstore
 
 import (

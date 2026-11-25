@@ -1,3 +1,7 @@
+/*
+解析 PulseAudio 与 PipeWire 的流列表和音量输出，定位本应用音频流。
+*/
+
 package mixvol
 
 import (

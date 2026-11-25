@@ -1,3 +1,7 @@
+/*
+验证缓存目录冲突、目录等价及符号链接解析规则。
+*/
+
 package cachemove
 
 import (

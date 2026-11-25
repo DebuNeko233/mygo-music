@@ -1,5 +1,9 @@
 //go:build !windows && !linux
 
+/*
+为不提供独立应用音量的系统提供空混音器适配。
+*/
+
 package mixvol
 
 // openLink links nothing: this system keeps no volume of its own for the app,

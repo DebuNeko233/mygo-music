@@ -1,3 +1,7 @@
+/*
+验证快捷键名称与按键组合能够往返转换。
+*/
+
 package shortcuts
 
 import (

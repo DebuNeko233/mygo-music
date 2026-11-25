@@ -1,3 +1,7 @@
+/*
+提供页面标题和分区标题等共享排版控件。
+*/
+
 package components
 
 import (

@@ -1,3 +1,7 @@
+/*
+验证 NCBL 容器元数据、加密帧及 ChaCha 编码结果。
+*/
+
 package netease
 
 import (

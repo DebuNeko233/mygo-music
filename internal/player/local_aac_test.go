@@ -1,3 +1,7 @@
+/*
+验证 ADTS 与 HE-AAC 解码、跳转和资源所有权，并测量解码开销。
+*/
+
 package player
 
 import (

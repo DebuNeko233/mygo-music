@@ -1,3 +1,7 @@
+/*
+验证图片请求合并、持久化、HTTP 缓存策略、条件校验和替换通知。
+*/
+
 package netease
 
 import (

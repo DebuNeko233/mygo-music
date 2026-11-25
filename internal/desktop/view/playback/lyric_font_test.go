@@ -1,3 +1,7 @@
+/*
+验证汉字区域偏好，以及字体设置对应的字体族。
+*/
+
 package playback
 
 import (

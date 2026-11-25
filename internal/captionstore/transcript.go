@@ -1,3 +1,7 @@
+/*
+保存字幕文本与已覆盖时间段，提供不可变写入快照和增量转写范围计算。
+*/
+
 package captionstore
 
 import (

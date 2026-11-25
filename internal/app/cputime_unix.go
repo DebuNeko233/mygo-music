@@ -1,5 +1,9 @@
 //go:build !windows
 
+/*
+读取非 Windows 平台的进程累计 CPU 时间，供性能观测使用。
+*/
+
 package app
 
 import "syscall"

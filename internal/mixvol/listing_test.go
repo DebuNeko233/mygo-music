@@ -1,3 +1,7 @@
+/*
+验证 Linux 混音器输出解析、流身份选择与音量换算。
+*/
+
 package mixvol
 
 import (

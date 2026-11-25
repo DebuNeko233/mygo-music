@@ -1,3 +1,7 @@
+/*
+验证转写起点、时间范围合并与字幕片段去重。
+*/
+
 package captionstore
 
 import (

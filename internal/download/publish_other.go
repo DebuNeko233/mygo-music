@@ -1,5 +1,9 @@
 //go:build !darwin && !linux && !windows
 
+/*
+为其他平台提供不覆盖已有目标的下载文件发布实现。
+*/
+
 package download
 
 import "os"

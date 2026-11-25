@@ -1,3 +1,7 @@
+/*
+通过显式启用的 Windows 内存探针检查重复创建 M4A 解码器时的资源增长。
+*/
+
 package player
 
 import (

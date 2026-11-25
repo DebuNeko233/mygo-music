@@ -1,3 +1,7 @@
+/*
+验证关注歌手请求同时在查询参数和表单中携带 CSRF 令牌。
+*/
+
 package netease
 
 import (

@@ -1,3 +1,7 @@
+/*
+为功能模型测试提供有界的后台结果等待，保留模型自身的发布调度方式。
+*/
+
 // Package testutil shares synchronization helpers between feature tests.
 package testutil
 

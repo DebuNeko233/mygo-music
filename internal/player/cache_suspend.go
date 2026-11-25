@@ -1,3 +1,7 @@
+/*
+在缓存迁移前暂停维护、关闭读写资源，并保留可恢复的播放状态。
+*/
+
 package player
 
 // Cache relocation closes readers and downloads before moving files, while

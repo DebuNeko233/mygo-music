@@ -1,4 +1,8 @@
-// Package home presents the home and chart pages using their shared ViewModel.
+/*
+使用首页模型呈现推荐内容和排行榜，连接卡片操作与失败重试。
+*/
+
+// Home and chart views use their shared ViewModel.
 package view
 
 import (

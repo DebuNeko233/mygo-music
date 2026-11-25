@@ -1,3 +1,7 @@
+/*
+验证暂停浏览、恢复跟随，以及歌词来源和跳转身份变化。
+*/
+
 package playback
 
 import (

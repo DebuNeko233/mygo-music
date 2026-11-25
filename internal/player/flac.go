@@ -1,3 +1,7 @@
+/*
+增量解码 FLAC 音频，处理元数据、帧定位、跳转及下载截断。
+*/
+
 package player
 
 import (
