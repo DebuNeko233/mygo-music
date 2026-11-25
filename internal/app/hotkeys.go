@@ -2,6 +2,7 @@ package app
 
 import (
 	"math"
+	"os"
 	"runtime"
 	"strings"
 
@@ -169,6 +170,13 @@ var (
 // window, and the tests, which have none, put their own answer in its place.
 var sysKeys = func(a *app) bool { return a.win != nil }
 
+// Hyprland's global-shortcut protocol accepts the requested accelerator but
+// reports an empty trigger; unlike desktops with a binding dialog, that is a
+// successful registration, not a refusal.
+var hyprlandDesktop = func() bool {
+	return runtime.GOOS == "linux" && strings.Contains(strings.ToLower(os.Getenv("XDG_CURRENT_DESKTOP")), "hyprland")
+}
+
 // registerGlobals claims the keys the global bindings ask for, and gives back
 // the ones they no longer do: the system lets one app take a key, so what a
 // key is given to has to be claimed again whenever it changes.
@@ -196,8 +204,8 @@ func (a *app) registerGlobals() {
 				// Wayland's portal answers asynchronously. An empty answer means
 				// that no key was bound, not that another application took it.
 				a.post(func() {
-					if keys == "" {
-						a.hotkeyErrs[name] = "系统未绑定快捷键，请在系统设置中允许或设置"
+					if keys == "" && !hyprlandDesktop() {
+						a.hotkeyErrs[name] = "快捷键未生效，请检查系统的应用权限和快捷键设置"
 					} else {
 						delete(a.hotkeyErrs, name)
 					}

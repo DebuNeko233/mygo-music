@@ -138,7 +138,12 @@ func TestWaylandShortcutBindingResultIsVisible(t *testing.T) {
 	a.settings = defaultSettings()
 	posts := testPosts(a)
 	oldSysKeys, oldRegister, oldUnregister := sysKeys, globalRegister, globalUnregister
-	t.Cleanup(func() { sysKeys, globalRegister, globalUnregister = oldSysKeys, oldRegister, oldUnregister })
+	oldHyprland := hyprlandDesktop
+	t.Cleanup(func() {
+		sysKeys, globalRegister, globalUnregister = oldSysKeys, oldRegister, oldUnregister
+		hyprlandDesktop = oldHyprland
+	})
+	hyprlandDesktop = func() bool { return false }
 	sysKeys = func(*app) bool { return true }
 	globalUnregister = func(string) {}
 	var bound mygo.GlobalShortcutOptions
@@ -154,13 +159,19 @@ func TestWaylandShortcutBindingResultIsVisible(t *testing.T) {
 	}
 	bound.OnKeys("")
 	wait(t, posts, "the portal's unbound shortcut")()
-	if got := a.hotkeyErrs["deskLyrics"]; got != "系统未绑定快捷键，请在系统设置中允许或设置" {
+	if got := a.hotkeyErrs["deskLyrics"]; got != "快捷键未生效，请检查系统的应用权限和快捷键设置" {
 		t.Fatalf("unbound portal shortcut reported %q", got)
 	}
 	bound.OnKeys("Ctrl+Alt+L")
 	wait(t, posts, "the portal's bound shortcut")()
 	if got := a.hotkeyErrs["deskLyrics"]; got != "" {
 		t.Fatalf("a bound shortcut kept its error %q", got)
+	}
+	hyprlandDesktop = func() bool { return true }
+	bound.OnKeys("")
+	wait(t, posts, "Hyprland's accepted shortcut")()
+	if got := a.hotkeyErrs["deskLyrics"]; got != "" {
+		t.Fatalf("Hyprland's empty trigger reported an error %q", got)
 	}
 }
 
