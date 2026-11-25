@@ -6,7 +6,6 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 
 const HeartRadio = "heart"
@@ -47,15 +46,19 @@ func (m *Radio) Sync(name string) {
 }
 
 type RadioServices struct {
-	Player     *player.Player
-	Library    *libraryvm.Library
-	Post       func(func())
-	Notify     func(string)
-	NowPlaying func()
-	PersonalFM func(string) ([]netease.Track, error)
-	Heart      func(int64, int64, int64) ([]netease.Track, error)
-	Playlist   func(int64) (*netease.Playlist, error)
-	Dislike    func(int64) error
+	Player *player.Player
+	// Collection queries run on the owner thread, including each refill.
+	// Cached playlists are borrowed read-only for the lifetime of a request.
+	LikedPlaylist  func() int64
+	IsLiked        func(int64) bool
+	CachedPlaylist func(int64) *netease.Playlist
+	Post           func(func())
+	Notify         func(string)
+	NowPlaying     func()
+	PersonalFM     func(string) ([]netease.Track, error)
+	Heart          func(int64, int64, int64) ([]netease.Track, error)
+	Playlist       func(int64) (*netease.Playlist, error)
+	Dislike        func(int64) error
 }
 
 func playable(tracks []netease.Track) []netease.Track {
@@ -80,7 +83,7 @@ func (m *Radio) Feed(name string, s RadioServices) func(got func([]netease.Track
 			fetch = func() ([]netease.Track, error) { return s.PersonalFM(mode) }
 		case name == HeartRadio:
 			// More like the last song queued, from the song it began with.
-			q, pid := s.Player.Queue(), s.Library.LikedPlaylist()
+			q, pid := s.Player.Queue(), s.LikedPlaylist()
 			if len(q) == 0 || pid == 0 {
 				got(nil)
 				return
@@ -175,7 +178,7 @@ func (m *Radio) Trash(s RadioServices) {
 // startHeartMode plays songs like one the listener likes: the one playing,
 // if they like it, or else one of their liked songs at random.
 func (m *Radio) StartHeart(s RadioServices) {
-	pid := s.Library.LikedPlaylist()
+	pid := s.LikedPlaylist()
 	if pid == 0 {
 		s.Notify("喜欢一些歌曲后，即可开启心动模式")
 		return
@@ -187,11 +190,11 @@ func (m *Radio) StartHeart(s RadioServices) {
 	}
 	var seed *netease.Track
 	fromPlaying := false
-	if cur := s.Player.Current(); cur != nil && s.Library.Liked[cur.ID] {
+	if cur := s.Player.Current(); cur != nil && s.IsLiked(cur.ID) {
 		s := *cur
 		seed, fromPlaying = &s, true
 	}
-	liked := s.Library.Playlists[pid]
+	liked := s.CachedPlaylist(pid)
 	m.CancelPending()
 	m.Starting = HeartRadio
 	generation, revision, origin := m.generation, s.Player.QueueRevision(), s.Player.Radio()

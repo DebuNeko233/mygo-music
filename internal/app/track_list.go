@@ -13,7 +13,7 @@ func trackIndex(tracks []netease.Track, key int64) int { return searchvm.TrackIn
 // Other sources still use the player's normal snapshot queue.
 func (a *app) playTrackQueue(tracks []netease.Track, at int) {
 	a.cloud.FollowQueue(0)
-	a.pl.PlayQueueFrom(tracks, at, a.playSource())
+	a.playPageQueue(tracks, at)
 	if a.nav.Current.Page == pageCloud {
 		a.cloud.FollowQueue(a.pl.QueueRevision())
 	}

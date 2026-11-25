@@ -76,6 +76,8 @@ go tool mygo build   # 打包到 build/
 go test ./...        # 运行测试
 ```
 
+目录职责、依赖方向和状态生命周期见 [项目架构](docs/architecture.md)。
+
 ## 致谢
 
 - [MyGo](https://github.com/egoist/mygo)：原生 UI 与应用框架

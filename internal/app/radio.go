@@ -19,8 +19,11 @@ var fmTrash = netease.FMTrash
 
 func (a *app) radioServices() radiovm.RadioServices {
 	return radiovm.RadioServices{
-		Player: a.pl, Library: &a.library, Post: a.detailPost(),
-		Notify: func(message string) { a.toast = message }, NowPlaying: func() { a.playbackState.Open = true },
+		Player: a.pl, Post: a.detailPost(),
+		LikedPlaylist:  a.library.LikedPlaylist,
+		IsLiked:        func(id int64) bool { return a.library.Liked[id] },
+		CachedPlaylist: func(id int64) *netease.Playlist { return a.library.Playlists[id] },
+		Notify:         func(message string) { a.toast = message }, NowPlaying: func() { a.playbackState.Open = true },
 		PersonalFM: personalFM, Heart: netease.HeartMode, Playlist: netease.PlaylistDetail, Dislike: fmTrash,
 	}
 }
