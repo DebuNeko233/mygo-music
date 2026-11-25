@@ -11,6 +11,7 @@ import (
 
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/navigation"
+	"netease-music-mygo/internal/preferences"
 )
 
 // Navigation is a read-only projection and commands of the application's navigator.
@@ -24,7 +25,10 @@ type Navigation struct {
 }
 
 // Sidebar fills the three feature-owned regions around the navigation links.
-type Sidebar struct{ Search, Library, Account func(*ui.Context) }
+type Sidebar struct {
+	Search, Library, Account func(*ui.Context)
+	Hidden                   preferences.SidebarPages
+}
 
 func (s *State) Sidebar(c *ui.Context, p components.Palette, n Navigation, slots Sidebar) {
 	// Under the window buttons where they sit over the sidebar, as the
@@ -40,13 +44,24 @@ func (s *State) Sidebar(c *ui.Context, p components.Palette, n Navigation, slots
 
 		ui.Scroll(c.Key("nav")).TrackScroll(&s.NavScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
 			navItem(c, p, n, components.IconHome, "为你推荐", navigation.Route{Page: navigation.Home})
-			navItem(c, p, n, components.IconDaily, "每日推荐", navigation.Route{Page: navigation.Daily})
-			navItem(c, p, n, components.IconHistory, "最近播放", navigation.Route{Page: navigation.Recent})
-			navItem(c, p, n, components.IconRadio, "私人 FM", navigation.Route{Page: navigation.FM})
-			navItem(c, p, n, components.IconCharts, "排行榜", navigation.Route{Page: navigation.Charts})
-			navItem(c, p, n, components.IconPodcast, "播客", navigation.Route{Page: navigation.Podcasts})
-			navItem(c, p, n, components.IconNote, "本地歌曲", navigation.Route{Page: navigation.Local})
-			navItem(c, p, n, components.IconCloud, "音乐网盘", navigation.Route{Page: navigation.Cloud})
+			for _, item := range []struct {
+				hidden bool
+				icon   *ui.SVG
+				label  string
+				page   navigation.Page
+			}{
+				{slots.Hidden.Daily, components.IconDaily, "每日推荐", navigation.Daily},
+				{slots.Hidden.Recent, components.IconHistory, "最近播放", navigation.Recent},
+				{slots.Hidden.FM, components.IconRadio, "私人 FM", navigation.FM},
+				{slots.Hidden.Charts, components.IconCharts, "排行榜", navigation.Charts},
+				{slots.Hidden.Podcasts, components.IconPodcast, "播客", navigation.Podcasts},
+				{slots.Hidden.Local, components.IconNote, "本地歌曲", navigation.Local},
+				{slots.Hidden.Cloud, components.IconCloud, "音乐网盘", navigation.Cloud},
+			} {
+				if !item.hidden {
+					navItem(c, p, n, item.icon, item.label, navigation.Route{Page: item.page})
+				}
+			}
 			if n.LastSearch != nil && n.LastSearch.Query != "" {
 				navItem(c, p, n, components.IconSearch, "搜索结果", *n.LastSearch)
 			}

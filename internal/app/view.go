@@ -191,6 +191,7 @@ func (a *app) shellNavigation() shell.Navigation {
 }
 func (a *app) sidebar(c *ui.Context) {
 	a.shell.Sidebar(c, a.pal, a.shellNavigation(), shell.Sidebar{
+		Hidden: a.settings.HiddenSidebarPages,
 		Search: a.views.search.Field, Account: a.views.account.Row,
 		Library: func(c *ui.Context) {
 			a.views.library.Playlists(c, "我的歌单", a.library.Mine, true, &a.shell.MineCollapsed)

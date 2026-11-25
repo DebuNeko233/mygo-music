@@ -536,6 +536,10 @@ func (a *View) sections(c *ui.Context, p components.Palette) []settingsSection {
 
 	}
 
+	add("sidebar", "侧边栏", components.IconHome, func(row Row, block Block) {
+		a.sidebarSettings(c, row)
+	})
+
 	add("playback", "播放", components.IconVolume, func(row Row, block Block) {
 
 		row("音质", "无损与 Hi-Res 需要黑胶 VIP，没有时播放所能播放的最高音质；下一首歌曲开始生效", func() {

@@ -13,10 +13,55 @@ import (
 
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/navigation"
+	"netease-music-mygo/internal/preferences"
 )
 
 func nothing(*ui.Context)                {}
 func noBindings(*ui.Context, ui.Element) {}
+
+// Hiding all optional destinations leaves home, search and library commands usable; a restored entry navigates again.
+func TestSidebarHiddenEntriesKeepPermanentNavigation(t *testing.T) {
+	var s State
+	last := navigation.Route{Page: navigation.Search, Query: "MyGO"}
+	nav := Navigation{Current: navigation.Route{Page: navigation.Local}, LastSearch: &last}
+	nav.Open = func(r navigation.Route) { nav.Current = r }
+	hidden := preferences.SidebarPages{Daily: true, Recent: true, FM: true, Charts: true, Podcasts: true, Local: true, Cloud: true}
+	libraryClicks := 0
+	tt := ui.NewTester(func(c *ui.Context) {
+		s.Sidebar(c, components.PaletteFor(c.Theme(), ui.Color{}), nav, Sidebar{
+			Hidden: hidden, Search: nothing, Account: nothing,
+			Library: func(c *ui.Context) {
+				ui.Button(c, "saved playlist").OnClick(func() { libraryClicks++ })
+			},
+		})
+	}, 220, 600)
+	if err := tt.Click("为你推荐"); err != nil {
+		t.Fatal(err)
+	}
+	if nav.Current.Page != navigation.Home {
+		t.Fatal("home navigation was disabled")
+	}
+	if err := tt.Click("搜索结果"); err != nil {
+		t.Fatal(err)
+	}
+	if nav.Current != last {
+		t.Fatal("search navigation lost its route")
+	}
+	if err := tt.Click("saved playlist"); err != nil {
+		t.Fatal(err)
+	}
+	if libraryClicks != 1 {
+		t.Fatal("library command was disabled")
+	}
+	hidden.Local = false
+	tt.Frame()
+	if err := tt.Click("本地歌曲"); err != nil {
+		t.Fatal(err)
+	}
+	if nav.Current.Page != navigation.Local {
+		t.Fatal("restored entry did not navigate to its page")
+	}
+}
 
 // Sidebar choices and history buttons invoke the supplied navigator without owning a second history.
 func TestNavigationCommands(t *testing.T) {

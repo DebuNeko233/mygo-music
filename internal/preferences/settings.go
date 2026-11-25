@@ -40,6 +40,9 @@ type Settings struct {
 	Appearance string `json:"appearance"`
 	// UIFont overrides the default typeface for the app's interface.
 	UIFont string `json:"uiFont,omitempty"`
+	// HiddenSidebarPages hides optional navigation entries, not the pages themselves.
+	// Missing fields keep existing installations' entries visible.
+	HiddenSidebarPages SidebarPages `json:"hiddenSidebarPages"`
 	// PlaybackLyricFont is the preferred face for in-app lyrics and translations.
 	PlaybackLyricFont string `json:"playbackLyricFont,omitempty"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
@@ -153,6 +156,18 @@ type Settings struct {
 type ShortcutKeys struct {
 	InApp  map[string]string `json:"inApp,omitempty"`
 	Global map[string]string `json:"global,omitempty"`
+}
+
+// SidebarPages contains only the seven optional sidebar destinations.
+// The home, search and library entries always remain available.
+type SidebarPages struct {
+	Daily    bool `json:"daily,omitempty"`
+	Recent   bool `json:"recent,omitempty"`
+	FM       bool `json:"fm,omitempty"`
+	Charts   bool `json:"charts,omitempty"`
+	Podcasts bool `json:"podcasts,omitempty"`
+	Local    bool `json:"local,omitempty"`
+	Cloud    bool `json:"cloud,omitempty"`
 }
 
 func Default() Settings {

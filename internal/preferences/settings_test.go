@@ -116,3 +116,23 @@ func TestSaveSoonKeepsTheLastOfABurst(t *testing.T) {
 		t.Fatalf("lyric size %v, for the last one set: 32", kept.LyricSize)
 	}
 }
+
+// Loading a pre-sidebar configuration preserves its settings and leaves optional entries available until explicitly hidden.
+func TestSidebarSettingsLegacyConfiguration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"quality":"lossless","volume":0.3}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, ok := Load(path)
+	if !ok || s.Quality != "lossless" || s.Volume != 0.3 || s.HiddenSidebarPages != (SidebarPages{}) {
+		t.Fatal("legacy configuration lost its values or hid sidebar entries")
+	}
+	s.HiddenSidebarPages = SidebarPages{Daily: true, Local: true}
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, ok := Load(path)
+	if !ok || reloaded.HiddenSidebarPages != s.HiddenSidebarPages || reloaded.Volume != 0.3 {
+		t.Fatal("migrated configuration lost hidden entries or unrelated values")
+	}
+}
