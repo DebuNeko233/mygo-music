@@ -2,6 +2,7 @@ package app
 
 import (
 	"math"
+	"os"
 	"runtime"
 	"strings"
 
@@ -159,13 +160,22 @@ func (a *app) taken(kind keyKind, name, acc string) (string, bool) {
 // globalRegister and globalUnregister are the system's shortcuts: the tests
 // put their own in their place, as there is no system to claim keys from.
 var (
-	globalRegister   = func(acc string, fn func()) error { return mygo.GlobalShortcut.Register(acc, fn) }
+	globalRegister = func(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
+		return mygo.GlobalShortcut.RegisterWith(acc, opts, fn)
+	}
 	globalUnregister = func(acc string) { mygo.GlobalShortcut.Unregister(acc) }
 )
 
 // sysKeys says whether the app has a system to claim keys from: it needs a
 // window, and the tests, which have none, put their own answer in its place.
 var sysKeys = func(a *app) bool { return a.win != nil }
+
+// Hyprland's global-shortcut protocol accepts the requested accelerator but
+// reports an empty trigger; unlike desktops with a binding dialog, that is a
+// successful registration, not a refusal.
+var hyprlandDesktop = func() bool {
+	return runtime.GOOS == "linux" && strings.Contains(strings.ToLower(os.Getenv("XDG_CURRENT_DESKTOP")), "hyprland")
+}
 
 // registerGlobals claims the keys the global bindings ask for, and gives back
 // the ones they no longer do: the system lets one app take a key, so what a
@@ -187,7 +197,23 @@ func (a *app) registerGlobals() {
 		if acc == "" {
 			continue
 		}
-		if err := globalRegister(acc, func() { a.runHotkey(h) }); err != nil {
+		name := h.name
+		opts := mygo.GlobalShortcutOptions{
+			Description: h.label,
+			OnKeys: func(keys string) {
+				// Wayland's portal answers asynchronously. An empty answer means
+				// that no key was bound, not that another application took it.
+				a.post(func() {
+					if keys == "" && !hyprlandDesktop() {
+						a.hotkeyErrs[name] = "快捷键未生效，请检查系统的应用权限和快捷键设置"
+					} else {
+						delete(a.hotkeyErrs, name)
+					}
+					a.redraw()
+				})
+			},
+		}
+		if err := globalRegister(acc, opts, func() { a.runHotkey(h) }); err != nil {
 			// The system keeps the key for another app, or another action of
 			// this one asked for it first: the settings say so.
 			a.hotkeyErrs[h.name] = "被其他程序占用"
