@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
 	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
@@ -74,7 +75,7 @@ func TestAddSongKeepsVisiblePlaylistDuringRefresh(t *testing.T) {
 	original := a.library.Playlists[id]
 	a.touchPlaylist(id)
 	added := netease.Track{ID: 3, Name: "新歌曲"}
-	next := copyPlaylist(*original)
+	next := library.CopyPlaylist(*original)
 	next.Tracks = append([]netease.Track{added}, next.Tracks...)
 
 	oldAdd, oldDetail, oldMine := addToPlaylist, playlistDetail, userPlaylists
@@ -231,7 +232,7 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 	if pid := wait(t, requests, "the replacement lookup"); pid != id {
 		t.Fatalf("refreshed playlist %d, want %d", pid, id)
 	}
-	server := copyPlaylist(*reduced)
+	server := library.CopyPlaylist(*reduced)
 	server.PlayCount = 10
 	replies <- &server
 	refreshPost(t, posts)
@@ -412,7 +413,7 @@ func TestDeletePlaylist(t *testing.T) {
 	if got := <-ids; got != 10 {
 		t.Errorf("deleted playlist %d, want 10", got)
 	}
-	if a.editable(10) != nil {
+	if a.library.Editable(10) != nil {
 		t.Error("the sidebar still lists it")
 	}
 	if a.nav.Current.Page != pageCharts || len(a.nav.History) != 0 || len(a.nav.Forward) != 0 {
@@ -444,7 +445,7 @@ func TestDeletePlaylistReplyAccountIsolation(t *testing.T) {
 
 			uid := a.account.Profile.UserID
 			gen := a.account.Generation
-			a.confirmDelete(a.editable(10))
+			a.confirmDelete(a.library.Editable(10))
 			a.deleteChosen()
 			<-started
 			a.account.Profile = &netease.Profile{UserID: 2}
@@ -488,7 +489,7 @@ func TestCancelDeletingPlaylist(t *testing.T) {
 	}
 	tt.Advance(300 * time.Millisecond)
 	tt.Frame()
-	if a.editable(11) == nil {
+	if a.library.Editable(11) == nil {
 		t.Error("the playlist left the sidebar")
 	}
 }
@@ -519,10 +520,10 @@ func TestPlaylistEditFrames(t *testing.T) {
 		a.newPlaylist(nil)
 		save("create" + suffix)
 		a.library.Naming.Open = false
-		a.startRename(a.editable(11))
+		a.startRename(a.library.Editable(11))
 		save("rename" + suffix)
 		a.library.Naming.Open = false
-		a.confirmDelete(a.editable(11))
+		a.confirmDelete(a.library.Editable(11))
 		save("delete" + suffix)
 		a.library.Deleting.Open = false
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
@@ -60,10 +61,12 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 			old := center()
 			save("before")
 			q := a.pl.Queue()
-			key := func(i int) string { return netease.Sized(q[i].Album.PicURL, nowPlayingCoverPixels) + "#backdrop" }
+			key := func(i int) string {
+				return netease.Sized(q[i].Album.PicURL, nowPlayingCoverPixels) + "#backdrop"
+			}
 			for _, i := range []int{1, 2} {
-				a.art.invalidate(netease.Sized(q[i].Album.PicURL, nowPlayingCoverPixels), false)
-				a.art.busy[key(i)] = 1 // hold decoding without starting a worker
+				a.art.Invalidate(netease.Sized(q[i].Album.PicURL, nowPlayingCoverPixels), false)
+				holdArtwork(a.art, key(i))
 			}
 			if err := tt.Click("下一首"); err != nil {
 				t.Fatal(err)
@@ -74,12 +77,12 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 			}
 			a.pl.Jump(2)
 			tt.Frame()
-			a.art.add(key(1), arts[1])
+			a.art.Put(key(1), arts[1])
 			tt.Frame()
 			if state.Current != arts[0] || center() != old {
 				t.Fatal("an obsolete completion replaced the held cover")
 			}
-			a.art.add(key(2), arts[2])
+			a.art.Put(key(2), arts[2])
 			tt.Frame()
 			if state.Current != arts[2] || state.Previous != arts[0] || center() != old {
 				t.Fatal("the latest ready cover did not start over the old picture")
@@ -100,7 +103,7 @@ func TestPaneCoverFollowsLatestSelection(t *testing.T) {
 				t.Fatal("the latest selection did not settle and release its predecessor")
 			}
 			save("after")
-			a.art.add(key(4), &artwork{failed: true})
+			a.art.Put(key(4), &artcache.Image{Failed: true})
 			a.pl.Next()
 			tt.Frame()
 			tt.Advance(2 * playbackview.CoverFadeDuration)

@@ -2,10 +2,8 @@ package app
 
 import (
 	"errors"
-	"image"
 	"net"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -208,27 +206,6 @@ func TestOfflineAccountScheduledRetriesRecover(t *testing.T) {
 	}
 }
 
-// Failed visible artwork can be retried, but navigating away does not start
-// downloads for every old failure ever seen.
-func TestOfflineArtworkRetryTracksVisibleRows(t *testing.T) {
-	c := newArtCache(func(func()) {})
-	c.add("shown", &artwork{failed: true, retryable: true})
-	c.add("hidden", &artwork{failed: true, retryable: true})
-	c.beginFrame()
-	c.get("shown", false)
-	if !c.hasFailed(false) {
-		t.Fatal("visible failure was forgotten")
-	}
-	c.retryFailed(false)
-	if c.art["shown"] != nil || c.art["hidden"] == nil {
-		t.Fatal("retried hidden covers or retained visible failure")
-	}
-	c.beginFrame()
-	if c.hasFailed(false) {
-		t.Fatal("offscreen failures keep recovery alive")
-	}
-}
-
 // A healthy offline-enabled page schedules neither retry timers nor idle frames.
 func TestOfflineIdleFrameBudget(t *testing.T) {
 	a, _ := offlineFixture(t)
@@ -411,37 +388,5 @@ func TestOfflineArtistRestoresCachedPages(t *testing.T) {
 	d := a.artist(1)
 	if len(d.Albums) != 2 || d.Albums[1].ID != 11 || !d.AlbumsFailed || d.AlbumsPage.More {
 		t.Fatal("cached pages beyond failed first page became inaccessible")
-	}
-}
-
-// A stale cover load finishing after invalidation cannot undo a newer load.
-func TestOfflineArtworkInvalidationRejectsOldLoad(t *testing.T) {
-	loader := loadArt
-	t.Cleanup(func() { loadArt = loader })
-	posts := make(chan func(), 4)
-	entered := make(chan struct{}, 2)
-	release := make(chan struct{})
-	var calls atomic.Int32
-	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
-		// Downloads are started in a controlled order below.
-		n := calls.Add(1)
-		entered <- struct{}{}
-		if n == 1 {
-			<-release
-		}
-		return nil, nil, 0, errors.New("bad cover")
-	}
-	c := newArtCache(func(f func()) { posts <- f })
-	c.get("cover", false)
-	<-entered
-	c.invalidate("cover", false)
-	c.get("cover", false)
-	<-entered
-	refreshPost(t, posts)
-	fresh := c.art["cover"]
-	close(release)
-	refreshPost(t, posts)
-	if c.art["cover"] != fresh {
-		t.Fatal("invalidated load replaced its successor")
 	}
 }

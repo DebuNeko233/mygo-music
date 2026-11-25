@@ -18,7 +18,7 @@ func localSearchFixture(t *testing.T) (*app, []localcatalog.Song, *ui.Tester) {
 	before := searchSuggest
 	searchSuggest = func(string) (netease.Suggestions, error) { return netease.Suggestions{}, netease.ErrOffline }
 	a, songs, tt := localLocateFixture(t, false)
-	t.Cleanup(func() { a.dismissSuggestions(); searchSuggest = before })
+	t.Cleanup(func() { a.searches.DismissSuggestions(); searchSuggest = before })
 	// Real local files need not have a catalogue ID; keep every one at zero.
 	for i := range songs {
 		songs[i].Track.ID = 0

@@ -3,6 +3,8 @@ package components
 import (
 	"fmt"
 	"time"
+
+	"netease-music-mygo/internal/netease"
 )
 
 // Clock formats a duration as minutes and seconds.
@@ -83,4 +85,49 @@ func CommentTime(t, now time.Time) string {
 	default:
 		return fmt.Sprintf("%d年%d月%d日", y1, m1, d1)
 	}
+}
+
+// HeardAt says when and where a song was played.
+func HeardAt(p netease.Play, now time.Time) string {
+	when := AgoLabel(now.Sub(p.At))
+	if where := DeviceName(p.Device); where != "" {
+		return when + "在" + where + "上听过"
+	}
+	return when + "听过"
+}
+
+// AgoLabel says how long ago d was, as the recent plays say it.
+func AgoLabel(d time.Duration) string {
+	switch {
+	case d < 2*time.Minute:
+		return "刚刚"
+	case d < time.Hour:
+		return fmt.Sprintf("%d分钟前", int(d/time.Minute))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d小时前", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%d天前", int(d/(24*time.Hour)))
+}
+
+// DeviceName names the kind of device NetEase calls os, or "".
+func DeviceName(os string) string {
+	switch os {
+	case "iphone", "android", "ipad", "harmony":
+		return "手机"
+	case "osx", "pc", "mac", "windows", "linux":
+		return "电脑"
+	case "web":
+		return "网页版"
+	}
+	return ""
+}
+
+// PlayedAt says when and on what the listener played something, as
+// "12分钟前 · 手机".
+func PlayedAt(at time.Time, device string, now time.Time) string {
+	when := AgoLabel(now.Sub(at))
+	if where := DeviceName(device); where != "" {
+		return when + " · " + where
+	}
+	return when
 }

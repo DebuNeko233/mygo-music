@@ -86,7 +86,7 @@ func TestUnsavePlaylistFromSidebar(t *testing.T) {
 	if got := nextSave(t, calls); got != (saveCall{20, false}) {
 		t.Errorf("asked NetEase for %+v, want playlist 20 unsaved", got)
 	}
-	if len(a.library.Saved) != 0 || a.isSaved(a.library.Playlists[20]) {
+	if len(a.library.Saved) != 0 || a.library.IsSaved(a.library.Playlists[20]) {
 		t.Errorf("playlist 20 still reads saved: %+v", a.library.Saved)
 	}
 }

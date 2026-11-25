@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	"netease-music-mygo/internal/desktop/view/shell"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 )
@@ -300,7 +301,7 @@ func TestImmersiveLyricViewportTracksControls(t *testing.T) {
 	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
 	var barHeight float32
 	tt := ui.NewTesterWith(func(c *ui.Context) {
-		barHeight = topBar(c)
+		barHeight = shell.TopBar(c)
 		a.views.playback.NowPlayingView(c)
 	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	for _, size := range [][2]int{{1200, 800}, {880, 580}, {1920, 1080}, {750, 1330}, {880, 580}, {1200, 800}} {

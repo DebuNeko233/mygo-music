@@ -85,8 +85,8 @@ func TestLifecycleStopsPeriodicSessionSave(t *testing.T) {
 	a.release()
 	due()
 	a.keepSession()
-	if stops != 1 || starts != 1 || a.sessionDue || a.sessionSave.path != "" {
-		t.Fatalf("late session save survived shutdown: stops=%d, starts=%d, path=%s", stops, starts, a.sessionSave.path)
+	if stops != 1 || starts != 1 || a.sessionDue || a.sessionSavePath != "" {
+		t.Fatalf("late session save survived shutdown: stops=%d, starts=%d, path=%s", stops, starts, a.sessionSavePath)
 	}
 }
 

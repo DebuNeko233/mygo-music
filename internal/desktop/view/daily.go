@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/desktop/view/page"
 	"netease-music-mygo/internal/desktop/view/shell"
@@ -200,12 +201,12 @@ func (a *Daily) Playing() (ours, playing bool) {
 func dailyColors(art components.Image) (deep, rich, glow ui.Color) {
 	h, s := 356.0, 0.74
 	if art != nil && !art.ImageFailed() {
-		th, ts, _ := components.HSV(float64(art.ImageTint().R)/255, float64(art.ImageTint().G)/255, float64(art.ImageTint().B)/255)
+		th, ts, _ := artcache.HSV(float64(art.ImageTint().R)/255, float64(art.ImageTint().G)/255, float64(art.ImageTint().B)/255)
 		if ts > 0.15 {
 			h, s = th, min(max(ts*1.2, 0.5), 0.78)
 		}
 	}
-	return components.HSVColor(h, s, 0.24), components.HSVColor(math.Mod(h+16, 360), s*0.9, 0.5), components.HSVColor(math.Mod(h+32, 360), s*0.55, 1)
+	return artcache.HSVColor(h, s, 0.24), artcache.HSVColor(math.Mod(h+16, 360), s*0.9, 0.5), artcache.HSVColor(math.Mod(h+32, 360), s*0.55, 1)
 }
 
 // drawDailyBackdrop paints the daily card in r: a gradient of the cover's

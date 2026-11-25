@@ -1,4 +1,4 @@
-package app
+package artwork
 
 import (
 	"container/list"
@@ -9,17 +9,17 @@ import (
 
 const embeddedArtworkLimit = 8 << 20
 
-type embeddedArtworkKey struct {
-	path        string
-	stamp, size int64
+type EmbeddedKey struct {
+	Path        string
+	Stamp, Size int64
 }
 
-func localEmbeddedArtworkKey(s localcatalog.Song) embeddedArtworkKey {
-	return embeddedArtworkKey{s.Path, s.Stamp, s.Size}
+func LocalEmbeddedKey(s localcatalog.Song) EmbeddedKey {
+	return EmbeddedKey{s.Path, s.Stamp, s.Size}
 }
 
 type embeddedArtwork struct {
-	key   embeddedArtworkKey
+	key   EmbeddedKey
 	ready chan struct{}
 	data  []byte
 	entry *list.Element
@@ -27,14 +27,14 @@ type embeddedArtwork struct {
 
 // The player and the different UI sizes share encoded artwork. Keep one
 // in-flight read per file and evict encoded bytes independently of bitmaps.
-type embeddedArtworkCache struct {
+type EmbeddedCache struct {
 	mu    sync.Mutex
-	files map[embeddedArtworkKey]*embeddedArtwork
+	files map[EmbeddedKey]*embeddedArtwork
 	order list.List
 	bytes int
 }
 
-func (c *embeddedArtworkCache) get(key embeddedArtworkKey, read func(string) []byte) []byte {
+func (c *EmbeddedCache) Get(key EmbeddedKey, read func(string) []byte) []byte {
 	c.mu.Lock()
 	if found := c.files[key]; found != nil {
 		if found.entry != nil {
@@ -46,12 +46,12 @@ func (c *embeddedArtworkCache) get(key embeddedArtworkKey, read func(string) []b
 	}
 	f := &embeddedArtwork{key: key, ready: make(chan struct{})}
 	if c.files == nil {
-		c.files = make(map[embeddedArtworkKey]*embeddedArtwork)
+		c.files = make(map[EmbeddedKey]*embeddedArtwork)
 	}
 	c.files[key] = f
 	c.mu.Unlock()
 
-	data := read(key.path)
+	data := read(key.Path)
 	c.mu.Lock()
 	f.data = data
 	if len(data) == 0 || len(data) > embeddedArtworkLimit {

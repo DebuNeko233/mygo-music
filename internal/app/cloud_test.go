@@ -27,7 +27,7 @@ func cloudFixture(t *testing.T) (*app, chan func()) {
 	searchSuggest = func(string) (netease.Suggestions, error) { return netease.Suggestions{}, netease.ErrOffline }
 	t.Cleanup(func() { cloudSongs, searchSuggest = old, oldSuggest })
 	a := newTestApp()
-	t.Cleanup(a.dismissSuggestions)
+	t.Cleanup(a.searches.DismissSuggestions)
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1}
 	a.nav.Current = route{Page: pageCloud}
@@ -209,7 +209,7 @@ func TestCloudFrames(t *testing.T) {
 		{"cloud-loading-narrow.png", 800, false, false, true},
 	} {
 		a.searches.Query = ""
-		a.dismissSuggestions()
+		a.searches.DismissSuggestions()
 		a.cloud.Stop()
 		if variant.loading {
 			holdCloudLoad(t, &a.cloud)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
@@ -233,7 +234,7 @@ func TestPlayerBarCoverFrameBudget(t *testing.T) {
 	before, after := "test://before", "test://after"
 	for _, url := range []string{before, after} {
 		img := image.NewRGBA(image.Rect(0, 0, 2, 2))
-		a.art.add(netease.Sized(url, barCoverPixels), &artwork{bmp: ui.NewBitmap(img)})
+		a.art.Put(netease.Sized(url, barCoverPixels), &artcache.Image{Bitmap: ui.NewBitmap(img)})
 	}
 	track := &netease.Track{Album: netease.Album{PicURL: before}}
 	builds := 0
@@ -358,8 +359,8 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 // go, so that the backdrop stops asking for frames.
 func TestBackdropFadeEnds(t *testing.T) {
 	a, tt, _ := coverApp(t)
-	a.art.art[netease.Sized("a", 600)+"#backdrop"] = &artwork{tint: ui.RGB(200, 40, 40)}
-	a.art.art[netease.Sized("b", 600)+"#backdrop"] = &artwork{tint: ui.RGB(40, 40, 200)}
+	a.art.Put(netease.Sized("a", 600)+"#backdrop", &artcache.Image{Tint: ui.RGB(200, 40, 40)})
+	a.art.Put(netease.Sized("b", 600)+"#backdrop", &artcache.Image{Tint: ui.RGB(40, 40, 200)})
 	q := a.pl.Queue()
 	q[1].Album.PicURL, q[2].Album.PicURL = "a", "b"
 	tt.Frame()

@@ -5,11 +5,13 @@ import (
 
 	"github.com/egoist/mygo"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/navigation"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/sessionstore"
 	"netease-music-mygo/internal/speech"
 	accountvm "netease-music-mygo/internal/viewmodel/account"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
@@ -75,7 +77,7 @@ type app struct {
 	notch  *playbackview.Notch
 	lyrics *playbackview.DeskLyrics // the lyrics in their own window, once it is made
 	tray   *mygo.Tray               // the icon in the menu bar or notification area, while it shows
-	art    *artCache
+	art    *artcache.Cache
 	pl     *player.Player
 
 	nav navigation.Navigator
@@ -133,7 +135,8 @@ type app struct {
 	cacheSettings settingsvm.CacheSettings
 	updates       bool // the update plugin is used (useUpdater)
 
-	restored    bool // playback picked up where it was left
-	sessionSave sessionSaver
-	sessionDue  bool // a save of the session is due
+	restored        bool // playback picked up where it was left
+	sessionSave     sessionstore.Saver
+	sessionSavePath string
+	sessionDue      bool // a save of the session is due
 }

@@ -14,6 +14,8 @@ import (
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/sessionstore"
+	"netease-music-mygo/internal/userdata"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
@@ -170,7 +172,7 @@ func TestLocalTemporaryOpenAfterRestore(t *testing.T) {
 	song.Track.LocalID = 1
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{song}})
 	path, err := sessionPath()
-	if err != nil || !writeSessionJSON(path, player.Session{Queue: []netease.Track{song.Track}, Order: []int{0}}) {
+	if err != nil || !userdata.WriteJSON(path, player.Session{Queue: []netease.Track{song.Track}, Order: []int{0}}) {
 		t.Fatal("cannot save the original queue", err)
 	}
 
@@ -210,8 +212,8 @@ func TestLocalTemporaryOpenAfterRestore(t *testing.T) {
 		t.Fatalf("unexpected temporary playback or catalog: %+v, %+v", cur, a.local.Catalog)
 	}
 	a.saveSession()
-	a.sessionSave.wait()
-	if s, ok := readSession(path); !ok || len(s.Queue) != 1 || s.Queue[0].LocalID != song.Track.LocalID {
+	a.sessionSave.Wait()
+	if s, ok := sessionstore.Read(path); !ok || len(s.Queue) != 1 || s.Queue[0].LocalID != song.Track.LocalID {
 		t.Fatalf("temporary file leaked into the saved queue: %+v", s)
 	}
 	if _, err := os.Stat(a.local.Path); !os.IsNotExist(err) {

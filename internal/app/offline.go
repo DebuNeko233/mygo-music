@@ -31,7 +31,7 @@ func (a *app) initOffline() {
 		a.browseCache = diskcache.New(paths.Browse, 64<<20)
 		a.imageCache = netease.NewArtworkStore(paths.Artwork, 256<<20)
 		netease.UseImageCache(a.imageCache, func(url string, change netease.ImageChange) {
-			a.post(func() { a.art.imageChanged(url, change) })
+			a.post(func() { a.art.ImageChanged(url, change) })
 		})
 	}
 	if root, err := mygo.App.Path(mygo.PathUserData); err == nil {
@@ -206,7 +206,7 @@ func (a *app) failedLoads(manual bool) bool {
 		}
 
 	}
-	return a.art.hasFailed(manual) || a.pl.MetadataPending()
+	return a.art.HasFailed(manual) || a.pl.MetadataPending()
 }
 
 func (a *app) recoverLoads() { a.retryLoads(false) }
@@ -261,7 +261,7 @@ func (a *app) retryLoads(manual bool) {
 
 	}
 	a.retryTrackArtwork(manual)
-	a.art.retryFailed(manual)
+	a.art.RetryFailed(manual)
 	if manual {
 		a.pl.RetryMetadata()
 	} else {
@@ -345,7 +345,7 @@ func (a *app) persistLibraryChanges(changed libraryvm.LibrarySnapshots, ids ...i
 		}
 	}
 	if a.library.Dirty&libraryvm.SnapshotLists != 0 && (a.library.Mine != nil || a.library.Saved != nil) {
-		keep("mine", library.Lists{Mine: copyPlaylists(a.library.Mine), Saved: copyPlaylists(a.library.Saved)})
+		keep("mine", library.Lists{Mine: library.CopyPlaylists(a.library.Mine), Saved: library.CopyPlaylists(a.library.Saved)})
 	}
 	if a.library.Dirty&libraryvm.SnapshotAlbums != 0 && a.library.SubsShown {
 		keep("albums", slices.Clone(a.library.SubAlbums))
@@ -363,7 +363,7 @@ func (a *app) persistLibraryChanges(changed libraryvm.LibrarySnapshots, ids ...i
 	for id := range a.library.DirtySnapshots {
 		if pl := a.library.Playlists[id]; pl != nil {
 			req := a.cacheRequest(fmt.Sprintf("playlist/%d", id))
-			snapshot := copyPlaylist(*pl)
+			snapshot := library.CopyPlaylist(*pl)
 			a.savePlaylistSnapshot(req, func() []byte { return cacheBytes(snapshot) })
 		}
 	}
@@ -379,7 +379,7 @@ func (a *app) recoveryBusy() bool {
 	if a.account.Busy || a.home.Loading || a.library.Refresh.Mine.Busy || a.library.Refresh.Likes.Busy || a.pl.MetadataLoading() {
 		return true
 	}
-	if a.trackArt.searching || a.trackArt.publication.loading && a.trackArt.publication.track == a.pl.Current() || a.art.hasLoading() {
+	if a.trackArt.searching || a.trackArt.publication.loading && a.trackArt.publication.track == a.pl.Current() || a.art.HasLoading() {
 		return true
 	}
 	switch a.nav.Current.Page {

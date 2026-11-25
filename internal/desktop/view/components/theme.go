@@ -66,3 +66,40 @@ func (p Palette) ApplyAccent(t *ui.Theme) {
 	t.Accent, t.AccentText = p.Accent, p.OnAccent
 	t.AccentHover, t.AccentPressed = accent.AccentHover, accent.AccentPressed
 }
+
+// Accent is a colour the app can take, named for the settings, in the
+// lightness each appearance needs of it.
+type Accent struct {
+	Name        string
+	Dark, Light ui.Color
+}
+
+// Accents are the colours the app can take, the first being the one its
+// appearance gives.
+var Accents = []Accent{
+	{"胭脂", ui.Oklch(0.66, 0.2, 22), ui.Oklch(0.6, 0.21, 24)},
+	{"柑橘", ui.Oklch(0.68, 0.18, 55), ui.Oklch(0.62, 0.19, 52)},
+	{"琥珀", ui.Oklch(0.72, 0.17, 90), ui.Oklch(0.64, 0.17, 88)},
+	{"青苔", ui.Oklch(0.68, 0.17, 140), ui.Oklch(0.6, 0.16, 142)},
+	{"松石", ui.Oklch(0.7, 0.14, 190), ui.Oklch(0.6, 0.13, 192)},
+	{"湖蓝", ui.Oklch(0.68, 0.16, 230), ui.Oklch(0.6, 0.15, 232)},
+	{"靛青", ui.Oklch(0.64, 0.19, 265), ui.Oklch(0.56, 0.19, 267)},
+	{"紫罗兰", ui.Oklch(0.66, 0.19, 300), ui.Oklch(0.58, 0.18, 302)},
+	{"玫瑰", ui.Oklch(0.68, 0.19, 340), ui.Oklch(0.6, 0.18, 342)},
+	{"石墨", ui.Oklch(0.6, 0.02, 260), ui.Oklch(0.5, 0.02, 260)},
+}
+
+// AccentColor returns the colour called name, or zero for one that names
+// none of them.
+func AccentColor(name string, dark bool) ui.Color {
+	for _, a := range Accents {
+		if a.Name != name {
+			continue
+		}
+		if dark {
+			return a.Dark
+		}
+		return a.Light
+	}
+	return ui.Color{}
+}

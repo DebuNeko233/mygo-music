@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	"netease-music-mygo/internal/desktop/view/tracklist"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
@@ -232,7 +233,7 @@ func init() {
 			step(0, func() {
 				pl := a.library.Playlists[a.home.Charts[1].ID]
 				a.setVolume(0.15)
-				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+				a.pl.PlayQueue(pl.Tracks, tracklist.FirstPlayable(pl.Tracks))
 			})
 			time.Sleep(5 * time.Second)
 			shot("4-playing", a.win)

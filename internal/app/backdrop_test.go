@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -161,7 +162,7 @@ func TestStillBackdropTransition(t *testing.T) {
 	if bd.Still != first || bd.PreviousStill != nil || bd.StillAt != now {
 		t.Fatal("unchanged background restarted its transition")
 	}
-	bd.PrepareStill(&artwork{}, blue, now)
+	bd.PrepareStill(&artcache.Image{}, blue, now)
 	if bd.Still.Ramp != first.Ramp || bd.PreviousStill != first {
 		t.Fatal("unchanged color failed to reuse its ramp")
 	}
@@ -257,12 +258,12 @@ func TestBackdropDriftFrames(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		art := &artwork{tint: dominantColor(img)}
+		art := &artcache.Image{Tint: artcache.DominantColor(img)}
 		shots := []struct{ drift, bass float32 }{{0, 0}, {2, 0}, {4, 0}, {4, 0.9}}
 		row := image.NewRGBA(image.Rect(0, 0, w*len(shots), h))
 		for i, s := range shots {
 			tt := ui.NewTester(func(c *ui.Context) {
-				ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { playbackview.DrawFog(p, r, art.tint, s.drift, s.bass) })
+				ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { playbackview.DrawFog(p, r, art.Tint, s.drift, s.bass) })
 			}, w, h)
 			tt.Frame()
 			shot := tt.Image()

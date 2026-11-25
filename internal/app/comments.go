@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/netease"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
@@ -37,7 +38,7 @@ func (a *app) loadComments() {
 // commentsTab names the comments' pane, with how many there are.
 func (a *app) commentsTab() string {
 	if n := a.commentCount(); n > 0 {
-		return "评论 " + count(n)
+		return "评论 " + components.Count(n)
 	}
 	return "评论"
 }

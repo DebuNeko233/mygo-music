@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/player"
 )
 
@@ -18,7 +19,7 @@ func isolateUserData(t *testing.T) {
 
 func newTestApp() *app {
 	a := newApp()
-	a.art = newArtCache(func(func()) {})
+	a.art = artcache.New(artcache.Options{Post: func(func()) {}})
 	a.pl = player.New(func(func()) {})
 	a.pl.SetVolume(0.5)
 	return a

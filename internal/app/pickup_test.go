@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -31,7 +32,7 @@ func TestLastStretch(t *testing.T) {
 	if !ok || len(ids) != 3 || ids[0] != 2 || ids[1] != 3 || ids[2] != 5 || last.Track.ID != 5 {
 		t.Fatalf("picked %v, last %d", ids, last.Track.ID)
 	}
-	if got := heardAt(last, now); got != "3分钟前在手机上听过" {
+	if got := components.HeardAt(last, now); got != "3分钟前在手机上听过" {
 		t.Errorf("heard %q", got)
 	}
 

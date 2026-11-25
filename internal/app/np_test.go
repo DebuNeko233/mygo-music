@@ -125,7 +125,7 @@ func TestQueueStaysAsATrackIsPlayed(t *testing.T) {
 // crashed on start when the choice asked the player what played.
 func TestLyricsPaneBeforePlayer(t *testing.T) {
 	a := &app{settings: settings{LyricsStage: true}}
-	if pane := a.LyricsPaneChosen(); pane != playbackview.PaneStage {
+	if pane := playbackview.LyricsPaneChosen(a.settings.LyricsStage); pane != playbackview.PaneStage {
 		t.Errorf("pane %d", pane)
 	}
 }

@@ -1,4 +1,4 @@
-package app
+package artwork
 
 import (
 	"sync/atomic"
@@ -9,9 +9,9 @@ import (
 // Concurrent consumers share one tag read and replacing the audio refreshes the cover.
 func TestLocalEmbeddedArtworkSharesTagRead(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		var cache embeddedArtworkCache
+		var cache EmbeddedCache
 		var reads atomic.Int32
-		source := embeddedArtworkKey{path: "song.flac", stamp: 1}
+		source := EmbeddedKey{Path: "song.flac", Stamp: 1}
 		finish := make(chan struct{})
 		read := func(string) []byte {
 			reads.Add(1)
@@ -20,7 +20,7 @@ func TestLocalEmbeddedArtworkSharesTagRead(t *testing.T) {
 		}
 		results := make(chan []byte, 3)
 		for range 3 {
-			go func() { results <- cache.get(source, read) }()
+			go func() { results <- cache.Get(source, read) }()
 		}
 		synctest.Wait()
 		close(finish)
@@ -32,8 +32,8 @@ func TestLocalEmbeddedArtworkSharesTagRead(t *testing.T) {
 		if n := reads.Load(); n != 1 {
 			t.Fatalf("read tags %d times for the same file", n)
 		}
-		source.stamp++
-		if got := cache.get(source, func(string) []byte { return []byte("replacement") }); string(got) != "replacement" {
+		source.Stamp++
+		if got := cache.Get(source, func(string) []byte { return []byte("replacement") }); string(got) != "replacement" {
 			t.Fatalf("read stale cover %q", got)
 		}
 	})

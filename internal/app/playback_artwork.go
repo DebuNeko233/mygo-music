@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"
@@ -23,18 +24,18 @@ const nowPlayingCoverPixels = components.NowPlayingCoverPixels
 var barCoverRequest = playbackCover{pixels: barCoverPixels, prefetchPrevious: true}
 var nowPlayingCoverRequest = playbackCover{pixels: nowPlayingCoverPixels, backdrop: true}
 
-func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artwork {
+func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artcache.Image {
 	if !tr.IsLocal() {
-		return a.art.get(netease.Sized(a.trackArtworkURL(tr), px), backdrop)
+		return a.art.Get(netease.Sized(a.trackArtworkURL(tr), px), backdrop)
 	}
 	song := a.playbackLocalSong(tr)
 	if !song.Cover {
-		return a.art.get(netease.Sized(a.localArtworkURL(tr, song), px), backdrop)
+		return a.art.Get(netease.Sized(a.localArtworkURL(tr, song), px), backdrop)
 	}
-	source := localEmbeddedArtworkKey(song)
-	key := fmt.Sprintf("local-cover/%d/%d/%d/%s", source.stamp, source.size, px, source.path)
-	return a.art.requestCover(key, backdrop, true, func(string) (*ui.Bitmap, image.Image, int, error) {
-		return decodeArtSized(a.localView.embeddedArtwork.get(source, localmedia.Cover), px)
+	source := artcache.LocalEmbeddedKey(song)
+	key := fmt.Sprintf("local-cover/%d/%d/%d/%s", source.Stamp, source.Size, px, source.Path)
+	return a.art.RequestCover(key, backdrop, true, func(string) (*ui.Bitmap, image.Image, int, error) {
+		return artcache.DecodeSized(a.localView.embeddedArtwork.Get(source, localmedia.Cover), px)
 	})
 }
 
@@ -45,7 +46,7 @@ func (a *app) trackCover(c *ui.Context, tr *netease.Track, px int, size, radius 
 	if url := a.localArtworkURL(tr, a.playbackLocalSong(tr)); url != "" {
 		return a.views.artwork.Cover(c, url, px, size, radius)
 	}
-	return a.coverImage(c, size, radius, func(ui.Element) *artwork { return a.trackArtwork(tr, px, false) })
+	return a.coverImage(c, size, radius, func(ui.Element) *artcache.Image { return a.trackArtwork(tr, px, false) })
 }
 
 func (a *app) hasTrackCover(tr *netease.Track) bool {
@@ -57,7 +58,7 @@ func (a *app) hasTrackCover(tr *netease.Track) bool {
 }
 
 // playbackTrackArtwork is the common request path for the bar and Now Playing.
-func (a *app) playbackTrackArtwork(tr *netease.Track, cover playbackCover) *artwork {
+func (a *app) playbackTrackArtwork(tr *netease.Track, cover playbackCover) *artcache.Image {
 	if tr.IsLocal() {
 		return a.trackArtwork(tr, cover.pixels, cover.backdrop)
 	}
@@ -66,9 +67,9 @@ func (a *app) playbackTrackArtwork(tr *netease.Track, cover playbackCover) *artw
 
 // playbackArtwork requests the visible cover first, then warms the exact
 // cache entries this view will use after a skip.
-func (a *app) playbackArtwork(url string, cover playbackCover) *artwork {
+func (a *app) playbackArtwork(url string, cover playbackCover) *artcache.Image {
 	current := netease.Sized(url, cover.pixels)
-	art := a.art.get(current, cover.backdrop)
+	art := a.art.Get(current, cover.backdrop)
 	if a.network.offline {
 		return art
 	}
@@ -87,9 +88,20 @@ func (a *app) playbackArtwork(url string, cover playbackCover) *artwork {
 		}
 		key := netease.Sized(url, cover.pixels)
 		if key != current && key != seen {
-			a.art.prefetch(key, cover.backdrop)
+			a.art.Prefetch(key, cover.backdrop)
 			seen = key
 		}
+	}
+	return art
+}
+
+func (a *app) coverImage(c *ui.Context, size, radius float32, load func(ui.Element) *artcache.Image) ui.Element {
+	return a.views.artwork.Image(c, size, radius, func(el ui.Element) *ui.Bitmap { return components.Bitmap(load(el)) })
+}
+
+func viewImage(art *artcache.Image) components.Image {
+	if art == nil {
+		return nil
 	}
 	return art
 }

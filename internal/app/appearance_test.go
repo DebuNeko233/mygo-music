@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"image/gif"
-	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -14,6 +12,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
+	"netease-music-mygo/internal/desktop/view/components"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/preferences"
 )
@@ -41,10 +41,10 @@ func TestChoosingAccentColorsIt(t *testing.T) {
 	if a.settings.Accent != "湖蓝" {
 		t.Fatalf("chose %q", a.settings.Accent)
 	}
-	if got, want := paletteFor(&ui.Theme{}).Accent, accentColor("湖蓝", false); got != want {
+	if got, want := paletteFor(&ui.Theme{}).Accent, components.AccentColor("湖蓝", false); got != want {
 		t.Errorf("light accent %v, want %v", got, want)
 	}
-	if got, want := paletteFor(&ui.Theme{Dark: true}).Accent, accentColor("湖蓝", true); got != want {
+	if got, want := paletteFor(&ui.Theme{Dark: true}).Accent, components.AccentColor("湖蓝", true); got != want {
 		t.Errorf("dark accent %v, want %v", got, want)
 	}
 	// Following the appearance again gives its own accent back.
@@ -121,60 +121,6 @@ func TestAddingPicturesKeepsPicturesOnce(t *testing.T) {
 	}
 }
 
-// A picture picked is read, kept as the pixels of its size, and no longer
-// on its longer side than a picture takes.
-func TestPictureIsReadAtItsSize(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "wide.png")
-	writePicture(t, path, 4000, 100, color.RGBA{R: 255, G: 255, B: 255, A: 255})
-	pic := decodePicture(path)
-	if pic == nil {
-		t.Fatal("could not read the picture")
-	}
-	if pic.W != 2000 || pic.H != 50 {
-		t.Errorf("kept %v×%v, want 2000×50", pic.W, pic.H)
-	}
-	if decodePicture(filepath.Join(t.TempDir(), "missing.png")) != nil {
-		t.Error("read a picture that is not there")
-	}
-}
-
-// Every format the picker offers is read, so a picture picked is never one
-// the app cannot show.
-func TestEveryPictureFormatIsRead(t *testing.T) {
-	dir := t.TempDir()
-	img := image.NewRGBA(image.Rect(0, 0, 3, 2))
-	for i := range img.Pix {
-		img.Pix[i] = 255
-	}
-	for _, name := range []string{"still.png", "still.jpg", "still.gif"} {
-		path := filepath.Join(dir, name)
-		f, err := os.Create(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		switch filepath.Ext(name) {
-		case ".png":
-			err = png.Encode(f, img)
-		case ".jpg":
-			err = jpeg.Encode(f, img, nil)
-		default:
-			err = gif.Encode(f, img, nil)
-		}
-		f.Close()
-		if err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		pic := decodePicture(path)
-		if pic == nil {
-			t.Errorf("%s: could not read the picture", name)
-			continue
-		}
-		if pic.W != 3 || pic.H != 2 {
-			t.Errorf("%s: kept %v×%v, want 3×2", name, pic.W, pic.H)
-		}
-	}
-}
-
 // A picture covers the page it stands on, centred, keeping its own shape:
 // what is outside the page is cut off, never squeezed in.
 func TestCoverSourceKeepsTheShape(t *testing.T) {
@@ -212,7 +158,7 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 	a.settings.BackdropHomeOpacity = 1
 	a.settings.BackdropPlayingOpacity = 0
 	// Read, as the app reads them: off the main thread, kept here.
-	a.pics = map[string]*backdropEntry{path: {pic: decodePicture(path)}}
+	a.pics = map[string]*backdropEntry{path: {pic: artcache.DecodePicture(path)}}
 	tt := ui.NewTester(a.view, 900, 600)
 	tt.Frame()
 	const w, h = 900, 600
@@ -306,7 +252,7 @@ func TestPlayingBackdropCoversTheStage(t *testing.T) {
 	a.settings.BackdropPlaying = []string{path}
 	a.settings.BackdropHomeOpacity = 0
 	a.settings.BackdropPlayingOpacity = 1
-	a.pics = map[string]*backdropEntry{path: {pic: decodePicture(path)}}
+	a.pics = map[string]*backdropEntry{path: {pic: artcache.DecodePicture(path)}}
 	const w, h = 400, 300
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Box(c).Fill().Background(ui.Hex("#0b0b0d"))
@@ -393,7 +339,7 @@ func TestBackdropFramesKeepBothPagesDecoded(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "playing.png")
 	writePicture(t, path, 8, 8, color.RGBA{R: 255, A: 255})
-	playing := decodePicture(path)
+	playing := artcache.DecodePicture(path)
 	if playing == nil {
 		t.Fatal("could not decode the playing backdrop")
 	}

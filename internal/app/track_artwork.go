@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/localmedia"
@@ -157,8 +158,8 @@ func (a *app) syncTrackArtwork() {
 			return
 		}
 		if song.Cover {
-			embedded := localEmbeddedArtworkKey(song)
-			a.announceTrackArtwork(t, func() ([]byte, error) { return a.localView.embeddedArtwork.get(embedded, localmedia.Cover), nil })
+			embedded := artcache.LocalEmbeddedKey(song)
+			a.announceTrackArtwork(t, func() ([]byte, error) { return a.localView.embeddedArtwork.Get(embedded, localmedia.Cover), nil })
 			return
 		}
 		if track.Name == strings.TrimSuffix(filepath.Base(song.Path), filepath.Ext(song.Path)) {

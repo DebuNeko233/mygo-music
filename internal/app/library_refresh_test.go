@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/diskcache"
+	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 	libraryvm "netease-music-mygo/internal/viewmodel/library"
@@ -50,7 +51,7 @@ func TestPlaylistRefreshKeepsUnchangedSnapshot(t *testing.T) {
 	a.library.Playlists[pl.ID] = pl
 	req := a.cacheRequest("playlist/7")
 	playlistDetail = func(int64) (*netease.Playlist, error) {
-		result := copyPlaylist(*pl)
+		result := library.CopyPlaylist(*pl)
 		return &result, nil
 	}
 
@@ -80,9 +81,9 @@ func TestPlaylistRefreshAppliesHeaderAndPrivileges(t *testing.T) {
 	a, posts, now := refreshFixture(t)
 	pl := &netease.Playlist{ID: 7, Name: "歌单", Tracks: []netease.Track{{ID: 1, Name: "歌曲"}}}
 	a.library.Playlists[pl.ID] = pl
-	header := copyPlaylist(*pl)
+	header := library.CopyPlaylist(*pl)
 	header.PlayCount = 10
-	withPrivilege := copyPlaylist(header)
+	withPrivilege := library.CopyPlaylist(header)
 	withPrivilege.Tracks[0].Privilege = &netease.Privilege{ID: 1, St: -1}
 
 	playlistDetail = func(int64) (*netease.Playlist, error) { return &header, nil }
@@ -139,7 +140,7 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 			if !ok {
 				t.Fatal("test top song was not built")
 			}
-			fresh := copyPlaylist(*pl)
+			fresh := library.CopyPlaylist(*pl)
 			want := pl.Tracks[first-1].Name
 			switch edit {
 			case "insert above", "duplicate":

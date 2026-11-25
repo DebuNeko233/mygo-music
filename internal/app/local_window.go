@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -11,7 +12,7 @@ type localViewState struct {
 	window  *mygo.Window
 	picking bool
 
-	embeddedArtwork embeddedArtworkCache
+	embeddedArtwork artcache.EmbeddedCache
 }
 
 var openLocalDialog = mygo.Dialog.Open
@@ -119,4 +120,9 @@ func (a *app) localSongItems(tr *netease.Track, fromLibrary bool) func(*ui.Menu)
 			}
 		}
 	}
+}
+
+func (a *app) localFoldersView(c *ui.Context) {
+	t := a.settings.uiTheme(c.Theme())
+	a.views.local.Folders(c, t, paletteFor(&t))
 }

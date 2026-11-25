@@ -58,6 +58,10 @@ func TestPackageBoundaries(t *testing.T) {
 			if layer != "app" && layer != "desktop" && layer != "viewmodel" && inPackage(target, "viewmodel") {
 				t.Errorf("%s imports %s; services must not depend on feature presentation", path, dep)
 			}
+			if layer == "desktop" && !inPackage(pkg, "desktop/view") &&
+				(inPackage(target, "desktop/view") || inPackage(target, "viewmodel")) {
+				t.Errorf("%s imports %s; desktop capabilities must stay independent of views and feature presentation", path, dep)
+			}
 			if layer == "viewmodel" && strings.HasPrefix(target, "viewmodel/") &&
 				!inPackage(target, pkg) {
 				t.Errorf("%s imports another feature %s; compose features in app or share a lower-level capability", path, dep)

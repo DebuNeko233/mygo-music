@@ -10,6 +10,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
+	"netease-music-mygo/internal/desktop/view/components"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -23,7 +25,10 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 	a.settings = defaultSettings()
 	a.pl.SuspendCache()
 	posts := testPosts(a)
-	a.art.post = a.post
+	a.art = artcache.New(artcache.Options{Post: a.post, Load: func(string) (*ui.Bitmap, image.Image, int, error) {
+		img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+		return ui.NewBitmap(img), img, 0, nil
+	}})
 	q := []netease.Track{
 		{ID: 1, Album: netease.Album{PicURL: "test://first"}},
 		{ID: 2, Album: netease.Album{PicURL: "test://second"}},
@@ -31,19 +36,14 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 		{ID: 4, Album: netease.Album{PicURL: "test://fourth"}},
 	}
 	url := func(i int) string { return netease.Sized(q[i].Album.PicURL, barCoverPixels) }
-	var arts [4]*artwork
+	var arts [4]*artcache.Image
 	for i := range q {
 		if i != 1 {
-			arts[i] = &artwork{bmp: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))}
-			a.art.add(url(i), arts[i])
+			arts[i] = &artcache.Image{Bitmap: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))}
+			a.art.Put(url(i), arts[i])
 		}
 	}
-	oldLoad := loadArt
-	defer func() { loadArt = oldLoad }()
-	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
-		img := image.NewRGBA(image.Rect(0, 0, 2, 2))
-		return ui.NewBitmap(img), img, 0, nil
-	}
+
 	a.pl.Cue(q)
 	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
 	tt.Advance(2 * playbackview.CoverFadeDuration)
@@ -62,7 +62,7 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 	}
 	a.pl.Jump(2)
 	refreshPost(t, posts)
-	if bitmap(a.art.art[url(1)]) == nil {
+	if components.Bitmap(a.art.Peek(url(1))) == nil {
 		t.Fatal("the delayed cover did not reach the cache")
 	}
 	tt.Frame()
@@ -106,7 +106,7 @@ func TestPlayerBarCoverBlendKeepsBothPicturesVisible(t *testing.T) {
 	for i, c := range []color.RGBA{{R: 255, A: 255}, {B: 255, A: 255}} {
 		img := image.NewRGBA(image.Rect(0, 0, 48, 48))
 		draw.Draw(img, img.Bounds(), image.NewUniform(c), image.Point{}, draw.Src)
-		a.art.add(netease.Sized(q[i].Album.PicURL, barCoverPixels), &artwork{bmp: ui.NewBitmap(img)})
+		a.art.Put(netease.Sized(q[i].Album.PicURL, barCoverPixels), &artcache.Image{Bitmap: ui.NewBitmap(img)})
 	}
 	a.pl.Cue(q)
 	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
@@ -146,15 +146,13 @@ func TestPlayerBarCoverFallsBackAfterFailure(t *testing.T) {
 		{ID: 1, Album: netease.Album{PicURL: "test://first"}},
 		{ID: 2, Album: netease.Album{PicURL: "test://unavailable"}},
 	}
-	oldArt := &artwork{bmp: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))}
-	a.art.add(netease.Sized(q[0].Album.PicURL, barCoverPixels), oldArt)
+	oldArt := &artcache.Image{Bitmap: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 2, 2)))}
 	posts := testPosts(a)
-	a.art.post = a.post
-	oldLoad := loadArt
-	defer func() { loadArt = oldLoad }()
-	loadArt = func(string) (*ui.Bitmap, image.Image, int, error) {
+	a.art = artcache.New(artcache.Options{Post: a.post, Load: func(string) (*ui.Bitmap, image.Image, int, error) {
 		return nil, nil, 0, errors.New("invalid cover")
-	}
+	}})
+	a.art.Put(netease.Sized(q[0].Album.PicURL, barCoverPixels), oldArt)
+
 	a.pl.Cue(q)
 	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
 	tt.Advance(2 * playbackview.CoverFadeDuration)
@@ -210,16 +208,14 @@ func TestPlayerBarPrefetchesAdjacentCovers(t *testing.T) {
 					a.pl.AttachRadio("test", func(func([]netease.Track)) {})
 				}
 				asked, posts := make(chan string, artJobs), make(chan func(), artJobs)
-				a.art = newArtCache(func(fn func()) { posts <- fn })
-				defer a.art.close()
-				old := loadArt
-				defer func() { loadArt = old }()
-				loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
+				a.art = artcache.New(artcache.Options{Post: func(fn func()) { posts <- fn }, Load: func(url string) (*ui.Bitmap, image.Image, int, error) {
 					asked <- url
 					return nil, nil, 0, errors.New("fixture")
-				}
+				}})
+				defer a.art.Close()
+
 				current := a.pl.Current().Album.PicURL
-				a.art.add(netease.Sized(current, barCoverPixels), &artwork{})
+				a.art.Put(netease.Sized(current, barCoverPixels), &artcache.Image{})
 				a.playbackArtwork(current, barCoverRequest)
 				a.playbackArtwork(current, barCoverRequest)
 				synctest.Wait()

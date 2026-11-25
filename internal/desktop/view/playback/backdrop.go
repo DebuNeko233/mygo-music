@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/shader"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/player"
 )
@@ -347,11 +348,11 @@ func backdropLab(c ui.Color) [3]float32 {
 // the cover, so that white reads over it, as NetEase's player paints it.
 // A gray cover stays gray.
 func BackdropColors(tint ui.Color) (top, foot ui.Color) {
-	h, s, _ := components.HSV(float64(tint.R)/255, float64(tint.G)/255, float64(tint.B)/255)
+	h, s, _ := artcache.HSV(float64(tint.R)/255, float64(tint.G)/255, float64(tint.B)/255)
 	if s > 0.12 {
 		s = min(max(s*1.3, 0.45), 0.66)
 	}
-	return components.HSVColor(h, s, 0.35), components.HSVColor(h, min(s*1.05, 0.7), 0.24)
+	return artcache.HSVColor(h, s, 0.35), artcache.HSVColor(h, min(s*1.05, 0.7), 0.24)
 }
 
 // DrawFog paints the fog of tint in r at drift seconds, lit by bass.
@@ -366,11 +367,11 @@ func DrawFog(p *ui.Painter, r ui.Rect, tint ui.Color, drift, bass float32) {
 // cover of tint: its hue, rich, at the same depths whatever the cover, so
 // that white reads over them. A gray cover stays gray.
 func fogColors(tint ui.Color) (deep, fog ui.Color) {
-	h, s, _ := components.HSV(float64(tint.R)/255, float64(tint.G)/255, float64(tint.B)/255)
+	h, s, _ := artcache.HSV(float64(tint.R)/255, float64(tint.G)/255, float64(tint.B)/255)
 	if s > 0.12 {
 		s = min(max(s*1.3, 0.6), 0.85)
 	}
-	return components.HSVColor(h, s, 0.3), components.HSVColor(h, s*0.6, 0.72)
+	return artcache.HSVColor(h, s, 0.3), artcache.HSVColor(h, s*0.6, 0.72)
 }
 
 // backdropOver paints the backdrop again over band, a strip of win, the

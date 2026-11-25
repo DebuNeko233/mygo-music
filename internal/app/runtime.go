@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/player"
@@ -69,7 +70,7 @@ func (a *app) start() {
 	a.settings = loadSettings()
 	a.initialized = true
 	a.settings.applyAppearance()
-	a.playbackState.Pane = a.LyricsPaneChosen()
+	a.playbackState.Pane = playbackview.LyricsPaneChosen(a.settings.LyricsStage)
 	a.preloadPictures()
 	if runtime.GOOS == "darwin" {
 		// Start Metal's shader and pipeline compilation before the first
@@ -78,7 +79,7 @@ func (a *app) start() {
 	}
 	// Before the window: on Windows it lays out its content as it is
 	// made, and the view asks the player what plays.
-	a.art = newArtCache(a.post, a.postResource)
+	a.art = artcache.New(artcache.Options{Post: a.post, PostResource: a.postResource})
 	a.pl = player.New(a.post, a.postResource)
 	a.initLocalMusic()
 	a.initOffline()

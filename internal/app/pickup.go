@@ -1,10 +1,10 @@
 package app
 
 import (
-	"fmt"
 	"slices"
 	"time"
 
+	"netease-music-mygo/internal/desktop/view/components"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -35,9 +35,9 @@ func (a *app) pickUp(uid int64) {
 				order[i] = i
 			}
 			a.pl.Restore(player.Session{Queue: songs, Order: order, At: len(songs) - 1})
-			a.picked = playbackview.PickedUp{ID: last.Track.ID, Heard: heardAt(last, time.Now())}
+			a.picked = playbackview.PickedUp{ID: last.Track.ID, Heard: components.HeardAt(last, time.Now())}
 			where := "上次"
-			if d := deviceName(last.Device); d != "" {
+			if d := components.DeviceName(last.Device); d != "" {
 				where = "在" + d + "上"
 			}
 			a.toast = "已接上你" + where + "听的《" + last.Track.Name + "》，按空格键继续"
@@ -70,39 +70,4 @@ func lastStretch(plays []netease.Play, now time.Time) (songs []netease.Track, la
 	}
 	slices.Reverse(songs)
 	return songs, last, len(songs) > 0
-}
-
-// heardAt says when and where a song was played.
-func heardAt(p netease.Play, now time.Time) string {
-	when := agoLabel(now.Sub(p.At))
-	if where := deviceName(p.Device); where != "" {
-		return when + "在" + where + "上听过"
-	}
-	return when + "听过"
-}
-
-// agoLabel says how long ago d was, as the recent plays say it.
-func agoLabel(d time.Duration) string {
-	switch {
-	case d < 2*time.Minute:
-		return "刚刚"
-	case d < time.Hour:
-		return fmt.Sprintf("%d分钟前", int(d/time.Minute))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%d小时前", int(d/time.Hour))
-	}
-	return fmt.Sprintf("%d天前", int(d/(24*time.Hour)))
-}
-
-// deviceName names the kind of device NetEase calls os, or "".
-func deviceName(os string) string {
-	switch os {
-	case "iphone", "android", "ipad", "harmony":
-		return "手机"
-	case "osx", "pc", "mac", "windows", "linux":
-		return "电脑"
-	case "web":
-		return "网页版"
-	}
-	return ""
 }

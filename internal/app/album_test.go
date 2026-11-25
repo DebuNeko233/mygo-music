@@ -70,8 +70,8 @@ func TestSaveAlbumFromItsPage(t *testing.T) {
 		t.Errorf("asked NetEase for %+v, want album 77 saved", got)
 	}
 	refreshPost(t, posts)
-	if !a.albumSaved(77) || a.toast != "" {
-		t.Errorf("album 77 saved %v, toast %q, want saved and nothing said", a.albumSaved(77), a.toast)
+	if !a.library.AlbumSaved(77) || a.toast != "" {
+		t.Errorf("album 77 saved %v, toast %q, want saved and nothing said", a.library.AlbumSaved(77), a.toast)
 	}
 	if len(a.library.SubAlbums) != 1 || a.library.SubAlbums[0].Songs != nil {
 		t.Errorf("saved albums are %+v, want album 77 alone, without its songs", a.library.SubAlbums)
@@ -95,8 +95,8 @@ func TestUnsaveAlbumFromItsPage(t *testing.T) {
 		t.Errorf("asked NetEase for %+v, want album 77 unsaved", got)
 	}
 	refreshPost(t, posts)
-	if a.albumSaved(77) || a.toast != "" {
-		t.Errorf("album 77 saved %v, toast %q, want unsaved and nothing said", a.albumSaved(77), a.toast)
+	if a.library.AlbumSaved(77) || a.toast != "" {
+		t.Errorf("album 77 saved %v, toast %q, want unsaved and nothing said", a.library.AlbumSaved(77), a.toast)
 	}
 }
 
@@ -112,12 +112,12 @@ func TestAlbumSaveFailureReverts(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.albumSaved(77) {
+	if !a.library.AlbumSaved(77) {
 		t.Fatal("the album did not read saved at once")
 	}
 	refreshPost(t, posts)
-	if a.albumSaved(77) || a.toast != "操作失败，请稍后再试" {
-		t.Errorf("album 77 saved %v, toast %q, want unsaved and 操作失败，请稍后再试", a.albumSaved(77), a.toast)
+	if a.library.AlbumSaved(77) || a.toast != "操作失败，请稍后再试" {
+		t.Errorf("album 77 saved %v, toast %q, want unsaved and 操作失败，请稍后再试", a.library.AlbumSaved(77), a.toast)
 	}
 }
 

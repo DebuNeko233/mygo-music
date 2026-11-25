@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"netease-music-mygo/internal/desktop/view/tracklist"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	libraryvm "netease-music-mygo/internal/viewmodel/library"
@@ -41,7 +42,7 @@ func (a *app) playlistServices() libraryvm.PlaylistServices {
 		},
 		Cache: a.cacheRequest, Detail: playlistDetail, WaitSnapshot: a.waitForPlaylistSnapshot, SaveSnapshot: a.savePlaylistSnapshot,
 		Play: func(pl *netease.Playlist) {
-			a.pl.PlayQueueFrom(pl.Tracks, firstPlayable(pl.Tracks), player.PlaySource{Source: "list", ID: pl.ID})
+			a.pl.PlayQueueFrom(pl.Tracks, tracklist.FirstPlayable(pl.Tracks), player.PlaySource{Source: "list", ID: pl.ID})
 		},
 		VisiblePlaylist: a.visiblePlaylist, Recovering: func() bool { return a.network.recovering },
 	}

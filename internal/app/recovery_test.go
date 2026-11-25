@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/netease"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
@@ -143,18 +144,18 @@ func TestRecoveryDoesNotCascadeIntoPermanentArtistTab(t *testing.T) {
 // Manual refresh must retry visible permanent artwork failures without enabling automatic retry or touching hidden covers.
 func TestManualArtworkRefreshIncludesPermanentFailures(t *testing.T) {
 	a, _ := offlineFixture(t)
-	a.art.add("visible", &artwork{failed: true})
-	a.art.add("hidden", &artwork{failed: true})
-	a.art.beginFrame()
-	a.art.get("visible", false)
+	a.art.Put("visible", &artcache.Image{Failed: true})
+	a.art.Put("hidden", &artcache.Image{Failed: true})
+	a.art.BeginFrame()
+	a.art.Get("visible", false)
 	if a.needsRecovery() {
 		t.Fatal("permanent image started automatic recovery")
 	}
 	manual := a.failedLoads(true)
 	a.recoverLoads()
-	kept := a.art.art["visible"] != nil
+	kept := a.art.Peek("visible") != nil
 	a.retryLoads(true)
-	if !manual || !kept || a.art.art["visible"] != nil || a.art.art["hidden"] == nil {
+	if !manual || !kept || a.art.Peek("visible") != nil || a.art.Peek("hidden") == nil {
 		t.Fatal("manual artwork retry lost visibility or failure policy")
 	}
 }

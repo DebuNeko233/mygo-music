@@ -1,4 +1,4 @@
-package components
+package lifetime
 
 import (
 	"slices"
@@ -6,8 +6,8 @@ import (
 )
 
 // Closing releases subscriptions once in reverse order, including late registrations.
-func TestNativeLifetimeClosesSubscriptions(t *testing.T) {
-	var l NativeLifetime
+func TestSubscriptionsClosesSubscriptions(t *testing.T) {
+	var l Subscriptions
 	var calls []int
 	l.Listen(func() { calls = append(calls, 1) })
 	l.Listen(func() { calls = append(calls, 2) })

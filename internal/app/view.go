@@ -5,7 +5,6 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/desktop/view/shell"
-	"netease-music-mygo/internal/desktop/view/tracklist"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
 )
@@ -39,7 +38,7 @@ func (a *app) view(c *ui.Context) {
 	a.retryLibraryRefresh()
 
 	npOpen, npSettled := a.views.playback.NPState(c)
-	a.art.pageFrame(a.nav.Current, !npOpen)
+	a.art.PageFrame(a.nav.Current, !npOpen)
 	home := a.pictures(a.settings.BackdropHome)
 	var backdrop func(*ui.Context)
 	if pic := playbackview.BackdropShown(home, a.pl.Current()); pic != nil {
@@ -196,11 +195,7 @@ func (a *app) sidebar(c *ui.Context) {
 		},
 	})
 }
-func (a *app) insets(c *ui.Context) (float32, float32) { return shell.Insets(c) }
-func topBar(c *ui.Context) float32                     { return shell.TopBar(c) }
-func (a *app) startMark(c *ui.Context)                 { a.shell.StartMark(c) }
-func (a *app) endMark(c *ui.Context)                   { a.shell.EndMark(c) }
-func edgeShown(el ui.Element, under bool) float32      { return shell.EdgeShown(el, under) }
+
 func (a *app) content(c *ui.Context) {
 	// A new page starts at its top. Not as it is opened: a control in a
 	// list, as a page's tabs in its header, opens it as the list builds.
@@ -242,10 +237,6 @@ func (a *app) content(c *ui.Context) {
 	}
 }
 
-func (a *app) centered(c *ui.Context, message string, retry func()) {
-	shell.Centered(c, a.pal, a.network.offline, message, retry)
-}
-
 // Loading what the pages show.
 
 // freshenHome loads the home page again once NetEase has picked the day's
@@ -254,5 +245,3 @@ func (a *app) freshenHome() { a.home.Freshen(a.homeServices()) }
 
 // playlistDetail is what a playlist is asked of NetEase with.
 var playlistDetail func(id int64) (*netease.Playlist, error) = netease.PlaylistDetail
-
-func firstPlayable(tracks []netease.Track) int { return tracklist.FirstPlayable(tracks) }

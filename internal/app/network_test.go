@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -321,8 +322,8 @@ func TestHomeRefreshIconReloadsContent(t *testing.T) {
 			if scenario.reconnect {
 				a.home.Failures = map[string]error{"featured": netease.ErrOffline}
 			}
-			a.art.art["failed-cover"] = &artwork{failed: true}
-			a.art.seen["failed-cover"] = struct{}{}
+			a.art.Put("failed-cover", &artcache.Image{Failed: true})
+			a.art.Get("failed-cover", false)
 			featured, charts, daily, recommended, status := featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists, readNetworkStatus
 			t.Cleanup(func() {
 				featuredPlaylists, homeCharts, dailySongs, recommendedPlaylists, readNetworkStatus = featured, charts, daily, recommended, status

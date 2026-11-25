@@ -1,13 +1,13 @@
-package components
+package lifetime
 
-// NativeLifetime belongs to the UI thread. Each owner releases its native
+// Subscriptions belongs to the UI thread. Each owner releases its native
 // subscriptions once, including when startup only created some components.
-type NativeLifetime struct {
+type Subscriptions struct {
 	Closed bool
 	offs   []func()
 }
 
-func (l *NativeLifetime) Listen(off func()) {
+func (l *Subscriptions) Listen(off func()) {
 	if l.Closed {
 		off()
 		return
@@ -15,7 +15,7 @@ func (l *NativeLifetime) Listen(off func()) {
 	l.offs = append(l.offs, off)
 }
 
-func (l *NativeLifetime) Close() {
+func (l *Subscriptions) Close() {
 	if l.Closed {
 		return
 	}

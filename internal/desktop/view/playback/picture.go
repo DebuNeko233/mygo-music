@@ -3,18 +3,13 @@ package playback
 import (
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/netease"
 )
 
-// BackdropPicture is one of the pictures a page stands on.
-type BackdropPicture struct {
-	Bitmap *ui.Bitmap
-	W, H   float32 // its pixels
-}
-
 // BackdropShown returns which of the pictures shows while tr plays: the
 // listener who chose many sees them all, changing with the song.
-func BackdropShown(pics []*BackdropPicture, tr *netease.Track) *BackdropPicture {
+func BackdropShown(pics []*artcache.Picture, tr *netease.Track) *artcache.Picture {
 	if len(pics) == 0 {
 		return nil
 	}
@@ -26,7 +21,7 @@ func BackdropShown(pics []*BackdropPicture, tr *netease.Track) *BackdropPicture 
 }
 
 // DrawPicture paints pic over r, covering it, as opaque as alpha says.
-func DrawPicture(p *ui.Painter, r ui.Rect, pic *BackdropPicture, alpha float32) {
+func DrawPicture(p *ui.Painter, r ui.Rect, pic *artcache.Picture, alpha float32) {
 	if pic == nil || alpha <= 0 || r.W <= 0 || r.H <= 0 {
 		return
 	}
@@ -43,6 +38,6 @@ func CoverSource(r ui.Rect, w, h float32) ui.Rect {
 	return ui.Rect{X: w/2 - r.W/(2*s), Y: h/2 - r.H/(2*s), W: r.W / s, H: r.H / s}
 }
 
-func (a *View) HomeBackdrop(c *ui.Context, pic *BackdropPicture, opacity float32) {
+func (a *View) HomeBackdrop(c *ui.Context, pic *artcache.Picture, opacity float32) {
 	ui.Box(c.Key("backdrop")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) { DrawPicture(p, r, pic, opacity) })
 }

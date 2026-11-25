@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/desktop/view/page"
 	"netease-music-mygo/internal/netease"
@@ -68,7 +69,7 @@ type View struct {
 
 	VolumeServices func() playbackvm.VolumeServices
 
-	Pictures      func([]string) []*BackdropPicture
+	Pictures      func([]string) []*artcache.Picture
 	TrackArtwork  func(*netease.Track, int, bool) components.Image
 	HasTrackCover func(*netease.Track) bool
 	BarArtwork    func(*netease.Track) components.Image

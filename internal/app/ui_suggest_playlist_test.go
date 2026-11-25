@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	searchvm "netease-music-mygo/internal/viewmodel/search"
 )
 
 func playlistSearchFixture(t *testing.T) (*app, *netease.Playlist, *ui.Tester) {
@@ -24,7 +25,7 @@ func playlistSearchFixture(t *testing.T) (*app, *netease.Playlist, *ui.Tester) {
 	}
 	a, pl, tt := locateFixture(t, 0, false)
 	t.Cleanup(func() {
-		a.dismissSuggestions()
+		a.searches.DismissSuggestions()
 		searchSuggest = before
 	})
 	return a, pl, tt
@@ -91,7 +92,7 @@ func TestPlaylistSuggestionPlaysAndLocates(t *testing.T) {
 			target := pl.Tracks[249]
 			typePlaylistSearch(t, tt, "250")
 			// Online suggestions may arrive later, but cannot take first place.
-			a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 900, Name: "250 elsewhere"}}})
+			a.searches.Suggestions.Items = searchvm.SuggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 900, Name: "250 elsewhere"}}})
 			tt.Frame()
 			if keyboard {
 				tt.Key(0, ui.KeyDown)
@@ -117,7 +118,7 @@ func TestPlaylistSuggestionRemoteKeyboard(t *testing.T) {
 	a, _, tt := playlistSearchFixture(t)
 	a.library.Playlists[8] = &netease.Playlist{ID: 8, Name: "另一张歌单"}
 	typePlaylistSearch(t, tt, "250")
-	a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Playlists: []netease.Playlist{{ID: 8, Name: "另一张歌单"}}})
+	a.searches.Suggestions.Items = searchvm.SuggestionList(netease.Suggestions{Playlists: []netease.Playlist{{ID: 8, Name: "另一张歌单"}}})
 	tt.Frame()
 	tt.Key(0, ui.KeyDown) // Current-playlist match.
 	tt.Key(0, ui.KeyDown) // Remote playlist.
@@ -141,7 +142,7 @@ func TestPlaylistSuggestionSmallWindow(t *testing.T) {
 		a.library.Playlists[pl.ID] = &pl
 		remote = append(remote, pl)
 	}
-	a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Playlists: remote})
+	a.searches.Suggestions.Items = searchvm.SuggestionList(netease.Suggestions{Playlists: remote})
 	tt.Frame()
 	for range 3 + len(remote) {
 		tt.Key(0, ui.KeyDown)
@@ -435,7 +436,7 @@ func TestPlaylistSuggestionFrames(t *testing.T) {
 		}
 		tt.SetDark(dark)
 		typePlaylistSearch(t, tt, "春日影")
-		a.searches.Suggestions.Items = suggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 901, Name: "春日影", Artists: []netease.Artist{{Name: "CRYCHIC"}}}}, Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 902, Name: "迷跡波"}}}})
+		a.searches.Suggestions.Items = searchvm.SuggestionList(netease.Suggestions{Songs: []netease.Track{{ID: 901, Name: "春日影", Artists: []netease.Artist{{Name: "CRYCHIC"}}}}, Albums: []netease.AlbumProfile{{Album: netease.Album{ID: 902, Name: "迷跡波"}}}})
 		theme := "light"
 		if dark {
 			theme = "dark"

@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
@@ -152,7 +153,7 @@ func TestUnlikeInLikedPlaylistKeepsScrollAndQueue(t *testing.T) {
 				next.Tracks[song-1].ID != song+1 || next.TrackIDs[song-1].ID != song+1 {
 				t.Fatal("the confirmed unlike did not remove the song from the cached list")
 			}
-			remote := copyPlaylist(*next)
+			remote := library.CopyPlaylist(*next)
 			remote.PlayCount = 1
 			detailReply <- &remote
 			refreshPost(t, posts)
@@ -456,14 +457,14 @@ func TestBackdropFrame(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		art := &artwork{bmp: ui.NewBitmap(img), tint: dominantColor(img)}
-		top, foot := playbackview.BackdropColors(art.tint)
-		t.Logf("tint %v, backdrop %v to %v", art.tint, top, foot)
-		a.art.art[netease.Sized(tr.Album.PicURL, size)] = art
+		art := &artcache.Image{Bitmap: ui.NewBitmap(img), Tint: artcache.DominantColor(img)}
+		top, foot := playbackview.BackdropColors(art.Tint)
+		t.Logf("tint %v, backdrop %v to %v", art.Tint, top, foot)
+		a.art.Put(netease.Sized(tr.Album.PicURL, size), art)
 		if size == 600 {
 			bd := *art
-			bd.backdrop = ui.NewBitmap(blurImage(img))
-			a.art.art[netease.Sized(tr.Album.PicURL, size)+"#backdrop"] = &bd
+			bd.Backdrop = ui.NewBitmap(artcache.Blur(img))
+			a.art.Put(netease.Sized(tr.Album.PicURL, size)+"#backdrop", &bd)
 		}
 	}
 	a.pl.Cue([]netease.Track{tr})
@@ -499,12 +500,12 @@ func TestSmokeFrames(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		art := &artwork{bmp: ui.NewBitmap(img), tint: dominantColor(img)}
-		a.art.art[netease.Sized(tr.Album.PicURL, size)] = art
+		art := &artcache.Image{Bitmap: ui.NewBitmap(img), Tint: artcache.DominantColor(img)}
+		a.art.Put(netease.Sized(tr.Album.PicURL, size), art)
 		if size == 600 {
 			bd := *art
-			bd.backdrop = ui.NewBitmap(blurImage(img))
-			a.art.art[netease.Sized(tr.Album.PicURL, size)+"#backdrop"] = &bd
+			bd.Backdrop = ui.NewBitmap(artcache.Blur(img))
+			a.art.Put(netease.Sized(tr.Album.PicURL, size)+"#backdrop", &bd)
 		}
 	}
 	a.pl.Cue([]netease.Track{tr})

@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/lifetime"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
@@ -17,7 +18,7 @@ import (
 // player under the pointer. On a display without a notch it hangs from the
 // top of the screen all the same.
 type Notch struct {
-	Lifetime                            components.NativeLifetime
+	Lifetime                            lifetime.Subscriptions
 	PollTimer, greetingTimer, hideTimer *time.Timer
 	A                                   *View
 	Win                                 *mygo.Window

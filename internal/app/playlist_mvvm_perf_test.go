@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -48,7 +49,7 @@ func BenchmarkPlaylistMVVMFresh(b *testing.B) {
 func BenchmarkPlaylistMVVMRefresh(b *testing.B) {
 	a := playlistPerfApp()
 	posts := testPosts(a)
-	pl := copyPlaylist(*a.library.Playlists[7])
+	pl := library.CopyPlaylist(*a.library.Playlists[7])
 	old := playlistDetail
 	b.Cleanup(func() { playlistDetail = old })
 	playlistDetail = func(int64) (*netease.Playlist, error) { return &pl, nil }

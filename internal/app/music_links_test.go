@@ -63,7 +63,7 @@ func TestMusicLinkSearchEnter(t *testing.T) {
 			if len(a.settings.SearchHistory) != 1 || a.settings.SearchHistory[0] != "春日影" {
 				t.Fatal("URL entered search history")
 			}
-			a.dismissSuggestions()
+			a.searches.DismissSuggestions()
 		})
 	}
 	select {
@@ -362,7 +362,7 @@ func TestMusicLinkColdStartSurvivesAccountRestore(t *testing.T) {
 	a := musicLinkApp(t)
 	posts := testPosts(a)
 	fakeOfflineHome(t)
-	saved := sessionFile{Session: player.Session{Queue: []netease.Track{{ID: 1}, {ID: 2}}, Order: []int{0, 1}, At: 0}}
+	saved := player.Session{Queue: []netease.Track{{ID: 1}, {ID: 2}}, Order: []int{0, 1}, At: 0}
 	data, err := json.Marshal(saved)
 	if err != nil {
 		t.Fatal(err)

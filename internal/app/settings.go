@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"netease-music-mygo/internal/desktop/shortcuts"
 	"netease-music-mygo/internal/preferences"
 	"netease-music-mygo/internal/userdata"
 )
@@ -45,12 +46,12 @@ func fillShortcutKeys(k shortcutKeys) shortcutKeys {
 		filled.InApp[h.name] = h.inApp
 		filled.Global[h.name] = h.global
 		if acc, ok := k.InApp[h.name]; ok {
-			if _, _, parsed := parseAccelerator(acc); parsed || acc == "" {
+			if _, _, parsed := shortcuts.Parse(acc); parsed || acc == "" {
 				filled.InApp[h.name] = acc
 			}
 		}
 		if acc, ok := k.Global[h.name]; ok {
-			if validGlobal(acc) || acc == "" {
+			if shortcuts.ValidGlobal(acc) || acc == "" {
 				filled.Global[h.name] = acc
 			}
 		}

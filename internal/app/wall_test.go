@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
@@ -169,7 +170,7 @@ func TestWallFrames(t *testing.T) {
 		for i := range a.pl.Queue() {
 			url := fmt.Sprintf("art%d", i)
 			a.pl.Queue()[i].Album.PicURL = url
-			a.art.art[netease.Sized(url, 240)] = &artwork{bmp: solidBitmap(colors[i%len(colors)]), tint: colors[i%len(colors)]}
+			a.art.Put(netease.Sized(url, 240), &artcache.Image{Bitmap: solidBitmap(colors[i%len(colors)]), Tint: colors[i%len(colors)]})
 		}
 		tt.Advance(time.Second)
 		tt.Frame()

@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
 )
@@ -26,17 +27,15 @@ func TestPrefetchesNextCover(t *testing.T) {
 			t.Cleanup(func() { netease.SetOffline(offline) })
 			asked := make(chan string, 8)
 			posts := make(chan func(), 8)
-			old := loadArt
-			t.Cleanup(func() { loadArt = old })
-			loadArt = func(url string) (*ui.Bitmap, image.Image, int, error) {
-				asked <- url
-				img := image.NewRGBA(image.Rect(0, 0, 8, 8))
-				return ui.NewBitmap(img), img, 16, nil
-			}
+
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.settings.HotComments = false
-			a.art = newArtCache(func(fn func()) { posts <- fn })
+			a.art = artcache.New(artcache.Options{Post: func(fn func()) { posts <- fn }, Load: func(url string) (*ui.Bitmap, image.Image, int, error) {
+				asked <- url
+				img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+				return ui.NewBitmap(img), img, 16, nil
+			}})
 			q := []netease.Track{
 				{ID: 1, Album: netease.Album{PicURL: "test://one"}},
 				{ID: 2, Album: netease.Album{PicURL: "test://two"}},
@@ -69,11 +68,11 @@ func TestPrefetchesNextCover(t *testing.T) {
 				wait(t, posts, "decoded cover")()
 			}
 			tt.Frame()
-			entry := a.art.art[url+"#backdrop"]
-			if entry == nil || entry.bmp == nil || entry.backdrop == nil {
+			entry := a.art.Peek(url + "#backdrop")
+			if entry == nil || entry.Bitmap == nil || entry.Backdrop == nil {
 				t.Fatal("did not warm the large cover with its backdrop")
 			}
-			if a.art.get(url, true) != entry || len(a.art.busy) != 0 || len(asked) != 0 {
+			if a.art.Get(url, true) != entry || a.art.Stats().Pending != 0 || len(asked) != 0 {
 				t.Fatal("showing the prefetched cover loaded it again")
 			}
 			a.pl.Next()
@@ -95,23 +94,23 @@ func TestCoverPrefetchSkipsUnavailableNext(t *testing.T) {
 		{ID: 1, Album: netease.Album{PicURL: current}},
 		{ID: 2, Album: netease.Album{PicURL: "test://two"}},
 	})
-	a.art.add(netease.Sized(current, 600)+"#backdrop", &artwork{})
+	a.art.Put(netease.Sized(current, 600)+"#backdrop", &artcache.Image{})
 	a.network.offline = true
 	a.playbackArtwork(a.pl.Current().Album.PicURL, nowPlayingCoverRequest)
 	a.network.offline = false
 	// Next would wrap to a different cover if the feed were absent.
 	a.pl.Next()
-	a.art.invalidate(netease.Sized(current, 600), false)
-	a.art.add(netease.Sized(a.pl.Current().Album.PicURL, 600)+"#backdrop", &artwork{})
+	a.art.Invalidate(netease.Sized(current, 600), false)
+	a.art.Put(netease.Sized(a.pl.Current().Album.PicURL, 600)+"#backdrop", &artcache.Image{})
 	a.pl.AttachRadio("radio", func(func([]netease.Track)) {})
 	a.playbackArtwork(a.pl.Current().Album.PicURL, nowPlayingCoverRequest)
-	if len(a.art.busy) != 0 {
+	if a.art.Stats().Pending != 0 {
 		t.Fatal("started a cover request without an available next song")
 	}
 }
 
 // paintedCoverApp supplies ready images without network or disk access.
-func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*artwork) {
+func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*artcache.Image) {
 	t.Helper()
 	offline := netease.Offline()
 	netease.SetOffline(true)
@@ -121,7 +120,7 @@ func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*ar
 	a.settings = defaultSettings()
 	a.settings.HotComments = false
 	q := make([]netease.Track, n)
-	arts := make([]*artwork, n)
+	arts := make([]*artcache.Image, n)
 	for i := range q {
 		q[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprint(i + 1), Duration: 200000,
 			Album: netease.Album{PicURL: fmt.Sprintf("test://cover/%d", i)}}
@@ -131,11 +130,11 @@ func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*ar
 				img.SetRGBA(x, y, color.RGBA{R: uint8(60 + i*30), G: uint8(180 - i*20), B: uint8(50 + i*25), A: 255})
 			}
 		}
-		arts[i] = &artwork{bmp: ui.NewBitmap(img), tint: ui.RGB(uint8(60+i*30), uint8(180-i*20), uint8(50+i*25))}
+		arts[i] = &artcache.Image{Bitmap: ui.NewBitmap(img), Tint: ui.RGB(uint8(60+i*30), uint8(180-i*20), uint8(50+i*25))}
 		for _, size := range []int{96, 120, 240, 600} {
 			url := netease.Sized(q[i].Album.PicURL, size)
-			a.art.add(url, arts[i])
-			a.art.add(url+"#backdrop", arts[i])
+			a.art.Put(url, arts[i])
+			a.art.Put(url+"#backdrop", arts[i])
 		}
 	}
 	a.pl.Cue(q)
@@ -369,9 +368,9 @@ func TestCoverSwitchAfterHiddenPane(t *testing.T) {
 func TestCoverWaitsForTheLatestArtwork(t *testing.T) {
 	a, tt, arts := paintedCoverApp(t, 4, false)
 	for _, tr := range a.pl.Queue()[1:] {
-		a.art.invalidate(netease.Sized(tr.Album.PicURL, 600), false)
-		// Hold the requests without starting workers.
-		a.art.busy[netease.Sized(tr.Album.PicURL, 600)+"#backdrop"] = 1
+		a.art.Invalidate(netease.Sized(tr.Album.PicURL, 600), false)
+		// Leave request completions unconsumed until a fixture image is supplied.
+		holdArtwork(a.art, netease.Sized(tr.Album.PicURL, 600)+"#backdrop")
 	}
 	a.pl.Next()
 	a.pl.SetLyrics(nil)
@@ -383,12 +382,12 @@ func TestCoverWaitsForTheLatestArtwork(t *testing.T) {
 		t.Fatal("replaced the last image with a blank card")
 	}
 	q := a.pl.Queue()
-	a.art.add(netease.Sized(q[1].Album.PicURL, 600)+"#backdrop", arts[1])
+	a.art.Put(netease.Sized(q[1].Album.PicURL, 600)+"#backdrop", arts[1])
 	tt.Frame()
 	if a.NPCoverState.Art != arts[0] {
 		t.Fatal("showed an obsolete request's cover")
 	}
-	a.art.add(netease.Sized(q[2].Album.PicURL, 600)+"#backdrop", arts[2])
+	a.art.Put(netease.Sized(q[2].Album.PicURL, 600)+"#backdrop", arts[2])
 	tt.Frame()
 	if a.NPCoverState.Art != arts[2] || a.NPCoverState.Previous != arts[0] {
 		t.Fatal("did not switch from the held image to the latest one")

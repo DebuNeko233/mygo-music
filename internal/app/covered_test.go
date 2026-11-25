@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -29,11 +30,11 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			a.comments.Track = 2
 			a.pl.SetLyrics(nil)
 			now := time.Unix(1e9, 0)
-			a.art.now, a.art.limit = func() time.Time { return now }, 300
+			a.art = artcache.New(artcache.Options{Post: func(func()) {}, Now: func() time.Time { return now }, Limit: 300})
 			img := image.NewRGBA(image.Rect(0, 0, 4, 4))
 			draw.Draw(img, img.Bounds(), image.NewUniform(color.RGBA{R: 255, A: 255}), image.Point{}, draw.Src)
 			key := netease.Sized(tr.Album.PicURL, 96)
-			a.art.add(key, &artwork{bmp: ui.NewBitmap(img), size: 100})
+			a.art.Put(key, &artcache.Image{Bitmap: ui.NewBitmap(img)})
 			view := ui.NewTester(a.view, 1180, 780)
 			coverVisible := func() bool {
 				t.Helper()
@@ -57,9 +58,11 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			view.Advance(time.Second)
 			view.Frame()
 			now = now.Add(2 * time.Second)
-			a.art.add("offscreen", &artwork{size: 110, used: now})
-			a.art.add("latest", &artwork{size: 190, used: now})
-			if a.art.art[key] == nil || a.art.art["offscreen"] != nil || a.art.size > a.art.limit {
+			a.art.Put("offscreen", &artcache.Image{Bitmap: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 5, 5)))})
+			// Let the unrelated cover leave the scroll grace period.
+			now = now.Add(2 * time.Second)
+			a.art.Put("latest", &artcache.Image{Bitmap: ui.NewBitmap(image.NewRGBA(image.Rect(0, 0, 7, 5)))})
+			if a.art.Peek(key) == nil || a.art.Peek("offscreen") != nil || a.art.Stats().Bytes > 300 {
 				t.Fatal("the return page's cover was evicted despite room for it")
 			}
 			a.playbackState.Open, a.nav.Current = false, page

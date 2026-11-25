@@ -18,7 +18,7 @@ func (a *app) linkServices() linksvm.LinkServices {
 	return linksvm.LinkServices{
 		Player: a.pl, Post: a.detailPost(), Closed: func() bool { return a.quitting },
 		Show: a.showMain, NowPlaying: func() { a.playbackState.Open = true },
-		DismissSuggestions: a.dismissSuggestions, Navigate: a.open, Notify: func(message string) { a.toast = message },
+		DismissSuggestions: a.searches.DismissSuggestions, Navigate: a.open, Notify: func(message string) { a.toast = message },
 		Resolve: resolveMusicLink, Fetch: musicLinkTrack,
 	}
 }
@@ -35,7 +35,7 @@ func (a *app) openMusicInput(text string) bool {
 	}
 	a.local.CancelOpen()
 	a.cancelMusicLink()
-	a.dismissSuggestions()
+	a.searches.DismissSuggestions()
 	if err != nil {
 		a.toast = linksvm.LinkError(err)
 		return true

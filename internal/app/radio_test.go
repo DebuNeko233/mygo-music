@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/netease"
 )
 
@@ -24,7 +25,7 @@ func TestCommentTime(t *testing.T) {
 		{time.Date(2026, 3, 8, 9, 0, 0, 0, time.Local), "3月8日"},
 		{time.Date(2021, 4, 10, 9, 0, 0, 0, time.Local), "2021年4月10日"},
 	} {
-		if got := commentTime(c.t, now); got != c.want {
+		if got := components.CommentTime(c.t, now); got != c.want {
 			t.Errorf("%v: %q, want %q", c.t, got, c.want)
 		}
 	}

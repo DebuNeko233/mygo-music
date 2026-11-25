@@ -3,6 +3,7 @@ package settings
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -74,7 +75,6 @@ type View struct {
 
 	AddPictures    func([]string, *[]string)
 	ForgetPictures func()
-	PictureList    func([]string) string
 	FontNames      func() []string
 	LyricColor     func(string, ui.Color) ui.Color
 	AccentColor    func(string, bool) ui.Color
@@ -151,7 +151,7 @@ func (a *View) backdropRow(c *ui.Context, p components.Palette, key string, path
 				a.ForgetPictures()
 				a.Changed()
 			}
-			summary := a.PictureList(*paths)
+			summary := pictureList(*paths)
 			status := ui.Text(c, summary).FontSize(12).TextColor(p.Muted).SingleLine().Shrink(1).MinWidth(0)
 			if len(*paths) != 0 {
 				status.Tooltip(summary)
@@ -918,4 +918,19 @@ func (a *View) qualitySelect(c *ui.Context, level *string, label string) bool {
 		}
 	}
 	return false
+}
+
+// pictureList names the pictures chosen, as the settings row shows them.
+func pictureList(paths []string) string {
+	if len(paths) == 0 {
+		return "未选择，也可以把图片拖到这里"
+	}
+	names := make([]string, 0, len(paths))
+	for _, path := range paths {
+		names = append(names, filepath.Base(path))
+	}
+	if len(names) > 3 {
+		return fmt.Sprintf("已选 %d 张：%s 等", len(names), strings.Join(names[:3], "、"))
+	}
+	return "已选：" + strings.Join(names, "、")
 }

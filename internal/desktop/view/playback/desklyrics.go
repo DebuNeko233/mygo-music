@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/desktop/lifetime"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/lyrics"
 )
@@ -25,7 +26,7 @@ import (
 // except over its padlock, which is in this window too: the lock opens
 // without another window. Where it was left and how large, it opens again.
 type DeskLyrics struct {
-	Lifetime components.NativeLifetime
+	Lifetime lifetime.Subscriptions
 	A        *View
 	Win      *mygo.Window
 

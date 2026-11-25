@@ -9,6 +9,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/sessionstore"
 )
 
 // The session is kept a while after playback changes and every while as
@@ -21,7 +22,7 @@ func TestSessionRestsWhilePaused(t *testing.T) {
 	sessionAfter = func(_ time.Duration, fn func()) func() { due = append(due, fn); return func() {} }
 
 	a := newTestApp()
-	defer a.sessionSave.wait()
+	defer a.sessionSave.Wait()
 	a.pl.Changed = a.keepSession
 	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
 	out := newSilentAudio()
@@ -55,7 +56,7 @@ func TestSessionCheckpointFollowsQueue(t *testing.T) {
 	a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 	save := func() {
 		a.saveSession()
-		a.sessionSave.wait()
+		a.sessionSave.Wait()
 	}
 	save()
 	path, err := sessionPath()
@@ -74,53 +75,23 @@ func TestSessionCheckpointFollowsQueue(t *testing.T) {
 	if err != nil || !bytes.Equal(original, current) {
 		t.Fatal("checkpoint rewrote the full queue")
 	}
-	s, ok := readSession(path)
+	s, ok := sessionstore.Read(path)
 	if !ok || s.At != 2 || s.Position != 8000 || s.Repeat != player.RepeatAll || len(s.Queue) != 3 {
 		t.Fatalf("checkpoint did not restore playback: %+v", s)
 	}
 	a.pl.ToggleShuffle()
 	a.pl.Hold(15 * time.Second)
 	save()
-	s, ok = readSession(path)
+	s, ok = sessionstore.Read(path)
 	order, at := a.pl.PlayOrder()
 	if !ok || s.At != at || !s.Shuffle || s.Position != 15000 || !slices.Equal(s.Order, order) {
 		t.Fatalf("restored stale state from before shuffle: %+v", s)
 	}
 	a.pl.PlayQueue([]netease.Track{{ID: 9}}, 0)
 	save()
-	s, ok = readSession(path)
+	s, ok = sessionstore.Read(path)
 	if !ok || len(s.Queue) != 1 || s.Queue[0].ID != 9 || s.At != 0 || s.Position != 0 {
 		t.Fatalf("restored stale state from another queue: %+v", s)
-	}
-}
-
-// Multiple queue/order changes can race the disk worker; the final save
-// must win and a legacy session must still be readable without a token.
-func TestSessionKeepsLatestSave(t *testing.T) {
-	isolateUserData(t)
-	a := newTestApp()
-	a.pl.SuspendCache()
-	path, err := sessionPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	legacy := player.Session{Queue: []netease.Track{{ID: 5}}, Order: []int{0}, Position: 2000}
-	if !writeSessionJSON(path, legacy) {
-		t.Fatal("could not create legacy fixture")
-	}
-	if s, ok := readSession(path); !ok || len(s.Queue) != 1 || s.Queue[0].ID != 5 || s.Position != 2000 {
-		t.Fatalf("legacy session not restored: %+v", s)
-	}
-	for i := range 20 {
-		a.pl.PlayQueue([]netease.Track{{ID: int64(i + 1)}, {ID: 99}}, 0)
-		a.pl.ToggleShuffle()
-		a.pl.Hold(time.Duration(i) * time.Second)
-		a.saveSession()
-	}
-	a.sessionSave.wait()
-	s, ok := readSession(path)
-	if !ok || len(s.Queue) != 2 || s.Queue[0].ID != 20 || s.Position != 19000 || s.Shuffle {
-		t.Fatalf("latest checkpoint was not saved: %+v", s)
 	}
 }
 
@@ -144,8 +115,8 @@ func TestSessionFollowsRadioQueueEdits(t *testing.T) {
 	assertSaved := func(want int, radio string) {
 		t.Helper()
 		a.saveSession()
-		a.sessionSave.wait()
-		s, ok := readSession(path)
+		a.sessionSave.Wait()
+		s, ok := sessionstore.Read(path)
 		if !ok || len(s.Queue) != want || s.Radio != radio || s.Queue[0].ID != 1 {
 			t.Fatalf("queue edit was not saved: %+v", s)
 		}

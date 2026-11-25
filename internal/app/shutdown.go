@@ -3,6 +3,7 @@ package app
 import (
 	"log"
 
+	"netease-music-mygo/internal/desktop/lifetime"
 	"netease-music-mygo/internal/preferences"
 )
 
@@ -78,7 +79,7 @@ func (a *app) release() {
 	}
 	a.released = true
 	a.stopNative()
-	a.art.close()
+	a.art.Close()
 	a.closePosts()
 	if a.pl != nil {
 		a.pl.Close()
@@ -118,9 +119,16 @@ func (a *app) requestQuit(sessionEnding bool) bool {
 	if a.pl != nil {
 		a.saveSession()
 	}
-	a.sessionSave.wait()
+	a.sessionSave.Wait()
 	if write := a.transcriptWrite(); write != nil {
 		write()
 	}
 	return true
+}
+
+type appLifetime struct {
+	native        lifetime.Subscriptions
+	released      bool
+	initialized   bool
+	sessionCancel func()
 }
