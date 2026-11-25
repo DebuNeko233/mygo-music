@@ -159,7 +159,9 @@ func (a *app) taken(kind keyKind, name, acc string) (string, bool) {
 // globalRegister and globalUnregister are the system's shortcuts: the tests
 // put their own in their place, as there is no system to claim keys from.
 var (
-	globalRegister   = func(acc string, fn func()) error { return mygo.GlobalShortcut.Register(acc, fn) }
+	globalRegister = func(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
+		return mygo.GlobalShortcut.RegisterWith(acc, opts, fn)
+	}
 	globalUnregister = func(acc string) { mygo.GlobalShortcut.Unregister(acc) }
 )
 
@@ -187,7 +189,23 @@ func (a *app) registerGlobals() {
 		if acc == "" {
 			continue
 		}
-		if err := globalRegister(acc, func() { a.runHotkey(h) }); err != nil {
+		name := h.name
+		opts := mygo.GlobalShortcutOptions{
+			Description: h.label,
+			OnKeys: func(keys string) {
+				// Wayland's portal answers asynchronously. An empty answer means
+				// that no key was bound, not that another application took it.
+				a.post(func() {
+					if keys == "" {
+						a.hotkeyErrs[name] = "系统未绑定快捷键，请在系统设置中允许或设置"
+					} else {
+						delete(a.hotkeyErrs, name)
+					}
+					a.redraw()
+				})
+			},
+		}
+		if err := globalRegister(acc, opts, func() { a.runHotkey(h) }); err != nil {
 			// The system keeps the key for another app, or another action of
 			// this one asked for it first: the settings say so.
 			a.hotkeyErrs[h.name] = "被其他程序占用"

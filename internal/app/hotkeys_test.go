@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -130,6 +131,39 @@ func TestGlobalKeysAreClaimedAndGivenBack(t *testing.T) {
 	}
 }
 
+// A Wayland portal that binds no key explains the failure instead of
+// blaming another application, and a later successful answer clears it.
+func TestWaylandShortcutBindingResultIsVisible(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	posts := testPosts(a)
+	oldSysKeys, oldRegister, oldUnregister := sysKeys, globalRegister, globalUnregister
+	t.Cleanup(func() { sysKeys, globalRegister, globalUnregister = oldSysKeys, oldRegister, oldUnregister })
+	sysKeys = func(*app) bool { return true }
+	globalUnregister = func(string) {}
+	var bound mygo.GlobalShortcutOptions
+	globalRegister = func(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
+		if acc == "CmdOrCtrl+Alt+L" {
+			bound = opts
+		}
+		return nil
+	}
+	a.registerGlobals()
+	if bound.Description != "桌面歌词" || bound.OnKeys == nil {
+		t.Fatalf("the portal was not told what the shortcut does: %+v", bound)
+	}
+	bound.OnKeys("")
+	wait(t, posts, "the portal's unbound shortcut")()
+	if got := a.hotkeyErrs["deskLyrics"]; got != "系统未绑定快捷键，请在系统设置中允许或设置" {
+		t.Fatalf("unbound portal shortcut reported %q", got)
+	}
+	bound.OnKeys("Ctrl+Alt+L")
+	wait(t, posts, "the portal's bound shortcut")()
+	if got := a.hotkeyErrs["deskLyrics"]; got != "" {
+		t.Fatalf("a bound shortcut kept its error %q", got)
+	}
+}
+
 // errKeyHeld is what the system says of a key another app holds.
 var errKeyHeld = errors.New("the key is another app's")
 
@@ -140,7 +174,7 @@ type keySystem struct {
 	refuse         string
 }
 
-func (s *keySystem) register(acc string, fn func()) error {
+func (s *keySystem) register(acc string, opts mygo.GlobalShortcutOptions, fn func()) error {
 	if acc == s.refuse {
 		return errKeyHeld
 	}
