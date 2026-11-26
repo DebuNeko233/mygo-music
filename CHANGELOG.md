@@ -1,10 +1,17 @@
 # 更新日志
 
-## 未发布
+## 0.3.1
 
 - 应用名称改为 Nyago Music，数据、缓存及日志使用独立目录；直接使用默认状态，不迁移或删除旧目录。
 - 默认歌曲下载目录改为 `~/Music/Nyago Music`，保留自选目录行为。
 - Homebrew 增加显式 `--zap` 清理，仅处理 Nyago Music 正式版专用目录，保留旧版、开发版、钥匙串与用户歌曲。
+
+### 升级说明
+
+- macOS 数据目录为 `~/Library/Application Support/Nyago Music`，默认缓存为 `~/Library/Caches/Nyago Music`。
+- 本版直接使用新目录，不读取、复制或删除旧目录；旧设置、播放进度、曲库索引和缓存保留原处。
+- 应用标识与系统凭据服务暂时保留，因此钥匙串登录可能继续沿用；不清理钥匙串或用户下载歌曲。
+- Homebrew 用户运行 `brew update` 后使用 `brew upgrade --cask --greedy nyago-music` 更新。手动安装用户请使用 `Nyago Music.app`，不要继续打开旧包。
 
 ## 0.3.0
 

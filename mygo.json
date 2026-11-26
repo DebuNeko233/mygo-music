@@ -2,7 +2,7 @@
   "name": "Nyago Music",
   "identifier": "dev.egoist.cloudmusic",
   "slug": "mygo-cloudmusic",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "out": "build",
   "urlSchemes": ["orpheus"],
   "fileAssociations": [
