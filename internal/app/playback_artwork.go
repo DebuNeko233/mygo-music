@@ -5,7 +5,6 @@
 package app
 
 import (
-	"fmt"
 	"image"
 
 	"github.com/egoist/mygo/ui"
@@ -37,20 +36,28 @@ func (a *app) trackArtwork(tr *netease.Track, px int, backdrop bool) *artcache.I
 		return a.art.Get(netease.Sized(a.localArtworkURL(tr, song), px), backdrop)
 	}
 	source := artcache.LocalEmbeddedKey(song)
-	key := fmt.Sprintf("local-cover/%d/%d/%d/%s", source.Stamp, source.Size, px, source.Path)
+	embedded := &a.localView.embeddedArtwork
+	key := source.ArtworkKey(px)
 	return a.art.RequestCover(key, backdrop, true, func(string) (*ui.Bitmap, image.Image, int, error) {
-		return artcache.DecodeSized(a.localView.embeddedArtwork.Get(source, localmedia.Cover), px)
+		return artcache.DecodeSized(embedded.Get(source, localmedia.Cover), px)
 	})
 }
 
 func (a *app) trackCover(c *ui.Context, tr *netease.Track, px int, size, radius float32) ui.Element {
 	if !tr.IsLocal() {
-		return a.views.artwork.Cover(c, a.trackArtworkURL(tr), px, size, radius)
+		return a.views.artwork.ListCover(c, a.trackArtworkURL(tr), px, size, radius)
 	}
-	if url := a.localArtworkURL(tr, a.playbackLocalSong(tr)); url != "" {
-		return a.views.artwork.Cover(c, url, px, size, radius)
+	song := a.playbackLocalSong(tr)
+	if !song.Cover {
+		return a.views.artwork.ListCover(c, a.localArtworkURL(tr, song), px, size, radius)
 	}
-	return a.coverImage(c, size, radius, func(ui.Element) *artcache.Image { return a.trackArtwork(tr, px, false) })
+	source := artcache.LocalEmbeddedKey(song)
+	embedded := &a.localView.embeddedArtwork
+	return a.coverImage(c, size, radius, func(box ui.Element) *artcache.Image {
+		return a.art.RequestListCover(a.nav.Current, source.ArtworkKey(px), box, func(string) (*ui.Bitmap, image.Image, int, error) {
+			return artcache.DecodeSized(embedded.Get(source, localmedia.Cover), px)
+		})
+	}, components.ArtImmediate)
 }
 
 func (a *app) hasTrackCover(tr *netease.Track) bool {
@@ -99,8 +106,8 @@ func (a *app) playbackArtwork(url string, cover playbackCover) *artcache.Image {
 	return art
 }
 
-func (a *app) coverImage(c *ui.Context, size, radius float32, load func(ui.Element) *artcache.Image) ui.Element {
-	return a.views.artwork.Image(c, size, radius, func(el ui.Element) *ui.Bitmap { return components.Bitmap(load(el)) })
+func (a *app) coverImage(c *ui.Context, size, radius float32, load func(ui.Element) *artcache.Image, presentation ...components.ArtPresentation) ui.Element {
+	return a.views.artwork.Image(c, size, radius, func(el ui.Element) *ui.Bitmap { return components.Bitmap(load(el)) }, presentation...)
 }
 
 func viewImage(art *artcache.Image) components.Image {

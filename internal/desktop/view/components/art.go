@@ -23,12 +23,22 @@ func CoverPlaceholder(c *ui.Context, size, radius, opacity float32, bg, fg ui.Co
 // ArtFade is how an artwork fades in over its placeholder.
 var ArtFade = ui.Animation{Duration: 320 * time.Millisecond}
 
+type ArtPresentation uint8
+
+const (
+	ArtFadeIn ArtPresentation = iota
+	ArtImmediate
+)
+
 // ArtIn returns how far bmp has faded in on el, the element that shows it
 // or its placeholder: over a moment once it loads while el shows, and at
 // once if it was ready as el first showed.
-func ArtIn(el ui.Element, bmp *ui.Bitmap) float32 {
+func ArtIn(el ui.Element, bmp *ui.Bitmap, presentation ...ArtPresentation) float32 {
 	if bmp == nil {
 		return el.Jump("art", 0)
+	}
+	if len(presentation) > 0 && presentation[0] == ArtImmediate {
+		return el.Jump("art", 1)
 	}
 	return el.AnimateTo("art", 1, ArtFade)
 }

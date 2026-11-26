@@ -32,6 +32,8 @@ func (a *app) bindSharedViews() {
 	}}
 	a.views.artwork = components.Artwork{Palette: &a.pal, PlayerOpen: func() bool { return a.playbackState.Open }, Load: func(url string, backdrop bool, el ui.Element) *ui.Bitmap {
 		return components.Bitmap(a.art.GetInView(url, backdrop, el))
+	}, LoadList: func(url string, el ui.Element) *ui.Bitmap {
+		return components.Bitmap(a.art.GetListInView(a.nav.Current, url, el))
 	}}
 	a.views.cards = desktopview.Cards{Page: p, Open: a.open, LoadPlaylist: a.loadPlaylist}
 	a.views.tracks = tracklist.View{Page: p, State: &a.tracks, Local: &a.local, Library: &a.library, Current: func() *netease.Track { return a.pl.Current() }, LocalItems: a.localSongItems, SongItems: a.views.songMenu.Items, PlayingBars: a.views.playback.NowPlayingBars, Cover: a.trackCover, ArtistLinks: a.views.artist.Links, Like: a.views.like.Button, Relink: a.chooseLocalFile, Play: a.playTrackQueue}

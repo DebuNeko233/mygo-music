@@ -67,6 +67,12 @@ Wasm 引擎运行时涉及匿名内存权限。当前 [macos.entitlements.plist]
 
 缓存数据可以先展示并后台更新，但成功的网络新结果不应被迟到磁盘读取覆盖。退出登录与同账号重新登录均切换代次。新账号不能看到旧账号的私有资料库缓存。
 
+歌曲列表的小封面由 [artwork/list.go](../../internal/desktop/artwork/list.go)记录可见区，在原有 64 MiB 位图预算内优先保留最近三个列表页的最后一屏，每页最多 30 张，合计最多 8 MiB。保留条目仍由同一个缓存持有和计费；滚动替换当前页的可见区，重复封面只计算一次保留成本。硬容量压力可先回收最旧页面的保留条目，不能为了返回页面而突破总预算。播放封面、页面大图和模糊背景不占用这项列表保留额度。
+
+列表封面位图就绪后直接显示，包括磁盘或本地内嵌封面恢复；其他封面的既有淡入策略保持不变。磁盘读取和解码仍在后台，未保留或首次访问的封面允许短暂占位。缓存 `Stats` 提供累计内存命中、加载启动、容量淘汰和可见列表占位次数，以及当前列表保留条目和字节数；这些计数按 UI 构建调用统计，不是独立屏幕帧数，不包含 URL 或账号信息。
+
+回归入口：[list_test.go](../../internal/desktop/artwork/list_test.go)、[list_cover_test.go](../../internal/app/list_cover_test.go)、[list_cover_io_test.go](../../internal/app/list_cover_io_test.go)。测试覆盖多页返回首帧、垃圾回收、容量及可见区边界、撤销失效与断网后的磁盘恢复；`NM_FRAMES` 可输出明暗及常规/最小窗口的软件渲染结果。
+
 ## 目录迁移事务
 
 设置中的迁移由 [App cache_directory](../../internal/app/cache_directory.go)协调。底层路径校验、文件清单、日志与复制放 cachemove，不将 UI 回调混入文件算法。

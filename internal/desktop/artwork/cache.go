@@ -43,6 +43,8 @@ type Cache struct {
 	page        navigation.Route
 	pageVisible bool
 	returnPages [2]artPage
+	lists       listArtwork
+	metrics     cacheMetrics
 	// gone are the covers dropped, for as long as something else holds
 	// them: Now Playing keeps the cover it shows, which comes back as it
 	// was rather than loading again.
@@ -179,17 +181,22 @@ func (c *Cache) add(key string, a *Image) bool {
 	type candidate struct {
 		key  string
 		keep bool
+		list int
 		used time.Time
 	}
 	candidates := make([]candidate, 0, len(c.art))
+	retained := c.retainedListKeys()
 	recent := c.now().Add(-artScrollGrace)
 	for candidateKey, held := range c.art {
 		if _, visible := c.seen[candidateKey]; !visible && candidateKey != key && held.size > 0 {
 			keep := c.keepForReturn(candidateKey) || (held.Bitmap != nil && held.used.After(recent))
-			candidates = append(candidates, candidate{key: candidateKey, keep: keep, used: held.used})
+			candidates = append(candidates, candidate{key: candidateKey, keep: keep, list: retained[candidateKey], used: held.used})
 		}
 	}
 	slices.SortFunc(candidates, func(x, y candidate) int {
+		if x.list != y.list {
+			return x.list - y.list
+		}
 		if x.keep != y.keep {
 			if x.keep {
 				return 1
@@ -199,10 +206,11 @@ func (c *Cache) add(key string, a *Image) bool {
 		return x.used.Compare(y.used)
 	})
 	for _, candidate := range candidates {
-		if c.size <= c.limit*3/4 || (c.size <= c.limit && candidate.keep) {
+		if c.size <= c.limit*3/4 || (c.size <= c.limit && (candidate.keep || candidate.list != 0)) {
 			break
 		}
 		c.gone[candidate.key] = weak.Make(c.remove(candidate.key))
+		c.metrics.evictions++
 	}
 	return true
 }
@@ -254,13 +262,20 @@ func (c *Cache) Get(url string, backdrop bool) *Image {
 // content. MyGo rebuilds when InView changes, and a warm cover can paint
 // on the first frame without waiting for that measurement.
 func (c *Cache) GetInView(url string, backdrop bool, box ui.Element) *Image {
+	return c.getInView(url, backdrop, box, c.load)
+}
+
+func (c *Cache) getInView(url string, backdrop bool, box ui.Element, load func(string) (*ui.Bitmap, image.Image, int, error)) *Image {
 	visible := box.InView()
 	key := artworkKey(url, backdrop)
 	a := c.art[key]
 	if visible {
-		a = c.Get(url, backdrop)
+		a = c.RequestCover(url, backdrop, true, load)
 	} else if a == nil {
 		a = c.gone[key].Value()
+	}
+	if !visible && a != nil && a.Bitmap != nil {
+		c.metrics.memoryHits++
 	}
 	if (a != nil && !a.retryable) || backdrop || len(c.variants) == 0 || url == "" {
 		return a
@@ -311,6 +326,9 @@ func (c *Cache) RequestCover(url string, backdrop, visible bool, load func(strin
 		}
 	}
 	if a := current; a != nil {
+		if a.Bitmap != nil {
+			c.metrics.memoryHits++
+		}
 		if visible {
 			a.used = now
 		}
@@ -329,6 +347,7 @@ func (c *Cache) RequestCover(url string, backdrop, visible bool, load func(strin
 		return current
 	}
 	c.serial++
+	c.metrics.loads++
 	request := c.serial
 	c.busy[key] = request
 	go func() {
@@ -418,6 +437,7 @@ func (c *Cache) PageFrame(page navigation.Route, visible bool) {
 }
 
 func (c *Cache) BeginFrame() {
+	c.finishListFrame()
 	if len(c.art) > 512 {
 		for key, a := range c.art {
 			if a.Failed {
@@ -508,12 +528,25 @@ func (c *Cache) Put(key string, value *Image) bool {
 // Peek observes a cached image without starting a request or changing visibility.
 func (c *Cache) Peek(key string) *Image { return c.art[key] }
 
-type Stats struct{ Bytes, Entries, Pending, Jobs, PendingBytes int }
+type cacheMetrics struct{ memoryHits, loads, evictions, listPlaceholders uint64 }
+
+type Stats struct {
+	Bytes, Entries, Pending, Jobs, PendingBytes    int
+	RetainedListBytes, RetainedListEntries         int
+	MemoryHits, Loads, Evictions, ListPlaceholders uint64
+}
 
 // Stats is read on the owner thread; workers only change the pending byte budget.
 func (c *Cache) Stats() Stats {
 	c.results.L.Lock()
 	bytes := c.resultBytes
 	c.results.L.Unlock()
-	return Stats{c.size, len(c.art), len(c.busy), len(c.sem), bytes}
+	retained := c.retainedListKeys()
+	var retainedBytes int
+	for key := range retained {
+		retainedBytes += c.art[key].size
+	}
+	return Stats{Bytes: c.size, Entries: len(c.art), Pending: len(c.busy), Jobs: len(c.sem), PendingBytes: bytes,
+		RetainedListBytes: retainedBytes, RetainedListEntries: len(retained),
+		MemoryHits: c.metrics.memoryHits, Loads: c.metrics.loads, Evictions: c.metrics.evictions, ListPlaceholders: c.metrics.listPlaceholders}
 }

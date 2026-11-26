@@ -6,6 +6,7 @@ package artwork
 
 import (
 	"container/list"
+	"fmt"
 	"sync"
 
 	"netease-music-mygo/internal/localcatalog"
@@ -16,6 +17,12 @@ const embeddedArtworkLimit = 8 << 20
 type EmbeddedKey struct {
 	Path        string
 	Stamp, Size int64
+}
+
+// ArtworkKey shares a decoded size between lists and playback without mixing
+// files whose embedded picture changed after a catalog rescan.
+func (k EmbeddedKey) ArtworkKey(pixels int) string {
+	return fmt.Sprintf("local-cover/%d/%d/%d/%s", k.Stamp, k.Size, pixels, k.Path)
 }
 
 func LocalEmbeddedKey(s localcatalog.Song) EmbeddedKey {
