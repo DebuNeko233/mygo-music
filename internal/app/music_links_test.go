@@ -15,7 +15,7 @@ import (
 	"netease-music-mygo/internal/features/netease"
 	"netease-music-mygo/internal/features/player"
 	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 func musicLinkApp(t *testing.T) *app {

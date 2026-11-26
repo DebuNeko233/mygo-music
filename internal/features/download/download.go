@@ -18,7 +18,7 @@ import (
 	audiotag "netease-music-mygo/internal/features/download/tagging"
 	"netease-music-mygo/internal/features/netease"
 	"netease-music-mygo/internal/features/player"
-	"netease-music-mygo/internal/util/audioformat"
+	"netease-music-mygo/internal/utils/audioformat"
 )
 
 const (

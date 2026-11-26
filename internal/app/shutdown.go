@@ -8,7 +8,7 @@ import (
 	"log"
 
 	"netease-music-mygo/internal/features/preferences"
-	"netease-music-mygo/internal/util/lifetime"
+	"netease-music-mygo/internal/utils/lifetime"
 )
 
 // saveFinalSettings reports a write failure before the process exits, when a

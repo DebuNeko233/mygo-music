@@ -12,8 +12,8 @@ import (
 	"netease-music-mygo/internal/features/localcatalog"
 	"netease-music-mygo/internal/features/netease"
 	localvm "netease-music-mygo/internal/ui/viewmodel/local"
-	"netease-music-mygo/internal/util/audioformat"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/audioformat"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 var localExtensions = audioformat.Extensions()

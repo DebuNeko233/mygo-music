@@ -10,7 +10,7 @@
 | --- | --- |
 | [download](../../internal/features/download) | 下载任务、元数据整理、临时产物、最终发布 |
 | [download/tagging](../../internal/features/download/tagging) | 音频标签和封面读写 |
-| [audioformat](../../internal/util/audioformat) | 实际格式与导出扩展名 |
+| [audioformat](../../internal/utils/audioformat) | 实际格式与导出扩展名 |
 | [player/export.go](../../internal/features/player/export.go) | 复用完整音频缓存或共享下载能力 |
 | [viewmodel/downloads](../../internal/ui/viewmodel/downloads) | 任务列表、进度、取消和重试的界面状态 |
 | [App download](../../internal/app/download.go) | 歌曲来源、用户设置与任务协调 |

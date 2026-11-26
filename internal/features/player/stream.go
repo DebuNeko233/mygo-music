@@ -15,7 +15,7 @@ import (
 
 	"github.com/egoist/mygo/audio"
 	gomp3 "github.com/hajimehoshi/go-mp3"
-	"netease-music-mygo/internal/util/audioformat"
+	"netease-music-mygo/internal/utils/audioformat"
 )
 
 // A window reads a download a piece at a time, for scanning it byte by

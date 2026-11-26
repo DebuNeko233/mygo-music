@@ -18,7 +18,7 @@ internal/
 │   ├── view/              视图、控件及界面资源
 │   └── viewmodel/         展示状态、界面命令与派生数据
 ├── app/                   启停、接线、账号/窗口及跨功能协调
-└── util/                  audioformat、userdata、lifetime 通用工具
+└── utils/                  audioformat、userdata、lifetime 通用工具
 ```
 
 `features` 包含播放器、网易云协议、本地曲库、歌词、转写、下载、资料库、设置、导航及业务缓存等能力。`ui/view` 下的 artwork、shortcuts 属于界面资源与输入能力；控件和页面也在该层。`ui/viewmodel` 可以独立于控件测试，保存展示状态及界面命令，不拥有另一份播放器或账号数据。
@@ -35,14 +35,14 @@ internal/
 | `ui/view` | 页面、控件、绘制、输入、动画、界面资源 | 复制业务事实、自行管理账号与后台持久化 |
 | `ui/viewmodel` | 展示状态、界面命令、请求身份、分页及派生数据 | 控件、绘制、原生窗口、另一份核心业务状态 |
 | `app` | 组合根、启动关闭、服务注入、原生窗口与跨功能协调 | 具体业务算法、控件细节、通用工具实现 |
-| `util` | 不依赖业务与界面的通用文件、格式和订阅清理能力 | 账号、歌曲/页面状态、业务缓存布局、UI 框架类型 |
+| `utils` | 不依赖业务与界面的通用文件、格式和订阅清理能力 | 账号、歌曲/页面状态、业务缓存布局、UI 框架类型 |
 
 ```mermaid
 flowchart TD
     App[app] --> View[ui/view]
     App --> VM[ui/viewmodel]
     App --> Features[features]
-    App --> Util[util]
+    App --> Util[utils]
     View --> VM
     View --> Features
     View --> Util
@@ -56,7 +56,7 @@ ViewModel 通过注入的发布器回到所属线程，读取或更新功能服�
 ## 3. 强制依赖规则
 
 1. 其他层不导入 `app`，跨功能和原生生命周期协调通过 App 注入。
-2. `features` 不导入 `ui` 或 MyGo 的 `ui` 控件包；`util` 不导入 `features`、`ui`、`app` 或 MyGo。
+2. `features` 不导入 `ui` 或 MyGo 的 `ui` 控件包；`utils` 不导入 `features`、`ui`、`app` 或 MyGo。
 3. `ui/viewmodel` 不导入 MyGo、`ui/view` 或另一个功能 ViewModel；允许使用本包、共同根包及底层功能和工具。
 4. `ui/view/artwork`、`ui/view/shortcuts` 不依赖其他视图或功能 ViewModel，避免界面资源反向认识调用者。
 5. 生产代码不导入路径中包含 `testutil` 的测试包；测试可以组合多层验证真实接线。

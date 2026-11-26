@@ -12,7 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"netease-music-mygo/internal/util/audioformat"
+	"netease-music-mygo/internal/utils/audioformat"
 	"slices"
 	"strconv"
 	"strings"

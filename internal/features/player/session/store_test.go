@@ -10,7 +10,7 @@ import (
 
 	"netease-music-mygo/internal/features/netease"
 	"netease-music-mygo/internal/features/player"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 // Multiple queue/order changes can race the disk worker; the final save

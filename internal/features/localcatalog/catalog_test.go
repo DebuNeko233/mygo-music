@@ -13,7 +13,7 @@ import (
 
 	"netease-music-mygo/internal/features/lyrics"
 	"netease-music-mygo/internal/features/netease"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 // An unchanged file is not reopened or assigned another ID; overlapping scans and relinks keep stable identities.

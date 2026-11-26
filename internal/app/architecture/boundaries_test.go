@@ -39,8 +39,8 @@ func TestPackageBoundaries(t *testing.T) {
 		}
 		pkg := filepath.ToSlash(rel)
 		layer := strings.Split(pkg, "/")[0]
-		if !slices.Contains([]string{"app", "features", "ui", "util"}, layer) {
-			t.Errorf("%s is outside app, features, ui and util", path)
+		if !slices.Contains([]string{"app", "features", "ui", "utils"}, layer) {
+			t.Errorf("%s is outside app, features, ui and utils", path)
 		}
 		vm := inPackage(pkg, "ui/viewmodel")
 		if layer == "ui" && !vm && !inPackage(pkg, "ui/view") {
@@ -55,7 +55,7 @@ func TestPackageBoundaries(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if (vm || layer == "util") && inPackage(dep, "github.com/egoist/mygo") {
+			if (vm || layer == "utils") && inPackage(dep, "github.com/egoist/mygo") {
 				t.Errorf("%s imports UI framework %s; view models and generic tools must stay independent", path, dep)
 			}
 			if layer == "features" && inPackage(dep, "github.com/egoist/mygo/ui") {
@@ -71,7 +71,7 @@ func TestPackageBoundaries(t *testing.T) {
 			if layer != "app" && inPackage(target, "app") {
 				t.Errorf("%s imports %s; app owns composition", path, dep)
 			}
-			if layer == "util" && !inPackage(target, "util") {
+			if layer == "utils" && !inPackage(target, "utils") {
 				t.Errorf("%s imports %s; generic tools must not depend on features or presentation", path, dep)
 			}
 			if layer == "features" && inPackage(target, "ui") {

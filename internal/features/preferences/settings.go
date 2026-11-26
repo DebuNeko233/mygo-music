@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 // settings are the listener's choices, kept in settings.json in the user

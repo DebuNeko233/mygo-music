@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"netease-music-mygo/internal/features/netease"
-	"netease-music-mygo/internal/util/audioformat"
+	"netease-music-mygo/internal/utils/audioformat"
 )
 
 // Cache keeps the songs played on disk, so that they play again at once,

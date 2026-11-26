@@ -20,7 +20,7 @@ import (
 	sessionstore "netease-music-mygo/internal/features/player/session"
 	playbackview "netease-music-mygo/internal/ui/view/playback"
 	commentsvm "netease-music-mygo/internal/ui/viewmodel/comments"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 // A local song's queue menu removes its entry instead of offering to add it again.

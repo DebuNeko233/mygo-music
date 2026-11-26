@@ -13,7 +13,7 @@ import (
 	"netease-music-mygo/internal/features/netease"
 	"netease-music-mygo/internal/features/player"
 	"netease-music-mygo/internal/ui/view/components"
-	"netease-music-mygo/internal/util/lifetime"
+	"netease-music-mygo/internal/utils/lifetime"
 )
 
 // Notch is the quick player around the camera housing at the top of the

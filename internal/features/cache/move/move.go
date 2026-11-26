@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"netease-music-mygo/internal/features/netease"
-	"netease-music-mygo/internal/util/audioformat"
+	"netease-music-mygo/internal/utils/audioformat"
 )
 
 // songFiles names the files of the songs dir keeps whole: a stream's .json

@@ -14,7 +14,7 @@ import (
 
 	diskcache "netease-music-mygo/internal/features/cache/disk"
 	"netease-music-mygo/internal/features/lyrics"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 type LyricMatch struct {

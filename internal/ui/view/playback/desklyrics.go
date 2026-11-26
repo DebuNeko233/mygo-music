@@ -13,7 +13,7 @@ import (
 
 	"netease-music-mygo/internal/features/lyrics"
 	"netease-music-mygo/internal/ui/view/components"
-	"netease-music-mygo/internal/util/lifetime"
+	"netease-music-mygo/internal/utils/lifetime"
 )
 
 // DeskLyrics is the song's lyrics in a window of their own, over every

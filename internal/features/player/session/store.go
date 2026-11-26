@@ -14,7 +14,7 @@ import (
 
 	"netease-music-mygo/internal/features/netease"
 	"netease-music-mygo/internal/features/player"
-	"netease-music-mygo/internal/util/userdata"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 // session.json is an atomic full snapshot, also readable by older builds.

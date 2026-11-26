@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"netease-music-mygo/internal/features/netease"
-	"netease-music-mygo/internal/util/audioformat"
+	"netease-music-mygo/internal/utils/audioformat"
 )
 
 // A download stores received byte ranges at their original offsets, in a
