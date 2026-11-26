@@ -30,18 +30,13 @@ jobs:
       # tag started the workflow.
       - name: Check the version
         run: test "$GITHUB_REF_NAME" = "v$(jq -r .version mygo.json)"
-      # mygo build puts the version's section of CHANGELOG.md in the update
-      # manifests, which the update window shows. That section is GitHub's own
-      # generated notes, copied out of the draft release; the release page gets
-      # the same text in place of the draft's.
-      - name: Take the notes from the changelog
+      # The release page adds a download matrix to the version's changelog.
+      # MyGo keeps the plain changelog in signed update manifests.
+      - name: Generate download table and release notes
         run: |
-          awk -v heading="## ${GITHUB_REF_NAME#v}" '
-            /^## / { inside = ($0 == heading); next }
-            inside
-          ' CHANGELOG.md | sed '/./,$!d' > "$RUNNER_TEMP/notes.md"
+          python3 -m unittest discover -s .github/scripts -p '*_test.py'
+          python3 .github/scripts/release_notes.py > "$RUNNER_TEMP/notes.md"
           test -s "$RUNNER_TEMP/notes.md"
-          cat "$RUNNER_TEMP/notes.md"
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}

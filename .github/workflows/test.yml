@@ -16,6 +16,14 @@ permissions:
   contents: read
 
 jobs:
+  release-notes:
+    name: Release notes generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test download links and changelog selection
+        run: python3 -m unittest discover -s .github/scripts -p '*_test.py'
+
   compile:
     name: Build Go packages
     runs-on: ubuntu-latest

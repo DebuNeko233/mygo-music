@@ -73,6 +73,12 @@ CGO_ENABLED=0 go test ./...
 
 `go tool mygo vet .` 在当前固定框架中先执行 Go vet，再检查 UI 生命周期等规则；CI 也使用此入口。`go test ./...` 包含 internal 和工具测试，满足内部包回归要求。只要动过生产 Go 逻辑，不能以单个定向测试替代全量回归。
 
+发行说明生成器的下载链接和版本章节测试由 Test 工作流单独运行；改动该生成器时本地执行：
+
+```sh
+python3 -m unittest discover -s .github/scripts -p '*_test.py'
+```
+
 文档专属改动按[文档维护](documentation.md)校验；不写无意义的文案测试。修改文档里的可执行脚本、生成器或配置时，仍应验证它们的实际行为。已通过的检查不无理由反复执行；新修改、失败或未解决风险才触发追加验证。
 
 ## 6. 竞态检查

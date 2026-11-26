@@ -6,25 +6,9 @@
 
 ## 安装
 
-独立版本从[本仓库 Releases](https://github.com/DebuNeko233/nyago-music/releases)下载。首个独立正式版本为 `v0.3.0`；旧预览版不包含本次主线改动。安装时请选择正式版本，字幕运行库资源发行不包含应用安装包。
+**前往 [最新 Release](https://github.com/DebuNeko233/nyago-music/releases/latest) 下载。**
 
-从 `v0.3.1` 开始，应用显示为「Nyago Music」，使用下述独立目录；`v0.3.0` 及更早版本仍使用旧目录。安装包文件名前缀暂保留 `mygo-cloudmusic`。
-
-原项目安装的版本不会自动切换到本项目：首次迁移需手动安装本仓库版本，此后使用本仓库的更新源和签名。应用标识与系统凭据服务暂时保留，因此可能继续使用现有钥匙串登录；文件数据已按应用名称隔离，但不保证两个应用并行运行。
-
-Windows 用户从[最新版本页面](https://github.com/DebuNeko233/nyago-music/releases/latest)下载对应架构的 `setup-*.exe` 安装包。Linux 用户选择对应架构的 `.deb`、`.rpm` 或 `.tar.gz` 包。
-
-macOS 也可以通过 [Nyago Music Homebrew tap](https://github.com/DebuNeko233/homebrew-nyago-music) 安装：
-
-```sh
-brew tap debuneko233/nyago-music
-brew trust --cask debuneko233/nyago-music/nyago-music
-brew install --cask debuneko233/nyago-music/nyago-music
-```
-
-Homebrew 7 需要信任第三方 cask；旧版 Homebrew 没有 `trust` 命令时跳过第二步。通过 Homebrew 更新时运行 `brew update`，再运行 `brew upgrade --cask --greedy nyago-music`。
-
-macOS 手动安装可从 [最新版本页面](https://github.com/DebuNeko233/nyago-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
+Release 说明提供「操作系统 × 处理器架构」下载表格、安装步骤和 Homebrew 指引，请按设备选择对应安装包。
 
 ## 数据与清理
 

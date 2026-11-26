@@ -58,9 +58,20 @@ git push origin v0.3.0
 
 ## 4. 构建草稿与发布
 
-[Release 工作流](.github/workflows/release.yml)由 `v*` 标签触发，检查配置、版本和变更说明，创建草稿并上传 macOS、Windows、Linux 的产物与签名更新。手动触发也必须选择匹配实际版本的标签，不能在 main 上绕过版本检查。
+[Release 工作流](.github/workflows/release.yml)由 `v*` 标签触发，检查配置、版本和变更说明，使用[说明生成器](.github/scripts/release_notes.py)生成下载表格与当前版本更新内容，创建草稿并上传 macOS、Windows、Linux 的产物与签名更新。手动触发也必须选择匹配实际版本的标签，不能在 main 上绕过版本检查。
 
 项目仅提供安装包、应用内更新及 Homebrew 安装，不分发 `install.sh` 或 `install.ps1`。固定 MyGo CLI 仍会生成这些文件；普通 Build 在上传 artifacts 前删除脚本并过滤校验清单，Release 则在全部平台上传结束后执行 `finalize-release`，移除两个脚本资产并同步 `SHA256SUMS`。必须等待收尾任务成功，再公开草稿；本地使用 `-upload` 时也必须完成相同清理。不要删除更新归档、增量包或签名清单。
+
+README 的安装入口固定指向 `releases/latest`。每次应用发行的说明以操作系统为列、架构为行，列出 DMG、Windows EXE、Linux DEB/RPM/TAR.GZ 的版本固定下载链接，并提供 Homebrew 指引；不会把旧版说明中的链接指向新版本。版本、文件名前缀和仓库从 mygo.json 读取，更新正文来自 CHANGELOG 对应章节。应用内更新清单仍使用原始 CHANGELOG 正文，不加入下载表格。
+
+本地预览与验证：
+
+```sh
+python3 -m unittest discover -s .github/scripts -p '*_test.py'
+python3 .github/scripts/release_notes.py > /tmp/nyago-release-notes.md
+```
+
+新增操作系统、架构或改变安装包命名时，必须同步生成器和测试，核对表中每个文件都出现在草稿资产中。更新现有 Release 说明时使用生成结果作为 `gh release edit --notes-file`，保留已经发布的包和签名文件。
 
 macOS 当前采用 ad-hoc 签名并跳过公证；更新签名与 Apple Developer ID 是两件事。Windows 安装包使用 NSIS，普通 Build 工作流产物没有正式更新私钥签名，不能冒充已经验证的更新发行。
 
