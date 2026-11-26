@@ -8,6 +8,7 @@
 
 | 任务 | 补充阅读 |
 | --- | --- |
+| Fork、创建贡献分支、推送、等待 CI 或提交 PR | [贡献流程与 PR 规范](contributing.md) |
 | 增加页面、功能或持久化设置 | [新增功能流程](adding-features.md)及对应功能文档 |
 | 调整控件、布局、动画、焦点 | [MyGo 界面开发](ui-development.md) |
 | 新增请求、缓存、后台任务、账号操作 | [数据与生命周期](data-lifecycle.md) |
@@ -41,6 +42,7 @@
 | 版本、更新源、资源和系统配置 | [mygo.json](../mygo.json)、[macOS 权限](../macos.entitlements.plist) |
 | CI 任务和触发条件 | [.github/workflows](../.github/workflows) |
 | 层次规则 | [architecture.md](architecture.md)，可执行检查为 [boundaries_test.go](../internal/architecture/boundaries_test.go) |
+| 贡献操作、分支与 PR 格式 | [contributing.md](contributing.md)，根 CONTRIBUTING 与 PR 模板提供入口 |
 | 测试策略 | [testing.md](testing.md)，具体断言在被测代码所属包旁 |
 | 代码风格与文件简介 | [coding-standards.md](coding-standards.md) |
 | 功能的长期契约 | [features](features/README.md) |

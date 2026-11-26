@@ -7,7 +7,7 @@
 | 内容 | 位置 |
 | --- | --- |
 | 产品介绍、安装和基本使用 | 根 README |
-| 如何参与、提交和交付 | 根 CONTRIBUTING.md，详细规则链接 docs |
+| 如何参与、提交和交付 | 根 CONTRIBUTING.md 提供入口，详细流程维护在 docs/contributing.md，PR 模板仅提供填写结构 |
 | 代码代理进入仓库的阅读入口 | 根 AGENTS.md |
 | 技能触发与按任务加载文档 | `.agents/skills/<name>/SKILL.md` |
 | 总体分层、依赖、状态职责 | docs/architecture.md |

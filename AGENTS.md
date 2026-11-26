@@ -21,7 +21,7 @@
 | 依赖升级、框架切换、合并上游 | [依赖与上游](docs/dependencies-and-upstream.md) |
 | 文档、代理规则或技能 | [文档维护](docs/documentation.md) |
 | 环境、构建、签名验证 | [开发环境](docs/development.md) |
-| 提交或贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| 提交或贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) → [贡献流程与 PR 规范](docs/contributing.md) |
 
 Nyago Music 维护技能位于 [.agents/skills/mygo-maintenance/SKILL.md](.agents/skills/mygo-maintenance/SKILL.md)，按相同文档入口执行。
 
