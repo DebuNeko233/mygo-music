@@ -44,6 +44,16 @@ func LoadURL(url string) (*ui.Bitmap, image.Image, int, error) {
 
 func DecodeSized(b []byte, limit int) (*ui.Bitmap, image.Image, int, error) {
 	b = stillCover(b)
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	cost, err := decodeCost(cfg, limit, int64(len(b)))
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	release := pictureDecodes.reserve(cost)
+	defer release()
 	img, _, err := image.Decode(bytes.NewReader(b))
 	if err != nil {
 		return nil, nil, 0, err

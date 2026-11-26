@@ -5,6 +5,7 @@
 package app
 
 import (
+	artcache "netease-music-mygo/internal/desktop/artwork"
 	desktopview "netease-music-mygo/internal/desktop/view"
 	"netease-music-mygo/internal/desktop/view/components"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
@@ -17,8 +18,9 @@ import (
 type mainViewState struct {
 	wasBehind bool
 
-	pal  components.Palette
-	pics map[string]*backdropEntry // shared by the home and playing backdrops
+	pal                           components.Palette
+	pics                          *artcache.PictureCache
+	homeBackdrop, playingBackdrop artcache.PictureSlot
 
 	intro desktopview.Description
 	toast string // a message to show once

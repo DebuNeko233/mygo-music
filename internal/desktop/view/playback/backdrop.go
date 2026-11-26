@@ -182,8 +182,7 @@ func (a *View) Backdrop(c *ui.Context, art components.Image, tint ui.Color) {
 	fog, still := a.Config.Fog, c.Preferences().ReduceMotion
 	// In place of the cover's own colors, the listener's picture, as deep
 	// as they asked: the page's colour shows through it.
-	pics := a.Pictures(a.Config.BackdropPlaying)
-	if pic := BackdropShown(pics, pl.Current()); pic != nil {
+	if pic := a.Picture(); pic != nil {
 		// Nothing of the cover's backdrop paints behind it, for the wall's
 		// edges to fade into.
 		a.BackdropCache.Canvas, a.BackdropCache.Before = nil, nil

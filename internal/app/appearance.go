@@ -18,12 +18,6 @@ import (
 // pages are built.
 var accentChosen string
 
-// Each request owns an entry so a discarded read cannot overwrite a later
-// request for the same path.
-type backdropEntry struct {
-	pic *artcache.Picture // nil while loading or if decoding failed
-}
-
 // addPictures adds those of files a page can stand on to its pictures,
 // once each, and keeps the settings.
 func (a *app) addPictures(files []string, paths *[]string) {
@@ -40,65 +34,44 @@ func (a *app) addPictures(files []string, paths *[]string) {
 	}
 }
 
-// preloadPictures starts reading the chosen backdrops before their first
-// frame. The home and playing paths overlap at most once in the read queue.
+// Prewarm only the two selected surfaces, independently of configured count.
 func (a *app) preloadPictures() {
-	for _, path := range slices.Concat(a.settings.BackdropHome, a.settings.BackdropPlaying) {
-		a.loadPicture(path)
-	}
+	a.homeBackdrop.Visible = true
+	a.homePicture()
+	a.playingPicture()
 }
 
-func (a *app) loadPicture(path string) {
-	if a.pics[path] != nil {
-		return
-	}
+func (a *app) homePicture() *artcache.Picture {
+	return a.picture(&a.homeBackdrop, a.settings.BackdropHome)
+}
+func (a *app) playingPicture() *artcache.Picture {
+	return a.picture(&a.playingBackdrop, a.settings.BackdropPlaying)
+}
+
+func (a *app) picture(slot *artcache.PictureSlot, paths []string) *artcache.Picture {
 	if a.pics == nil {
-		a.pics = make(map[string]*backdropEntry)
+		a.pics = artcache.NewPictureCache(artcache.PictureCacheOptions{Post: func(fn func()) { a.dispatch(fn, false) }, PostResource: a.postResource})
 	}
-	entry := &backdropEntry{}
-	a.pics[path] = entry
-	go a.readPicture(path, entry)
-}
-
-// pictures returns the pictures of the paths that could be read, skipping
-// those that could not, and starts reading the rest.
-func (a *app) pictures(paths []string) []*artcache.Picture {
-	out := make([]*artcache.Picture, 0, len(paths))
-	for _, path := range paths {
-		if entry := a.pics[path]; entry == nil {
-			a.loadPicture(path)
-		} else if entry.pic != nil {
-			out = append(out, entry.pic)
+	var key, next int64
+	hasNext := false
+	if a.pl != nil {
+		if tr := a.pl.Current(); tr != nil {
+			key = tr.Key()
+		}
+		if tr, _ := a.pl.AdjacentTracks(); tr != nil {
+			next = tr.Key()
+			hasNext = next != key
 		}
 	}
-	return out
+	return a.pics.Select(slot, paths, key, next, hasNext)
 }
 
-// Both pages can build in the same frame. Keep their configured pictures
-// together so neither page forces the other to decode its pictures again.
 func (a *app) forgetPictures() {
-	for path := range a.pics {
-		if !a.pictureChosen(path) {
-			delete(a.pics, path)
-		}
+	if a.pics != nil {
+		a.homePicture()
+		a.playingPicture()
+		a.pics.Retain(slices.Concat(a.settings.BackdropHome, a.settings.BackdropPlaying))
 	}
-}
-
-func (a *app) pictureChosen(path string) bool {
-	return slices.Contains(a.settings.BackdropHome, path) || slices.Contains(a.settings.BackdropPlaying, path)
-}
-
-// readPicture reads and decodes the picture at path, off the main thread,
-// and keeps it, or that it cannot be read.
-func (a *app) readPicture(path string, entry *backdropEntry) {
-	pic := artcache.DecodePicture(path)
-	a.postIfChanged(func() bool {
-		if a.pics[path] != entry {
-			return false
-		}
-		entry.pic = pic
-		return pic != nil
-	})
 }
 
 func paletteFor(t *ui.Theme) components.Palette {

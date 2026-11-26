@@ -28,7 +28,7 @@ func (a *app) bindPlaybackViews() {
 		Theme: func(t *ui.Theme) ui.Theme { return a.settings.uiTheme(t) }, SaveSettings: func() { a.settings.saveSoon() },
 		ProgramPane: a.views.podcast.ProgramPane, CommentsPane: a.views.comments.Pane, ArtistLinks: a.views.artist.Links, TrackCover: a.trackCover, LikeButton: a.views.like.Button, SongMenu: a.views.songMenu.Button, SongItems: a.views.songMenu.Items, ModelCard: a.views.settings.ModelCard, LocalLyricMatchButton: a.views.local.LyricMatchButton, Avatar: a.views.artwork.Avatar,
 		CommentsFor: a.commentsFor, CommentsTab: a.commentsTab, CommentCount: a.commentCount, CaptionsOn: a.captionsOn, CaptionsShown: a.captionsShown, CaptionsWritten: a.captionsWritten, ModelReady: a.modelReady, CaptionsWriting: a.captionsWriting,
-		SyncCaptions: a.syncCaptions, SyncVolume: a.syncVolume, SettingsChanged: a.changed, Redraw: a.redraw, OpenSettings: a.openSettings, ShowMain: a.showMain, ExitRadio: a.exitRadio, SyncWindows: a.syncWindows, Dispatch: a.dispatch, VolumeServices: a.volumeServices, Pictures: a.pictures,
+		SyncCaptions: a.syncCaptions, SyncVolume: a.syncVolume, SettingsChanged: a.changed, Redraw: a.redraw, OpenSettings: a.openSettings, ShowMain: a.showMain, ExitRadio: a.exitRadio, SyncWindows: a.syncWindows, Dispatch: a.dispatch, VolumeServices: a.volumeServices, Picture: a.playingPicture,
 		TrackArtwork: func(tr *netease.Track, px int, blur bool) components.Image {
 			return viewImage(a.trackArtwork(tr, px, blur))
 		}, HasTrackCover: a.hasTrackCover,

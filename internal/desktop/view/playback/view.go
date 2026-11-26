@@ -73,7 +73,7 @@ type View struct {
 
 	VolumeServices func() playbackvm.VolumeServices
 
-	Pictures      func([]string) []*artcache.Picture
+	Picture       func() *artcache.Picture
 	TrackArtwork  func(*netease.Track, int, bool) components.Image
 	HasTrackCover func(*netease.Track) bool
 	BarArtwork    func(*netease.Track) components.Image

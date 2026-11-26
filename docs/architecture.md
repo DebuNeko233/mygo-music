@@ -60,7 +60,7 @@ flowchart TD
 | `preferences`、`sessionstore`、`userdata` | 配置、播放会话、用户数据写入 | 系统主题、设置控件、原生对话框 |
 | `navigation` | 路由与前后历史 | 页面构建与请求调度 |
 | `mixvol` | Windows/Linux 应用音量接入及其他平台回退 | 播放栏控件 |
-| `desktop/artwork` | 图片解码、尺寸变体、内嵌封面、候选匹配、位图缓存 | 当前账号、播放来源、展示文案 |
+| `desktop/artwork` | 图片解码、尺寸变体、内嵌封面、候选匹配、位图缓存及背景图预算/淘汰 | 当前账号、播放来源、展示文案 |
 | `desktop/shortcuts` | 动作描述、按键转换、默认值和冲突规则 | 命令执行、全局注册生命周期 |
 | `desktop/lifetime` | 原生订阅一次性释放 | 应用退出决策 |
 | `testutil`、各包 `testdata` | 共用测试机制与归属明确的样本 | 生产依赖 |

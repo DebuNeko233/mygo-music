@@ -10,6 +10,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,9 +38,54 @@ func IsPicture(path string) bool {
 // keeps the bytes its pixels decode from again, so that they can go once
 // the GPU has them: what stays costs a fraction of the pixels.
 func DecodePicture(path string) *Picture {
-	b, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	configErr := err
+	info, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	cost := decodeByteLimit
+	if configErr == nil {
+		cost, err = decodeCost(cfg, backdropSide, info.Size())
+		if err != nil {
+			return nil
+		}
+	}
+	// Animated WebP needs its first frame extracted before DecodeConfig
+	// understands it. Unknown headers take the whole allowance, then use
+	// the same decoder below; they never bypass admission or add a decoder.
+	release := pictureDecodes.reserve(cost)
+	defer func() { release() }()
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil
+	}
+	// Read the size inspected above from the same open file, without an
+	// incrementally growing buffer retaining another copy of a large PNG.
+	b := make([]byte, info.Size())
+	if _, err := io.ReadFull(f, b); err != nil {
+		return nil
+	}
+	if cost < decodeByteLimit {
+		// An editor can rewrite the same open file while admission waits.
+		// Check the bytes we now own before expanding any pixels; a larger
+		// replacement must rejoin the queue with its actual source cost.
+		actual, _, err := image.DecodeConfig(bytes.NewReader(b))
+		if err != nil {
+			return nil
+		}
+		actualCost, err := decodeCost(actual, backdropSide, int64(len(b)))
+		if err != nil {
+			return nil
+		}
+		if actualCost > cost {
+			release()
+			release = pictureDecodes.reserve(actualCost)
+		}
 	}
 	img, err := DecodeImage(b)
 	if err != nil {
@@ -47,11 +93,12 @@ func DecodePicture(path string) *Picture {
 	}
 	img = shrinkPicture(img, backdropSide)
 	bounds := img.Bounds()
-	bmp, err := ui.DecodeBitmap(encodePicture(img))
+	encoded := encodePicture(img)
+	bmp, err := ui.DecodeBitmap(encoded)
 	if err != nil {
 		bmp = ui.NewBitmap(img)
 	}
-	return &Picture{Bitmap: bmp, W: float32(bounds.Dx()), H: float32(bounds.Dy())}
+	return &Picture{Bitmap: bmp, W: float32(bounds.Dx()), H: float32(bounds.Dy()), encodedBytes: cap(encoded)}
 }
 
 // encodePicture returns data a picture's pixels decode from again once it
@@ -61,14 +108,14 @@ func encodePicture(img image.Image) []byte {
 	var buf bytes.Buffer
 	if opaque, ok := img.(interface{ Opaque() bool }); ok && opaque.Opaque() {
 		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err == nil {
-			return buf.Bytes()
+			return bytes.Clone(buf.Bytes())
 		}
 		buf.Reset()
 	}
 	if err := png.Encode(&buf, img); err != nil {
 		return nil
 	}
-	return buf.Bytes()
+	return bytes.Clone(buf.Bytes())
 }
 
 // shrinkPicture scales img down so that its longer side is at most side
@@ -100,6 +147,7 @@ func shrinkPicture(img image.Image, side int) image.Image {
 
 // Picture is one of the pictures a page stands on.
 type Picture struct {
-	Bitmap *ui.Bitmap
-	W, H   float32 // its pixels
+	Bitmap       *ui.Bitmap
+	W, H         float32 // its pixels
+	encodedBytes int
 }
