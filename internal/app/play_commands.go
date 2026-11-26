@@ -5,11 +5,11 @@
 package app
 
 import (
-	"netease-music-mygo/internal/desktop/view/tracklist"
-	"netease-music-mygo/internal/mixvol"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	playbackvm "netease-music-mygo/internal/viewmodel/playback"
+	"netease-music-mygo/internal/features/mixvol"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	"netease-music-mygo/internal/ui/view/tracklist"
+	playbackvm "netease-music-mygo/internal/ui/viewmodel/playback"
 )
 
 // playPageTracks starts an album or playlist at its first playable song in order.

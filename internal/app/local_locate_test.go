@@ -15,9 +15,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 func localLocateFixture(t *testing.T, playing bool) (*app, []localcatalog.Song, *ui.Tester) {
@@ -27,7 +27,7 @@ func localLocateFixture(t *testing.T, playing bool) (*app, []localcatalog.Song, 
 	a.settings = defaultSettings()
 	songs := make([]localcatalog.Song, 250)
 	for i := range songs {
-		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), ID: int64(i + 1), Name: fmt.Sprintf("本地歌曲 %03d", i+1), Duration: 180000}, Path: "../player/testdata/seek.flac"}
+		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), ID: int64(i + 1), Name: fmt.Sprintf("本地歌曲 %03d", i+1), Duration: 180000}, Path: "../features/player/testdata/seek.flac"}
 	}
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	a.nav.Current = route{Page: pageLocal}

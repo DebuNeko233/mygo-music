@@ -6,7 +6,7 @@
 
 1. 先查调用点、同类实现和真实所有者，再决定放置位置。文件名表达职责，如 `playlist_cache.go`，不使用难以辨认的临时名称。
 2. 简单功能可以平放；只有多文件功能、独立依赖或复用能力才建子包。禁止仅为镜像目录而添加空层级。
-3. 不创建无边界的 `utils`、`common`、`manager` 大包。工具函数留在使用者附近，共享时按具体能力命名。
+3. 不创建无边界的 `utils`、`common`、`manager` 大包。工具函数留在使用者附近，共享时按具体能力命名；`internal/utils` 是按能力组织的目录，不建立统一的 `utils` Go 包。
 4. 平台差异放入 `_darwin.go`、`_windows.go`、`_linux.go` 或有明确构建约束的文件；提供必要的其他平台实现。
 5. 生产代码不导入测试工具。测试夹具不进入运行时 API，已有特殊测试接入口应复用，不继续扩大。
 6. 删除行为时同步检查状态、回调、平台实现、测试、资源、配置和文档；共享能力有其他调用者时保留。
@@ -27,7 +27,7 @@ package library
 
 - 构建标签保留在最前面，标签组后空行，再写简介；不能吞进块注释。
 - 保留版权、许可证和 `Code generated ... DO NOT EDIT.` 标记。
-- 生成文件的简介同步到生成器，不只改生成结果。例如 [scripts/sherpa/main.go](../scripts/sherpa/main.go)与 [natives.go](../internal/speech/natives.go)。
+- 生成文件的简介同步到生成器，不只改生成结果。例如 [scripts/sherpa/main.go](../scripts/sherpa/main.go)与 [natives.go](../internal/features/speech/natives.go)。
 - Python/Shell 保留 shebang 和编码声明位置。若帮助脚本按行提取注释，修改文件头时必须检查帮助输出。
 - 原有包说明、导出 API 注释和必要的内存布局解释继续保留。文件简介不替代函数契约。
 - 新测试前用一句注释写可观察行为；回归测试说明原先错误发生的条件。

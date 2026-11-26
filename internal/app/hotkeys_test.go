@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/shortcuts"
+	"netease-music-mygo/internal/ui/view/shortcuts"
 )
 
 // The keys the settings keep play the actions: those they start with, and

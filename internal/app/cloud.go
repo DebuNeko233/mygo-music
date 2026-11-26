@@ -7,8 +7,8 @@ package app
 import (
 	"errors"
 
-	"netease-music-mygo/internal/netease"
-	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	"netease-music-mygo/internal/features/netease"
+	cloudvm "netease-music-mygo/internal/ui/viewmodel/cloud"
 )
 
 var cloudSongs = netease.CloudSongsContext

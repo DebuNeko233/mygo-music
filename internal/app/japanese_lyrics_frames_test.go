@@ -13,10 +13,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // With NM_FRAMES set, inspect Japanese glyphs beside Chinese translations in

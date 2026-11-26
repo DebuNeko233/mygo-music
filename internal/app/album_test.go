@@ -11,9 +11,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	albumvm "netease-music-mygo/internal/viewmodel/album"
-	uservm "netease-music-mygo/internal/viewmodel/user"
+	"netease-music-mygo/internal/features/netease"
+	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
+	uservm "netease-music-mygo/internal/ui/viewmodel/user"
 )
 
 // albumTestApp is signed in, showing one album that the listener has not

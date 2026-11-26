@@ -11,9 +11,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 // Late cached and network replies from a prior login cannot change a new session of the same account or its snapshot.

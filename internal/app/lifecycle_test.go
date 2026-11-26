@@ -16,10 +16,10 @@ import (
 
 	"github.com/egoist/mygo"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/download"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/preferences"
+	"netease-music-mygo/internal/features/download"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/preferences"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // Dock reopening respects utility windows, but an overlay alone cannot consume a reopen request.
@@ -101,7 +101,7 @@ func TestStartupMixedOpeningOrder(t *testing.T) {
 			a := musicLinkApp(t)
 			posts := testPosts(a)
 			a.startup.waiting = true
-			file := filepath.Join("..", "player", "testdata", "seek.flac")
+			file := filepath.Join("..", "features", "player", "testdata", "seek.flac")
 			if fileLast {
 				a.openMusicInput("orpheus://album/34")
 				a.openTemporaryAudio(file)

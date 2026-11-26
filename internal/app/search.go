@@ -7,8 +7,8 @@ package app
 import (
 	"strings"
 
-	"netease-music-mygo/internal/netease"
-	searchvm "netease-music-mygo/internal/viewmodel/search"
+	"netease-music-mygo/internal/features/netease"
+	searchvm "netease-music-mygo/internal/ui/viewmodel/search"
 )
 
 func (a *app) searchServices() searchvm.SearchServices {

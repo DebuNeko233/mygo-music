@@ -7,8 +7,8 @@ package app
 import (
 	"testing"
 
-	"netease-music-mygo/internal/netease"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	"netease-music-mygo/internal/features/netease"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
 )
 
 // Visible artist events recover temporary failures automatically and permanent failures only on explicit refresh.

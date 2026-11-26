@@ -16,9 +16,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/desktop/view/tracklist"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	"netease-music-mygo/internal/ui/view/tracklist"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
 )
 
 // With NM_SHOTS set to a directory, the app walks through its views and

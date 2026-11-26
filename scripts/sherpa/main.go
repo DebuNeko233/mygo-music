@@ -6,8 +6,8 @@
 // captions on the device, for the app to download with the model: each
 // platform's, signed on macOS, and Silero's voice activity detector, which
 // every platform shares. It writes them, gzipped, into a directory to
-// upload as the assets of the release internal/speech downloads them from,
-// and internal/speech/natives.go, which names them with their digests:
+// upload as the assets of the release internal/features/speech downloads them from,
+// and internal/features/speech/natives.go, which names them with their digests:
 //
 //	go run ./scripts/sherpa -sign - -out build/sherpa
 //	go run ./scripts/sherpa -sign "Developer ID Application: …" -out build/sherpa
@@ -46,7 +46,7 @@ import (
 	"strings"
 )
 
-// version is the sherpa-onnx the app is written for: internal/speech
+// version is the sherpa-onnx the app is written for: internal/features/speech
 // mirrors the structs of its C API.
 const version = "2.0.1"
 
@@ -172,7 +172,7 @@ func run(identity, out string, platforms []string) error {
 		}
 		fmt.Printf("packed sherpa-onnx %s for %s\n", version, p)
 	}
-	return writeManifest(filepath.Join("internal", "speech", "natives.go"), platforms, libs, vadFile)
+	return writeManifest(filepath.Join("internal", "features", "speech", "natives.go"), platforms, libs, vadFile)
 }
 
 // Extract at most one platform at a time, including when packaging fails.

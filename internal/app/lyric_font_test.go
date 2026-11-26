@@ -10,9 +10,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/preferences"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/preferences"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // The two font controls save independently and resetting one restores its own automatic choice.

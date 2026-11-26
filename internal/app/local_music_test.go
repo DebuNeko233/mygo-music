@@ -14,13 +14,13 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/sessionstore"
-	"netease-music-mygo/internal/userdata"
-	commentsvm "netease-music-mygo/internal/viewmodel/comments"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	sessionstore "netease-music-mygo/internal/features/player/session"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	commentsvm "netease-music-mygo/internal/ui/viewmodel/comments"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 // A local song's queue menu removes its entry instead of offering to add it again.
@@ -29,7 +29,7 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	a.settings = defaultSettings()
 	current := netease.Track{ID: 31, Name: "正在播放的歌"}
 	local := netease.Track{LocalID: 1, Name: "本地待播歌曲"}
-	const path = "../player/testdata/seek.flac"
+	const path = "../features/player/testdata/seek.flac"
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: local, Path: path}}})
 	player.Cue(a.pl, []netease.Track{current})
 	player.Hold(a.pl, 17*time.Second)
@@ -68,7 +68,7 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 	a.settings = defaultSettings()
 	current := netease.Track{LocalID: 1, Name: "当前本地歌曲"}
 	local := netease.Track{LocalID: 2, Name: "另一首本地歌曲"}
-	const path = "../player/testdata/seek.flac"
+	const path = "../features/player/testdata/seek.flac"
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: current, Path: path}, {Track: local, Path: path}}})
 	player.Cue(a.pl, []netease.Track{current, {ID: 2, Name: "在线歌曲"}})
 	a.nav.Current = route{Page: pageLocal}
@@ -133,7 +133,7 @@ func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
 	played := netease.Track{LocalID: 1, Name: "已播本地歌曲"}
 	current := netease.Track{ID: 1, Name: "当前在线歌曲"}
 	next := netease.Track{ID: 2, Name: "下一首在线歌曲"}
-	const path = "../player/testdata/seek.flac"
+	const path = "../features/player/testdata/seek.flac"
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: played, Path: path}}})
 	a.pl.SuspendCache()
 	a.pl.Restore(player.Session{
@@ -165,7 +165,7 @@ func TestLocalTemporaryOpenAfterRestore(t *testing.T) {
 	posts := testPosts(a)
 	t.Cleanup(func() { a.pl.SuspendCache() })
 
-	original, err := filepath.Abs("../player/testdata/seek.flac")
+	original, err := filepath.Abs("../features/player/testdata/seek.flac")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	}
 	file := func(folder, name, destination string) string {
 		t.Helper()
-		b, err := os.ReadFile(filepath.Join("../player/testdata", name))
+		b, err := os.ReadFile(filepath.Join("../features/player/testdata", name))
 		if err != nil {
 			t.Fatal(err)
 		}

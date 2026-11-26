@@ -13,9 +13,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	radiovm "netease-music-mygo/internal/viewmodel/radio"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	radiovm "netease-music-mygo/internal/ui/viewmodel/radio"
 )
 
 // Playback and FM views reuse player facts rather than copying audio or queue state into the ViewModel.

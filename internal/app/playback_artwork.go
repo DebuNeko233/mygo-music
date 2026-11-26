@@ -9,10 +9,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/desktop/view/components"
-	"netease-music-mygo/internal/localmedia"
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/localmedia"
+	"netease-music-mygo/internal/features/netease"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	"netease-music-mygo/internal/ui/view/components"
 )
 
 type playbackCover struct {

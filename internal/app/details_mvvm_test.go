@@ -7,8 +7,8 @@ package app
 import (
 	"testing"
 
-	"netease-music-mygo/internal/netease"
-	albumvm "netease-music-mygo/internal/viewmodel/album"
+	"netease-music-mygo/internal/features/netease"
+	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
 )
 
 // Old owner-profile requests cannot publish subscriptions after leaving and re-entering the same account session.

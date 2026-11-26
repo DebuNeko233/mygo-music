@@ -41,7 +41,7 @@
 | 工具链、依赖、MyGo 替换 | [go.mod](../go.mod)、[go.sum](../go.sum) |
 | 版本、更新源、资源和系统配置 | [mygo.json](../mygo.json)、[macOS 权限](../macos.entitlements.plist) |
 | CI 任务和触发条件 | [.github/workflows](../.github/workflows) |
-| 层次规则 | [architecture.md](architecture.md)，可执行检查为 [boundaries_test.go](../internal/architecture/boundaries_test.go) |
+| 层次规则 | [architecture.md](architecture.md)，可执行检查为 [boundaries_test.go](../internal/app/architecture/boundaries_test.go) |
 | 贡献操作、分支与 PR 格式 | [contributing.md](contributing.md)，根 CONTRIBUTING 与 PR 模板提供入口 |
 | 测试策略 | [testing.md](testing.md)，具体断言在被测代码所属包旁 |
 | 代码风格与文件简介 | [coding-standards.md](coding-standards.md) |

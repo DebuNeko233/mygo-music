@@ -14,9 +14,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	desktopview "netease-music-mygo/internal/desktop/view"
-	"netease-music-mygo/internal/netease"
-	recentvm "netease-music-mygo/internal/viewmodel/recent"
+	"netease-music-mygo/internal/features/netease"
+	desktopview "netease-music-mygo/internal/ui/view"
+	recentvm "netease-music-mygo/internal/ui/viewmodel/recent"
 )
 
 func recentPerfApp(count int) *app {

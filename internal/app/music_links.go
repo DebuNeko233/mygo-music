@@ -7,8 +7,8 @@ package app
 import (
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/netease"
-	linksvm "netease-music-mygo/internal/viewmodel/links"
+	"netease-music-mygo/internal/features/netease"
+	linksvm "netease-music-mygo/internal/ui/viewmodel/links"
 )
 
 var (

@@ -13,12 +13,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/testutil"
-	localvm "netease-music-mygo/internal/viewmodel/local"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	"netease-music-mygo/internal/ui/view/testutil"
+	localvm "netease-music-mygo/internal/ui/viewmodel/local"
 )
 
 // Matching requires a version confirmation, keeps playback intact, and

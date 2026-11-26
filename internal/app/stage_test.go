@@ -11,8 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // All three lyric views choose YRC for the whole song and fall back to LRC together.

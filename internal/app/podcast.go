@@ -5,8 +5,8 @@
 package app
 
 import (
-	"netease-music-mygo/internal/netease"
-	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
+	"netease-music-mygo/internal/features/netease"
+	podcastvm "netease-music-mygo/internal/ui/viewmodel/podcast"
 )
 
 func (a *app) podcastServices() podcastvm.PodcastServices {

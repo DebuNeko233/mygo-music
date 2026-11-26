@@ -5,16 +5,16 @@
 package app
 
 import (
-	desktopview "netease-music-mygo/internal/desktop/view"
-	artistview "netease-music-mygo/internal/desktop/view/artist"
-	"netease-music-mygo/internal/desktop/view/components"
-	libraryview "netease-music-mygo/internal/desktop/view/library"
-	localview "netease-music-mygo/internal/desktop/view/local"
-	"netease-music-mygo/internal/desktop/view/page"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	searchview "netease-music-mygo/internal/desktop/view/search"
-	settingsview "netease-music-mygo/internal/desktop/view/settings"
-	"netease-music-mygo/internal/desktop/view/tracklist"
+	desktopview "netease-music-mygo/internal/ui/view"
+	artistview "netease-music-mygo/internal/ui/view/artist"
+	"netease-music-mygo/internal/ui/view/components"
+	libraryview "netease-music-mygo/internal/ui/view/library"
+	localview "netease-music-mygo/internal/ui/view/local"
+	"netease-music-mygo/internal/ui/view/page"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	searchview "netease-music-mygo/internal/ui/view/search"
+	settingsview "netease-music-mygo/internal/ui/view/settings"
+	"netease-music-mygo/internal/ui/view/tracklist"
 )
 
 type desktopViews struct {

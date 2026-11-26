@@ -13,11 +13,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/library"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/library"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
 )
 
 func offlineFixture(t *testing.T) (*app, chan func()) {

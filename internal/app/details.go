@@ -5,10 +5,10 @@
 package app
 
 import (
-	"netease-music-mygo/internal/netease"
-	albumvm "netease-music-mygo/internal/viewmodel/album"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
-	uservm "netease-music-mygo/internal/viewmodel/user"
+	"netease-music-mygo/internal/features/netease"
+	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
+	uservm "netease-music-mygo/internal/ui/viewmodel/user"
 )
 
 // detailPost publishes only into the account session that started the work.

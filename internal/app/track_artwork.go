@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/localmedia"
-	"netease-music-mygo/internal/netease"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/localmedia"
+	"netease-music-mygo/internal/features/netease"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
 )
 
 var searchTrackArtwork = netease.Search

@@ -11,8 +11,8 @@ import (
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 
-	"netease-music-mygo/internal/netease"
-	accountvm "netease-music-mygo/internal/viewmodel/account"
+	"netease-music-mygo/internal/features/netease"
+	accountvm "netease-music-mygo/internal/ui/viewmodel/account"
 )
 
 // Account controls reuse retained UI state without polling or rebuilding their data.

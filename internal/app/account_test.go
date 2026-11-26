@@ -16,9 +16,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	accountvm "netease-music-mygo/internal/viewmodel/account"
-	uservm "netease-music-mygo/internal/viewmodel/user"
+	"netease-music-mygo/internal/features/netease"
+	accountvm "netease-music-mygo/internal/ui/viewmodel/account"
+	uservm "netease-music-mygo/internal/ui/viewmodel/user"
 )
 
 type confirmedQR struct {

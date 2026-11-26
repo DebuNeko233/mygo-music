@@ -6,14 +6,14 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| [localcatalog](../../internal/localcatalog) | 扫描、目录编辑、歌曲身份、缺失/重定位、歌词文件规则 |
-| [localmedia](../../internal/localmedia/metadata.go) | 读取本地标签、时长等媒体元数据 |
-| [viewmodel/local](../../internal/viewmodel/local) | 曲库状态、过滤与本地操作的状态转换 |
-| [view/local](../../internal/desktop/view/local) | 列表、歌词选择交互 |
+| [localcatalog](../../internal/features/localcatalog) | 扫描、目录编辑、歌曲身份、缺失/重定位、歌词文件规则 |
+| [localmedia](../../internal/features/localmedia/metadata.go) | 读取本地标签、时长等媒体元数据 |
+| [viewmodel/local](../../internal/ui/viewmodel/local) | 曲库状态、过滤与本地操作的状态转换 |
+| [view/local](../../internal/ui/view/local) | 列表、歌词选择交互 |
 | [App local_music](../../internal/app/local_music.go) | 文件选择、后台扫描、目录持久化与播放器协调 |
 | [App local_open](../../internal/app/local_open.go) | 系统打开、临时文件、预备解码结果的交接 |
 | [App local_lyrics](../../internal/app/local_lyrics.go) | 在线歌词候选、用户确认、文件保存与当前播放刷新 |
-| [desktop/artwork](../../internal/desktop/artwork) | 本地内嵌封面、在线图片、匹配与解码缓存 |
+| [desktop/artwork](../../internal/ui/view/artwork) | 本地内嵌封面、在线图片、匹配与解码缓存 |
 | [App track_artwork](../../internal/app/track_artwork.go) | 当前曲目、账号、匹配请求和发布代次协调 |
 
 ## 扫描与目录编辑
@@ -26,7 +26,7 @@
 
 重定位需要更新曲库条目及队列中所有相关条目，包括重复出现的同一文件。批量更新形成一致的新版本，不得逐项发布半更新的队列。新扫描也不能覆盖用户之后进行的元数据或路径编辑。
 
-回归：[catalog_test.go](../../internal/localcatalog/catalog_test.go)、[local_music_test.go](../../internal/app/local_music_test.go)、[local_update_test.go](../../internal/player/local_update_test.go)，模型自身行为在 [viewmodel/local](../../internal/viewmodel/local)旁验证。
+回归：[catalog_test.go](../../internal/features/localcatalog/catalog_test.go)、[local_music_test.go](../../internal/app/local_music_test.go)、[local_update_test.go](../../internal/features/player/local_update_test.go)，模型自身行为在 [viewmodel/local](../../internal/ui/viewmodel/local)旁验证。
 
 ## 搜索、播放与定位
 
@@ -42,7 +42,7 @@
 
 预备解码器成功交给播放器后由播放器关闭；交接前失败、取消或过期则由准备任务关闭。尤其检查 AAC/MP4 底层资源，不能只清空 Go 指针。平台文件关联在 App 的 `fileassoc_*` 中适配，不让 player 依赖操作系统窗口接口。
 
-验证 player 的 [temporary.go](../../internal/player/temporary.go)对应测试、[local_test.go](../../internal/player/local_test.go)、[lifecycle_test.go](../../internal/player/lifecycle_test.go)，以及 App 的本地打开、文件关联集成回归。
+验证 player 的 [temporary.go](../../internal/features/player/temporary.go)对应测试、[local_test.go](../../internal/features/player/local_test.go)、[lifecycle_test.go](../../internal/features/player/lifecycle_test.go)，以及 App 的本地打开、文件关联集成回归。
 
 ## 在线歌词匹配
 
@@ -62,4 +62,4 @@
 
 账号变化、文件修改、缓存迁移与失败重试都影响请求有效性。主色和模糊图是派生数据，失效需与原图一致；不要把大图解码搬进颜色查询或绘制回调。
 
-回归：[artwork 缓存与匹配测试](../../internal/desktop/artwork)、[track_artwork_test.go](../../internal/app/track_artwork_test.go)、[cover_switch_test.go](../../internal/app/cover_switch_test.go)。验证大图限制和资源释放，不能只检查最终 URL。
+回归：[artwork 缓存与匹配测试](../../internal/ui/view/artwork)、[track_artwork_test.go](../../internal/app/track_artwork_test.go)、[cover_switch_test.go](../../internal/app/cover_switch_test.go)。验证大图限制和资源释放，不能只检查最终 URL。

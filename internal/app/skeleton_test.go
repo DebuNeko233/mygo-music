@@ -13,13 +13,13 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
-	accountvm "netease-music-mygo/internal/viewmodel/account"
-	commentsvm "netease-music-mygo/internal/viewmodel/comments"
-	searchvm "netease-music-mygo/internal/viewmodel/search"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	"netease-music-mygo/internal/ui/viewmodel"
+	accountvm "netease-music-mygo/internal/ui/viewmodel/account"
+	commentsvm "netease-music-mygo/internal/ui/viewmodel/comments"
+	searchvm "netease-music-mygo/internal/ui/viewmodel/search"
 )
 
 // skeletonScenes are the views that load, as they show while they do.

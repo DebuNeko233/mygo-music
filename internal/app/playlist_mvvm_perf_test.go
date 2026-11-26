@@ -11,8 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/library"
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/library"
+	"netease-music-mygo/internal/features/netease"
 )
 
 func playlistPerfApp() *app {

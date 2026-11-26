@@ -18,8 +18,8 @@ on:
       - 'scripts/check_linux_packages.sh'
       - '!**_test.go'
       - '!**/testdata/**'
-      - '!internal/testutil/**'
-      - '!internal/viewmodel/internal/testutil/**'
+      - '!internal/ui/view/testutil/**'
+      - '!internal/ui/viewmodel/internal/testutil/**'
       - '.github/workflows/go.yml'
   pull_request:
     paths:
@@ -33,8 +33,8 @@ on:
       - 'scripts/check_linux_packages.sh'
       - '!**_test.go'
       - '!**/testdata/**'
-      - '!internal/testutil/**'
-      - '!internal/viewmodel/internal/testutil/**'
+      - '!internal/ui/view/testutil/**'
+      - '!internal/ui/viewmodel/internal/testutil/**'
       - '.github/workflows/go.yml'
   workflow_dispatch:
 

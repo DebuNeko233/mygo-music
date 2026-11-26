@@ -10,10 +10,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	commentsvm "netease-music-mygo/internal/viewmodel/comments"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	commentsvm "netease-music-mygo/internal/ui/viewmodel/comments"
 )
 
 // The player's bubble opens the current song or episode's comments, not its lyrics or description.

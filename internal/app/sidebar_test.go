@@ -10,9 +10,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	albumvm "netease-music-mygo/internal/viewmodel/album"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
 )
 
 // Each playlist header hides only its own rows without changing the page

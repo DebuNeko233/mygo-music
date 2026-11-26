@@ -18,8 +18,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/preferences"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/preferences"
 )
 
 // cacheTestApp is an app whose songs are kept in a directory of the test's,

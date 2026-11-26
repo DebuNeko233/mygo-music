@@ -9,12 +9,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/desktop/shortcuts"
-	"netease-music-mygo/internal/desktop/view/components"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	settingsview "netease-music-mygo/internal/desktop/view/settings"
-	"netease-music-mygo/internal/preferences"
+	"netease-music-mygo/internal/features/preferences"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	"netease-music-mygo/internal/ui/view/components"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	settingsview "netease-music-mygo/internal/ui/view/settings"
+	"netease-music-mygo/internal/ui/view/shortcuts"
 )
 
 func (a *app) bindSettingsViews() {

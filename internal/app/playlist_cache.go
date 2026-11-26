@@ -5,8 +5,8 @@
 package app
 
 import (
-	"netease-music-mygo/internal/diskcache"
-	libraryvm "netease-music-mygo/internal/viewmodel/library"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	libraryvm "netease-music-mygo/internal/ui/viewmodel/library"
 )
 
 // A playlist can be evicted before its snapshot reaches disk. Keep the

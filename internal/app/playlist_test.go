@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
 )
 
 // A playlist asked to play while it loads plays once it is here, rather than

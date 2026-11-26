@@ -8,7 +8,7 @@ import (
 	"math"
 	"testing"
 
-	"netease-music-mygo/internal/mixvol"
+	"netease-music-mygo/internal/features/mixvol"
 )
 
 // The volume the system's mixer is set to becomes the volume the app shows,

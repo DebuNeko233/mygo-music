@@ -14,9 +14,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // Stage and wall covers must hold the old picture while loading, blend to

@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	localvm "netease-music-mygo/internal/viewmodel/local"
+	"netease-music-mygo/internal/features/netease"
+	localvm "netease-music-mygo/internal/ui/viewmodel/local"
 )
 
 var searchLocalLyrics = netease.Search

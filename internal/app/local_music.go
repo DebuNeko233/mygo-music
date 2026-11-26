@@ -9,11 +9,11 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/audioformat"
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/userdata"
-	localvm "netease-music-mygo/internal/viewmodel/local"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	localvm "netease-music-mygo/internal/ui/viewmodel/local"
+	"netease-music-mygo/internal/utils/audioformat"
+	"netease-music-mygo/internal/utils/userdata"
 )
 
 var localExtensions = audioformat.Extensions()

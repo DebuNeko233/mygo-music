@@ -12,8 +12,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/netease"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
 )
 
 func seedOfflineCaches(t *testing.T, a *app) {

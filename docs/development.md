@@ -59,7 +59,7 @@ CGO_ENABLED=0 go test ./...
 
 ```sh
 mkdir -p .gocache
-GOCACHE="$PWD/.gocache" CGO_ENABLED=0 go test ./internal/lyrics
+GOCACHE="$PWD/.gocache" CGO_ENABLED=0 go test ./internal/features/lyrics
 ```
 
 [.gitignore](../.gitignore)已覆盖 `build/`、`.gocache/`、`debug-frames/`、`profiles/` 等产物。缓存、个人歌词报告、账号数据、安装包和一次性截图不提交；可公开回归样本放在所属包 `testdata/`。

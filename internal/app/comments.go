@@ -7,9 +7,9 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/view/components"
-	"netease-music-mygo/internal/netease"
-	commentsvm "netease-music-mygo/internal/viewmodel/comments"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/ui/view/components"
+	commentsvm "netease-music-mygo/internal/ui/viewmodel/comments"
 )
 
 // These load a page of a thread's comments, and like a comment or unlike

@@ -15,10 +15,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/library"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	libraryvm "netease-music-mygo/internal/viewmodel/library"
+	"netease-music-mygo/internal/features/library"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	libraryvm "netease-music-mygo/internal/ui/viewmodel/library"
 )
 
 // editTestApp is signed in, with liked songs, two playlists of their own

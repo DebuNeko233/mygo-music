@@ -1,0 +1,803 @@
+/*
+定义核心歌曲与歌单数据，封装请求及推荐、详情、播放地址和歌词接口。
+*/
+
+package netease
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"netease-music-mygo/internal/utils/audioformat"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+// The public NetEase Cloud Music API, as the web player calls it, without
+// an account: what anyone may listen to.
+
+const apiBase = "https://music.163.com"
+
+const UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+var httpClient = &http.Client{Timeout: 20 * time.Second}
+
+type Artist struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+type Album struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	PicURL string `json:"picUrl"`
+}
+
+type Track struct {
+	ID          int64    `json:"id"`
+	LocalID     int64    `json:"localId,omitempty"` // local library identity in a playback queue
+	Temporary   bool     `json:"-"`                 // an open-file queue entry played once
+	Name        string   `json:"name"`
+	Artists     []Artist `json:"ar"`
+	Album       Album    `json:"al"`
+	Duration    int64    `json:"dt"` // milliseconds
+	TrackNumber int      `json:"no,omitempty"`
+	ISRC        string   `json:"isrc,omitempty"`
+	DiscNumber  string   `json:"cd,omitempty"`
+	PublishTime int64    `json:"publishTime,omitempty"`
+	Fee         int      `json:"fee"`
+	Alias       []string `json:"alia"`
+	// Reason says why a daily recommendation was picked; Alg identifies its
+	// recommendation algorithm when NetEase provides one.
+	Reason string `json:"reason"`
+	Alg    string `json:"alg"`
+	// Privilege is what the listener may do with the track, if known.
+	Privilege *Privilege `json:"privilege"`
+	// A podcast's episode plays as a track of its audio, ID, with the
+	// episode's ProgramID, the PodcastID it is in, and what it is about.
+	ProgramID   int64  `json:"programId,omitempty"`
+	PodcastID   int64  `json:"podcastId,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Cloud marks an entry from the signed-in listener's music cloud.
+	Cloud bool `json:"cloud,omitempty"`
+}
+
+func (t *Track) IsLocal() bool { return t.LocalID > 0 }
+
+// Key identifies a track in a mixed playback queue. Cloud IDs are positive.
+func (t *Track) Key() int64 {
+	if t.IsLocal() {
+		return -t.LocalID
+	}
+	return t.ID
+}
+
+// Privilege is what NetEase lets the listener signed in, or nobody, do
+// with a track.
+type Privilege struct {
+	ID int64 `json:"id"`
+	St int   `json:"st"` // below 0: taken down
+	Pl int   `json:"pl"` // the best bit rate the listener may play; 0 for none
+}
+
+// withPrivileges gives tracks their privileges, matched by ID.
+func withPrivileges(tracks []Track, privileges []Privilege) {
+	byID := make(map[int64]*Privilege, len(privileges))
+	for i := range privileges {
+		byID[privileges[i].ID] = &privileges[i]
+	}
+	for i := range tracks {
+		if p := byID[tracks[i].ID]; p != nil {
+			tracks[i].Privilege = p
+		}
+	}
+}
+
+// ArtistNames joins the track's artists as the credits read.
+func (t *Track) ArtistNames() string {
+	names := make([]string, len(t.Artists))
+	for i, a := range t.Artists {
+		names[i] = a.Name
+	}
+	return strings.Join(names, ", ")
+}
+
+// Playable reports whether the listener can play the whole track: as their
+// privilege says, or else as its fee does for anyone, VIP songs (1) and
+// paid albums (4) giving only a preview.
+func (t *Track) Playable() bool {
+	if t.Cloud {
+		// Catalogue privileges do not describe an uploaded file. Its stream
+		// endpoint still checks ownership and availability.
+		return t.ID > 0
+	}
+	if t.ProgramID > 0 {
+		// An episode's audio has no privilege: whether it streams, as a
+		// paid one bought, is up to its stream.
+		return true
+	}
+	if t.Privilege != nil {
+		return t.Privilege.St >= 0 && t.Privilege.Pl > 0
+	}
+	return t.Fee != 1 && t.Fee != 4
+}
+
+func (t *Track) Length() time.Duration { return time.Duration(t.Duration) * time.Millisecond }
+
+// URL is the track's page on the NetEase website.
+func (t *Track) URL() string {
+	if t.ProgramID > 0 {
+		return apiBase + "/program?id=" + strconv.FormatInt(t.ProgramID, 10)
+	}
+	return apiBase + "/song?id=" + strconv.FormatInt(t.ID, 10)
+}
+
+// Thread names the track's comments, and what NetEase likes it by, for an
+// episode: the episode's, not its audio's.
+func (t *Track) Thread() string {
+	if t.ProgramID > 0 {
+		return programThread(t.ProgramID)
+	}
+	return "R_SO_4_" + strconv.FormatInt(t.ID, 10)
+}
+
+// TrackID is a playlist entry: a song that a long playlist lists by id only.
+type TrackID struct {
+	ID int64 `json:"id"`
+}
+
+type Playlist struct {
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	CoverURL    string  `json:"coverImgUrl"`
+	PicURL      string  `json:"picUrl"`
+	Description string  `json:"description"`
+	PlayCount   float64 `json:"playCount"`
+	TrackCount  int     `json:"trackCount"`
+	UpdateFreq  string  `json:"updateFrequency"`
+	SpecialType int     `json:"specialType"` // 5: the listener's liked songs
+	Privacy     int     `json:"privacy"`     // 10: only its creator sees it
+	Subscribed  bool    `json:"subscribed"`  // the listener saved it
+	Creator     struct {
+		UserID   int64  `json:"userId"`
+		Nickname string `json:"nickname"`
+	} `json:"creator"`
+	Tracks   []Track   `json:"tracks"`
+	TrackIDs []TrackID `json:"trackIds"`
+	// Preview holds a chart's top songs, as its card shows them.
+	Preview []ChartLine `json:"-"`
+}
+
+// ChartLine is a song at the top of a chart: its name and its artist.
+type ChartLine struct {
+	First  string `json:"first"`
+	Second string `json:"second"`
+}
+
+func (p *Playlist) Cover() string {
+	if p.CoverURL != "" {
+		return p.CoverURL
+	}
+	return p.PicURL
+}
+
+type apiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Msg     string `json:"msg"`
+}
+
+// codeError preserves a risk-check refusal whichever gateway returned it.
+func (e apiError) codeError(path string) error {
+	msg := e.Message
+	if msg == "" {
+		msg = e.Msg
+	}
+	err := responseError{e.Code, fmt.Sprintf("netease: %s: code %d %s", path, e.Code, msg)}
+	switch e.Code {
+	case -460:
+		return fmt.Errorf("%w: %w", ErrRiskControl, err)
+	case 301:
+		return fmt.Errorf("%w: %w", ErrNotLoggedIn, err)
+	default:
+		return err
+	}
+}
+
+func get(path string, query url.Values, out any) error {
+	return getContext(context.Background(), path, query, out)
+}
+
+func getContext(ctx context.Context, path string, query url.Values, out any) error {
+	u := apiBase + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return err
+	}
+	return do(req, out)
+}
+
+// csrf returns the token the web API wants alongside a request that changes
+// an account: the one the session cookies carry, empty before signing in.
+func csrf() string {
+	if httpClient.Jar == nil {
+		return ""
+	}
+	return csrfIn(httpClient.Jar.Cookies(siteURL))
+}
+
+// csrfIn returns the token among cookies, empty if none carries one.
+func csrfIn(cookies []*http.Cookie) string {
+	for _, c := range cookies {
+		if c.Name == "__csrf" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
+func post(path string, form url.Values, out any) error {
+	return postAs(path, form, nil, out)
+}
+
+// postAs is post with the request carrying cookies of its own, for a request
+// that has to reach the account a session was kept by after it was cleared
+// here.
+func postAs(path string, form url.Values, cookies []*http.Cookie, out any) error {
+	return postAsClient(httpClient, path, form, cookies, out)
+}
+
+func postAsClient(client *http.Client, path string, form url.Values, cookies []*http.Cookie, out any) error {
+	return postAsClientContext(context.Background(), client, path, form, cookies, out)
+}
+
+func postAsClientContext(ctx context.Context, client *http.Client, path string, form url.Values, cookies []*http.Cookie, out any) error {
+	// The web API drops what it does not know the caller meant: following an
+	// artist and signing out came back with no effect at all without it.
+	token := ""
+	if client.Jar != nil {
+		token = csrfIn(client.Jar.Cookies(siteURL))
+	}
+	if cookies != nil {
+		token = csrfIn(cookies)
+	}
+	form.Set("csrf_token", token)
+	req, err := http.NewRequestWithContext(ctx, "POST", apiBase+path+"?csrf_token="+url.QueryEscape(token), strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if len(cookies) > 0 {
+		parts := make([]string, 0, len(cookies))
+		for _, c := range cookies {
+			parts = append(parts, c.Name+"="+c.Value)
+		}
+		req.Header.Set("Cookie", strings.Join(parts, "; "))
+	}
+	return doWithClient(client, req, out)
+}
+
+func do(req *http.Request, out any) error {
+	return doWithClient(httpClient, req, out)
+}
+
+func doWithClient(client *http.Client, req *http.Request, out any) error {
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("Referer", apiBase+"/")
+	res, err := DoRequest(client, req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return responseError{res.StatusCode, fmt.Sprintf("netease: %s: %s", req.URL.Path, res.Status)}
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	var status apiError
+	if err := json.Unmarshal(body, &status); err != nil {
+		return fmt.Errorf("netease: %s: %w", req.URL.Path, err)
+	}
+	if status.Code != 200 {
+		return status.codeError(req.URL.Path)
+	}
+	return json.Unmarshal(body, out)
+}
+
+// FeaturedPlaylists returns the playlists the home page recommends.
+func FeaturedPlaylists(limit int) ([]Playlist, error) {
+	var res struct {
+		Result []Playlist `json:"result"`
+	}
+	err := get("/api/personalized/playlist", url.Values{"limit": {strconv.Itoa(limit)}}, &res)
+	return res.Result, err
+}
+
+// DailySongs returns the day's recommended songs: chosen for the listener
+// once signed in, and what many listen to before.
+func DailySongs() ([]Track, error) {
+	var res struct {
+		Data struct {
+			DailySongs []Track `json:"dailySongs"`
+		} `json:"data"`
+	}
+	if err := get("/api/v3/discovery/recommend/songs", nil, &res); err != nil {
+		return nil, err
+	}
+	// They come without privileges: the songs' details have them.
+	songs := res.Data.DailySongs
+	detailPrivileges(songs)
+	return songs, nil
+}
+
+// detailPrivileges gives songs the privileges their details carry for the
+// listener, which are right where other lists have none, or wrong ones.
+func detailPrivileges(songs []Track) {
+	ids := make([]int64, len(songs))
+	for i := range songs {
+		ids[i] = songs[i].ID
+	}
+	details, err := SongDetails(ids)
+	if err != nil {
+		return
+	}
+	var privileges []Privilege
+	for _, d := range details {
+		if d.Privilege != nil {
+			privileges = append(privileges, *d.Privilege)
+		}
+	}
+	withPrivileges(songs, privileges)
+}
+
+// Charts returns the charts, each with its top three songs.
+func Charts() ([]Playlist, error) {
+	var res struct {
+		List []struct {
+			Playlist
+			Tracks []ChartLine `json:"tracks"`
+		} `json:"list"`
+	}
+	if err := get("/api/toplist/detail", nil, &res); err != nil {
+		return nil, err
+	}
+	out := make([]Playlist, len(res.List))
+	for i, l := range res.List {
+		out[i] = l.Playlist
+		out[i].Tracks = nil
+		out[i].Preview = l.Tracks
+	}
+	return out, nil
+}
+
+// PlaylistDetail returns a playlist with all of its tracks, up to the ten
+// thousand NetEase keeps in one.
+func PlaylistDetail(id int64) (*Playlist, error) {
+	var res struct {
+		Playlist   Playlist    `json:"playlist"`
+		Privileges []Privilege `json:"privileges"`
+	}
+	q := url.Values{"id": {strconv.FormatInt(id, 10)}, "n": {"1000"}}
+	if err := get("/api/v6/playlist/detail", q, &res); err != nil {
+		return nil, err
+	}
+	p := &res.Playlist
+	withPrivileges(p.Tracks, res.Privileges)
+	// Its privileges mark VIP songs as taken down that a subscriber may
+	// play, as Stan's: the songs' details say right.
+	detailPrivileges(p.Tracks)
+	// Long playlists list only some of their tracks in full: the rest by
+	// id, which their details have to fill in.
+	if ids := missingTracks(p.Tracks, p.TrackIDs); len(ids) > 0 {
+		// A detail that is cut short still returns the songs it got: a
+		// playlist showing part of itself beats one that fails whole.
+		more, _ := SongDetails(ids)
+		p.Tracks = playlistOrder(p.Tracks, more, p.TrackIDs)
+	}
+	return p, nil
+}
+
+// playlistOrder puts listed songs, and the details fetched for those it left
+// out, in the order the playlist keeps: the details come in a batch of their
+// own, and appending them at the end put every song past the first thousand
+// where the playlist does not have it. A song a playlist holds twice stays
+// twice, and one the ids do not mention stays at the end.
+func playlistOrder(listed, more []Track, trackIDs []TrackID) []Track {
+	if len(trackIDs) == 0 {
+		return append(listed, more...)
+	}
+	byID := make(map[int64]Track, len(listed)+len(more))
+	for _, t := range listed {
+		byID[t.ID] = t
+	}
+	for _, t := range more {
+		byID[t.ID] = t // fetched for its song's id: its details are the fuller
+	}
+	want := make(map[int64]int, len(trackIDs))
+	for _, id := range trackIDs {
+		want[id.ID]++
+	}
+	ordered := make([]Track, 0, len(trackIDs)+len(listed))
+	for _, id := range trackIDs {
+		if t, ok := byID[id.ID]; ok && want[id.ID] > 0 {
+			ordered = append(ordered, t)
+			want[id.ID]--
+		}
+	}
+	for _, t := range listed {
+		if want[t.ID] > 0 {
+			ordered = append(ordered, t)
+			want[t.ID]--
+		}
+	}
+	return ordered
+}
+
+// missingTracks returns the ids of a playlist's songs that come without
+// details, in the playlist's order.
+func missingTracks(tracks []Track, trackIDs []TrackID) []int64 {
+	listed := make(map[int64]bool, len(tracks))
+	for _, t := range tracks {
+		listed[t.ID] = true
+	}
+	ids := make([]int64, 0, len(trackIDs))
+	for _, t := range trackIDs {
+		if !listed[t.ID] {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids
+}
+
+// SongDetails returns the tracks of ids, in their order. It goes through
+// the eapi: the web API's privileges call some VIP songs taken down for
+// subscribers, whom the eapi streams them to.
+func SongDetails(ids []int64) ([]Track, error) {
+	return songDetails(context.Background(), ids)
+}
+
+// SongDetailsContext is the cancellable form used by metadata exports.
+func SongDetailsContext(ctx context.Context, ids []int64) ([]Track, error) {
+	return songDetails(ctx, ids)
+}
+
+func songDetails(ctx context.Context, ids []int64) ([]Track, error) {
+	// A playlist of ten thousand songs needs twenty-five batches of four
+	// hundred: asked one after another, it takes half a minute to show.
+	const batch, together = 400, 4
+	batches := (len(ids) + batch - 1) / batch
+	if batches == 0 {
+		return nil, nil
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	got := make([][]Track, batches)
+	errs := make([]error, batches)
+	var wg sync.WaitGroup
+	waiting := make(chan struct{}, together)
+	for i := range batches {
+		wg.Add(1)
+		waiting <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-waiting }()
+			lo, hi := i*batch, min((i+1)*batch, len(ids))
+			c := make([]map[string]int64, hi-lo)
+			for j, id := range ids[lo:hi] {
+				c[j] = map[string]int64{"id": id}
+			}
+			b, _ := json.Marshal(c)
+			var res struct {
+				Code       int         `json:"code"`
+				Songs      []Track     `json:"songs"`
+				Privileges []Privilege `json:"privileges"`
+			}
+			if err := eapiPostContext(ctx, "/api/v3/song/detail", map[string]any{"c": string(b)}, &res); err != nil {
+				errs[i] = err
+				return
+			}
+			if res.Code != 200 {
+				errs[i] = (apiError{Code: res.Code}).codeError("song detail")
+				return
+			}
+			withPrivileges(res.Songs, res.Privileges)
+			got[i] = res.Songs
+		}()
+	}
+	wg.Wait()
+	// A batch that failed cuts the rest short, as one request would have:
+	// the ids keep their order, and a playlist showing part of itself
+	// beats none of it.
+	var out []Track
+	for i := range got {
+		if errs[i] != nil {
+			return out, errs[i]
+		}
+		out = append(out, got[i]...)
+	}
+	return out, nil
+}
+
+// ArtistProfile is who an artist is, as their page shows them, with the
+// songs they are best known for.
+type ArtistProfile struct {
+	Artist
+	Avatar    string   `json:"img1v1Url"` // square
+	PicURL    string   `json:"picUrl"`    // wide
+	Alias     []string `json:"alias"`
+	Trans     string   `json:"trans"`
+	BriefDesc string   `json:"briefDesc"`
+	MusicSize int      `json:"musicSize"`
+	AlbumSize int      `json:"albumSize"`
+	Followed  bool     `json:"followed"` // by the listener signed in
+	// AccountID is the artist's own account, which posts their events, or 0.
+	AccountID int64   `json:"accountId"`
+	Songs     []Track `json:"-"`
+}
+
+// ArtistDetail returns an artist with their 50 most popular songs.
+func ArtistDetail(id int64) (*ArtistProfile, error) {
+	var res struct {
+		Artist   ArtistProfile `json:"artist"`
+		HotSongs []Track       `json:"hotSongs"`
+	}
+	if err := get("/api/v1/artist/"+strconv.FormatInt(id, 10), nil, &res); err != nil {
+		return nil, err
+	}
+	ar := &res.Artist
+	ar.Songs = res.HotSongs
+	detailPrivileges(ar.Songs)
+	return ar, nil
+}
+
+// ArtistLatestSongs returns up to limit of an artist's songs, the newest
+// first.
+func ArtistLatestSongs(id int64, limit int) ([]Track, error) {
+	var res struct {
+		Songs []struct {
+			ID int64 `json:"id"`
+		} `json:"songs"`
+	}
+	form := url.Values{"id": {strconv.FormatInt(id, 10)}, "order": {"time"}, "limit": {strconv.Itoa(limit)}, "offset": {"0"}}
+	if err := post("/api/v1/artist/songs", form, &res); err != nil {
+		return nil, err
+	}
+	// Some artists' songs come in the old shape (artists, album, duration)
+	// that Track doesn't read: their details have them in the new one, as
+	// the listener's privileges.
+	ids := make([]int64, len(res.Songs))
+	for i, s := range res.Songs {
+		ids[i] = s.ID
+	}
+	return SongDetails(ids)
+}
+
+var ErrUnavailable = errors.New("this song isn't available to stream")
+
+// ErrNotLoggedIn is NetEase turning a request down for want of a session:
+// what an expired one gets. It is not about the song, so nothing that
+// meets it may take the song for one that cannot play.
+var ErrNotLoggedIn = errors.New("the listener is not signed in")
+
+// ErrRiskControl is NetEase temporarily refusing a playback address while
+// checking the network. The address may work a little later; callers should
+// retry it after a longer gap rather than treating the song as unavailable.
+var ErrRiskControl = errors.New("NetEase is checking the network")
+
+// Stream is where a track streams from, and what it is.
+type Stream struct {
+	URL  string `json:"-"`
+	Size int64  `json:"size"` // in bytes
+	// Type is the format: mp3, or flac for the lossless levels.
+	Type string `json:"type"`
+	// Level is the level served, which may be below the one asked for.
+	Level string `json:"level"`
+	// Bitrate is the stream's actual bit rate in bits per second.
+	Bitrate int `json:"br"`
+	// Gain is how many dB to change the track by to sound as loud as
+	// others, and Peak its loudest sample, 1 at full scale, or 0 if
+	// unknown.
+	Gain float64 `json:"gain"`
+	Peak float64 `json:"peak"`
+}
+
+// Levels are the stream levels, from the lowest.
+var Levels = []string{"standard", "higher", "exhigh", "lossless", "hires"}
+
+// Lossless reports whether level streams FLAC.
+func Lossless(level string) bool { return level == "lossless" || level == "hires" }
+
+// SongURL returns where to stream a track, MP3 or FLAC, at level (one of
+// Levels) or the best below it the listener may play. The desktop gateway
+// carries the session, so VIP songs play for subscribers; its web counterpart
+// is a fallback when that gateway refuses or loses the request.
+func SongURL(id int64, level string) (*Stream, error) {
+	return SongURLContext(context.Background(), id, level)
+}
+
+// SongURLContext is SongURL with cancellation for a download or a retired view.
+func SongURLContext(ctx context.Context, id int64, level string) (*Stream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	const path = "/api/song/enhance/player/url/v1"
+	encode := "mp3"
+	if Lossless(level) {
+		encode = "flac"
+	}
+	ids := fmt.Sprintf("[%d]", id)
+	var res songURLAnswer
+	desktopErr := eapiPostContext(ctx, path, map[string]any{"ids": ids, "level": level, "encodeType": encode}, &res)
+	if desktopErr == nil {
+		if st, err := res.stream(path, level); err == nil {
+			return st, nil
+		} else if errors.Is(err, ErrUnavailable) || errors.Is(err, ErrNotLoggedIn) {
+			return nil, err
+		} else {
+			desktopErr = err
+		}
+	}
+	var fallback songURLAnswer
+	if err := postAsClientContext(ctx, httpClient, path, url.Values{"ids": {ids}, "level": {level}, "encodeType": {encode}}, nil, &fallback); err == nil {
+		if st, err := fallback.stream(path, level); err == nil {
+			return st, nil
+		} else if errors.Is(err, ErrUnavailable) {
+			// The other gateway offered only a preview: keep the refusal,
+			// rather than mistaking a VIP song for a whole track.
+			return nil, desktopErr
+		}
+	}
+	return nil, desktopErr
+}
+
+type songURLData struct {
+	Stream
+	Code          int             `json:"code"`
+	URL           string          `json:"url"`
+	Peak          *float64        `json:"peak"`
+	FreeTrialInfo json.RawMessage `json:"freeTrialInfo"`
+}
+
+type songURLAnswer struct {
+	Code    int           `json:"code"`
+	Message string        `json:"message"`
+	Msg     string        `json:"msg"`
+	Data    []songURLData `json:"data"`
+}
+
+func (res *songURLAnswer) stream(path, level string) (*Stream, error) {
+	// Account/risk refusals are distinct from a song's availability.
+	if res.Code != 200 {
+		return nil, apiError{Code: res.Code, Message: res.Message, Msg: res.Msg}.codeError(path)
+	}
+	if len(res.Data) == 0 {
+		return nil, errors.New("netease: no playback URL returned")
+	}
+	if res.Data[0].Code == http.StatusNotFound {
+		return nil, ErrUnavailable
+	}
+	return res.Data[0].stream(level)
+}
+
+// The two endpoints have different response envelopes but share the same
+// audio fields. Only playback supplies a fallback quality for cache naming.
+func (d songURLData) stream(fallbackLevel string) (*Stream, error) {
+	if len(d.FreeTrialInfo) > 0 && string(d.FreeTrialInfo) != "null" {
+		return nil, ErrUnavailable
+	}
+	if strings.TrimSpace(d.URL) == "" {
+		return nil, errors.New("netease: no audio URL returned")
+	}
+	s := d.Stream
+	if kind := audioformat.Normalize(s.Type); kind != "" {
+		s.Type = kind
+	} else if strings.TrimSpace(s.Type) != "" {
+		return nil, fmt.Errorf("unsupported format %s", s.Type)
+	}
+	if d.Peak != nil {
+		s.Peak = *d.Peak
+	}
+	if !slices.Contains(Levels, s.Level) {
+		s.Level = fallbackLevel
+	}
+	s.URL = strings.Replace(d.URL, "http://", "https://", 1)
+	return &s, nil
+}
+
+// Lyrics returns a track's timed lyrics, their translation if any, and
+// its word-timed lyrics (YRC) where NetEase has them, which only the
+// desktop client's API serves.
+//
+// lv asks for whichever version of them NetEase keeps: asked for the
+// first one instead, it serves nothing for some songs — 25 of the 300 in
+// two charts — which the player takes for an instrumental.
+func Lyrics(id int64) (lrc, translation, yrc string, err error) {
+	return LyricsContext(context.Background(), id)
+}
+
+// LyricsContext keeps download cancellation attached to both lyric requests.
+func LyricsContext(ctx context.Context, id int64) (lrc, translation, yrc string, err error) {
+	var res struct {
+		Lrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"lrc"`
+		Tlyric struct {
+			Lyric string `json:"lyric"`
+		} `json:"tlyric"`
+	}
+	q := url.Values{"id": {strconv.FormatInt(id, 10)}, "lv": {"-1"}, "kv": {"-1"}, "tv": {"-1"}}
+	if err = getContext(ctx, "/api/song/lyric", q, &res); err != nil {
+		return "", "", "", err
+	}
+	var words struct {
+		Yrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"yrc"`
+	}
+	data := map[string]any{"id": strconv.FormatInt(id, 10), "cp": false, "tv": 0, "lv": 0, "rv": 0, "kv": 0, "yv": 0, "ytv": 0, "yrv": 0}
+	if eapiPostContext(ctx, "/api/song/lyric/v1", data, &words) == nil {
+		yrc = words.Yrc.Lyric
+	}
+	return res.Lrc.Lyric, res.Tlyric.Lyric, yrc, nil
+}
+
+// CoverURL treats NetEase's generic music-note image as missing artwork.
+// Keep uploaded/custom images even when they have no catalogue album ID.
+func CoverURL(pic string) string {
+	pic = strings.TrimSpace(pic)
+	if !strings.Contains(pic, "/109951171180358170.jpg") {
+		return pic
+	}
+	if u, err := url.Parse(pic); err == nil && strings.HasSuffix(strings.ToLower(u.Hostname()), ".music.126.net") && strings.HasSuffix(u.Path, "/109951171180358170.jpg") {
+		return ""
+	}
+	return pic
+}
+
+// Sized asks the image CDN for a picture of n×n pixels.
+func Sized(pic string, n int) string {
+	pic = CoverURL(pic)
+	if pic == "" {
+		return ""
+	}
+	pic = strings.Replace(pic, "http://", "https://", 1)
+	return fmt.Sprintf("%s?param=%dy%d", pic, n, n)
+}
+
+// Fetch returns what is at url, as a cover the image CDN serves.
+func Fetch(url string) ([]byte, error) {
+	return FetchContext(context.Background(), url)
+}
+
+// FetchContext reuses the artwork store while allowing its consumer to cancel.
+func FetchContext(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", UserAgent)
+	if cache := images.Load(); cache != nil {
+		return cache.fetch(req)
+	}
+	res, err := DoRequest(httpClient, req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, responseError{res.StatusCode, res.Status}
+	}
+	return io.ReadAll(res.Body)
+}

@@ -19,9 +19,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
 )
 
 func listCoverBitmap() *ui.Bitmap {

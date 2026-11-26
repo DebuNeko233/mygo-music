@@ -18,10 +18,10 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 // A missing cover waits for connectivity and reuses its cached match on

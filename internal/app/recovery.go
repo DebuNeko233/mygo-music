@@ -9,10 +9,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	desktopview "netease-music-mygo/internal/desktop/view"
-	"netease-music-mygo/internal/netease"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
-	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	"netease-music-mygo/internal/features/netease"
+	desktopview "netease-music-mygo/internal/ui/view"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
+	cloudvm "netease-music-mygo/internal/ui/viewmodel/cloud"
 )
 
 type recoveryState struct {

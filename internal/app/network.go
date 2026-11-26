@@ -7,7 +7,7 @@ package app
 import (
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
 )
 
 type networkState struct {

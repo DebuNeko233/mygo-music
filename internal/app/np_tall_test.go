@@ -17,13 +17,13 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/desktop/view/shell"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/testutil"
-	commentsvm "netease-music-mygo/internal/viewmodel/comments"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	"netease-music-mygo/internal/ui/view/shell"
+	"netease-music-mygo/internal/ui/view/testutil"
+	commentsvm "netease-music-mygo/internal/ui/viewmodel/comments"
 )
 
 func tallLyricsApp(t *testing.T) *app {

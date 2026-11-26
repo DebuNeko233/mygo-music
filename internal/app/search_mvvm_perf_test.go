@@ -10,9 +10,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
-	searchvm "netease-music-mygo/internal/viewmodel/search"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/ui/viewmodel"
+	searchvm "netease-music-mygo/internal/ui/viewmodel/search"
 )
 
 func searchPerfApp() *app {

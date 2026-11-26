@@ -15,12 +15,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/diskcache"
-	"netease-music-mygo/internal/library"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
-	libraryvm "netease-music-mygo/internal/viewmodel/library"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/library"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	"netease-music-mygo/internal/ui/viewmodel"
+	libraryvm "netease-music-mygo/internal/ui/viewmodel/library"
 )
 
 func refreshFixture(t *testing.T) (*app, chan func(), *time.Time) {

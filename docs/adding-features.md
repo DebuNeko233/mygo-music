@@ -14,7 +14,7 @@
 
 ```sh
 rg -n 'HiddenSidebarPages|sidebarSettings|func .*sidebar' internal
-rg --files internal/viewmodel internal/desktop/view
+rg --files internal/ui/viewmodel internal/ui/view
 rg -n '^func Test' internal/app/sidebar_settings_test.go
 ```
 
@@ -24,13 +24,13 @@ rg -n '^func Test' internal/app/sidebar_settings_test.go
 
 | 新增内容 | 目标位置 |
 | --- | --- |
-| API 请求与响应解析 | `netease` |
+| API 请求与响应解析 | `features/netease` |
 | 无界面的算法或共享数据 | 对应底层服务/模型 |
-| 功能加载、请求身份、重试、表单 | `viewmodel/<feature>` |
-| 控件、布局、焦点、动画 | `desktop/view` 或功能视图子包 |
-| 用户偏好字段和持久化 | `preferences` |
+| 功能加载、请求身份、重试、表单 | `ui/viewmodel/<feature>` |
+| 控件、布局、焦点、动画 | `ui/view` 或功能视图子包 |
+| 用户偏好字段和持久化 | `features/preferences` |
 | 系统事件或跨功能操作 | App 适配文件与接线组 |
-| 导航种类与历史规则 | `navigation` |
+| 导航种类与历史规则 | `features/navigation` |
 | 业务验证 | 最接近被验证所有者的测试包 |
 
 复用已有包优先于建新包。若需要新包，说明它独立拥有的状态或依赖，检查是否会形成反向导入。只拆文件就能解决时不要增加层级。
@@ -39,11 +39,11 @@ rg -n '^func Test' internal/app/sidebar_settings_test.go
 
 以现有侧栏功能为参照：
 
-1. 在 [preferences.Settings](../internal/preferences/settings.go)中表达持久化值；旧文件缺字段时仍显示入口，因此使用 `HiddenSidebarPages` 的零值语义。
-2. 在 [settings/sidebar.go](../internal/desktop/view/settings/sidebar.go)中提供七项开关，显示文案属于视图。反向绑定在输入事件后提交，调用已有 Changed。
-3. 在 [settings.go](../internal/desktop/view/settings/settings.go)中注册可搜索设置分类，统一说明不在每行重复。
+1. 在 [preferences.Settings](../internal/features/preferences/settings.go)中表达持久化值；旧文件缺字段时仍显示入口，因此使用 `HiddenSidebarPages` 的零值语义。
+2. 在 [settings/sidebar.go](../internal/ui/view/settings/sidebar.go)中提供七项开关，显示文案属于视图。反向绑定在输入事件后提交，调用已有 Changed。
+3. 在 [settings.go](../internal/ui/view/settings/settings.go)中注册可搜索设置分类，统一说明不在每行重复。
 4. App [view.go](../internal/app/view.go)只传偏好值给 shell，不迁移路由或重建播放器。
-5. [shell/sidebar.go](../internal/desktop/view/shell/sidebar.go)过滤可选入口，保留固定入口与原有控件身份。
+5. [shell/sidebar.go](../internal/ui/view/shell/sidebar.go)过滤可选入口，保留固定入口与原有控件身份。
 6. 用 [App 集成测试](../internal/app/sidebar_settings_test.go)验证点击、保存、重载、搜索及播放不变；shell 测试验证固定入口和恢复导航；preferences 测试验证旧文件兼容。
 
 这个功能不需要新服务、goroutine、ViewModel 或轮询。若以后新增可隐藏项，必须先明确产品范围，再同步结构、UI、过滤、持久化兼容与功能文档，不能仅把页面枚举全部做成开关。
