@@ -2,7 +2,7 @@
   "name": "Nyago Music",
   "identifier": "io.github.debuneko233.nyagomusic",
   "slug": "nyago-music",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "out": "build",
   "urlSchemes": ["orpheus"],
   "fileAssociations": [
