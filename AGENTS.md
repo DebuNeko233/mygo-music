@@ -23,7 +23,7 @@
 | 环境、构建、签名验证 | [开发环境](docs/development.md) |
 | 提交或贡献 | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-MyGo 维护技能位于 [.agents/skills/mygo-maintenance/SKILL.md](.agents/skills/mygo-maintenance/SKILL.md)，按相同文档入口执行。
+Nyago Music 维护技能位于 [.agents/skills/mygo-maintenance/SKILL.md](.agents/skills/mygo-maintenance/SKILL.md)，按相同文档入口执行。
 
 ## 交付检查
 

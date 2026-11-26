@@ -1,9 +1,9 @@
 ---
 name: mygo-maintenance
-description: Maintain this MyGO Rev. desktop music repository, including features, MyGo UI fixes, architecture changes, tests, and dependency or upstream updates. Use the repository docs for ownership, UI lifetimes, verification, and delivery rules.
+description: Maintain this Nyago Music desktop music repository, including features, MyGo UI fixes, architecture changes, tests, and dependency or upstream updates. Use the repository docs for ownership, UI lifetimes, verification, and delivery rules.
 ---
 
-# MyGO Rev. 维护
+# Nyago Music 维护
 
 本技能是仓库文档的任务路由，不维护独立规则副本。路径均相对本文件；仓库根目录是 `../../..`。
 

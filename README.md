@@ -1,4 +1,4 @@
-# MyGO Rev.
+# Nyago Music
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的第三方音乐桌面客户端，原生界面，无 WebView。
 
@@ -7,6 +7,8 @@
 ## 安装
 
 独立版本从[本仓库 Releases](https://github.com/DebuNeko233/nyago-music/releases)下载。首个独立正式版本为 `v0.3.0`；旧预览版不包含本次主线改动。安装时请选择正式版本，字幕运行库资源发行不包含应用安装包。
+
+`v0.3.0` 安装后的应用仍显示为「MyGo 云音乐」，安装包文件名前缀为 `mygo-cloudmusic`，与当前构建配置一致。
 
 原项目安装的版本不会自动切换到本项目：首次迁移需手动安装本仓库版本，此后使用本仓库的更新源和签名。应用标识暂时保留以兼容已有配置与登录，不支持两者并行独立保存数据。
 

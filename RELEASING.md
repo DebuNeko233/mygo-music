@@ -1,6 +1,6 @@
 # 独立发行
 
-正式仓库是 `DebuNeko233/nyago-music`，开发主线是 `main`。应用更新、安装脚本与字幕库资源由本仓库提供。普通贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目边界见[独立维护与依赖](docs/dependencies-and-upstream.md)。
+Nyago Music 的正式仓库是 `DebuNeko233/nyago-music`，开发主线是 `main`。应用更新、安装脚本与字幕库资源由本仓库提供。普通贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目边界见[独立维护与依赖](docs/dependencies-and-upstream.md)。
 
 本指南用于已授权的发行操作；主线转正或普通推送不会自动创建应用版本标签。应用发行与字幕库资源发行分别管理。
 

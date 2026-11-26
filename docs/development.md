@@ -28,8 +28,8 @@ go list -m github.com/egoist/mygo
 ```sh
 git fetch origin
 # 基线按本次贡献目标替换。
-git worktree add -b feat/example ../mygo-example origin/main
-cd ../mygo-example
+git worktree add -b feat/example ../nyago-example origin/main
+cd ../nyago-example
 git status --short --branch
 ```
 
