@@ -94,7 +94,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
 
 Linux 可执行文件仍名为 `nyago-music`，桌面入口使用带引号的绝对路径。安装后的自更新使用实际安装目录。身份切换的旧包卸载、新包手动安装和重新登录要求见[依赖与兼容](dependencies-and-upstream.md#2-更新与用户数据兼容)。
 
-已经发布的 `v0.3.1` 资产与 Homebrew cask 仍对应旧包名和标识；下一次正式发行需在新资产可下载后同步 cask 的下载文件名和 `uninstall quit`。普通分支推送不修改既有发行资产。
+已经发布的 `v0.3.1` 资产对应旧包名和标识；`v0.3.2` 发行在新资产可下载后同步 Homebrew cask 的下载文件名和 `uninstall quit`。普通分支推送不修改既有发行资产。
 
 ## macOS 本地测试包
 

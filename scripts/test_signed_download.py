@@ -50,7 +50,7 @@ def main():
             ("player", "^(TestTaggedFormatsPreservePCM|TestCopyAudio.*)$"),
         ]:
             binary = root / (package + ".test")
-            run("build-" + package, ["go", "test", "-c", "-o", str(binary), "./internal/" + package],
+            run("build-" + package, ["go", "test", "-c", "-o", str(binary), "./internal/features/" + package],
                 env=os.environ | {"CGO_ENABLED": "0"})
             run("sign-" + package, ["codesign", "--force", "--sign", args.identity,
                 "--options", "runtime", "--timestamp=none", "--entitlements", str(entitlements), str(binary)])
@@ -66,7 +66,7 @@ def main():
             for state in ("cold", "warm"):
                 run(package + "-" + state,
                     [str(binary), "-test.run", tests, "-test.v", "-test.timeout", "120s"],
-                    cwd=repo / "internal" / package, env=os.environ | {"TMPDIR": str(cache)})
+                    cwd=repo / "internal" / "features" / package, env=os.environ | {"TMPDIR": str(cache)})
     if args.output:
         (args.output / "results.json").write_text(json.dumps(report, indent=2) + "\n")
     print("Signed download and playback regressions passed.")
