@@ -7,7 +7,6 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/desktop/view/shell"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel"
@@ -43,15 +42,18 @@ func (a *app) view(c *ui.Context) {
 
 	npOpen, npSettled := a.views.playback.NPState(c)
 	a.art.PageFrame(a.nav.Current, !npOpen)
-	home := a.pictures(a.settings.BackdropHome)
+	a.homeBackdrop.Visible = !npOpen || !npSettled
+	a.playingBackdrop.Visible = npOpen || !npSettled
+	home := a.homePicture()
+	a.playingPicture()
 	var backdrop func(*ui.Context)
-	if pic := playbackview.BackdropShown(home, a.pl.Current()); pic != nil {
+	if pic := home; pic != nil {
 		backdrop = func(c *ui.Context) {
 			a.views.playback.HomeBackdrop(c, pic, float32(a.settings.BackdropHomeOpacity))
 		}
 	}
 	a.shell.Build(c, shell.Layout{
-		Palette: p, HasBackdrop: len(home) > 0, Covered: npOpen && npSettled,
+		Palette: p, HasBackdrop: home != nil, Covered: npOpen && npSettled,
 		Navigation: a.shellNavigation(), BindRoot: a.bindInApp, Backdrop: backdrop,
 		Sidebar: a.sidebar, Page: a.content, Player: a.views.playback.PlayerBar,
 		NowPlaying: func(c *ui.Context) { a.views.playback.NowPlayingLayer(c, npOpen, npSettled) },

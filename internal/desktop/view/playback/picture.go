@@ -8,21 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/netease"
 )
-
-// BackdropShown returns which of the pictures shows while tr plays: the
-// listener who chose many sees them all, changing with the song.
-func BackdropShown(pics []*artcache.Picture, tr *netease.Track) *artcache.Picture {
-	if len(pics) == 0 {
-		return nil
-	}
-	if len(pics) == 1 || tr == nil {
-		return pics[0]
-	}
-	i := tr.Key() % int64(len(pics))
-	return pics[max(i, -i)]
-}
 
 // DrawPicture paints pic over r, covering it, as opaque as alpha says.
 func DrawPicture(p *ui.Painter, r ui.Rect, pic *artcache.Picture, alpha float32) {

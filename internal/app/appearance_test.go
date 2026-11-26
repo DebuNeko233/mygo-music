@@ -16,7 +16,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/preferences"
 )
@@ -137,7 +136,7 @@ func TestBackdropPictureCoversThePage(t *testing.T) {
 	a.settings.BackdropHomeOpacity = 1
 	a.settings.BackdropPlayingOpacity = 0
 	// Read, as the app reads them: off the main thread, kept here.
-	a.pics = map[string]*backdropEntry{path: {pic: artcache.DecodePicture(path)}}
+	warmTestBackdrops(t, a)
 	tt := ui.NewTester(a.view, 900, 600)
 	tt.Frame()
 	const w, h = 900, 600
@@ -179,10 +178,10 @@ func TestBackdropPreloadWarmsBothPages(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 	a.flushKept()
-	if got := a.pictures(a.settings.BackdropHome); len(got) != 1 || got[0] == nil {
+	if a.homePicture() == nil {
 		t.Fatal("the home page still has to wait for its backdrop")
 	}
-	if got := a.pictures(a.settings.BackdropPlaying); len(got) != 1 || got[0] == nil {
+	if a.playingPicture() == nil {
 		t.Fatal("the playing page still has to wait for its backdrop")
 	}
 }
@@ -231,7 +230,7 @@ func TestPlayingBackdropCoversTheStage(t *testing.T) {
 	a.settings.BackdropPlaying = []string{path}
 	a.settings.BackdropHomeOpacity = 0
 	a.settings.BackdropPlayingOpacity = 1
-	a.pics = map[string]*backdropEntry{path: {pic: artcache.DecodePicture(path)}}
+	warmTestBackdrops(t, a)
 	const w, h = 400, 300
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Box(c).Fill().Background(ui.Hex("#0b0b0d"))
@@ -318,32 +317,25 @@ func TestBackdropFramesKeepBothPagesDecoded(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "playing.png")
 	writePicture(t, path, 8, 8, color.RGBA{R: 255, A: 255})
-	playing := artcache.DecodePicture(path)
-	if playing == nil {
-		t.Fatal("could not decode the playing backdrop")
-	}
 	a.settings.BackdropPlaying = []string{path}
-	entry := &backdropEntry{pic: playing}
-	a.pics = map[string]*backdropEntry{path: entry}
 	for i := range 8 {
-		path := filepath.Join(dir, fmt.Sprintf("home%d.png", i))
-		a.settings.BackdropHome = append(a.settings.BackdropHome, path)
-		a.pics[path] = &backdropEntry{pic: playing}
+		p := filepath.Join(dir, fmt.Sprintf("home%d.png", i))
+		writePicture(t, p, 8, 8, color.RGBA{R: 255, A: 255})
+		a.settings.BackdropHome = append(a.settings.BackdropHome, p)
 	}
-	tt := ui.NewTester(func(c *ui.Context) {
-		a.pictures(a.settings.BackdropHome)
-		a.views.playback.Backdrop(c, nil, ui.RGB(120, 120, 130))
-	}, 300, 240)
+	warmTestBackdrops(t, a)
+	playing := a.playingPicture()
+	tt := ui.NewTester(func(c *ui.Context) { a.homePicture(); a.views.playback.Backdrop(c, nil, ui.RGB(120, 120, 130)) }, 300, 240)
 	for range 3 {
 		tt.Frame()
-		if a.pics[path] != entry {
-			t.Fatal("building the home backdrop evicted the playing backdrop")
+		if a.playingPicture() != playing {
+			t.Fatal("home backdrop evicted the playing backdrop")
 		}
 	}
 	a.settings.BackdropHome = nil
 	a.forgetPictures()
-	if len(a.pics) != 1 || a.pics[path] != entry {
-		t.Fatal("removing home backgrounds did not release their cached pictures")
+	if a.homePicture() != nil || a.playingPicture() != playing {
+		t.Fatal("removing home backgrounds disturbed playing background")
 	}
 }
 

@@ -47,11 +47,12 @@ func DecodePicture(path string) *Picture {
 	}
 	img = shrinkPicture(img, backdropSide)
 	bounds := img.Bounds()
-	bmp, err := ui.DecodeBitmap(encodePicture(img))
+	encoded := encodePicture(img)
+	bmp, err := ui.DecodeBitmap(encoded)
 	if err != nil {
 		bmp = ui.NewBitmap(img)
 	}
-	return &Picture{Bitmap: bmp, W: float32(bounds.Dx()), H: float32(bounds.Dy())}
+	return &Picture{Bitmap: bmp, W: float32(bounds.Dx()), H: float32(bounds.Dy()), encodedBytes: cap(encoded)}
 }
 
 // encodePicture returns data a picture's pixels decode from again once it
@@ -100,6 +101,7 @@ func shrinkPicture(img image.Image, side int) image.Image {
 
 // Picture is one of the pictures a page stands on.
 type Picture struct {
-	Bitmap *ui.Bitmap
-	W, H   float32 // its pixels
+	Bitmap       *ui.Bitmap
+	W, H         float32 // its pixels
+	encodedBytes int
 }

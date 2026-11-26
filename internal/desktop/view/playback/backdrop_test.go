@@ -64,7 +64,7 @@ func TestBackdropDrifts(t *testing.T) {
 // including after a Retina-scale change or resize: a thumbnail banded.
 func TestBackdropPixelResolution(t *testing.T) {
 	a := newTestView(t)
-	a.Pictures = func([]string) []*artcache.Picture { return nil }
+	a.Picture = func() *artcache.Picture { return nil }
 	*a.Config = preferences.Default()
 	tt := ui.NewTester(func(c *ui.Context) { a.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
 	check := func() {
@@ -141,7 +141,7 @@ func TestBackdropRampPrecision(t *testing.T) {
 // of allocating another screen-sized background texture.
 func TestBackdropRampSurvivesResize(t *testing.T) {
 	a := newTestView(t)
-	a.Pictures = func([]string) []*artcache.Picture { return nil }
+	a.Picture = func() *artcache.Picture { return nil }
 	*a.Config = preferences.Default()
 	tt := ui.NewTester(func(c *ui.Context) { a.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
 	palette := a.BackdropCache.Still
@@ -189,7 +189,7 @@ func TestStillBackdropTransition(t *testing.T) {
 // crossfade was interrupted, so unused artwork is no longer retained.
 func TestFogDropsStillPalettes(t *testing.T) {
 	a := newTestView(t)
-	a.Pictures = func([]string) []*artcache.Picture { return nil }
+	a.Picture = func() *artcache.Picture { return nil }
 	*a.Config = preferences.Default()
 	tint := ui.RGB(50, 80, 140)
 	tt := ui.NewTester(func(c *ui.Context) { a.Backdrop(c, nil, tint) }, 240, 160)

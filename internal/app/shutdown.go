@@ -84,6 +84,7 @@ func (a *app) release() {
 	a.released = true
 	a.stopNative()
 	a.art.Close()
+	a.pics.Close()
 	a.closePosts()
 	if a.pl != nil {
 		a.pl.Close()

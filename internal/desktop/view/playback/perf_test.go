@@ -110,7 +110,7 @@ func TestLyricWordPaintBudget(t *testing.T) {
 // state repainted the static background for about two seconds after a switch.
 func TestStaticBackdropStopsFog(t *testing.T) {
 	a := newTestView(t)
-	a.Pictures = func([]string) []*artcache.Picture { return nil }
+	a.Picture = func() *artcache.Picture { return nil }
 	*a.Config = preferences.Default()
 	a.Config.Fog = true
 	tt := ui.NewTester(func(c *ui.Context) { a.Backdrop(c, nil, ui.RGB(50, 80, 140)) }, 240, 160)
