@@ -60,7 +60,7 @@ func DecodePicture(path string) *Picture {
 	// understands it. Unknown headers take the whole allowance, then use
 	// the same decoder below; they never bypass admission or add a decoder.
 	release := pictureDecodes.reserve(cost)
-	defer release()
+	defer func() { release() }()
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil
 	}
@@ -69,6 +69,23 @@ func DecodePicture(path string) *Picture {
 	b := make([]byte, info.Size())
 	if _, err := io.ReadFull(f, b); err != nil {
 		return nil
+	}
+	if cost < decodeByteLimit {
+		// An editor can rewrite the same open file while admission waits.
+		// Check the bytes we now own before expanding any pixels; a larger
+		// replacement must rejoin the queue with its actual source cost.
+		actual, _, err := image.DecodeConfig(bytes.NewReader(b))
+		if err != nil {
+			return nil
+		}
+		actualCost, err := decodeCost(actual, backdropSide, int64(len(b)))
+		if err != nil {
+			return nil
+		}
+		if actualCost > cost {
+			release()
+			release = pictureDecodes.reserve(actualCost)
+		}
 	}
 	img, err := DecodeImage(b)
 	if err != nil {

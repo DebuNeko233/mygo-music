@@ -6,8 +6,11 @@ package artwork
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
+	"image/color"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -45,6 +48,60 @@ func TestDecodeBudgetRunsOversizedSourceAlone(t *testing.T) {
 		if b.used != 0 {
 			t.Fatal("decoder completion leaked admission bytes")
 		}
+	})
+}
+
+// A file rewritten in place while its decoder waits must be charged for the
+// dimensions actually read, rather than the smaller header inspected earlier.
+func TestPictureDecodeRechecksSourceAfterWaiting(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		dir := t.TempDir()
+		magic := "nyago-decode-" + dir + ":"
+		config := func(r io.Reader) (image.Config, error) {
+			b := make([]byte, len(magic)+8)
+			if _, err := io.ReadFull(r, b); err != nil {
+				return image.Config{}, err
+			}
+			return image.Config{ColorModel: color.RGBAModel,
+				Width:  int(binary.LittleEndian.Uint32(b[len(magic):])),
+				Height: int(binary.LittleEndian.Uint32(b[len(magic)+4:]))}, nil
+		}
+		charged := make(chan int64, 1)
+		// The test decoder observes admission before any pixels are expanded;
+		// it needs only one pixel to exercise the surrounding file loader.
+		image.RegisterFormat(magic, magic, func(r io.Reader) (image.Image, error) {
+			if _, err := config(r); err != nil {
+				return nil, err
+			}
+			pictureDecodes.ready.L.Lock()
+			charged <- pictureDecodes.used
+			pictureDecodes.ready.L.Unlock()
+			return image.NewRGBA(image.Rect(0, 0, 1, 1)), nil
+		}, config)
+		data := func(side uint32) []byte {
+			b := append([]byte(nil), magic...)
+			b = binary.LittleEndian.AppendUint32(b, side)
+			return binary.LittleEndian.AppendUint32(b, side)
+		}
+		path := filepath.Join(dir, "picture.png")
+		if err := os.WriteFile(path, data(4), 0600); err != nil {
+			t.Fatal(err)
+		}
+		release := pictureDecodes.reserve(decodeByteLimit)
+		done := make(chan *Picture, 1)
+		go func() { done <- DecodePicture(path) }()
+		synctest.Wait()
+		if err := os.WriteFile(path, data(2560), 0600); err != nil {
+			t.Fatal(err)
+		}
+		release()
+		if <-done == nil {
+			t.Fatal("rewritten image did not decode")
+		}
+		if used := <-charged; used != decodeByteLimit {
+			t.Fatalf("large replacement decoded with only %d admitted bytes", used)
+		}
+		pictureDecodes.reserve(decodeByteLimit)()
 	})
 }
 
