@@ -73,7 +73,7 @@ CGO_ENABLED=0 go test ./...
 
 `go tool mygo vet .` 在当前固定框架中先执行 Go vet，再检查 UI 生命周期等规则；CI 也使用此入口。`go test ./...` 包含 internal 和工具测试，满足内部包回归要求。只要动过生产 Go 逻辑，不能以单个定向测试替代全量回归。
 
-发行说明生成器的下载链接和版本章节测试由 Test 工作流单独运行；改动该生成器时本地执行：
+发行说明生成器的下载链接和版本章节测试由 Release Notes 工作流单独运行；改动该生成器时本地执行：
 
 ```sh
 python3 -m unittest discover -s .github/scripts -p '*_test.py'
@@ -128,11 +128,30 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 | 工作流 | 当前内容 | 不能据此声称 |
 | --- | --- | --- |
 | [test.yml](../.github/workflows/test.yml) / Test | Linux 构建、Go/MyGo vet、非 App internal 测试、两片 App 测试、非 App race 与选定 App 并发测试 | 已完整运行所有 App race 或所有平台原生界面 |
-| [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main push、本仓库定时、手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
+| [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main 的相关文件变更或手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
 | [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物 | 全部软件行为和签名运行已实测 |
+| [release-notes.yml](../.github/workflows/release-notes.yml) / Release Notes | 发行说明生成器测试与当前版本说明校验 | 已运行应用构建或竞态检查 |
 | [release.yml](../.github/workflows/release.yml) / Release | 版本检查、更新签名、草稿发行和上传 | 普通开发可以直接触发发行 |
 
-Test 与 Build 覆盖所有分支 push 和 PR，不依赖 GitHub fork 状态。CI 并发策略可能取消旧 SHA 的任务。按本次完整 SHA、事件和目标仓库检查，不能引用旧提交的绿色结果；Test 不覆盖 `scripts/sherpa` 的全部测试，因此本地全量 `./...` 有额外价值。
+Test 与 Build 对所有分支的 push 和 PR 使用路径过滤；Full UI Race 只自动检查 main 的相关改动，不再每日定时执行。自动触发范围如下：
+
+| 改动 | 自动运行 |
+| --- | --- |
+| 根目录 Go 文件、`internal/` 生产代码与内嵌资源、`icon/`、`go.mod` / `go.sum` | Build、Test、main 上的 Full UI Race |
+| `*_test.go`、`testdata/`、共享测试辅助包 | Test、main 上的 Full UI Race；不打包安装产物 |
+| `mygo.json` | Build、Test、main 上的 Full UI Race、Release Notes |
+| `macos.entitlements.plist` | Build |
+| `scripts/sherpa/` | Test（包含工具编译与 vet；仍需本地运行该工具的测试） |
+| App 测试分片脚本 | Test、main 上的 Full UI Race |
+| 发行说明生成器、其测试、Release 工作流 | Release Notes |
+| 某个 CI 工作流自身 | 该工作流，便于验证 CI 配置修改 |
+| README、`docs/`、贡献指南、AGENTS、CHANGELOG、代理技能等说明文件 | 不触发上述应用或工具 CI |
+
+`internal/netease/keyring_help.md` 等通过 `go:embed` 打包的文件属于应用资源，不能按 Markdown 扩展名一律排除。新增源码根目录、构建输入或测试工具时，同步对应工作流的 push 和 PR 路径清单。Build、Full UI Race 与 Release Notes 保留手动运行；Release 仍只通过版本标签或显式手动发行触发。
+
+使用 GitHub 原生路径过滤，规则见[官方工作流语法](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore)。如以后配置 PR 必需检查，应避免把会因路径过滤而整条跳过的工作流设为无条件必需，否则文档 PR 可能一直等待结果。
+
+CI 并发策略可能取消旧 SHA 的任务。按本次完整 SHA、事件和目标仓库检查，不能引用旧提交的绿色结果；Test 不覆盖 `scripts/sherpa` 的全部测试，因此本地全量 `./...` 有额外价值。
 
 ## 10. 交付报告
 

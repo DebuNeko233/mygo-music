@@ -1,5 +1,5 @@
-# Pull requests and all branch pushes package the macOS, Windows and
-# Linux installers. This catches packaging failures before release and makes
+# Relevant source, resource and packaging changes build the macOS, Windows
+# and Linux installers. This catches packaging failures before release and makes
 # the installers available as artifacts. test.yml runs the Go checks, and
 # release.yml signs and uploads the updates.
 name: Build
@@ -7,7 +7,33 @@ name: Build
 on:
   push:
     branches: ['**']
+    paths:
+      - '*.go'
+      - 'internal/**'
+      - 'icon/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'mygo.json'
+      - 'macos.entitlements.plist'
+      - '!**_test.go'
+      - '!**/testdata/**'
+      - '!internal/testutil/**'
+      - '!internal/viewmodel/internal/testutil/**'
+      - '.github/workflows/go.yml'
   pull_request:
+    paths:
+      - '*.go'
+      - 'internal/**'
+      - 'icon/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'mygo.json'
+      - 'macos.entitlements.plist'
+      - '!**_test.go'
+      - '!**/testdata/**'
+      - '!internal/testutil/**'
+      - '!internal/viewmodel/internal/testutil/**'
+      - '.github/workflows/go.yml'
   workflow_dispatch:
 
 # A newer commit on the same branch or PR replaces the pending work.

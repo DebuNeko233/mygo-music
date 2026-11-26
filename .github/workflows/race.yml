@@ -1,10 +1,19 @@
+# Run full UI races for relevant main-branch changes or explicit requests.
+# Documentation and release-note edits do not schedule the expensive suite.
 name: Full UI Race
 
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: '19 19 * * *'
+    paths:
+      - '*.go'
+      - 'internal/**'
+      - 'icon/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'mygo.json'
+      - '.github/scripts/shard_app_tests.py'
+      - '.github/workflows/race.yml'
   workflow_dispatch:
     inputs:
       source_sha:
@@ -21,7 +30,6 @@ permissions:
 jobs:
   race:
     name: Race detector (${{ matrix.shard }})
-    if: ${{ github.event_name != 'schedule' || github.repository == 'DebuNeko233/nyago-music' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

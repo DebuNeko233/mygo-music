@@ -1,0 +1,39 @@
+# Validate release-note tooling independently from application builds and races.
+# Plain changelog and documentation edits do not start application CI.
+name: Release Notes
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '.github/scripts/release_notes.py'
+      - '.github/scripts/release_notes_test.py'
+      - '.github/workflows/release-notes.yml'
+      - '.github/workflows/release.yml'
+      - 'mygo.json'
+  pull_request:
+    paths:
+      - '.github/scripts/release_notes.py'
+      - '.github/scripts/release_notes_test.py'
+      - '.github/workflows/release-notes.yml'
+      - '.github/workflows/release.yml'
+      - 'mygo.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-notes:
+    name: Release notes generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test download links and changelog selection
+        run: python3 -m unittest discover -s .github/scripts -p '*_test.py'
+      - name: Validate current release notes
+        run: python3 .github/scripts/release_notes.py > "$RUNNER_TEMP/notes.md"

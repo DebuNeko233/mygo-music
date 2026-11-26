@@ -1,11 +1,31 @@
-# Check pull requests and all branch pushes. The slower full app
-# race suite runs separately in race.yml.
+# Check application code, test inputs and this workflow when they change.
+# Full UI races and release-note tools use their own filtered workflows.
 name: Test
 
 on:
   push:
     branches: ['**']
+    paths:
+      - '*.go'
+      - 'internal/**'
+      - 'icon/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'mygo.json'
+      - 'scripts/sherpa/**'
+      - '.github/scripts/shard_app_tests.py'
+      - '.github/workflows/test.yml'
   pull_request:
+    paths:
+      - '*.go'
+      - 'internal/**'
+      - 'icon/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'mygo.json'
+      - 'scripts/sherpa/**'
+      - '.github/scripts/shard_app_tests.py'
+      - '.github/workflows/test.yml'
 
 # A newer commit on the same branch or PR replaces the pending work.
 concurrency:
@@ -16,14 +36,6 @@ permissions:
   contents: read
 
 jobs:
-  release-notes:
-    name: Release notes generator
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Test download links and changelog selection
-        run: python3 -m unittest discover -s .github/scripts -p '*_test.py'
-
   compile:
     name: Build Go packages
     runs-on: ubuntu-latest
