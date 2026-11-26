@@ -34,6 +34,10 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	if _, ok := tt.Find("专辑封面"); !ok {
 		t.Fatal("now playing did not open")
 	}
+	canvas := a.BackdropCache.Canvas
+	if canvas == nil {
+		t.Fatal("visible background did not retain its canvas")
+	}
 	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
 	if a.playbackState.Open {
@@ -51,10 +55,22 @@ func TestNowPlayingClosesAsOneLayer(t *testing.T) {
 	if !dark(900, 400) || !dark(100, 400) {
 		t.Errorf("page %v, sidebar %v: the closing layer should cover both", dark(900, 400), dark(100, 400))
 	}
+	if a.BackdropCache.Canvas != canvas {
+		t.Fatal("closing transition discarded the visible background")
+	}
 	tt.Advance(2 * time.Second)
 	tt.Frame()
 	if _, ok := tt.Find("专辑封面"); ok {
 		t.Error("now playing still shows after closing")
+	}
+	if a.BackdropCache.Canvas != nil || a.LyricBlurPass != nil {
+		t.Fatal("closed player retained its offscreen canvases")
+	}
+	a.playbackState.Open = true
+	tt.Frame()
+	tt.Advance(time.Second)
+	if _, ok := tt.Find("专辑封面"); !ok || a.BackdropCache.Canvas == nil || a.BackdropCache.Canvas == canvas {
+		t.Fatal("reopening did not reconstruct the background and cover")
 	}
 }
 

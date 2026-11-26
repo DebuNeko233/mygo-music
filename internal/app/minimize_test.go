@@ -55,7 +55,14 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 				}
 			}
 			tt.SetWindowHidden(true)
+			if a.BackdropCache.Canvas != nil || a.LyricBlurPass != nil {
+				t.Fatal("hidden player retained reconstructible layers")
+			}
 			tt.SetSize(0, 0)
+			tt.Frame()
+			if a.BackdropCache.Canvas != nil || a.LyricBlurPass != nil || !a.playbackState.Open {
+				t.Fatal("a hidden rebuild recreated layers or closed the player")
+			}
 			tt.SetWindowHidden(false)
 			tt.SetSize(1200, 800)
 			tt.Advance(time.Second)

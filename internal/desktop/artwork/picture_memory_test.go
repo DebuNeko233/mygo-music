@@ -7,6 +7,8 @@ package artwork
 import (
 	"image"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -30,5 +32,21 @@ func TestEncodedPictureDoesNotRetainGrowthBuffer(t *testing.T) {
 		if err != nil || decoded.Bounds() != img.Bounds() {
 			t.Fatalf("encoding no longer reconstructs picture: %v", err)
 		}
+	}
+}
+
+// Background admission must preserve the animated-WebP first-frame fallback
+// even though the initial file header is not a standalone decodable image.
+func TestAnimatedWebPPicture(t *testing.T) {
+	b, err := os.ReadFile("testdata/animated.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "animated.webp")
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if pic := DecodePicture(path); pic == nil || pic.W != 24 || pic.H != 24 {
+		t.Fatal("background no longer shows the first WebP frame")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,8 +38,36 @@ func IsPicture(path string) bool {
 // keeps the bytes its pixels decode from again, so that they can go once
 // the GPU has them: what stays costs a fraction of the pixels.
 func DecodePicture(path string) *Picture {
-	b, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	cfg, _, err := image.DecodeConfig(f)
+	configErr := err
+	info, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	cost := decodeByteLimit
+	if configErr == nil {
+		cost, err = decodeCost(cfg, backdropSide, info.Size())
+		if err != nil {
+			return nil
+		}
+	}
+	// Animated WebP needs its first frame extracted before DecodeConfig
+	// understands it. Unknown headers take the whole allowance, then use
+	// the same decoder below; they never bypass admission or add a decoder.
+	release := pictureDecodes.reserve(cost)
+	defer release()
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil
+	}
+	// Read the size inspected above from the same open file, without an
+	// incrementally growing buffer retaining another copy of a large PNG.
+	b := make([]byte, info.Size())
+	if _, err := io.ReadFull(f, b); err != nil {
 		return nil
 	}
 	img, err := DecodeImage(b)

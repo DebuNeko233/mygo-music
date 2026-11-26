@@ -69,6 +69,14 @@ func (a *View) NowPlayingLayer(c *ui.Context, open, settled bool) {
 		pose = ui.Pose{}
 	}
 	layer.AnimatePose(pose, npSpring)
+	// Ask on every build: MyGo then rebuilds once when visibility changes.
+	// Native hide callbacks alone cannot stop a later hidden build from
+	// recreating the resources they just dropped.
+	if c.WindowHidden() {
+		layer.Invisible()
+		a.releaseGraphics()
+		return
+	}
 	if !open {
 		a.NPSpectrum = LyricSpectrum{}
 	}
@@ -76,9 +84,7 @@ func (a *View) NowPlayingLayer(c *ui.Context, open, settled bool) {
 		// Closed: nothing to paint or click.
 		layer.Invisible()
 		a.QueueAt, a.WallState.track = -1, 0
-		a.NPCoverState.Previous = nil
-		a.NPCoverState.Switching = false
-		a.LyricBlurPass = nil
+		a.releaseGraphics()
 		return
 	}
 	if !open {
@@ -90,6 +96,20 @@ func (a *View) NowPlayingLayer(c *ui.Context, open, settled bool) {
 		// The framebuffer is only reused while the effect is in view.
 		a.LyricBlurPass = nil
 	}
+}
+
+// releaseGraphics drops reconstructible layers after the closing transition,
+// or when the owning window is hidden/minimized. Keep the current covers so
+// restoring while a new cover loads does not expose a placeholder. The renderer
+// owns GPU deletion and in-flight frames; views only release their references.
+func (a *View) releaseGraphics() {
+	a.BackdropCache = BackdropCache{}
+	a.LyricBlurPass = nil
+	a.NPSpectrum = LyricSpectrum{}
+	a.NPCoverState.Previous = nil
+	a.NPCoverState.Switching = false
+	a.StageCover.Previous, a.WallCover.Previous = nil, nil
+	a.StageCover.ChangedAt, a.WallCover.ChangedAt = time.Time{}, time.Time{}
 }
 
 // NowPlayingView fills the window with what plays: its cover over a slow
