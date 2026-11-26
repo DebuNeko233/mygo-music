@@ -6,6 +6,8 @@ package app
 
 import (
 	"slices"
+	"time"
+	"weak"
 
 	"github.com/egoist/mygo/ui"
 
@@ -17,6 +19,11 @@ import (
 // appearance gives. Set from the settings, on the main thread, before the
 // pages are built.
 var accentChosen string
+
+const (
+	backdropDecodeJobs   = 2
+	backdropReleaseDelay = 250 * time.Millisecond
+)
 
 // Each request owns an entry so a discarded read cannot overwrite a later
 // request for the same path.
@@ -55,6 +62,9 @@ func (a *app) loadPicture(path string) {
 	if a.pics == nil {
 		a.pics = make(map[string]*backdropEntry)
 	}
+	if a.pictureJobs == nil {
+		a.pictureJobs = make(chan struct{}, backdropDecodeJobs)
+	}
 	entry := &backdropEntry{}
 	a.pics[path] = entry
 	go a.readPicture(path, entry)
@@ -91,14 +101,30 @@ func (a *app) pictureChosen(path string) bool {
 // readPicture reads and decodes the picture at path, off the main thread,
 // and keeps it, or that it cannot be read.
 func (a *app) readPicture(path string, entry *backdropEntry) {
+	// Gate the read itself: queued requests keep only their paths, not a
+	// full encoded file or decoded source while other images are loading.
+	a.pictureJobs <- struct{}{}
 	pic := artcache.DecodePicture(path)
-	a.postIfChanged(func() bool {
+	a.postResource(func() {
+		defer func() { <-a.pictureJobs }()
 		if a.pics[path] != entry {
-			return false
+			return
 		}
 		entry.pic = pic
-		return pic != nil
-	})
+		if pic != nil {
+			// After the first frames have uploaded the picture, retain its
+			// encoded source and GPU texture; CPU pixels can be reconstructed.
+			ref := weak.Make(pic.Bitmap)
+			time.AfterFunc(backdropReleaseDelay, func() {
+				a.postIfChanged(func() bool {
+					if bitmap := ref.Value(); bitmap != nil {
+						bitmap.ReleasePixels()
+					}
+					return false
+				})
+			})
+		}
+	}, func() { <-a.pictureJobs })
 }
 
 func paletteFor(t *ui.Theme) components.Palette {

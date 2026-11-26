@@ -17,8 +17,9 @@ import (
 type mainViewState struct {
 	wasBehind bool
 
-	pal  components.Palette
-	pics map[string]*backdropEntry // shared by the home and playing backdrops
+	pal         components.Palette
+	pics        map[string]*backdropEntry // shared by the home and playing backdrops
+	pictureJobs chan struct{}             // bounds concurrent full-size backdrop decodes
 
 	intro desktopview.Description
 	toast string // a message to show once

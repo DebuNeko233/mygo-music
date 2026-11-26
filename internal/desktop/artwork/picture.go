@@ -61,14 +61,14 @@ func encodePicture(img image.Image) []byte {
 	var buf bytes.Buffer
 	if opaque, ok := img.(interface{ Opaque() bool }); ok && opaque.Opaque() {
 		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err == nil {
-			return buf.Bytes()
+			return bytes.Clone(buf.Bytes())
 		}
 		buf.Reset()
 	}
 	if err := png.Encode(&buf, img); err != nil {
 		return nil
 	}
-	return buf.Bytes()
+	return bytes.Clone(buf.Bytes())
 }
 
 // shrinkPicture scales img down so that its longer side is at most side
