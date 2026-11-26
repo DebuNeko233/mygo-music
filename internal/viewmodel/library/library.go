@@ -7,7 +7,7 @@ package library
 import (
 	"time"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
 )

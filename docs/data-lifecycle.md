@@ -82,11 +82,11 @@ go func() {
 | 数据 | 当前入口 | 契约 |
 | --- | --- | --- |
 | 用户设置 `settings.json` | [preferences/settings.go](../internal/preferences/settings.go) | 加载先取默认值；无效 JSON 整体拒绝；Path 不从 JSON 接受 |
-| 播放快照 `session.json` 与进度旁文件 | [sessionstore/store.go](../internal/sessionstore/store.go) | token 匹配才用进度覆盖快照；旧格式保持可读 |
+| 播放快照 `session.json` 与进度旁文件 | [player/session/store.go](../internal/player/session/store.go) | token 匹配才用进度覆盖快照；旧格式保持可读 |
 | 本地曲库 `local-music.json` | [localcatalog](../internal/localcatalog) | 稳定本地身份；成功写入后再发布编辑 |
 | 账号凭据 | [netease/auth.go](../internal/netease/auth.go) | 系统凭据存储；错误分类和保存失败可见 |
-| 离线页面与歌词 | [diskcache](../internal/diskcache)、[lyrics/cache.go](../internal/lyrics/cache.go) | scope/epoch 隔离，旧写入不能复活已失效条目 |
-| 字幕与覆盖时间段 | [captionstore/transcript.go](../internal/captionstore/transcript.go) | 读取能看到最新已接受待写入内容；写盘只处理不可变数据 |
+| 离线页面与歌词 | [cache/disk](../internal/cache/disk)、[lyrics/cache.go](../internal/lyrics/cache.go) | scope/epoch 隔离，旧写入不能复活已失效条目 |
+| 字幕与覆盖时间段 | [speech/transcript/transcript.go](../internal/speech/transcript/transcript.go) | 读取能看到最新已接受待写入内容；写盘只处理不可变数据 |
 
 新增字段须说明缺失、未知值、非法值及旧版本文件的处理。未知字段的容忍不能演变为允许配置覆盖内部路径、执行命令或注入任意资源。
 
@@ -118,7 +118,7 @@ Homebrew 普通卸载只移除应用，显式 `--zap` 只清理正式版的三�
 
 缓存迁移步骤由现有服务管理：校验路径 → 冻结相关写入 → 暂存复制 → 记录和校验发布 → 提交设置并重绑读取者 → 清理源。只读快照可以按现有事务约定保持打开。失败或取消走回滚，进程中断走日志恢复。
 
-只处理受管理的 `songs`、`browse-v1` 和 `artwork-v2` 等当前布局成员，不能递归移动或删除用户选择目录中的所有文件。解析符号链接和目录等价，拒绝相同、包含或冲突的路径。目录选择和是否迁移由界面决定，文件事务归 `cachemove`。
+只处理受管理的 `songs`、`browse-v1` 和 `artwork-v2` 等当前布局成员，不能递归移动或删除用户选择目录中的所有文件。解析符号链接和目录等价，拒绝相同、包含或冲突的路径。目录选择和是否迁移由界面决定，文件事务归 `cache/move`。
 
 歌曲导出先在独立暂存副本中写标签并验证，再无覆盖地发布。缓存不完整、质量不匹配或缺少有效元数据时不能充当已完成导出源。详见[下载与缓存](features/download-cache.md)。
 

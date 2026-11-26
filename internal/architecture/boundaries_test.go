@@ -53,6 +53,14 @@ func TestPackageBoundaries(t *testing.T) {
 				continue
 			}
 			target := strings.TrimPrefix(dep, prefix)
+			if (inPackage(pkg, "cache/disk") || inPackage(pkg, "cache/page")) &&
+				inPackage(target, "cache") && !inPackage(target, pkg) {
+				t.Errorf("%s imports %s; disk and page caches must stay independent of cache orchestration", path, dep)
+			}
+			if inPackage(pkg, "download/tagging") &&
+				((inPackage(target, "download") && !inPackage(target, pkg)) || inPackage(target, "player")) {
+				t.Errorf("%s imports %s; metadata writing must stay independent of downloads and playback", path, dep)
+			}
 			if inPackage(target, "testutil") || (strings.HasSuffix(target, "/internal/testutil") || strings.Contains(target, "/internal/testutil/")) {
 				t.Errorf("%s imports test helper %s; keep test fixtures out of production", path, dep)
 			}

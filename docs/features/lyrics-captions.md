@@ -11,7 +11,7 @@
 | [view/playback](../../internal/desktop/view/playback) | 逐字行、长列表、字体、舞台、特效、桌面歌词 |
 | [speech](../../internal/speech) | 模型管理、原生识别引擎、重采样、转写行 |
 | [viewmodel/captions](../../internal/viewmodel/captions) | 字幕任务状态与界面操作 |
-| [captionstore](../../internal/captionstore) | 转写结果持久化 |
+| [speech/transcript](../../internal/speech/transcript) | 转写结果持久化 |
 | [App captions](../../internal/app/captions.go) | 当前节目、播放器、窗口和字幕任务协调 |
 
 歌词请求在工作线程加载，发布时检查缓存代次、账号与歌曲请求身份。相同歌曲再次被选择也可能是新请求，不能只比较 song ID。缓存陈旧可刷新，但不能让旧网络结果覆盖较新的本地匹配或账号状态。通用规则见[数据生命周期](../data-lifecycle.md)。

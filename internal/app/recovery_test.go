@@ -13,8 +13,8 @@ import (
 
 	"github.com/egoist/mygo"
 
+	diskcache "netease-music-mygo/internal/cache/disk"
 	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )

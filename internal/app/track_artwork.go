@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	diskcache "netease-music-mygo/internal/cache/disk"
 	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/localmedia"
 	"netease-music-mygo/internal/netease"

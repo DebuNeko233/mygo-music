@@ -13,7 +13,7 @@ import (
 
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/sessionstore"
+	sessionstore "netease-music-mygo/internal/player/session"
 )
 
 // The session is kept a while after playback changes and every while as

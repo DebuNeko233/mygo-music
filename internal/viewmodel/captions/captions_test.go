@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/captionstore"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/speech"
+	captionstore "netease-music-mygo/internal/speech/transcript"
 	"netease-music-mygo/internal/viewmodel/internal/testutil"
 )
 

@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 )
 
 type imageRecord struct {

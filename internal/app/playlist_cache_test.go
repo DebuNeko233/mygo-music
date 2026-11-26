@@ -10,7 +10,7 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 	"netease-music-mygo/internal/netease"
 )
 

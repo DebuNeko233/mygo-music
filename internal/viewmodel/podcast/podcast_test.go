@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	pagecache "netease-music-mygo/internal/cache/page"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/pagecache"
 	"netease-music-mygo/internal/viewmodel"
 	"netease-music-mygo/internal/viewmodel/internal/testutil"
 )

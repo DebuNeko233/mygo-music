@@ -5,7 +5,7 @@
 package app
 
 import (
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 

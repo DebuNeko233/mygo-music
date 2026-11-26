@@ -9,13 +9,13 @@ import (
 
 	"github.com/egoist/mygo"
 
+	diskcache "netease-music-mygo/internal/cache/disk"
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/mixvol"
 	"netease-music-mygo/internal/navigation"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/sessionstore"
+	sessionstore "netease-music-mygo/internal/player/session"
 	"netease-music-mygo/internal/speech"
 	accountvm "netease-music-mygo/internal/viewmodel/account"
 	albumvm "netease-music-mygo/internal/viewmodel/album"

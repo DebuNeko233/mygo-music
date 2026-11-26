@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 )
 
 // Cached lyrics are available without any successful request to the lyrics service.

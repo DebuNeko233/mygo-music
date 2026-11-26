@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 )
 
 func coverBytes(t *testing.T) []byte {

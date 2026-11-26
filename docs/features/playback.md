@@ -11,7 +11,7 @@
 | [Playback ViewModel](../../internal/viewmodel/playback) | 播放相关的界面状态与操作语义 |
 | [播放视图](../../internal/desktop/view/playback) | 控件、手势、进度、封面、动画、正在播放及舞台布局 |
 | [tracklist](../../internal/desktop/view/tracklist) | 通用歌曲行、虚拟列表和当前歌曲定位 |
-| [sessionstore](../../internal/sessionstore) | 会话与进度快照的存储格式和串行写入 |
+| [player/session](../../internal/player/session) | 会话与进度快照的存储格式和串行写入 |
 | [App 上报](../../internal/app/play_report.go) | 捕获实际播放会话、账号隔离、网易云播放记录上报 |
 | [mixvol](../../internal/mixvol) | 平台应用音量能力 |
 
@@ -61,13 +61,13 @@
 
 ## 会话恢复和播放记录
 
-[App session](../../internal/app/session.go)组装队列、模式、选中项与位置快照；[sessionstore](../../internal/sessionstore/store.go)维护 `session.json` 和轻量 `session-progress.json`。进度带会话身份，只有匹配的快照可合并，避免旧进度套到新队列。后台写入使用独立快照，不能持有仍会被 UI 修改的 slice。
+[App session](../../internal/app/session.go)组装队列、模式、选中项与位置快照；[player/session](../../internal/player/session/store.go)维护 `session.json` 和轻量 `session-progress.json`。进度带会话身份，只有匹配的快照可合并，避免旧进度套到新队列。后台写入使用独立快照，不能持有仍会被 UI 修改的 slice。
 
 恢复会话应恢复暂停状态下的可见进度和队列，不应因读取配置自行开始播放。旧格式兼容要用真实旧字段构造夹具，不靠修改默认值掩盖。
 
 播放上报依据音频实际开始、结束的会话。暂停和 Seek 不建立新的播放会话；单曲循环结束后再次开始属于新会话。听歌时长排除暂停和直接跳转的时间，不能用 UI 帧次数或歌曲时长替代。异步上报捕获当时的账号凭据，退出登录后不能拿新账号发送旧记录；串行工作与关闭等待应有边界。
 
-验证 [session_test.go](../../internal/app/session_test.go)、[store_test.go](../../internal/sessionstore/store_test.go)、[play_report_test.go](../../internal/app/play_report_test.go)。
+验证 [session_test.go](../../internal/app/session_test.go)、[store_test.go](../../internal/player/session/store_test.go)、[play_report_test.go](../../internal/app/play_report_test.go)。
 
 ## 当前歌曲定位
 

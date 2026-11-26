@@ -19,9 +19,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	diskcache "netease-music-mygo/internal/cache/disk"
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"

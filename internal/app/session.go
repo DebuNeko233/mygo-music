@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/sessionstore"
+	sessionstore "netease-music-mygo/internal/player/session"
 )
 
 func sessionPath() (string, error) {

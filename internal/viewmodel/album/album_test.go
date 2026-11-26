@@ -7,7 +7,7 @@ package album
 import (
 	"testing"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/viewmodel/internal/testutil"
 )

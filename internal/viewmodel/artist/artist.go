@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
+	pagecache "netease-music-mygo/internal/cache/page"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/pagecache"
 	"netease-music-mygo/internal/viewmodel"
 )
 

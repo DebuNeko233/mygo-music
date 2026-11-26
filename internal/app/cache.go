@@ -10,8 +10,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/cachemove"
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
+	cachemove "netease-music-mygo/internal/cache/move"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"

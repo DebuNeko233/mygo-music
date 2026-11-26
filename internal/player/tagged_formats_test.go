@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"go.senan.xyz/taglib"
-	"netease-music-mygo/internal/audiotag"
+	audiotag "netease-music-mygo/internal/download/tagging"
 )
 
 // Embedded multilingual credits, cover and timed lyrics must round-trip in

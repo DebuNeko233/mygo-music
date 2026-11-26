@@ -4,7 +4,7 @@
 
 package app
 
-import "netease-music-mygo/internal/captionstore"
+import captionstore "netease-music-mygo/internal/speech/transcript"
 
 type transcript = captionstore.Transcript
 type span = captionstore.Span

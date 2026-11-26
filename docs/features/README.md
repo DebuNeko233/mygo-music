@@ -12,15 +12,15 @@
 | 音乐网盘、最近播放、续播 | [浏览与资料库](browsing-library.md) | cloud/recent/playback 模型与 App 适配 |
 | 播客、节目、私人 FM、心动、评论 | [浏览与资料库](browsing-library.md) | podcast/radio/comments 模型与 netease |
 | 队列、模式、音质、预取、跳转 | [播放与音频](playback.md) | `player`、App play_commands |
-| 响度均衡、音量、频谱、播放记录、恢复 | [播放与音频](playback.md) | player、mixvol、sessionstore、App play_report/session |
+| 响度均衡、音量、频谱、播放记录、恢复 | [播放与音频](playback.md) | player、mixvol、player/session、App play_report/session |
 | 当前歌曲定位、虚拟列表 | [播放与音频](playback.md) | view tracklist、App cloud/local 协调 |
 | 歌词来源、翻译、署名、逐字与舞台 | [歌词与字幕](lyrics-captions.md) | lyrics、view playback |
 | 桌面歌词、字体、频谱背景、间奏热评 | [歌词与字幕](lyrics-captions.md) | view playback、App settings |
-| 播客转写、模型下载和字幕保存 | [歌词与字幕](lyrics-captions.md) | speech、captionstore、viewmodel/captions |
+| 播客转写、模型下载和字幕保存 | [歌词与字幕](lyrics-captions.md) | speech、speech/transcript、viewmodel/captions |
 | 本地扫描、重定位、临时打开、歌词匹配 | [本地音乐](local-music.md) | localcatalog、localmedia、viewmodel/local |
 | 本地与网盘封面匹配 | [本地音乐](local-music.md) | desktop/artwork、App track_artwork |
-| 歌曲导出、标签、下载任务 | [下载与缓存](download-cache.md) | download、audiotag、viewmodel/downloads |
-| 音频/图片/页面缓存、离线、目录迁移 | [下载与缓存](download-cache.md) | player/cache、diskcache、cachemove、pagecache |
+| 歌曲导出、标签、下载任务 | [下载与缓存](download-cache.md) | download、download/tagging、viewmodel/downloads |
+| 音频/图片/页面缓存、离线、目录迁移 | [下载与缓存](download-cache.md) | player/cache、cache/disk、cache/move、cache/page |
 | 主题、背景、设置搜索、侧栏开关 | [桌面与设置](desktop-settings.md) | preferences、view settings/shell、App appearance |
 | 快捷键、托盘、原生菜单、刘海、更新 | [桌面与设置](desktop-settings.md) | desktop/shortcuts、App、view playback |
 

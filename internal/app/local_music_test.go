@@ -18,7 +18,7 @@ import (
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/sessionstore"
+	sessionstore "netease-music-mygo/internal/player/session"
 	"netease-music-mygo/internal/userdata"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )

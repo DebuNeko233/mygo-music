@@ -8,10 +8,10 @@ import (
 	"context"
 	"time"
 
-	"netease-music-mygo/internal/captionstore"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/speech"
+	captionstore "netease-music-mygo/internal/speech/transcript"
 )
 
 const captionLead = 30 * time.Second

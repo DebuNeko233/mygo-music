@@ -12,7 +12,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 	"netease-music-mygo/internal/netease"
 	recentvm "netease-music-mygo/internal/viewmodel/recent"
 )

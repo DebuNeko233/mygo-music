@@ -13,10 +13,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/captionstore"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/speech"
+	captionstore "netease-music-mygo/internal/speech/transcript"
 	captionsvm "netease-music-mygo/internal/viewmodel/captions"
 )
 

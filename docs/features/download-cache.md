@@ -9,7 +9,7 @@
 | 所有者 | 职责 |
 | --- | --- |
 | [download](../../internal/download) | 下载任务、元数据整理、临时产物、最终发布 |
-| [audiotag](../../internal/audiotag) | 音频标签和封面读写 |
+| [download/tagging](../../internal/download/tagging) | 音频标签和封面读写 |
 | [audioformat](../../internal/audioformat) | 实际格式与导出扩展名 |
 | [player/export.go](../../internal/player/export.go) | 复用完整音频缓存或共享下载能力 |
 | [viewmodel/downloads](../../internal/viewmodel/downloads) | 任务列表、进度、取消和重试的界面状态 |
@@ -44,7 +44,7 @@
 4. 播放器统一路径验证导出文件、冷缓存与热缓存的读取和 Seek。
 5. 受平台运行时约束的签名产物另作原生验证。
 
-主要回归：[download_test.go](../../internal/download/download_test.go)、[metadata_test.go](../../internal/download/metadata_test.go)、[audiotag](../../internal/audiotag)、[export_test.go](../../internal/player/export_test.go)、[tagged_formats_test.go](../../internal/player/tagged_formats_test.go)、[App download_test.go](../../internal/app/download_test.go)。
+主要回归：[download_test.go](../../internal/download/download_test.go)、[metadata_test.go](../../internal/download/metadata_test.go)、[download/tagging](../../internal/download/tagging)、[export_test.go](../../internal/player/export_test.go)、[tagged_formats_test.go](../../internal/player/tagged_formats_test.go)、[App download_test.go](../../internal/app/download_test.go)。
 
 ## macOS 签名运行时
 
@@ -57,11 +57,11 @@ Wasm 引擎运行时涉及匿名内存权限。当前 [macos.entitlements.plist]
 | 类别 | 所有者 | 需要保留的边界 |
 | --- | --- | --- |
 | 音频 | player | 完整性、音质、并发读取、容量与活动文件 |
-| 通用磁盘条目 | [diskcache](../../internal/diskcache) | 键、序列化与落盘完整性 |
-| 页面数据 | [pagecache](../../internal/pagecache)及 App | 账号作用域、代次、后台快照 |
+| 通用磁盘条目 | [cache/disk](../../internal/cache/disk) | 键、序列化与落盘完整性 |
+| 页面数据 | [cache/page](../../internal/cache/page)及 App | 账号作用域、代次、后台快照 |
 | 歌词 | lyrics | 过期刷新、歌曲身份与显式发布 |
 | 图片 | desktop/artwork | 下载/解码预算、嵌入封面、图像释放 |
-| 布局迁移 | [cachemove](../../internal/cachemove) | 目录验证、事务、日志与恢复 |
+| 布局迁移 | [cache/move](../../internal/cache/move) | 目录验证、事务、日志与恢复 |
 
 缓存路径不能散落在视图里拼接。当前受管理布局包括 `songs`、`browse-v1`、`artwork-v2`；根目录可能含其他应用或用户文件，不能整根复制、删除或把未知文件视作垃圾。登录态、配置和用户曲库不因清缓存而全部删除。
 
@@ -77,10 +77,10 @@ Wasm 引擎运行时涉及匿名内存权限。当前 [macos.entitlements.plist]
 
 ## 目录迁移事务
 
-设置中的迁移由 [App cache_directory](../../internal/app/cache_directory.go)协调。底层路径校验、文件清单、日志与复制放 cachemove，不将 UI 回调混入文件算法。
+设置中的迁移由 [App cache_directory](../../internal/app/cache_directory.go)协调。底层路径校验、文件清单、日志与复制放 cache/move，不将 UI 回调混入文件算法。
 
 迁移要覆盖相同目录、父子嵌套、符号链接解析、跨磁盘、已有目标文件、空间不足、取消、保存配置失败和进程中断。内容冲突保留目标数据并报错，不能默认覆盖。
 
 正确顺序是冻结受影响写入，准备并验证目标，提交配置并重绑读取者，随后回收旧文件。复制或配置提交失败应保留旧目录的可用数据。旧 reader 不能在提交后继续向待删除目录写入；恢复日志必须与实际提交阶段一致。
 
-测试覆盖 [cachemove](../../internal/cachemove)、[cache_directory_test.go](../../internal/app/cache_directory_test.go)、[cache_layout_test.go](../../internal/app/cache_layout_test.go)、[cache_review_test.go](../../internal/app/cache_review_test.go)。不能以“成功复制几个文件”的测试替代事务失败验证。
+测试覆盖 [cache/move](../../internal/cache/move)、[cache_directory_test.go](../../internal/app/cache_directory_test.go)、[cache_layout_test.go](../../internal/app/cache_layout_test.go)、[cache_review_test.go](../../internal/app/cache_review_test.go)。不能以“成功复制几个文件”的测试替代事务失败验证。

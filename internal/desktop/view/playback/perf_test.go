@@ -15,13 +15,13 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/captionstore"
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/desktop/view/components"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/preferences"
+	captionstore "netease-music-mygo/internal/speech/transcript"
 	"netease-music-mygo/internal/testutil"
 )
 

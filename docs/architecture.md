@@ -54,10 +54,10 @@ flowchart TD
 | `player` | 队列、模式、音源、解码、预取、下载缓冲、歌曲缓存、频谱、播放事件 | 页面布局、导出文件命名 |
 | `netease` | 协议、请求、会话、响应模型、错误分类和图片网络缓存 | 页面布局、功能间导航 |
 | `lyrics` | LRC/YRC、翻译与署名、展示时间线、歌词缓存 | 字体、Shader、窗口、输入 |
-| `download`、`audiotag`、`audioformat` | 音频导出、标签写入、实际格式识别 | 下载队列界面、第二套播放器 |
-| `speech`、`captionstore` | 本地识别、模型与库、字幕文本及覆盖范围 | 应用窗口、字幕控件 |
-| `diskcache`、`cachemove`、`pagecache` | 磁盘快照与索引、迁移事务、页面数据保留 | 原生目录选择、账号菜单 |
-| `preferences`、`sessionstore`、`userdata` | 配置、播放会话、用户数据写入 | 系统主题、设置控件、原生对话框 |
+| `download`、`download/tagging`、`audioformat` | 音频导出、标签写入、实际格式识别 | 下载队列界面、第二套播放器 |
+| `speech`、`speech/transcript` | 本地识别、模型与库、字幕文本及覆盖范围 | 应用窗口、字幕控件 |
+| `cache/disk`、`cache/move`、`cache/page` | 磁盘快照与索引、迁移事务、页面数据保留 | 原生目录选择、账号菜单 |
+| `preferences`、`player/session`、`userdata` | 配置、播放会话、用户数据写入 | 系统主题、设置控件、原生对话框 |
 | `navigation` | 路由与前后历史 | 页面构建与请求调度 |
 | `mixvol` | Windows/Linux 应用音量接入及其他平台回退 | 播放栏控件 |
 | `desktop/artwork` | 图片解码、尺寸变体、内嵌封面、候选匹配、位图缓存及背景图预算/淘汰 | 当前账号、播放来源、展示文案 |
@@ -66,6 +66,10 @@ flowchart TD
 | `testutil`、各包 `testdata` | 共用测试机制与归属明确的样本 | 生产依赖 |
 
 表中未带 `internal/` 的路径均位于 `internal/` 下。
+
+缓存体系统一放在 `internal/cache/` 命名空间中，`disk`、`page`、`move` 仍是独立 Go 包：磁盘缓存和页面内存缓存不依赖其他缓存子包，目录迁移按需组合磁盘缓存能力。缓存根目录不增加共享业务状态或统一管理器。
+
+持久化与辅助能力归入所属领域：`player/session` 保存播放会话，`speech/transcript` 保存转写文本和覆盖范围，`download/tagging` 写入导出文件的标签。会话、转写存储继续使用父包的值类型，父包不回引其存储子包；App 和 ViewModel 保留原有协调职责。标签写入独立于下载调度和播放器，播放器的格式测试可以直接复用该子包。这里只调整源码组织，不迁移用户数据或改变存储格式。
 
 ## 3. 强制依赖规则
 
@@ -76,6 +80,7 @@ flowchart TD
 5. 桌面能力包可以使用 MyGo，但不能依赖视图和 ViewModel。
 6. 生产代码禁止导入测试辅助包；测试可以组合多层来验证真实边界。
 7. 视图间组合传必要数据或回调，不把 App 暴露成万能服务。
+8. `cache/disk`、`cache/page` 不导入其他缓存子包，迁移编排归 `cache/move`；`download/tagging` 不依赖下载调度包或 `player`，保持标签能力可独立使用。
 
 [边界测试](../internal/architecture/boundaries_test.go)解析所有平台的生产 Go 文件，包括本机构建标签排除的文件。它检查导入，不能替代状态所有权和副作用审查。
 

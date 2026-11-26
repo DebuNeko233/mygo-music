@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"netease-music-mygo/internal/diskcache"
+	diskcache "netease-music-mygo/internal/cache/disk"
 )
 
 // Cache reads lyrics for a captured account scope. Fetch and Publish are

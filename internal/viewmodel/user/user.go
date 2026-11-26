@@ -5,8 +5,8 @@
 package user
 
 import (
+	pagecache "netease-music-mygo/internal/cache/page"
 	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/pagecache"
 )
 
 type UserPage struct {

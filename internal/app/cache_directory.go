@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/cachemove"
+	cachemove "netease-music-mygo/internal/cache/move"
 	"netease-music-mygo/internal/player"
 	settingsvm "netease-music-mygo/internal/viewmodel/settings"
 )

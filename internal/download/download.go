@@ -16,7 +16,7 @@ import (
 	"unicode"
 
 	"netease-music-mygo/internal/audioformat"
-	"netease-music-mygo/internal/audiotag"
+	audiotag "netease-music-mygo/internal/download/tagging"
 	"netease-music-mygo/internal/netease"
 	"netease-music-mygo/internal/player"
 )
