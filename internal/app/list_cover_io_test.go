@@ -44,7 +44,9 @@ func TestListCoverRestoresFromDiskOffline(t *testing.T) {
 	tr := netease.Track{ID: 1, Album: netease.Album{PicURL: server.URL + "/cover.png"}}
 	// Sized upgrades CDN URLs to HTTPS; this injected loader maps only the
 	// isolated fixture back to its HTTP listener, leaving production TLS intact.
+	var loads atomic.Int32
 	load := func(url string) (*ui.Bitmap, image.Image, int, error) {
+		loads.Add(1)
 		return artcache.LoadURL(strings.Replace(url, "https://", "http://", 1))
 	}
 	url := strings.Replace(netease.Sized(tr.Album.PicURL, 96), "https://", "http://", 1)
@@ -60,11 +62,19 @@ func TestListCoverRestoresFromDiskOffline(t *testing.T) {
 		a.art.PageFrame(a.nav.Current, true)
 		a.trackCover(c, &tr, 96, 38, 6).Label("列表封面")
 	}, 200, 100)
+	bounds, ok := view.Find("列表封面")
+	if !ok {
+		t.Fatal("loading row missing")
+	}
+	before := view.Image().RGBAAt(int(bounds.X+bounds.W/2), int(bounds.Y+bounds.H/2))
+	if before.R > 240 && before.G < 20 && before.B < 20 {
+		t.Fatal("fixture skipped the loading placeholder")
+	}
 	wait(t, posts, "disk cover decode")()
 	view.Frame()
 	assertListCoverRed(t, view)
 	s := a.art.Stats()
-	if requests.Load() != 1 || s.Loads != 1 || s.ListPlaceholders == 0 {
+	if requests.Load() != 1 || loads.Load() != 1 {
 		t.Fatalf("disk recovery did not exercise one asynchronous cache restore: HTTP=%d stats=%+v", requests.Load(), s)
 	}
 	t.Logf("disk restore: HTTP=%d stats=%+v", requests.Load(), s)

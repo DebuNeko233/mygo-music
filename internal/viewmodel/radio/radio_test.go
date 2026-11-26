@@ -20,7 +20,7 @@ func TestHeartSeedQueries(t *testing.T) {
 		t.Run(source, func(t *testing.T) {
 			p := player.New(func(func()) {})
 			p.SuspendCache()
-			p.Cue([]netease.Track{{ID: 7}})
+			player.Cue(p, []netease.Track{{ID: 7}})
 			posts := make(chan func(), 8)
 			asked := make(chan [3]int64, 1)
 			fetched := make(chan int64, 1)
@@ -81,7 +81,7 @@ func TestHeartSeedQueries(t *testing.T) {
 func TestHeartFeedUsesLiveCollection(t *testing.T) {
 	p := player.New(func(func()) {})
 	p.SuspendCache()
-	p.Cue([]netease.Track{{ID: 7}, {ID: 8}})
+	player.Cue(p, []netease.Track{{ID: 7}, {ID: 8}})
 	posts := make(chan func(), 4)
 	asked := make(chan [3]int64, 4)
 	pid := int64(42)
@@ -175,7 +175,7 @@ func TestRadioPendingKeepsManualIntent(t *testing.T) {
 		if exit {
 			m.Exit(s)
 		} else {
-			p.Cue([]netease.Track{{ID: 99}})
+			player.Cue(p, []netease.Track{{ID: 99}})
 		}
 		update()
 		if p.Radio() != "" || m.Starting != "" || (!exit && (p.Current() == nil || p.Current().ID != 99)) {
@@ -188,7 +188,7 @@ func TestRadioPendingKeepsManualIntent(t *testing.T) {
 func TestRadioModeSwitchSurvivesRefill(t *testing.T) {
 	p := player.New(func(func()) {})
 	p.SuspendCache()
-	p.Cue([]netease.Track{{ID: 1}})
+	player.Cue(p, []netease.Track{{ID: 1}})
 	var refill func([]netease.Track)
 	p.AttachRadio(FMRadio(netease.FMDefault), func(got func([]netease.Track)) { refill = got })
 	posts := make(chan func(), 4)

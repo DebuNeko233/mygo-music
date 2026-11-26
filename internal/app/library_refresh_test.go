@@ -18,6 +18,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
@@ -126,8 +127,8 @@ func TestPlaylistRefreshKeepsScrollAndQueue(t *testing.T) {
 			}
 			a.nav.Current = route{Page: pagePlaylist, ID: id}
 			a.library.Playlists[id] = pl
-			a.pl.Cue(pl.Tracks)
-			a.pl.Hold(43 * time.Second)
+			player.Cue(a.pl, pl.Tracks)
+			player.Hold(a.pl, 43*time.Second)
 			queue := slices.Clone(a.pl.Queue())
 			tt := ui.NewTester(a.view, 1100, 760)
 			tt.Frame()

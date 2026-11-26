@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
 )
 
@@ -27,7 +28,7 @@ func TestSidebarPlaylistCollapse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := editTestApp()
 			a.library.Playlists[tc.playlist] = &netease.Playlist{ID: tc.playlist, Name: tc.row}
-			a.pl.Cue(a.library.Playlists[10].Tracks)
+			player.Cue(a.pl, a.library.Playlists[10].Tracks)
 			before := a.nav.Current
 			tt := ui.NewTester(a.view, 1200, 800)
 			tt.Frame()

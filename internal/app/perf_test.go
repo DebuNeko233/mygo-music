@@ -16,6 +16,7 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/testutil"
 )
 
@@ -52,7 +53,7 @@ func TestPlayerBarCoverFrameBudget(t *testing.T) {
 func TestCoverSlideFrameBudget(t *testing.T) {
 	for _, reduced := range []bool{false, true} {
 		a := newTestApp()
-		a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+		player.Cue(a.pl, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 		builds := 0
 		tt := ui.NewTesterWith(func(c *ui.Context) {
 			builds++
@@ -78,7 +79,7 @@ func playingApp() (*app, *ui.Tester, *int) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
-	a.pl.Cue([]netease.Track{tr})
+	player.Cue(a.pl, []netease.Track{tr})
 	// A line every 10 seconds, sung over the first 5 of them.
 	var lrc string
 	for i := range 12 {
@@ -90,8 +91,8 @@ func playingApp() (*app, *ui.Tester, *int) {
 		l.End = l.At + 5*time.Second
 		l.Words = lyrics.SpreadWords(l.Text, l.At, l.End)
 	}
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(0)
+	player.SetLyrics(a.pl, lines)
+	player.Hold(a.pl, 0)
 	builds := 0
 	tt := ui.NewTester(func(c *ui.Context) { builds++; a.view(c) }, 1200, 800)
 	return a, tt, &builds
@@ -189,7 +190,7 @@ func hotCommentStageClock(style string, reduced bool, pos time.Duration) (*app, 
 			start = c.Now()
 		}
 		builds++
-		a.pl.Hold(pos + c.Now().Sub(start))
+		player.Hold(a.pl, pos+c.Now().Sub(start))
 		ui.Column(c).Fill().Children(func() { a.views.playback.Stage(c, a.pl.Current(), ui.RGB(255, 100, 100)) })
 	}, 1200, 800, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}})
 	return a, tt, &builds

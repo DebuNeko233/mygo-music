@@ -28,11 +28,11 @@ import (
 // An ending word can finish before the next regular highlight tick without rebuilding the view.
 func TestLyricWordFinishesBeforeRegularTick(t *testing.T) {
 	a := newTestView(t)
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 8000}})
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 8000}})
 	line := lyrics.Line{Text: "Quick", Words: []lyrics.Word{
 		{Text: "Quick", Start: time.Second, End: 1050 * time.Millisecond},
 	}}
-	a.Player().Hold(1030 * time.Millisecond)
+	player.Hold(a.Player(), 1030*time.Millisecond)
 	builds := 0
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
@@ -41,8 +41,7 @@ func TestLyricWordFinishesBeforeRegularTick(t *testing.T) {
 	}, 200, 65)
 	partial := tt.Image()
 	before := builds
-
-	a.Player().Hold(line.Words[0].End)
+	player.Hold(a.Player(), line.Words[0].End)
 	// The last 20 ms of the word should schedule its own paint even
 	// though the regular tick is 40 ms away.
 	tt.Advance(25 * time.Millisecond)
@@ -63,8 +62,8 @@ func TestLyricWordPaintBudget(t *testing.T) {
 		{Text: "Beta", Start: 3 * time.Second, End: 3500 * time.Millisecond},
 	}}
 	a := newTestView(t)
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 8000}})
-	a.Player().Hold(900 * time.Millisecond)
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 8000}})
+	player.Hold(a.Player(), 900*time.Millisecond)
 	builds := 0
 	tt := ui.NewTester(func(c *ui.Context) {
 		builds++
@@ -86,7 +85,7 @@ func TestLyricWordPaintBudget(t *testing.T) {
 	if dimLeft == 0 || dimRight == 0 {
 		t.Fatal("dim words were not drawn")
 	}
-	a.Player().Hold(1300 * time.Millisecond)
+	player.Hold(a.Player(), 1300*time.Millisecond)
 	tt.Advance(145 * time.Millisecond)
 	if got := brightness(left); got <= dimLeft {
 		t.Fatalf("word did not brighten: %d -> %d", dimLeft, got)
@@ -94,9 +93,9 @@ func TestLyricWordPaintBudget(t *testing.T) {
 	if brightness(right) != dimRight || builds != before {
 		t.Fatal("highlight changed a later word or rebuilt the view")
 	}
-	a.Player().Hold(1600 * time.Millisecond)
+	player.Hold(a.Player(), 1600*time.Millisecond)
 	tt.Advance(45 * time.Millisecond)
-	a.Player().Hold(3400 * time.Millisecond)
+	player.Hold(a.Player(), 3400*time.Millisecond)
 	tt.Advance(800 * time.Millisecond)
 	if brightness(right) != dimRight {
 		t.Fatal("periodic highlight updated during the silent gap")
@@ -156,9 +155,9 @@ func TestImmersiveLRCStaysIdleBetweenLines(t *testing.T) {
 	lines := lyrics.Build("[00:00.00]First line\n[00:10.00]Second line\n[00:20.00]Third line", "", "")
 	a := newTestView(t)
 	a.Config.LyricEdgeFade = true
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 30000}})
-	a.Player().SetLyrics(lines)
-	a.Player().Hold(2 * time.Second)
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 30000}})
+	player.SetLyrics(a.Player(), lines)
+	player.Hold(a.Player(), 2*time.Second)
 	paints := 0
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		c.Root().Draw(func(*ui.Painter, ui.Rect) { paints++ })
@@ -175,7 +174,7 @@ func lyricScrollFixture(t *testing.T, n int) (*ui.Tester, *int, func(time.Durati
 	t.Helper()
 	a := newTestView(t)
 	tr := netease.Track{ID: 1, Duration: int64(n * 2000)}
-	a.Player().Cue([]netease.Track{tr})
+	player.Cue(a.Player(), []netease.Track{tr})
 	lines := make([]lyrics.Line, n)
 	for i := range lines {
 		lines[i] = lyrics.Line{
@@ -183,7 +182,7 @@ func lyricScrollFixture(t *testing.T, n int) (*ui.Tester, *int, func(time.Durati
 			Translation: "Translation of the lyrics",
 		}
 	}
-	a.Player().SetLyrics(lines)
+	player.SetLyrics(a.Player(), lines)
 	pos := time.Duration(n/2) * 2 * time.Second
 	a.Player().Seek(pos)
 	builds := 0
@@ -307,8 +306,8 @@ func stageClock(t *testing.T, style string, reduced, playing bool, pos time.Dura
 	*a.Config = preferences.Default()
 	a.Config.HotComments = false
 	a.Config.StageStyle, a.Config.StageSparks = style, true
-	a.Player().Cue([]netease.Track{{ID: 7, Duration: 30000}})
-	a.Player().SetLyrics([]lyrics.Line{
+	player.Cue(a.Player(), []netease.Track{{ID: 7, Duration: 30000}})
+	player.SetLyrics(a.Player(), []lyrics.Line{
 		{At: 2 * time.Second, End: 7 * time.Second, Text: "一 二", Words: []lyrics.Word{
 			{Text: "一 ", Start: 2 * time.Second, End: 4 * time.Second},
 			{Text: "二", Start: 6 * time.Second, End: 7 * time.Second},
@@ -325,7 +324,7 @@ func stageClock(t *testing.T, style string, reduced, playing bool, pos time.Dura
 		}
 		builds++
 		if playing {
-			a.Player().Hold(pos + c.Now().Sub(start))
+			player.Hold(a.Player(), pos+c.Now().Sub(start))
 		} else {
 			a.Player().Seek(pos)
 		}

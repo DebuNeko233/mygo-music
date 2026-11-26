@@ -119,7 +119,7 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 | `NM_LYRICS_REPORT` | 可选私有歌词抽样报告，不能直接公开 |
 | `SPEECH_WAV`、`SPEECH_ROOT` | 真实转写样本和模型目录，可能触发模型下载 |
 | `SHERPA_ONNX_DIR`、`SPEECH_MODEL` | 替代的本地库和模型路径 |
-| `NM_SHOTS`、`NM_SCENE` | 原生应用开发截图/场景入口，见 [debug_shots.go](../internal/app/debug_shots.go) |
+| `NM_SHOTS`、`NM_SCENE` | 仅 `nyago_debug` 构建包含的原生截图/场景入口，普通构建和 release 不编译；见 [debug_shots.go](../internal/app/debug_shots.go) |
 
 真实收听上报可能改变账号历史；只在用户明确要求或接受这类验证时启用。默认不联网测试，不把真实请求当作测试替身的便捷替代。
 

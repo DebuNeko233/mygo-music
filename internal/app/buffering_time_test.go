@@ -43,7 +43,7 @@ func TestCachedTrackTimeDoesNotFlashBuffering(t *testing.T) {
 	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", nil }
 	a.pl.SetVolume(0)
 	t.Cleanup(func() { a.pl.SuspendCache() })
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 20000}, {ID: 2, Duration: 10000}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Duration: 20000}, {ID: 2, Duration: 10000}})
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() {
 			a.views.playback.NowPlayingTime(c)
@@ -79,7 +79,7 @@ func TestCachedTrackTimeDoesNotFlashBuffering(t *testing.T) {
 // Waiting for unavailable audio still displays buffering; only complete cached opens skip the hint.
 func TestNowPlayingTimeKeepsNonCachedBuffering(t *testing.T) {
 	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 20000}, {ID: 2, Duration: 10000}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Duration: 20000}, {ID: 2, Duration: 10000}})
 	a.pl.SuspendCache() // Hold audio loading without a network request or wall-clock timer.
 	tt := ui.NewTester(a.views.playback.NowPlayingTime, 300, 24)
 	check := func() {

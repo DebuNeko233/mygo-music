@@ -17,10 +17,10 @@ func TestAppendQueuePreservesPlayback(t *testing.T) {
 	for _, playing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "paused", true: "playing"}[playing], func(t *testing.T) {
 			p := &Player{}
-			p.Cue([]netease.Track{{ID: 1}, {ID: 2}, {LocalID: 3}})
+			Cue(p, []netease.Track{{ID: 1}, {ID: 2}, {LocalID: 3}})
 			p.SuspendCache()
 			p.at, p.track = 1, &p.queue[1]
-			p.Hold(17 * time.Second)
+			Hold(p, 17*time.Second)
 			p.playing = playing
 			current, rev := p.Current(), p.QueueRevision()
 			if !p.AppendQueue([]netease.Track{{ID: 2}, {ID: 3}, {ID: 3}, {LocalID: 3}, {ID: 4}}, rev) {
@@ -41,7 +41,7 @@ func TestAppendQueueRejectsChangedOwner(t *testing.T) {
 	for _, kind := range []string{"add", "remove", "replace", "shuffle", "radio", "temporary"} {
 		t.Run(kind, func(t *testing.T) {
 			p := &Player{}
-			p.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+			Cue(p, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 			p.SuspendCache()
 			rev := p.QueueRevision()
 			switch kind {
@@ -50,7 +50,7 @@ func TestAppendQueueRejectsChangedOwner(t *testing.T) {
 			case "remove":
 				p.RemoveQueueEntry(1)
 			case "replace":
-				p.Cue([]netease.Track{{ID: 9}})
+				Cue(p, []netease.Track{{ID: 9}})
 			case "shuffle":
 				p.ToggleShuffle()
 			case "temporary":
@@ -69,7 +69,7 @@ func TestAppendQueueRejectsChangedOwner(t *testing.T) {
 // Extending a shuffled queue preserves played entries and includes every upcoming song exactly once.
 func TestAppendQueuePreservesShuffledHistory(t *testing.T) {
 	p := &Player{shuffle: true}
-	p.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+	Cue(p, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 	p.SuspendCache()
 	p.order, p.at, p.track = []int{2, 0, 1}, 1, &p.queue[0]
 	if !p.AppendQueue([]netease.Track{{ID: 4}, {ID: 5}}, p.QueueRevision()) {

@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/testutil"
 )
 
@@ -95,9 +96,9 @@ func coverView(t *testing.T) (*View, *ui.Tester, ui.Rect) {
 	t.Helper()
 	v := newTestView(t)
 	v.HasTrackCover = func(*netease.Track) bool { return false }
-	v.Player().Cue([]netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
+	player.Cue(v.Player(), []netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
 	v.Player().Next()
-	v.Player().SetLyrics(nil)
+	player.SetLyrics(v.Player(), nil)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		ui.Column(c).Fill().Center().Children(func() { v.NPCover(c, v.Player().Current(), nil, 280) })
 	}, 860, 560, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})

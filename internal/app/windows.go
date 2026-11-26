@@ -13,9 +13,6 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 )
 
-// shotHook, when set, drives the app to check its design.
-var shotHook func(a *app)
-
 // Overlay windows can be visible while all ordinary windows are hidden.
 // Reopening from the Dock restores the main window unless a utility is open.
 func (a *app) activate() {

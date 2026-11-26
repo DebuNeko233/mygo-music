@@ -44,7 +44,6 @@ type Cache struct {
 	pageVisible bool
 	returnPages [2]artPage
 	lists       listArtwork
-	metrics     cacheMetrics
 	// gone are the covers dropped, for as long as something else holds
 	// them: Now Playing keeps the cover it shows, which comes back as it
 	// was rather than loading again.
@@ -210,7 +209,6 @@ func (c *Cache) add(key string, a *Image) bool {
 			break
 		}
 		c.gone[candidate.key] = weak.Make(c.remove(candidate.key))
-		c.metrics.evictions++
 	}
 	return true
 }
@@ -262,20 +260,16 @@ func (c *Cache) Get(url string, backdrop bool) *Image {
 // content. MyGo rebuilds when InView changes, and a warm cover can paint
 // on the first frame without waiting for that measurement.
 func (c *Cache) GetInView(url string, backdrop bool, box ui.Element) *Image {
-	return c.getInView(url, backdrop, box, c.load)
+	return c.getInView(url, backdrop, box.InView(), c.load)
 }
 
-func (c *Cache) getInView(url string, backdrop bool, box ui.Element, load func(string) (*ui.Bitmap, image.Image, int, error)) *Image {
-	visible := box.InView()
+func (c *Cache) getInView(url string, backdrop, visible bool, load func(string) (*ui.Bitmap, image.Image, int, error)) *Image {
 	key := artworkKey(url, backdrop)
 	a := c.art[key]
 	if visible {
 		a = c.RequestCover(url, backdrop, true, load)
 	} else if a == nil {
 		a = c.gone[key].Value()
-	}
-	if !visible && a != nil && a.Bitmap != nil {
-		c.metrics.memoryHits++
 	}
 	if (a != nil && !a.retryable) || backdrop || len(c.variants) == 0 || url == "" {
 		return a
@@ -326,9 +320,6 @@ func (c *Cache) RequestCover(url string, backdrop, visible bool, load func(strin
 		}
 	}
 	if a := current; a != nil {
-		if a.Bitmap != nil {
-			c.metrics.memoryHits++
-		}
 		if visible {
 			a.used = now
 		}
@@ -347,7 +338,6 @@ func (c *Cache) RequestCover(url string, backdrop, visible bool, load func(strin
 		return current
 	}
 	c.serial++
-	c.metrics.loads++
 	request := c.serial
 	c.busy[key] = request
 	go func() {
@@ -528,25 +518,12 @@ func (c *Cache) Put(key string, value *Image) bool {
 // Peek observes a cached image without starting a request or changing visibility.
 func (c *Cache) Peek(key string) *Image { return c.art[key] }
 
-type cacheMetrics struct{ memoryHits, loads, evictions, listPlaceholders uint64 }
-
-type Stats struct {
-	Bytes, Entries, Pending, Jobs, PendingBytes    int
-	RetainedListBytes, RetainedListEntries         int
-	MemoryHits, Loads, Evictions, ListPlaceholders uint64
-}
+type Stats struct{ Bytes, Entries, Pending, Jobs, PendingBytes int }
 
 // Stats is read on the owner thread; workers only change the pending byte budget.
 func (c *Cache) Stats() Stats {
 	c.results.L.Lock()
 	bytes := c.resultBytes
 	c.results.L.Unlock()
-	retained := c.retainedListKeys()
-	var retainedBytes int
-	for key := range retained {
-		retainedBytes += c.art[key].size
-	}
-	return Stats{Bytes: c.size, Entries: len(c.art), Pending: len(c.busy), Jobs: len(c.sem), PendingBytes: bytes,
-		RetainedListBytes: retainedBytes, RetainedListEntries: len(retained),
-		MemoryHits: c.metrics.memoryHits, Loads: c.metrics.loads, Evictions: c.metrics.evictions, ListPlaceholders: c.metrics.listPlaceholders}
+	return Stats{c.size, len(c.art), len(c.busy), len(c.sem), bytes}
 }

@@ -16,7 +16,7 @@ func TestConnectionStatusUpdatesAudioError(t *testing.T) {
 	netease.SetOffline(true)
 	t.Cleanup(func() { netease.SetOffline(false) })
 	p := New(func(func()) {})
-	p.Cue([]netease.Track{{ID: 1}})
+	Cue(p, []netease.Track{{ID: 1}})
 	p.pending = 123
 	p.failed(0, 0, *p.track, p.pending, netease.ErrOffline)
 	offline := p.Err()
@@ -45,7 +45,7 @@ func TestConnectionStatusPlaybackRetryPreservesPosition(t *testing.T) {
 	t.Cleanup(func() { netease.SetOffline(false) })
 	posts := make(chan func(), 8)
 	p := New(func(f func()) { posts <- f })
-	p.Cue([]netease.Track{{ID: 7}, {ID: 8}})
+	Cue(p, []netease.Track{{ID: 7}, {ID: 8}})
 	p.pending = 23 * time.Second
 	p.failed(0, 0, *p.track, p.pending, netease.ErrOffline)
 	ask := songURL
@@ -81,7 +81,7 @@ func TestConnectionStatusRejectsStaleOfflineLyricsText(t *testing.T) {
 	posts := make(chan func(), 4)
 	started, release := make(chan struct{}), make(chan struct{})
 	p := New(func(f func()) { posts <- f })
-	p.Cue([]netease.Track{{ID: 1}})
+	Cue(p, []netease.Track{{ID: 1}})
 	p.NetworkOffline()
 	offline := p.LyricsError()
 	p.FetchLyrics = func(int64) (string, string, string, error) {

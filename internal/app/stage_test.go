@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	"netease-music-mygo/internal/player"
 )
 
 // All three lyric views choose YRC for the whole song and fall back to LRC together.
@@ -24,8 +25,8 @@ func TestLyricViewsShareSelectedSource(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, pane := shortLyricsApp(nil, 360, 300)
-			a.pl.RefreshLyrics(1, lrc, translation, tc.yrc)
-			a.pl.Hold(26 * time.Second)
+			player.RefreshLyrics(a.pl, 1, lrc, translation, tc.yrc)
+			player.Hold(a.pl, 26*time.Second)
 			pane.Frame()
 			stage := ui.NewTesterWith(func(c *ui.Context) { a.views.playback.Stage(c, a.pl.Current(), playbackview.White) }, 360, 300,
 				ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})

@@ -35,8 +35,8 @@ func TestLocalLyricsMatchAndRestore(t *testing.T) {
 	track := netease.Track{LocalID: 4, Name: "试唱", Artists: []netease.Artist{{Name: "测试乐队"}}, Duration: 180000}
 	catalog := localcatalog.Catalog{Songs: []localcatalog.Song{{Track: track, Path: filepath.Join(dir, "recording.mp3")}}}
 	a.local.Replace(catalog)
-	a.pl.Cue([]netease.Track{track})
-	a.pl.Hold(time.Second)
+	player.Cue(a.pl, []netease.Track{track})
+	player.Hold(a.pl, time.Second)
 	a.pl.RetryMetadata()
 	wait(t, posts, "local lyrics")()
 	if view, loaded := a.pl.LyricsDisplay(); !loaded || view.EmptyText() != lyrics.UnavailableText {
@@ -109,7 +109,7 @@ func TestLocalLyricsMatchAndRestore(t *testing.T) {
 	reopened.local.Replace(catalog)
 	reopened.network.offline = true
 	reopenedPosts := testPosts(reopened)
-	reopened.pl.Cue([]netease.Track{track})
+	player.Cue(reopened.pl, []netease.Track{track})
 	reopened.pl.RetryMetadata()
 	wait(t, reopenedPosts, "offline cached lyrics")()
 	wantLyrics(reopened, "匹配歌词", "译文")
@@ -130,7 +130,7 @@ func TestLocalLyricsTemporaryMatchStaysInMemory(t *testing.T) {
 	posts := testPosts(a)
 	track := netease.Track{LocalID: 1, Temporary: true}
 	a.local.Temporary = localcatalog.Song{Track: track, Path: filepath.Join(t.TempDir(), "temp.flac")}
-	a.pl.Cue([]netease.Track{track})
+	player.Cue(a.pl, []netease.Track{track})
 	a.pl.RetryMetadata()
 	wait(t, posts, "temporary metadata")()
 	d := &localvm.LocalLyricMatch{Open: true, Track: a.pl.Current(), Selected: 12}
@@ -162,7 +162,7 @@ func TestLocalLyricsRemovedFolderDoesNotKeepMatches(t *testing.T) {
 		{Track: removed, Scanned: true, Path: filepath.Join(folder, "song.mp3")},
 		{Track: kept, Path: filepath.Join(dir, "relinked.mp3")},
 	}})
-	a.pl.Cue([]netease.Track{removed})
+	player.Cue(a.pl, []netease.Track{removed})
 	for _, id := range []int64{removed.LocalID, kept.LocalID} {
 		if err := a.local.LyricCache.Save(a.local.LyricPath(id), id, localcatalog.LyricMatch{SongID: id}); err != nil {
 			t.Fatal(err)
@@ -201,7 +201,7 @@ func TestLocalLyricsRemovedFolderDoesNotKeepMatches(t *testing.T) {
 func TestLocalLyricsDialogInputAndDismissal(t *testing.T) {
 	a := newTestApp()
 	track := netease.Track{LocalID: 1, Name: "recording"}
-	a.pl.Cue([]netease.Track{track})
+	player.Cue(a.pl, []netease.Track{track})
 	posts := testPosts(a)
 	old := searchLocalLyrics
 	queries := make(chan string, 2)

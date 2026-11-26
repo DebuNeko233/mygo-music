@@ -13,7 +13,7 @@ import (
 // Batch relinking updates every duplicate and the current track with one queue revision.
 func TestUpdateLocalTracksUpdatesTheWholeQueue(t *testing.T) {
 	p := &Player{at: 1}
-	p.Cue([]netease.Track{{LocalID: 1, Name: "old"}, {LocalID: 2, Name: "current"}, {LocalID: 1, Name: "old"}})
+	Cue(p, []netease.Track{{LocalID: 1, Name: "old"}, {LocalID: 2, Name: "current"}, {LocalID: 1, Name: "old"}})
 	p.order, p.track = []int{0, 1, 2}, &p.queue[1]
 	rev := p.QueueRevision()
 	p.UpdateLocalTracks([]netease.Track{{LocalID: 1, Name: "new"}, {LocalID: 2, Name: "relocated"}})

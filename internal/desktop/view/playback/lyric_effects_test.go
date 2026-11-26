@@ -14,6 +14,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Only a long intro or a gap with a known end time shows the interlude.
@@ -102,7 +103,7 @@ func TestLyricIntroFollowsReflow(t *testing.T) {
 // A lyric near the close button ignores clicks and highlight hover until it moves away.
 func TestLyricNearCloseDoesNotSeek(t *testing.T) {
 	a := newTestView(t)
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 30000}})
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 30000}})
 	line := lyrics.Line{At: 5 * time.Second, Text: "Lyric"}
 	y := float32(35)
 	var hovered bool
@@ -163,7 +164,7 @@ func TestLyricIntroEasesIntoFirstLine(t *testing.T) {
 			tt.SetPreferences(ui.Preferences{})
 			firstY := func(left time.Duration) float32 {
 				t.Helper()
-				a.Player().Hold(firstAt - left)
+				player.Hold(a.Player(), firstAt-left)
 				tt.Frame()
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[first].Text)
 				if !ok {
@@ -261,10 +262,10 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 			a, tt := lyricPaneView(t, lines, 120, 200)
 			tt.SetScale(0.25)
 			a.Config.LyricEdgeFade = true
-			a.Player().Hold(lines[4].At)
+			player.Hold(a.Player(), lines[4].At)
 			tt.Frame()
 			tt.SetPreferences(ui.Preferences{})
-			a.Player().Hold(lines[5].At)
+			player.Hold(a.Player(), lines[5].At)
 			tt.Frame()
 			tt.Advance(80 * time.Millisecond)
 			tt.SetSize(120, 170)
@@ -302,7 +303,7 @@ func TestLyricClickGlidesToReadingPosition(t *testing.T) {
 					a, tt := lyricPaneView(t, lines, 240, 300)
 					tt.SetScale(0.25)
 					a.Config.LyricEdgeFade = immersive
-					a.Player().Hold(lines[6].At)
+					player.Hold(a.Player(), lines[6].At)
 					tt.Frame()
 					target := lines[8]
 					if browse {
@@ -345,8 +346,8 @@ func TestLyricClickGlidesToReadingPosition(t *testing.T) {
 // Immersive lyrics light LRC as a whole line and reserve progressive highlights for real word timestamps.
 func TestImmersiveLyricsUseActualWordTiming(t *testing.T) {
 	a := newTestView(t)
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 10000}})
-	a.Player().Hold(1500 * time.Millisecond)
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 10000}})
+	player.Hold(a.Player(), 1500*time.Millisecond)
 	line := lyrics.Build("[00:01.00]Hello world\n[00:05.00]Next line", "", "")[0]
 	if len(line.Words) == 0 {
 		t.Fatal("the LRC fixture needs estimated words")

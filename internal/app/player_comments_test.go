@@ -12,6 +12,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
@@ -41,9 +42,9 @@ func TestPlayerBarOpensComments(t *testing.T) {
 			a.settings.LyricsStage = true
 			a.playbackState.Pane = tc.pane
 			a.comments = commentsvm.Comments{Track: 2, Thread: "R_SO_4_2", Loaded: true}
-			a.pl.Cue([]netease.Track{tc.track})
-			a.pl.SetLyrics(nil)
-			a.pl.Hold(30 * time.Second)
+			player.Cue(a.pl, []netease.Track{tc.track})
+			player.SetLyrics(a.pl, nil)
+			player.Hold(a.pl, 30*time.Second)
 			tt := ui.NewTester(a.view, 1200, 800)
 			tt.Frame()
 			if err := tt.Click("评论"); err != nil {

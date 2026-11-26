@@ -18,6 +18,7 @@ import (
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/testutil"
 )
 
@@ -30,11 +31,11 @@ func wallApp(n, at int) (*app, *ui.Tester) {
 	for i := range n {
 		tracks = append(tracks, netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌%03d", i), Duration: 200000})
 	}
-	a.pl.Cue(tracks)
+	player.Cue(a.pl, tracks)
 	if at > 0 {
 		a.pl.Jump(at)
 	}
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneWall
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -82,7 +83,7 @@ func TestWallPlaysTheCoverSwaying(t *testing.T) {
 	a, tt := wallApp(300, 0)
 	// Keep logical hit testing at the same window size with a smaller raster.
 	tt.SetScale(0.25)
-	a.pl.Hold(0) // playing
+	player.Hold(a.pl, 0) // playing
 	// A whole turn of the sway is sampled, whatever the clock starts it on:
 	// the rows are only ever on their way from one side to the other.
 	for range 2 * 14 {

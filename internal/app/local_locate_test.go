@@ -17,6 +17,7 @@ import (
 
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 func localLocateFixture(t *testing.T, playing bool) (*app, []localcatalog.Song, *ui.Tester) {
@@ -31,9 +32,9 @@ func localLocateFixture(t *testing.T, playing bool) (*app, []localcatalog.Song, 
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	a.nav.Current = route{Page: pageLocal}
 	a.pl.SuspendCache()
-	a.pl.Cue([]netease.Track{songs[149].Track, {ID: 999, Name: "另一首在线歌曲"}})
+	player.Cue(a.pl, []netease.Track{songs[149].Track, {ID: 999, Name: "另一首在线歌曲"}})
 	if playing {
-		a.pl.Hold(36 * time.Second)
+		player.Hold(a.pl, 36*time.Second)
 	}
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
@@ -87,7 +88,7 @@ func TestLocalLocateKeepsPlayback(t *testing.T) {
 func TestLocalLocateUsesLocalIdentity(t *testing.T) {
 	a, _, tt := localLocateFixture(t, false)
 	for _, tr := range []netease.Track{{ID: 150, Name: "在线歌曲"}, {LocalID: 999, Name: "未收入曲库的本地文件"}} {
-		a.pl.Cue([]netease.Track{tr})
+		player.Cue(a.pl, []netease.Track{tr})
 		tt.Frame()
 		if _, shown := tt.Find("定位正在播放的歌曲"); shown {
 			t.Fatal("locator offered an unrelated local row")

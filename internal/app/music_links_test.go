@@ -131,7 +131,7 @@ func TestMusicLinkFailureAndNavigation(t *testing.T) {
 	old := musicLinkTrack
 	t.Cleanup(func() { musicLinkTrack = old })
 	a := musicLinkApp(t)
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "original"}})
+	player.Cue(a.pl, []netease.Track{{ID: 7, Name: "original"}})
 	posts := testPosts(a)
 	musicLinkTrack = func(context.Context, netease.MusicLink) (netease.Track, error) {
 		return netease.Track{}, errors.New("offline")
@@ -182,8 +182,8 @@ func TestMusicLinkColdStart(t *testing.T) {
 // a song already in the queue can be played offline without a metadata call.
 func TestMusicLinkReusesQueue(t *testing.T) {
 	a := musicLinkApp(t)
-	a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}})
-	a.pl.Hold(0)
+	player.Cue(a.pl, []netease.Track{{ID: 1}, {ID: 2}})
+	player.Hold(a.pl, 0)
 	a.openMusicInput("orpheus://song/1")
 	if len(a.pl.Queue()) != 2 || a.pl.Current().ID != 1 {
 		t.Fatal("current song's queue was replaced")
@@ -244,7 +244,7 @@ func TestMusicLinkRespectsManualPlayback(t *testing.T) {
 	old := musicLinkTrack
 	t.Cleanup(func() { musicLinkTrack = old })
 	a := musicLinkApp(t)
-	a.pl.Cue([]netease.Track{{ID: 7}})
+	player.Cue(a.pl, []netease.Track{{ID: 7}})
 	posts := testPosts(a)
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -255,7 +255,7 @@ func TestMusicLinkRespectsManualPlayback(t *testing.T) {
 	}
 	a.openMusicInput("orpheus://song/1")
 	wait(t, entered, "metadata request")
-	a.pl.Cue([]netease.Track{{ID: 8}})
+	player.Cue(a.pl, []netease.Track{{ID: 8}})
 	close(release)
 	wait(t, posts, "metadata result")()
 	if a.pl.Current().ID != 8 {
@@ -355,7 +355,7 @@ func TestMusicLinkShortKeepsManualPlayback(t *testing.T) {
 	}
 	a.openMusicInput("https://163cn.tv/abc")
 	update := wait(t, posts, "short link")
-	a.pl.Cue([]netease.Track{{ID: 99}})
+	player.Cue(a.pl, []netease.Track{{ID: 99}})
 	update()
 	if a.nav.Current.Page != pageHome || a.pl.Current() == nil || a.pl.Current().ID != 99 {
 		t.Fatal("short link overrode manual playback")
@@ -396,7 +396,7 @@ func TestMusicLinkAccountRestoreCancelsLookup(t *testing.T) {
 	posts := testPosts(a)
 	fakeOfflineHome(t)
 	a.restored = true
-	a.pl.Cue([]netease.Track{{ID: 99}})
+	player.Cue(a.pl, []netease.Track{{ID: 99}})
 	old := musicLinkTrack
 	t.Cleanup(func() { musicLinkTrack = old })
 	contexts := make(chan context.Context, 1)

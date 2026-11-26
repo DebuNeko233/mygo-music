@@ -22,7 +22,7 @@ func TestTransportShuffleToggle(t *testing.T) {
 	for _, size := range []float32{18, 20, 22, 28} {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			a := newTestApp()
-			a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+			player.Cue(a.pl, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 			tt := ui.NewTester(func(c *ui.Context) {
 				a.views.playback.Transport(c, playbackview.White, playbackview.White.Alpha(0.45), playbackview.White, size)
 			}, 400, 100)
@@ -48,7 +48,7 @@ func TestTransportShuffleToggle(t *testing.T) {
 // The highlighted loop button still cycles through both repeat modes and back to off.
 func TestTransportRepeatCycle(t *testing.T) {
 	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 1}})
+	player.Cue(a.pl, []netease.Track{{ID: 1}})
 	tt := ui.NewTester(func(c *ui.Context) {
 		a.views.playback.Transport(c, playbackview.White, playbackview.White.Alpha(0.45), playbackview.White, 22)
 	}, 400, 100)
@@ -66,8 +66,8 @@ func TestTransportRepeatCycle(t *testing.T) {
 func TestNowPlayingVolumeTrackAndMute(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "歌曲", Duration: 200000}})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "歌曲", Duration: 200000}})
+	player.SetLyrics(a.pl, nil)
 	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	a.playbackState.Open = true
 	a.setVolume(0.5)

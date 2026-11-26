@@ -107,9 +107,7 @@ func (a *app) start() {
 
 	a.openMainWindow()
 	a.boot()
-	if shotHook != nil {
-		shotHook(a)
-	}
+	a.runDebugShots()
 	if a.startup.show {
 		a.showMain()
 	}

@@ -21,6 +21,7 @@ import (
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // A missing cover waits for connectivity and reuses its cached match on
@@ -45,7 +46,7 @@ func TestLocalArtworkSearchAndOfflineReuse(t *testing.T) {
 		a := newTestApp()
 		a.browseCache, a.network.offline = store, true
 		a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{song}})
-		a.pl.Cue([]netease.Track{song.Track})
+		player.Cue(a.pl, []netease.Track{song.Track})
 		return a, testPosts(a)
 	}
 	a, posts := makeApp(song)
@@ -112,7 +113,7 @@ func TestCloudArtworkUsesSharedResolver(t *testing.T) {
 		a := newTestApp()
 		a.account.Profile = &netease.Profile{UserID: 1}
 		a.browseCache = store
-		a.pl.Cue([]netease.Track{tr})
+		player.Cue(a.pl, []netease.Track{tr})
 		return a, testPosts(a)
 	}
 	a, posts := makeApp()
@@ -166,8 +167,8 @@ func artworkRecoveryFixture(t *testing.T, local bool) (*app, chan func()) {
 		tr.ID, tr.Cloud, tr.LocalID = 0, false, 4
 		a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: tr, Path: "Song.mp3"}}})
 	}
-	a.pl.Cue([]netease.Track{tr})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{tr})
+	player.SetLyrics(a.pl, nil)
 	return a, testPosts(a)
 }
 
@@ -479,8 +480,8 @@ func TestTrackArtworkPublicationRejectsOldSong(t *testing.T) {
 			second := *first
 			second.ID++
 			second.Name = "Second song"
-			a.pl.Cue([]netease.Track{second})
-			a.pl.SetLyrics(nil)
+			player.Cue(a.pl, []netease.Track{second})
+			player.SetLyrics(a.pl, nil)
 			current := a.pl.Current()
 			a.trackArt.known[a.artworkKey(current)] = trackArtworkResult{url: nextURL}
 			a.syncTrackArtwork()

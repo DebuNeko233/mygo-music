@@ -12,6 +12,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
@@ -54,8 +55,8 @@ func TestEpisodeComments(t *testing.T) {
 	defer func() { threadComments = netease.ThreadComments }()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 13, Name: "第一期", ProgramID: 3, PodcastID: 5, Duration: 600000}})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{{ID: 13, Name: "第一期", ProgramID: 3, PodcastID: 5, Duration: 600000}})
+	player.SetLyrics(a.pl, nil)
 	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)

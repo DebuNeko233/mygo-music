@@ -41,6 +41,8 @@ git status --short --branch
 go tool mygo dev
 ```
 
+截图巡览与性能场景仅在显式 `nyago_debug` 构建中可用，例如 `GOFLAGS='-tags=nyago_debug' go tool mygo dev` 配合 `NM_SHOTS`、`NM_SCENE`。普通构建及 release 不设置这个标签，不包含这些环境入口和采样逻辑；单独设置 `NM_SHOTS` 不会启用它们。
+
 这会打开原生桌面应用，需要图形会话。没有显示服务器的容器或无法访问窗口系统的环境不能据此验证界面行为。
 
 ```sh

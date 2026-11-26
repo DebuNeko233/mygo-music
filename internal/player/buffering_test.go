@@ -74,7 +74,7 @@ func TestUncachedLoadsReportBufferingBeforeURLReturns(t *testing.T) {
 				}
 			})
 			p.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", nil }
-			p.Cue([]netease.Track{{ID: 1, Duration: 5000}})
+			Cue(p, []netease.Track{{ID: 1, Duration: 5000}})
 			if prefetched {
 				p.startPrefetch(1, "exhigh", nil, songURL, 0)
 				select {

@@ -17,6 +17,7 @@ import (
 
 	"netease-music-mygo/internal/library"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	libraryvm "netease-music-mygo/internal/viewmodel/library"
 )
 
@@ -122,8 +123,9 @@ func TestRemoveSongFromPlaylist(t *testing.T) {
 	defer func() { removeFromPlaylist = netease.RemoveFromPlaylist }()
 
 	a := editTestApp()
-	// Playing the id: the queue keeps the song.
-	a.pl.Cue(a.library.Playlists[10].Tracks)
+	player.
+		// Playing the id: the queue keeps the song.
+		Cue(a.pl, a.library.Playlists[10].Tracks)
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	if err := tt.RightClick("宝船"); err != nil {
@@ -153,7 +155,7 @@ func TestConcurrentPlaylistRemovalRollback(t *testing.T) {
 	original.Tracks = append(original.Tracks, netease.Track{ID: 3})
 	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}, {ID: 3}}
 	original.TrackCount = 3
-	a.pl.Cue(original.Tracks)
+	player.Cue(a.pl, original.Tracks)
 
 	oldRemove, oldDetail, oldMine := removeFromPlaylist, playlistDetail, userPlaylists
 	t.Cleanup(func() { removeFromPlaylist, playlistDetail, userPlaylists = oldRemove, oldDetail, oldMine })
@@ -201,8 +203,8 @@ func TestRemoveSongRefreshesOffscreenPlaylist(t *testing.T) {
 	original.TrackCount = 2
 	original.TrackIDs = []netease.TrackID{{ID: 1}, {ID: 2}}
 	a.nav.Current = route{Page: pageHome}
-	a.pl.Cue(original.Tracks)
-	a.pl.Hold(10 * time.Second)
+	player.Cue(a.pl, original.Tracks)
+	player.Hold(a.pl, 10*time.Second)
 	revision := a.pl.QueueRevision()
 
 	oldRemove, oldDetail, oldMine := removeFromPlaylist, playlistDetail, userPlaylists

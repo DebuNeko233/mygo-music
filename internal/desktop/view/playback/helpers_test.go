@@ -24,9 +24,9 @@ func lyricPaneView(t *testing.T, lines []lyrics.Line, w, h int) (*View, *ui.Test
 	*a.Config = preferences.Default()
 	a.Config.LyricEdgeFade = false
 	a.Config.HotComments = false
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 200000}})
-	a.Player().SetLyrics(lines)
-	a.Player().Hold(0)
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 200000}})
+	player.SetLyrics(a.Player(), lines)
+	player.Hold(a.Player(), 0)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		_, height := c.Size()
 		ui.Column(c).Fill().Children(func() { a.LyricsPane(c, a.Player().Current(), height, ui.Rect{}, 0) })
@@ -59,7 +59,7 @@ func captionView(t *testing.T) *View {
 	t.Helper()
 	v := newTestView(t)
 	*v.Config = preferences.Default()
-	v.Player().Cue([]netease.Track{{ID: 7, ProgramID: 42, Duration: 600000}})
+	player.Cue(v.Player(), []netease.Track{{ID: 7, ProgramID: 42, Duration: 600000}})
 	v.ModelReady = func() bool { return true }
 	v.CaptionsWriting = func(pos time.Duration) bool { return v.Captions.Writing(pos, false) }
 	return v

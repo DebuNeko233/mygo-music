@@ -15,6 +15,7 @@ import (
 
 	"netease-music-mygo/internal/localcatalog"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 func localSearchFixture(t *testing.T) (*app, []localcatalog.Song, *ui.Tester) {
@@ -31,7 +32,7 @@ func localSearchFixture(t *testing.T) (*app, []localcatalog.Song, *ui.Tester) {
 	}
 	songs[149].Track.Alias = []string{"珍藏现场"}
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
-	a.pl.Cue([]netease.Track{songs[0].Track, {ID: 999, Name: "在线歌曲"}})
+	player.Cue(a.pl, []netease.Track{songs[0].Track, {ID: 999, Name: "在线歌曲"}})
 	tt.Frame()
 	return a, songs, tt
 }
@@ -81,7 +82,7 @@ func TestLocalSearchRevalidatesMissingFiles(t *testing.T) {
 		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), Name: "匹配歌曲"}, Path: "../player/testdata/seek.flac"}
 	}
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
-	a.pl.Cue([]netease.Track{{ID: 999, Name: "正在播放"}})
+	player.Cue(a.pl, []netease.Track{{ID: 999, Name: "正在播放"}})
 	old := a.trackSuggestions("匹配")[0].Key
 	for _, id := range []int64{1, 2, 3} {
 		a.local.MarkMissing(id)

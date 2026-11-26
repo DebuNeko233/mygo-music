@@ -16,6 +16,7 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
@@ -31,9 +32,9 @@ func quietApp(pos time.Duration) (*app, netease.Track, []lyrics.Line) {
 		{At: 20 * time.Second, End: 25 * time.Second, Text: "故事的小黄花"},
 		{At: 25 * time.Second, End: 30 * time.Second, Text: "从出生那年就飘着"},
 	}
-	a.pl.Cue([]netease.Track{tr})
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(pos)
+	player.Cue(a.pl, []netease.Track{tr})
+	player.SetLyrics(a.pl, lines)
+	player.Hold(a.pl, pos)
 	hot := []netease.Comment{
 		{ID: 1, Content: "刮风这天，我试过握着你手", LikedCount: 52000},
 		{ID: 2, Content: "从前从前，有个人爱你很久", LikedCount: 31000},
@@ -95,7 +96,7 @@ func TestQuietCommentAfterLyricsRefresh(t *testing.T) {
 	}
 	refreshed := slices.Clone(lines)
 	refreshed[1].At, refreshed[1].End = 3*time.Second, 9*time.Second
-	a.pl.SetLyrics(refreshed)
+	player.SetLyrics(a.pl, refreshed)
 	if cm, _ := a.views.playback.QuietComment(&tr, refreshed, true, pos); cm != nil {
 		t.Fatal("the comment persisted into the new singing interval")
 	}
@@ -163,7 +164,7 @@ func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
 			for i := range extra {
 				lines = append(lines, lyrics.Line{At: 31*time.Second + time.Duration(i)*400*time.Millisecond, Text: fmt.Sprint("Lyric ", i)})
 			}
-			a.pl.SetLyrics(lines)
+			player.SetLyrics(a.pl, lines)
 			tt := ui.NewTester(func(c *ui.Context) {
 				a.views.playback.LyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
 			}, 320, 360)
@@ -176,12 +177,12 @@ func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
 				}
 			}
 			check("before entrance", true, false)
-			a.pl.Hold(2 * time.Second)
+			player.Hold(a.pl, 2*time.Second)
 			tt.Frame()
 			tt.Advance(160 * time.Millisecond)
 			check("mid-entrance", false, true)
 			tt.Advance(600 * time.Millisecond)
-			a.pl.Hold(19200 * time.Millisecond)
+			player.Hold(a.pl, 19200*time.Millisecond)
 			tt.Frame()
 			tt.Advance(160 * time.Millisecond)
 			check("mid-exit", false, true)
@@ -196,7 +197,7 @@ func TestStaticLyricsQuietCard(t *testing.T) {
 	for _, text := range []string{lyrics.InstrumentalText, "作曲：周杰伦"} {
 		t.Run(text, func(t *testing.T) {
 			a, _, _ := quietApp(0)
-			a.pl.SetLyrics([]lyrics.Line{{At: 10 * time.Second, Text: text}})
+			player.SetLyrics(a.pl, []lyrics.Line{{At: 10 * time.Second, Text: text}})
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				a.views.playback.LyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)
 			}, 320, 360, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
@@ -204,7 +205,7 @@ func TestStaticLyricsQuietCard(t *testing.T) {
 			if tt.HasText(comment) {
 				t.Fatal("hot comment showed before the quiet interval")
 			}
-			a.pl.Hold(5 * time.Second)
+			player.Hold(a.pl, 5*time.Second)
 			tt.Frame()
 			if !tt.HasText(comment) {
 				t.Fatal("hot comment missing during the quiet interval")

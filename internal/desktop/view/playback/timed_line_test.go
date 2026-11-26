@@ -15,6 +15,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // A timed word split across lines must paint both pieces again after seeking backward.
@@ -23,7 +24,7 @@ func TestWrappedLyricWordAfterBackwardSeek(t *testing.T) {
 	text := strings.Repeat("m", 8)
 	line := lyrics.Line{Text: text, Words: []lyrics.Word{{Text: text, Start: time.Second, End: 2 * time.Second}}}
 	a := newTestView(t)
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 8000}})
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 8000}})
 	a.Player().Seek(2 * time.Second)
 	tt := ui.NewTester(func(c *ui.Context) {
 		c.Root().Background(ui.RGB(0, 0, 0))

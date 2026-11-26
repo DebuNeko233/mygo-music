@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/preferences"
 )
 
@@ -23,8 +24,8 @@ func TestSidebarSettingsApplyAndReload(t *testing.T) {
 	a := newTestApp()
 	a.settings.Path = filepath.Join(t.TempDir(), "settings.json")
 	a.nav.Current = route{Page: pageLocal}
-	a.pl.Cue([]netease.Track{{ID: 42, Name: "playing", Duration: 120000}})
-	a.pl.Hold(12 * time.Second)
+	player.Cue(a.pl, []netease.Track{{ID: 42, Name: "playing", Duration: 120000}})
+	player.Hold(a.pl, 12*time.Second)
 	before := a.nav.Current
 	main := ui.NewTester(a.sidebar, 220, 800)
 	settingsWindow := ui.NewTester(a.views.settings.Build, 780, 640)

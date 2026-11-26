@@ -154,7 +154,7 @@ func TestNetworkControlsStayOutsideNowPlaying(t *testing.T) {
 	a.nav.Current = route{Page: pagePlaylist, ID: 9}
 	a.library.Playlists[9] = &netease.Playlist{ID: 9, Name: "Cached"}
 	a.pl = player.New(a.post)
-	a.pl.Cue([]netease.Track{{ID: 1}})
+	player.Cue(a.pl, []netease.Track{{ID: 1}})
 	a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
 	read, comments := readNetworkStatus, threadComments
 	t.Cleanup(func() { readNetworkStatus, threadComments = read, comments })
@@ -259,7 +259,7 @@ func TestNetworkLyricsRetryAction(t *testing.T) {
 	for _, pane := range []int{playbackview.PaneLyrics, playbackview.PaneStage} {
 		a, posts := offlineFixture(t)
 		a.pl = player.New(a.post)
-		a.pl.Cue([]netease.Track{{ID: 7, Name: "Recovery"}})
+		player.Cue(a.pl, []netease.Track{{ID: 7, Name: "Recovery"}})
 		a.pl.FetchLyrics = func(int64) (string, string, string, error) { return "", "", "", netease.ErrOffline }
 		a.networkChanged(mygo.NetworkStatus{})
 		a.networkChanged(mygo.NetworkStatus{Online: true})

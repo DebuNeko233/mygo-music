@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
 )
@@ -70,7 +71,7 @@ func TestPodcastMVVMLatePlayKeepsPlayerQueue(t *testing.T) {
 	}
 	a.playPodcast(7)
 	first, second := wait(t, posts, "metadata or episodes"), wait(t, posts, "other playback input")
-	a.pl.Cue([]netease.Track{{ID: 99, Name: "new choice"}})
+	player.Cue(a.pl, []netease.Track{{ID: 99, Name: "new choice"}})
 	revision := a.pl.QueueRevision()
 	first()
 	second()

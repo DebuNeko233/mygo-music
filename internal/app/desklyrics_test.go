@@ -14,6 +14,7 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/preferences"
 )
 
@@ -112,9 +113,9 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.LyricWindow = true
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
-	a.pl.SetLyrics([]lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
-	a.pl.Hold(0)
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "时过境迁"}})
+	player.SetLyrics(a.pl, []lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
+	player.Hold(a.pl, 0)
 	d := &playbackview.DeskLyrics{A: &a.views.playback}
 	a.lyrics = d
 
@@ -167,9 +168,9 @@ func TestLockingTheDeskLyricsLeavesOnlyItsLines(t *testing.T) {
 func TestDeskLyricsAreVerticallyCentered(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
-	a.pl.SetLyrics([]lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
-	a.pl.Hold(0)
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "时过境迁"}})
+	player.SetLyrics(a.pl, []lyrics.Line{{At: 0, Text: "第一句"}, {At: 2 * time.Second, Text: "第二句"}})
+	player.Hold(a.pl, 0)
 	tt := ui.NewTester((&playbackview.DeskLyrics{A: &a.views.playback}).View, 840, 400)
 	tt.Frame()
 	first, ok := tt.Find("第一句")
@@ -192,13 +193,13 @@ func TestTheSettingsChooseHowManyLinesTheWindowShows(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "时过境迁"}})
-	a.pl.SetLyrics([]lyrics.Line{
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "时过境迁"}})
+	player.SetLyrics(a.pl, []lyrics.Line{
 		{At: 0, Text: "第一句"},
 		{At: 2 * time.Second, Text: "第二句"},
 		{At: 4 * time.Second, Text: "第三句"},
 	})
-	a.pl.Hold(2 * time.Second)
+	player.Hold(a.pl, 2*time.Second)
 
 	settings := ui.NewTester(a.views.settings.Build, 780, 3400)
 	showSettingsPage(t, settings, "桌面歌词")
@@ -310,8 +311,8 @@ func TestDeskLyricsAlignInstrumentalNotice(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "纯音乐"}})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "纯音乐"}})
+	player.SetLyrics(a.pl, nil)
 	tt := ui.NewTester((&playbackview.DeskLyrics{A: &a.views.playback}).View, 840, 400)
 	for _, lines := range []int{1, 2} {
 		for _, choice := range []int{0, 1, 2} {

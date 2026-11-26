@@ -79,13 +79,13 @@ func TestCaptionObsoleteCompletion(t *testing.T) {
 // Returning to the same episode waits for the latest transcript load instead of accepting its previous visit's result.
 func TestCaptionTranscriptLoadIdentity(t *testing.T) {
 	m, s, posts := captionFixture(t)
-	s.Player.Cue([]netease.Track{{ID: 42, ProgramID: 42}})
+	player.Cue(s.Player, []netease.Track{{ID: 42, ProgramID: 42}})
 	m.Sync(s)
 	old := testutil.Wait(t, posts, "first A")
-	s.Player.Cue([]netease.Track{{ID: 8, ProgramID: 8}})
+	player.Cue(s.Player, []netease.Track{{ID: 8, ProgramID: 8}})
 	m.Sync(s)
 	middle := testutil.Wait(t, posts, "B")
-	s.Player.Cue([]netease.Track{{ID: 42, ProgramID: 42}})
+	player.Cue(s.Player, []netease.Track{{ID: 42, ProgramID: 42}})
 	m.Sync(s)
 	latest := testutil.Wait(t, posts, "last A")
 	old()

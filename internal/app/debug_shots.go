@@ -1,3 +1,5 @@
+//go:build nyago_debug
+
 /*
 根据 NM_SHOTS 环境变量驱动界面巡览，并保存窗口截图以检查设计。
 */
@@ -21,240 +23,238 @@ import (
 
 // With NM_SHOTS set to a directory, the app walks through its views and
 // saves what each window shows there, for checking the design.
-func init() {
+func (a *app) runDebugShots() {
 	dir := os.Getenv("NM_SHOTS")
 	if dir == "" {
 		return
 	}
-	shotHook = func(a *app) {
-		// The scenes change settings to measure them: keep the
-		// listener's own as they were.
-		a.settings.Path = ""
-		go func() {
-			shot := func(name string, w *mygo.Window) {
-				png, err := w.CapturePage()
-				if err == nil {
-					os.WriteFile(filepath.Join(dir, name+".png"), png, 0o644)
-				}
+	// The scenes change settings to measure them: keep the
+	// listener's own as they were.
+	a.settings.Path = ""
+	go func() {
+		shot := func(name string, w *mygo.Window) {
+			png, err := w.CapturePage()
+			if err == nil {
+				os.WriteFile(filepath.Join(dir, name+".png"), png, 0o644)
 			}
-			step := func(d time.Duration, fn func()) {
-				time.Sleep(d)
-				mygo.RunOnMain(func() { fn(); a.redraw() })
+		}
+		step := func(d time.Duration, fn func()) {
+			time.Sleep(d)
+			mygo.RunOnMain(func() { fn(); a.redraw() })
+		}
+		mygo.RunOnMain(func() { a.win.Show(); a.win.Focus() })
+		if os.Getenv("NM_SCENE") == "perf" {
+			// Muted, marks on stderr where each part begins, for the
+			// frame log of MYGO_FRAME_STATS.
+			// With the process's CPU time so far, in ms, all its threads.
+			mark := func(s string) {
+				println("mark", time.Now().Format("15:04:05.000"), s, "cpu", cpuTime())
 			}
-			mygo.RunOnMain(func() { a.win.Show(); a.win.Focus() })
-			if os.Getenv("NM_SCENE") == "perf" {
-				// Muted, marks on stderr where each part begins, for the
-				// frame log of MYGO_FRAME_STATS.
-				// With the process's CPU time so far, in ms, all its threads.
-				mark := func(s string) {
-					println("mark", time.Now().Format("15:04:05.000"), s, "cpu", cpuTime())
+			// Above other windows: a covered window draws no frames.
+			mygo.RunOnMain(func() {
+				a.win.SetAlwaysOnTop(true)
+				a.win.Show()
+				// NM_SMOKE=0 and NM_NOTCH=0 turn them off, to measure them.
+				a.settings.Smoke = os.Getenv("NM_SMOKE") != "0"
+				a.settings.Notch = os.Getenv("NM_NOTCH") != "0"
+				a.notch.SetEnabled(a.settings.Notch)
+			})
+			for range 40 {
+				var n int
+				mygo.RunOnMain(func() { n = len(a.home.Daily) })
+				if n > 0 {
+					break
 				}
-				// Above other windows: a covered window draws no frames.
-				mygo.RunOnMain(func() {
-					a.win.SetAlwaysOnTop(true)
-					a.win.Show()
-					// NM_SMOKE=0 and NM_NOTCH=0 turn them off, to measure them.
-					a.settings.Smoke = os.Getenv("NM_SMOKE") != "0"
-					a.settings.Notch = os.Getenv("NM_NOTCH") != "0"
-					a.notch.SetEnabled(a.settings.Notch)
-				})
-				for range 40 {
-					var n int
-					mygo.RunOnMain(func() { n = len(a.home.Daily) })
-					if n > 0 {
-						break
-					}
-					time.Sleep(250 * time.Millisecond)
+				time.Sleep(250 * time.Millisecond)
+			}
+			step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
+			time.Sleep(4 * time.Second)
+			if os.Getenv("NM_DAILY") != "" {
+				// The home page, its daily card's record turning, for a
+				// while; then another page, without it, loaded first.
+				step(0, func() { a.open(route{Page: pageCharts}) })
+				time.Sleep(6 * time.Second)
+				step(0, func() { a.open(route{Page: pageHome}) })
+				time.Sleep(2 * time.Second)
+				if f, err := os.Create(filepath.Join(dir, "daily.pprof")); err == nil {
+					pprof.StartCPUProfile(f)
+					go func() {
+						time.Sleep(5 * time.Second)
+						pprof.StopCPUProfile()
+						f.Close()
+					}()
 				}
-				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
-				time.Sleep(4 * time.Second)
-				if os.Getenv("NM_DAILY") != "" {
-					// The home page, its daily card's record turning, for a
-					// while; then another page, without it, loaded first.
-					step(0, func() { a.open(route{Page: pageCharts}) })
-					time.Sleep(6 * time.Second)
-					step(0, func() { a.open(route{Page: pageHome}) })
-					time.Sleep(2 * time.Second)
-					if f, err := os.Create(filepath.Join(dir, "daily.pprof")); err == nil {
-						pprof.StartCPUProfile(f)
-						go func() {
-							time.Sleep(5 * time.Second)
-							pprof.StopCPUProfile()
-							f.Close()
-						}()
-					}
-					mark("home")
-					time.Sleep(10 * time.Second)
-					mark("charts")
-					step(0, func() { a.open(route{Page: pageCharts}) })
-					time.Sleep(10 * time.Second)
-					mark("end")
-					mygo.RunOnMain(mygo.App.Quit)
-					return
+				mark("home")
+				time.Sleep(10 * time.Second)
+				mark("charts")
+				step(0, func() { a.open(route{Page: pageCharts}) })
+				time.Sleep(10 * time.Second)
+				mark("end")
+				mygo.RunOnMain(mygo.App.Quit)
+				return
+			}
+			if long := os.Getenv("NM_LONG"); long != "" {
+				// Each pane for a while, as one listens: a mark every 5 s.
+				// NM_LONG=stage shows only the stage.
+				panes := []int{playbackview.PaneLyrics, playbackview.PaneStage}
+				if long == "stage" {
+					panes = panes[1:]
 				}
-				if long := os.Getenv("NM_LONG"); long != "" {
-					// Each pane for a while, as one listens: a mark every 5 s.
-					// NM_LONG=stage shows only the stage.
-					panes := []int{playbackview.PaneLyrics, playbackview.PaneStage}
-					if long == "stage" {
-						panes = panes[1:]
+				for _, pane := range panes {
+					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, pane })
+					for i := range 4 {
+						mark(fmt.Sprint("pane", pane, "-", i))
+						time.Sleep(5 * time.Second)
 					}
-					for _, pane := range panes {
-						step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, pane })
-						for i := range 4 {
-							mark(fmt.Sprint("pane", pane, "-", i))
-							time.Sleep(5 * time.Second)
-						}
-					}
-					mark("end")
-					mygo.RunOnMain(mygo.App.Quit)
-					return
-				}
-				for round := range 2 {
-					if round == 0 {
-						// A CPU profile of the opening, for go tool pprof.
-						if f, err := os.Create(filepath.Join(dir, "open.pprof")); err == nil {
-							pprof.StartCPUProfile(f)
-							go func() {
-								time.Sleep(1500 * time.Millisecond)
-								pprof.StopCPUProfile()
-								f.Close()
-							}()
-						}
-					}
-					mark(fmt.Sprint("open", round))
-					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics })
-					time.Sleep(3 * time.Second)
-					mark(fmt.Sprint("close", round))
-					step(0, func() { a.playbackState.Open = false })
-					time.Sleep(2 * time.Second)
-				}
-				for round := range 2 {
-					if round == 0 {
-						// And one of the stage, for its character animation.
-						if f, err := os.Create(filepath.Join(dir, "stage.pprof")); err == nil {
-							pprof.StartCPUProfile(f)
-							go func() {
-								time.Sleep(4 * time.Second)
-								pprof.StopCPUProfile()
-								f.Close()
-							}()
-						}
-					}
-					mark(fmt.Sprint("stage", round))
-					step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage })
-					time.Sleep(4 * time.Second)
-					mark(fmt.Sprint("shut", round))
-					step(0, func() { a.playbackState.Open = false })
-					time.Sleep(2 * time.Second)
 				}
 				mark("end")
 				mygo.RunOnMain(mygo.App.Quit)
 				return
 			}
-			if os.Getenv("NM_SCENE") == "np" {
-				time.Sleep(5 * time.Second)
-				shot("q-home", a.win)
-				step(0, func() { a.open(route{Page: pageDaily}) })
-				time.Sleep(2 * time.Second)
-				shot("q-daily", a.win)
-				step(0, func() { a.pl.PlayQueue(a.home.Daily, 0); a.setVolume(0.15) })
-				time.Sleep(4 * time.Second)
-				step(0, func() { a.playbackState.Open = true })
-				time.Sleep(4 * time.Second)
-				shot("q-np", a.win)
-				mygo.RunOnMain(mygo.App.Quit)
-				return
-			}
-			if os.Getenv("NM_SCENE") == "podcasts" {
-				// The podcasts tab as it loads and once it has, then the
-				// first podcast's newest episode, as its card's button plays
-				// it, muted.
-				time.Sleep(3 * time.Second)
-				step(0, func() { a.open(route{Page: pagePodcasts}) })
-				time.Sleep(150 * time.Millisecond)
-				shot("p-loading", a.win)
-				time.Sleep(4 * time.Second)
-				shot("p-podcasts", a.win)
-				step(0, func() {
-					a.setVolume(0)
-					t := a.podcasts.Home
-					if pods := append(t.Subs, append(t.Picks, t.Hot...)...); len(pods) > 0 {
-						a.playPodcast(pods[0].ID)
+			for round := range 2 {
+				if round == 0 {
+					// A CPU profile of the opening, for go tool pprof.
+					if f, err := os.Create(filepath.Join(dir, "open.pprof")); err == nil {
+						pprof.StartCPUProfile(f)
+						go func() {
+							time.Sleep(1500 * time.Millisecond)
+							pprof.StopCPUProfile()
+							f.Close()
+						}()
 					}
-				})
-				time.Sleep(4 * time.Second)
-				shot("p-playing", a.win)
-				mygo.RunOnMain(mygo.App.Quit)
-				return
-			}
-			if os.Getenv("NM_SCENE") == "artist" {
-				// Now Playing, then the page of the artist it credits first,
-				// as their name opens it, its songs the most popular and the newest.
-				time.Sleep(5 * time.Second)
-				step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
-				time.Sleep(3 * time.Second)
+				}
+				mark(fmt.Sprint("open", round))
 				step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics })
 				time.Sleep(3 * time.Second)
-				shot("a-np", a.win)
-				step(0, func() { a.openArtist(a.pl.Current().Artists[0].ID) })
-				time.Sleep(150 * time.Millisecond)
-				shot("a-loading", a.win)
-				time.Sleep(4 * time.Second)
-				shot("a-artist", a.win)
-				step(0, func() { a.artists.Tab = artistvm.ArtistLatest; a.loadLatest(a.nav.Current.ID) })
-				time.Sleep(3 * time.Second)
-				shot("a-latest", a.win)
-				mygo.RunOnMain(mygo.App.Quit)
-				return
-			}
-			if os.Getenv("NM_SCENE") == "profile" {
-				// The listener's own page, and at its foot the podcasts they
-				// subscribe to and the artists they follow.
-				time.Sleep(4 * time.Second)
-				step(0, func() { a.open(route{Page: pageUser, ID: a.account.Profile.UserID}) })
-				time.Sleep(4 * time.Second)
-				shot("p-profile", a.win)
-				step(0, func() { a.shell.PageScroll.ScrollTo(0, 100000, ui.Smooth) })
+				mark(fmt.Sprint("close", round))
+				step(0, func() { a.playbackState.Open = false })
 				time.Sleep(2 * time.Second)
-				shot("p-follows", a.win)
-				mygo.RunOnMain(mygo.App.Quit)
-				return
 			}
+			for round := range 2 {
+				if round == 0 {
+					// And one of the stage, for its character animation.
+					if f, err := os.Create(filepath.Join(dir, "stage.pprof")); err == nil {
+						pprof.StartCPUProfile(f)
+						go func() {
+							time.Sleep(4 * time.Second)
+							pprof.StopCPUProfile()
+							f.Close()
+						}()
+					}
+				}
+				mark(fmt.Sprint("stage", round))
+				step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneStage })
+				time.Sleep(4 * time.Second)
+				mark(fmt.Sprint("shut", round))
+				step(0, func() { a.playbackState.Open = false })
+				time.Sleep(2 * time.Second)
+			}
+			mark("end")
+			mygo.RunOnMain(mygo.App.Quit)
+			return
+		}
+		if os.Getenv("NM_SCENE") == "np" {
 			time.Sleep(5 * time.Second)
-			mygo.RunOnMain(func() {
-				x, y, w, h := playbackview.WindowFrame(a.notch.Win.NativeHandle())
-				println("notch frame", int(x), int(y), int(w), int(h))
-			})
-			shot("1-home", a.win)
-			shot("1-notch-idle", a.notch.Win)
-			step(0, func() { a.open(route{Page: pageCharts}) })
-			time.Sleep(time.Second)
-			shot("2-charts", a.win)
-			step(0, func() { a.open(route{Page: pagePlaylist, ID: a.home.Charts[1].ID}) })
-			time.Sleep(4 * time.Second)
-			shot("3-playlist", a.win)
-			step(0, func() {
-				pl := a.library.Playlists[a.home.Charts[1].ID]
-				a.setVolume(0.15)
-				a.pl.PlayQueue(pl.Tracks, tracklist.FirstPlayable(pl.Tracks))
-			})
-			time.Sleep(5 * time.Second)
-			shot("4-playing", a.win)
-			shot("4-notch-compact", a.notch.Win)
-			step(0, func() { a.notch.Open = true; a.notch.LastInside = time.Now().Add(time.Hour) })
+			shot("q-home", a.win)
+			step(0, func() { a.open(route{Page: pageDaily}) })
 			time.Sleep(2 * time.Second)
-			shot("5-notch-open", a.notch.Win)
+			shot("q-daily", a.win)
+			step(0, func() { a.pl.PlayQueue(a.home.Daily, 0); a.setVolume(0.15) })
+			time.Sleep(4 * time.Second)
 			step(0, func() { a.playbackState.Open = true })
 			time.Sleep(4 * time.Second)
-			shot("6-now-playing", a.win)
-			step(0, func() { a.playbackState.Pane = playbackview.PaneQueue })
-			time.Sleep(2 * time.Second)
-			shot("7-queue", a.win)
-			step(0, func() { a.search("周杰伦") })
-			time.Sleep(4 * time.Second)
-			shot("8-search", a.win)
+			shot("q-np", a.win)
 			mygo.RunOnMain(mygo.App.Quit)
-		}()
-	}
+			return
+		}
+		if os.Getenv("NM_SCENE") == "podcasts" {
+			// The podcasts tab as it loads and once it has, then the
+			// first podcast's newest episode, as its card's button plays
+			// it, muted.
+			time.Sleep(3 * time.Second)
+			step(0, func() { a.open(route{Page: pagePodcasts}) })
+			time.Sleep(150 * time.Millisecond)
+			shot("p-loading", a.win)
+			time.Sleep(4 * time.Second)
+			shot("p-podcasts", a.win)
+			step(0, func() {
+				a.setVolume(0)
+				t := a.podcasts.Home
+				if pods := append(t.Subs, append(t.Picks, t.Hot...)...); len(pods) > 0 {
+					a.playPodcast(pods[0].ID)
+				}
+			})
+			time.Sleep(4 * time.Second)
+			shot("p-playing", a.win)
+			mygo.RunOnMain(mygo.App.Quit)
+			return
+		}
+		if os.Getenv("NM_SCENE") == "artist" {
+			// Now Playing, then the page of the artist it credits first,
+			// as their name opens it, its songs the most popular and the newest.
+			time.Sleep(5 * time.Second)
+			step(0, func() { a.setVolume(0); a.pl.PlayQueue(a.home.Daily, 0) })
+			time.Sleep(3 * time.Second)
+			step(0, func() { a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics })
+			time.Sleep(3 * time.Second)
+			shot("a-np", a.win)
+			step(0, func() { a.openArtist(a.pl.Current().Artists[0].ID) })
+			time.Sleep(150 * time.Millisecond)
+			shot("a-loading", a.win)
+			time.Sleep(4 * time.Second)
+			shot("a-artist", a.win)
+			step(0, func() { a.artists.Tab = artistvm.ArtistLatest; a.loadLatest(a.nav.Current.ID) })
+			time.Sleep(3 * time.Second)
+			shot("a-latest", a.win)
+			mygo.RunOnMain(mygo.App.Quit)
+			return
+		}
+		if os.Getenv("NM_SCENE") == "profile" {
+			// The listener's own page, and at its foot the podcasts they
+			// subscribe to and the artists they follow.
+			time.Sleep(4 * time.Second)
+			step(0, func() { a.open(route{Page: pageUser, ID: a.account.Profile.UserID}) })
+			time.Sleep(4 * time.Second)
+			shot("p-profile", a.win)
+			step(0, func() { a.shell.PageScroll.ScrollTo(0, 100000, ui.Smooth) })
+			time.Sleep(2 * time.Second)
+			shot("p-follows", a.win)
+			mygo.RunOnMain(mygo.App.Quit)
+			return
+		}
+		time.Sleep(5 * time.Second)
+		mygo.RunOnMain(func() {
+			x, y, w, h := playbackview.WindowFrame(a.notch.Win.NativeHandle())
+			println("notch frame", int(x), int(y), int(w), int(h))
+		})
+		shot("1-home", a.win)
+		shot("1-notch-idle", a.notch.Win)
+		step(0, func() { a.open(route{Page: pageCharts}) })
+		time.Sleep(time.Second)
+		shot("2-charts", a.win)
+		step(0, func() { a.open(route{Page: pagePlaylist, ID: a.home.Charts[1].ID}) })
+		time.Sleep(4 * time.Second)
+		shot("3-playlist", a.win)
+		step(0, func() {
+			pl := a.library.Playlists[a.home.Charts[1].ID]
+			a.setVolume(0.15)
+			a.pl.PlayQueue(pl.Tracks, tracklist.FirstPlayable(pl.Tracks))
+		})
+		time.Sleep(5 * time.Second)
+		shot("4-playing", a.win)
+		shot("4-notch-compact", a.notch.Win)
+		step(0, func() { a.notch.Open = true; a.notch.LastInside = time.Now().Add(time.Hour) })
+		time.Sleep(2 * time.Second)
+		shot("5-notch-open", a.notch.Win)
+		step(0, func() { a.playbackState.Open = true })
+		time.Sleep(4 * time.Second)
+		shot("6-now-playing", a.win)
+		step(0, func() { a.playbackState.Pane = playbackview.PaneQueue })
+		time.Sleep(2 * time.Second)
+		shot("7-queue", a.win)
+		step(0, func() { a.search("周杰伦") })
+		time.Sleep(4 * time.Second)
+		shot("8-search", a.win)
+		mygo.RunOnMain(mygo.App.Quit)
+	}()
 }

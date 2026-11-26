@@ -303,8 +303,8 @@ func TestLyricCanvasAcrossTrackChanges(t *testing.T) {
 	for i := range lines {
 		lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Lyric %d", i)}
 	}
-	a.Player().Cue([]netease.Track{{ID: 1, Duration: 60000}})
-	a.Player().SetLyrics(lines)
+	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 60000}})
+	player.SetLyrics(a.Player(), lines)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() { a.LyricsPane(c, a.Player().Current(), 180, ui.Rect{}, 0) })
 	}, 160, 180, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
@@ -312,13 +312,13 @@ func TestLyricCanvasAcrossTrackChanges(t *testing.T) {
 		if a.LyricBlurPass == nil {
 			t.Fatal("scrolling lyrics did not allocate a canvas")
 		}
-		a.Player().Cue([]netease.Track{{ID: int64(i) + 2, Duration: 60000}})
-		a.Player().SetLyrics([]lyrics.Line{{Text: text}})
+		player.Cue(a.Player(), []netease.Track{{ID: int64(i) + 2, Duration: 60000}})
+		player.SetLyrics(a.Player(), []lyrics.Line{{Text: text}})
 		tt.Frame()
 		if a.LyricBlurPass != nil {
 			t.Fatalf("canvas was held while displaying %q", text)
 		}
-		a.Player().SetLyrics(lines)
+		player.SetLyrics(a.Player(), lines)
 		tt.Frame()
 	}
 	if a.LyricBlurPass == nil {
@@ -331,12 +331,12 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 	for _, count := range []int{20, 120} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			a := newTestView(t)
-			a.Player().Cue([]netease.Track{{ID: 1, Duration: 200000}})
+			player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 200000}})
 			lines := make([]lyrics.Line, count)
 			for i := range lines {
 				lines[i] = lyrics.Line{At: time.Duration(i+1) * time.Second, Text: fmt.Sprintf("第 %02d 句歌词", i), Translation: "The lyrics keep scrolling"}
 			}
-			a.Player().SetLyrics(lines)
+			player.SetLyrics(a.Player(), lines)
 			a.Player().Seek(lines[count/2].At)
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				_, h := c.Size()
@@ -384,7 +384,7 @@ func TestLyricEdgeFadeScrolling(t *testing.T) {
 			}
 			tt.Scroll(180, 180, 0, 24)
 			manual = a.LyricScroll.Y
-			a.Player().Hold(lines[count/2+1].At)
+			player.Hold(a.Player(), lines[count/2+1].At)
 			tt.Frame()
 			tt.Advance(3 * time.Second)
 			if a.Reading.BrowseUntil.IsZero() || a.LyricScroll.Y != manual {
@@ -433,7 +433,7 @@ func TestImmersiveFirstLyricAnchor(t *testing.T) {
 				t.Fatalf("first lyric did not start below the anchored intro: %+v", first)
 			}
 			for _, i := range []int{0, 1, count - 1} {
-				a.Player().Hold(lines[i].At)
+				player.Hold(a.Player(), lines[i].At)
 				tt.Frame()
 				row, ok := tt.AccessByRole(ui.RoleButton, lines[i].Text)
 				if !ok || Abs32(row.Bounds.Y-h*0.3) > 1 {
@@ -454,7 +454,7 @@ func TestLyricManualResizeKeepsReadingPosition(t *testing.T) {
 	a, tt := lyricPaneView(t, lines, 500, 400)
 	tt.SetScale(0.25) // accessibility bounds use DIPs
 	a.Config.LyricEdgeFade = true
-	a.Player().Hold(lines[5].At)
+	player.Hold(a.Player(), lines[5].At)
 	tt.Frame()
 	tt.Scroll(180, 180, 0, 280)
 	firstVisible := func() int {
@@ -491,8 +491,8 @@ func TestImmersiveLyricsFollowPlayerSeekWhileBrowsing(t *testing.T) {
 				if !playing {
 					// shortLyricsApp pins a running clock; use a fresh paused player.
 					paused := newTestPlayer(t)
-					paused.Cue([]netease.Track{{ID: 1, Duration: 200000}})
-					paused.SetLyrics(lines)
+					player.Cue(paused, []netease.Track{{ID: 1, Duration: 200000}})
+					player.SetLyrics(paused, lines)
 					a.Player = func() *player.Player { return paused }
 				}
 				a.Player().Seek(lines[6].At)

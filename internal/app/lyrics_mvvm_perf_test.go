@@ -17,17 +17,18 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 func lyricsMVVMPerfApp(comments bool) *app {
 	a := catalogApp()
-	a.pl.Cue([]netease.Track{{ID: 71, Name: "测试歌曲", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 900000}})
+	player.Cue(a.pl, []netease.Track{{ID: 71, Name: "测试歌曲", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 900000}})
 	lines := make([]lyrics.Line, 300)
 	for i := range lines {
 		lines[i] = lyrics.Line{At: time.Duration(i) * 3 * time.Second, End: time.Duration(i+1) * 3 * time.Second, Text: fmt.Sprintf("歌词 %03d", i), Translation: "翻译文字"}
 	}
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(60 * time.Second)
+	player.SetLyrics(a.pl, lines)
+	player.Hold(a.pl, 60*time.Second)
 	posts := testPosts(a)
 	old := threadComments
 	threadComments = func(string, int, int) (*netease.Comments, error) {

@@ -14,6 +14,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // An automatic retry of an uncached failed page retains its settled error;
@@ -48,7 +49,7 @@ func TestOfflinePageRetryKeepsSettledState(t *testing.T) {
 func TestOfflineLyricsStopAnimating(t *testing.T) {
 	for _, pane := range []int{playbackview.PaneLyrics, playbackview.PaneStage} {
 		a, _ := offlineFixture(t)
-		a.pl.Cue([]netease.Track{{ID: 1, Name: "Offline"}})
+		player.Cue(a.pl, []netease.Track{{ID: 1, Name: "Offline"}})
 		a.networkChanged(mygo.NetworkStatus{})
 		a.playbackState.Open, a.playbackState.Pane = true, pane
 		tt := ui.NewTester(a.view, 1100, 800)

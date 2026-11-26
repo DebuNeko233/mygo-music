@@ -28,10 +28,10 @@ func TestSessionRestsWhilePaused(t *testing.T) {
 	a := newTestApp()
 	defer a.sessionSave.Wait()
 	a.pl.Changed = a.keepSession
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
+	player.Cue(a.pl, []netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
 	out := newSilentAudio()
 	out.Play()
-	a.pl.Attach(out)
+	player.Attach(a.pl, out)
 	defer out.Close()
 
 	a.pl.TogglePlay()
@@ -57,7 +57,7 @@ func TestSessionCheckpointFollowsQueue(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.pl.SuspendCache()
-	a.pl.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
+	player.Cue(a.pl, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}})
 	save := func() {
 		a.saveSession()
 		a.sessionSave.Wait()
@@ -73,7 +73,7 @@ func TestSessionCheckpointFollowsQueue(t *testing.T) {
 	}
 	a.pl.Jump(2)
 	a.pl.CycleRepeat()
-	a.pl.Hold(8 * time.Second)
+	player.Hold(a.pl, 8*time.Second)
 	save()
 	current, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(original, current) {
@@ -84,7 +84,7 @@ func TestSessionCheckpointFollowsQueue(t *testing.T) {
 		t.Fatalf("checkpoint did not restore playback: %+v", s)
 	}
 	a.pl.ToggleShuffle()
-	a.pl.Hold(15 * time.Second)
+	player.Hold(a.pl, 15*time.Second)
 	save()
 	s, ok = sessionstore.Read(path)
 	order, at := a.pl.PlayOrder()

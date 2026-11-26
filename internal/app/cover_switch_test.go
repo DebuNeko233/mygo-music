@@ -19,6 +19,7 @@ import (
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Prefetch warms the same 600px backdrop entry the next song uses, even
@@ -48,7 +49,7 @@ func TestPrefetchesNextCover(t *testing.T) {
 			if mode == "single" {
 				q = q[:1]
 			}
-			a.pl.Cue(q)
+			player.Cue(a.pl, q)
 			if mode == "wrap" || mode == "shuffle" {
 				a.pl.Next()
 				a.pl.Next()
@@ -59,7 +60,7 @@ func TestPrefetchesNextCover(t *testing.T) {
 			order, at := a.pl.PlayOrder()
 			want := q[order[(at+1)%len(order)]]
 			url := netease.Sized(want.Album.PicURL, 600)
-			a.pl.SetLyrics(nil)
+			player.SetLyrics(a.pl, nil)
 			wanted := map[string]bool{url: true, netease.Sized(a.pl.Current().Album.PicURL, 600): true}
 			// This checks requests, not layout. Keep the software-rendered
 			// backdrop small so this fixture is cheap under the race detector.
@@ -94,7 +95,7 @@ func TestCoverPrefetchSkipsUnavailableNext(t *testing.T) {
 	a.pl.SuspendCache()
 	a.playbackArtwork("", nowPlayingCoverRequest)
 	const current = "test://one"
-	a.pl.Cue([]netease.Track{
+	player.Cue(a.pl, []netease.Track{
 		{ID: 1, Album: netease.Album{PicURL: current}},
 		{ID: 2, Album: netease.Album{PicURL: "test://two"}},
 	})
@@ -141,9 +142,9 @@ func paintedCoverApp(t *testing.T, n int, reduced bool) (*app, *ui.Tester, []*ar
 			a.art.Put(url+"#backdrop", arts[i])
 		}
 	}
-	a.pl.Cue(q)
-	a.pl.Hold(0)
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, q)
+	player.Hold(a.pl, 0)
+	player.SetLyrics(a.pl, nil)
 	a.playbackState.Open = true
 	tt := ui.NewTesterWith(a.view, 640, 440,
 		ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: reduced}, Dark: true})
@@ -158,7 +159,7 @@ func TestCoverDirectionAfterShuffleAndWrap(t *testing.T) {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
 			a, tt, _ := paintedCoverApp(t, n, false)
 			a.pl.Next()
-			a.pl.SetLyrics(nil)
+			player.SetLyrics(a.pl, nil)
 			tt.Frame()
 			tt.Advance(time.Second)
 			a.pl.ToggleShuffle()
@@ -168,7 +169,7 @@ func TestCoverDirectionAfterShuffleAndWrap(t *testing.T) {
 				dir  float32
 			}{{a.pl.Next, 1}, {a.pl.Next, 1}, {a.pl.Prev, -1}} {
 				step.play()
-				a.pl.SetLyrics(nil)
+				player.SetLyrics(a.pl, nil)
 				tt.Frame()
 				if a.NPCoverState.Direction != step.dir {
 					t.Fatalf("direction %v, want %v", a.NPCoverState.Direction, step.dir)
@@ -184,15 +185,15 @@ func TestCoverDirectionAfterShuffleAndWrap(t *testing.T) {
 func TestCoverDirectionAfterQueueReplacement(t *testing.T) {
 	a, tt, _ := paintedCoverApp(t, 5, false)
 	a.pl.Next()
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	tt.Advance(time.Second)
 	q := a.pl.Queue()
 	a.pl.PlayQueue([]netease.Track{q[0], q[2], q[3], q[1], q[4]}, 3)
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	a.pl.Jump(2)
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	if a.NPCoverState.Direction != -1 {
 		t.Fatal("selected an earlier song in the new queue, but entered from the right")
@@ -213,7 +214,7 @@ func TestCoverDirectionWithDuplicateSongs(t *testing.T) {
 			q := append([]netease.Track(nil), original...)
 			q = append(q, original[0])
 			a.pl.PlayQueue(q, pick.from)
-			a.pl.SetLyrics(nil)
+			player.SetLyrics(a.pl, nil)
 			tt.Frame()
 			tt.Advance(time.Second)
 			rest, ok := tt.Find("专辑封面")
@@ -221,7 +222,7 @@ func TestCoverDirectionWithDuplicateSongs(t *testing.T) {
 				t.Fatal("no resting cover")
 			}
 			a.pl.Jump(pick.to)
-			a.pl.SetLyrics(nil)
+			player.SetLyrics(a.pl, nil)
 			tt.Frame()
 			if a.NPCoverState.Direction != pick.want {
 				t.Fatalf("direction %v, want %v", a.NPCoverState.Direction, pick.want)
@@ -241,12 +242,12 @@ func TestCoverDirectionDoesNotReuseOldQueuePositions(t *testing.T) {
 	a, tt, _ := paintedCoverApp(t, 3, false)
 	a.pl.SuspendCache()
 	a.pl.Next()
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	tt.Advance(time.Second)
 	q := a.pl.Queue()
 	a.pl.PlayQueue([]netease.Track{q[0], q[2], q[1]}, 1)
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	if a.NPCoverState.Direction != 1 {
 		t.Fatal("replacement inferred a backward move from the old song ID")
@@ -263,7 +264,7 @@ func TestRapidCoverChangesRestartTheEntrance(t *testing.T) {
 				if err := tt.Click("下一首"); err != nil {
 					t.Fatal(err)
 				}
-				a.pl.SetLyrics(nil)
+				player.SetLyrics(a.pl, nil)
 				tt.Frame()
 				cs := &a.NPCoverState
 				if a.pl.Current().ID != int64(i+1) || cs.Art != arts[i] || cs.Previous != arts[i-1] || cs.Slide != i || cs.PreviousSlide != i-1 {
@@ -299,7 +300,7 @@ func TestRapidCoverChangesAlwaysMove(t *testing.T) {
 				a, tt, _ := paintedCoverApp(t, 8, false)
 				if pattern == "previous" {
 					a.pl.Jump(7)
-					a.pl.SetLyrics(nil)
+					player.SetLyrics(a.pl, nil)
 					tt.Frame()
 					tt.Advance(time.Second)
 				}
@@ -317,7 +318,7 @@ func TestRapidCoverChangesAlwaysMove(t *testing.T) {
 					if err := tt.Click(label); err != nil {
 						t.Fatal(err)
 					}
-					a.pl.SetLyrics(nil)
+					player.SetLyrics(a.pl, nil)
 					tt.Frame()
 					cs := &a.NPCoverState
 					if cs.Slide != before+1 || cs.PreviousSlide != before || cs.Previous != previous {
@@ -354,7 +355,7 @@ func TestCoverSwitchAfterHiddenPane(t *testing.T) {
 	a.playbackState.Pane = playbackview.PaneStage
 	tt.Frame()
 	a.pl.Next()
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	a.playbackState.Pane = playbackview.PaneLyrics
 	tt.Frame()
@@ -377,10 +378,10 @@ func TestCoverWaitsForTheLatestArtwork(t *testing.T) {
 		holdArtwork(a.art, netease.Sized(tr.Album.PicURL, 600)+"#backdrop")
 	}
 	a.pl.Next()
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	a.pl.Next()
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Frame()
 	if a.NPCoverState.Art != arts[0] {
 		t.Fatal("replaced the last image with a blank card")

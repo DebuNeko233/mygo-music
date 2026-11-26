@@ -15,6 +15,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 	accountvm "netease-music-mygo/internal/viewmodel/account"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
@@ -58,7 +59,7 @@ func skeletonApp(set func(a *app)) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.home.Loading = true
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "春日影"}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "春日影"}})
 	set(a)
 	return a
 }

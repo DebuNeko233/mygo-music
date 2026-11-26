@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 func locateFixture(t *testing.T, current int, playing bool) (*app, *netease.Playlist, *ui.Tester) {
@@ -34,9 +35,9 @@ func locateFixture(t *testing.T, current int, playing bool) (*app, *netease.Play
 	// The current song is queue index zero but is far down the displayed list.
 	// Suspend loading so a broken locate action cannot launch network/audio jobs.
 	a.pl.SuspendCache()
-	a.pl.Cue([]netease.Track{pl.Tracks[current], {ID: 1001, Name: "另一张歌单的歌曲"}})
+	player.Cue(a.pl, []netease.Track{pl.Tracks[current], {ID: 1001, Name: "另一张歌单的歌曲"}})
 	if playing {
-		a.pl.Hold(43 * time.Second)
+		player.Hold(a.pl, 43*time.Second)
 	}
 	tt := ui.NewTester(a.view, 1100, 760)
 	tt.Frame()
@@ -137,7 +138,7 @@ func TestPlaylistLocateFloatsAndSupportsKeyboard(t *testing.T) {
 func TestPlaylistLocateUsesLatestSongAndList(t *testing.T) {
 	a, pl, tt := locateFixture(t, 99, false)
 	clickLocate(t, tt)
-	a.pl.Cue([]netease.Track{pl.Tracks[349]})
+	player.Cue(a.pl, []netease.Track{pl.Tracks[349]})
 	tt.Frame()
 	if row, ok := tt.AccessByRole(ui.RoleButton, pl.Tracks[349].Name); ok && !row.Offscreen {
 		t.Fatal("song change scrolled the page without a click")
@@ -215,7 +216,7 @@ func TestPlaylistLocateHiddenForVisibleSong(t *testing.T) {
 	if _, shown := tt.Find("定位正在播放的歌曲"); shown {
 		t.Fatal("locate shown for the visible current song")
 	}
-	a.pl.Cue([]netease.Track{pl.Tracks[1]})
+	player.Cue(a.pl, []netease.Track{pl.Tracks[1]})
 	tt.Frame()
 	locatedRow(t, tt, pl.Tracks[1].Name, 760)
 	if _, shown := tt.Find("定位正在播放的歌曲"); shown {
@@ -315,7 +316,7 @@ func TestPlaylistLocateOnlyForMatchingPlaylist(t *testing.T) {
 			case "no current":
 				a.pl = newTestApp().pl
 			case "another playlist":
-				a.pl.Cue([]netease.Track{{ID: 9001, Name: "别处的歌曲"}})
+				player.Cue(a.pl, []netease.Track{{ID: 9001, Name: "别处的歌曲"}})
 			case "empty":
 				pl.Tracks = nil
 			case "loading":

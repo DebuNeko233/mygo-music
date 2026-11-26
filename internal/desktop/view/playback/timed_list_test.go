@@ -15,6 +15,7 @@ import (
 
 	"netease-music-mygo/internal/captionstore"
 	"netease-music-mygo/internal/lyrics"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/speech"
 	captionsvm "netease-music-mygo/internal/viewmodel/captions"
 )
@@ -26,7 +27,7 @@ func TestLongLyricsWindow(t *testing.T) {
 		lines[i] = lyrics.Line{At: time.Second + time.Duration(i)*200*time.Millisecond, Text: fmt.Sprintf("第 %d 句", i), Translation: strings.Repeat("这句歌词翻译会根据窗口宽度换行", 3)}
 	}
 	a, tt := lyricPaneView(t, lines, 480, 520)
-	a.Player().Hold(lines[480].At)
+	player.Hold(a.Player(), lines[480].At)
 	tt.Frame()
 	tt.Advance(time.Second)
 	check := func(height float32) {
@@ -72,7 +73,7 @@ func TestLongLyricsKeepAnchorWhenTogglingImmersive(t *testing.T) {
 	const height = 240
 	a, tt := lyricPaneView(t, lines, 200, height)
 	active := lines[len(lines)/2]
-	a.Player().Hold(active.At)
+	player.Hold(a.Player(), active.At)
 	for _, immersive := range []bool{false, true, false} {
 		a.Config.LyricEdgeFade = immersive
 		tt.Frame()

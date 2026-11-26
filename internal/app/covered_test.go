@@ -17,6 +17,7 @@ import (
 
 	artcache "netease-music-mygo/internal/desktop/artwork"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // A playlist keeps its on-screen covers ready when returning from either Now Playing or another page.
@@ -30,9 +31,9 @@ func TestPlaylistCoversSurviveReturningToPage(t *testing.T) {
 			tr := netease.Track{ID: 1, Name: "测试封面", Album: netease.Album{PicURL: "https://p1.music.126.net/test/row.jpg"}}
 			a.library.Playlists[42] = &netease.Playlist{ID: 42, Name: "原歌单", Tracks: []netease.Track{tr}}
 			a.library.Playlists[43] = &netease.Playlist{ID: 43, Name: "其他歌单"}
-			a.pl.Cue([]netease.Track{{ID: 2, Name: "正在播放的歌曲"}})
+			player.Cue(a.pl, []netease.Track{{ID: 2, Name: "正在播放的歌曲"}})
 			a.comments.Track = 2
-			a.pl.SetLyrics(nil)
+			player.SetLyrics(a.pl, nil)
 			now := time.Unix(1e9, 0)
 			a.art = artcache.New(artcache.Options{Post: func(func()) {}, Now: func() time.Time { return now }, Limit: 300})
 			img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -94,7 +95,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 	for i := range 40 {
 		a.home.Charts = append(a.home.Charts, netease.Playlist{ID: int64(100 + i), Name: fmt.Sprintf("榜单%d", i+1)})
 	}
-	a.pl.Cue([]netease.Track{{ID: 9999, Name: "一张相片"}})
+	player.Cue(a.pl, []netease.Track{{ID: 9999, Name: "一张相片"}})
 	tt := ui.NewTester(a.view, 1200, 800)
 
 	for _, r := range []route{{Page: pagePlaylist, ID: 42}, {Page: pageCharts}} {

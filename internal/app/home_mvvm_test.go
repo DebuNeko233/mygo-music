@@ -13,6 +13,7 @@ import (
 
 	"netease-music-mygo/internal/diskcache"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Late cached and network replies from a prior login cannot change a new session of the same account or its snapshot.
@@ -70,7 +71,7 @@ func TestDailyCardPlayPauseKeepsSharedQueue(t *testing.T) {
 	if a.pl.Current() == nil || a.pl.Current().ID != 2 || len(a.pl.Queue()) != 3 || !a.pl.Playing() || a.nav.Current.Page != pageHome {
 		t.Fatal("daily card bypassed the shared player or navigated instead of playing")
 	}
-	a.pl.Hold(17 * time.Second)
+	player.Hold(a.pl, 17*time.Second)
 	tt.Frame()
 	if err := tt.Click("暂停播放"); err != nil {
 		t.Fatal(err)

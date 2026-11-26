@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
 )
 
@@ -55,7 +56,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 			} else if err := tt.Click("First 001"); err != nil {
 				t.Fatal(err)
 			}
-			a.pl.Hold(17 * time.Second)
+			player.Hold(a.pl, 17*time.Second)
 			current := a.pl.Current()
 			switch action {
 			case "add":
@@ -63,7 +64,7 @@ func TestCloudQueueCompletesWhileLoading(t *testing.T) {
 			case "remove":
 				a.pl.RemoveQueueEntry(99)
 			case "replace":
-				a.pl.Cue([]netease.Track{cloudTrack(999, "Other queue")})
+				player.Cue(a.pl, []netease.Track{cloudTrack(999, "Other queue")})
 			case "retry":
 				results <- reply{err: io.ErrUnexpectedEOF}
 				refreshPost(t, posts)
@@ -126,7 +127,7 @@ func TestCloudRefreshPublishesOnlyWhenComplete(t *testing.T) {
 	now := oldTime.Add(24 * time.Hour)
 	a.library.Refresh.Now = func() time.Time { return now }
 	a.cloud = cloudvm.Cloud{CloudListing: cloudvm.CloudListing{Tracks: original, Count: 3, Offset: 3}, Loaded: true, At: oldTime}
-	a.pl.Cue(slices.Clone(original))
+	player.Cue(a.pl, slices.Clone(original))
 	calls := make(chan int, 4)
 	attempt := 0
 	cloudSongs = func(_ context.Context, _, offset int) (*netease.CloudPage, error) {

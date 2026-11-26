@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // The menu of a playing song copies its name, its name and singers, and the
@@ -24,8 +25,8 @@ func TestSongMenuCopies(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	tr := netease.Track{ID: 1859245776, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}, {Name: "小明"}}, Duration: 200000}
-	a.pl.Cue([]netease.Track{tr})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{tr})
+	player.SetLyrics(a.pl, nil)
 	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)

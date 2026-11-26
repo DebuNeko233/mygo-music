@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Dragging the progress bar seeks once, where it is let go: not as the
@@ -21,12 +22,12 @@ func TestScrubSeeksOnRelease(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	tr := netease.Track{ID: 7, Name: "宝船", Duration: 200000}
-	a.pl.Cue([]netease.Track{tr, {ID: 8, Name: "下一首"}})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{tr, {ID: 8, Name: "下一首"}})
+	player.SetLyrics(a.pl, nil)
 	// Keep playback at a fixed position regardless of how long CI takes
 	// to draw the window under the race detector.
 	const start = 3 * time.Second
-	a.pl.Hold(start)
+	player.Hold(a.pl, start)
 	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)
@@ -81,8 +82,8 @@ func TestNowPlayingTimeForLongAndUnknownDuration(t *testing.T) {
 		{"unknown", 0, "1:01:01", "—"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			a.pl.Cue([]netease.Track{{ID: 7, Duration: tc.duration}})
-			a.pl.Hold(time.Hour + time.Minute + time.Second + 500*time.Millisecond)
+			player.Cue(a.pl, []netease.Track{{ID: 7, Duration: tc.duration}})
+			player.Hold(a.pl, time.Hour+time.Minute+time.Second+500*time.Millisecond)
 			tt := ui.NewTester(a.views.playback.NowPlayingTime, 300, 24)
 			tt.Frame()
 			texts := tt.Texts()
@@ -96,8 +97,8 @@ func TestNowPlayingTimeForLongAndUnknownDuration(t *testing.T) {
 // The visible clocks refresh at playback boundaries even if the scrubber does not rebuild the view.
 func TestNowPlayingTimeRefreshesWithoutScrubber(t *testing.T) {
 	a := newTestApp()
-	a.pl.Cue([]netease.Track{{ID: 7, Duration: 10_500}})
-	a.pl.Hold(2*time.Second + 250*time.Millisecond)
+	player.Cue(a.pl, []netease.Track{{ID: 7, Duration: 10_500}})
+	player.Hold(a.pl, 2*time.Second+250*time.Millisecond)
 	tt := ui.NewTester(a.views.playback.NowPlayingTime, 300, 24)
 	check := func(elapsed, remaining string) {
 		t.Helper()
@@ -107,10 +108,10 @@ func TestNowPlayingTimeRefreshesWithoutScrubber(t *testing.T) {
 		}
 	}
 	check("0:02", "−0:09")
-	a.pl.Hold(2*time.Second + 500*time.Millisecond)
+	player.Hold(a.pl, 2*time.Second+500*time.Millisecond)
 	tt.Advance(250 * time.Millisecond)
 	check("0:02", "−0:08")
-	a.pl.Hold(3 * time.Second)
+	player.Hold(a.pl, 3*time.Second)
 	tt.Advance(500 * time.Millisecond)
 	check("0:03", "−0:08")
 }

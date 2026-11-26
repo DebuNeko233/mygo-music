@@ -41,8 +41,8 @@ func TestListCoverRetentionByteAndPageLimits(t *testing.T) {
 					t.Fatalf("wrong retention for %s under pressure", key)
 				}
 			}
-			s := c.Stats()
-			if s.Bytes > c.limit || s.RetainedListBytes != test.cost*test.kept || s.RetainedListEntries != test.kept || s.Evictions != uint64(5-test.kept) {
+			s := listStats(c)
+			if s.Bytes > c.limit || s.RetainedListBytes != test.cost*test.kept || s.RetainedListEntries != test.kept || s.Entries != test.kept+1 {
 				t.Fatalf("retention exceeded its shared/page allowance: %+v", s)
 			}
 		})
@@ -61,7 +61,7 @@ func TestListCoverRetentionTracksLastViewport(t *testing.T) {
 		c.noteListCover(page, key)
 	}
 	c.BeginFrame()
-	if s := c.Stats(); s.RetainedListEntries != 30 {
+	if s := listStats(c); s.RetainedListEntries != 30 {
 		t.Fatalf("one viewport retained too many covers: %+v", s)
 	}
 	for i := 30; i < 40; i++ {
@@ -74,7 +74,7 @@ func TestListCoverRetentionTracksLastViewport(t *testing.T) {
 			t.Fatalf("retained a scrolled-past cover or evicted the latest viewport at %d", i)
 		}
 	}
-	if s := c.Stats(); s.Bytes > c.limit || s.RetainedListEntries != 10 {
+	if s := listStats(c); s.Bytes > c.limit || s.RetainedListEntries != 10 {
 		t.Fatalf("viewport accumulated old cover costs: %+v", s)
 	}
 }
@@ -93,7 +93,7 @@ func TestListCoverRetentionSharesImagesAndYieldsToHardLimit(t *testing.T) {
 		c.noteListCover(p, key)
 		c.BeginFrame()
 	}
-	if s := c.Stats(); s.RetainedListBytes != 80 || s.RetainedListEntries != 4 {
+	if s := listStats(c); s.RetainedListBytes != 80 || s.RetainedListEntries != 4 {
 		t.Fatalf("shared album was charged more than once: %+v", s)
 	}
 	c.add("visible-large", keptListImage(40))
@@ -109,7 +109,7 @@ func TestListCoverRetentionDoesNotPinPlaybackOrRevokedImages(t *testing.T) {
 	c.now = func() time.Time { return time.Unix(100, 0) }
 	c.add("playback", keptListImage(100))
 	c.Get("playback", false)
-	if c.Stats().RetainedListEntries != 0 {
+	if listStats(c).RetainedListEntries != 0 {
 		t.Fatal("playback artwork acquired list protection")
 	}
 	c.add("list", keptListImage(100))
@@ -117,7 +117,22 @@ func TestListCoverRetentionDoesNotPinPlaybackOrRevokedImages(t *testing.T) {
 	c.BeginFrame()
 	c.ImageChanged("list", netease.ImageRevoked)
 	runtime.GC()
-	if c.Stats().RetainedListBytes != 0 || bitmap(c.Get("list", false)) != nil {
+	if listStats(c).RetainedListBytes != 0 || bitmap(c.Get("list", false)) != nil {
 		t.Fatal("revoked image remained retained or came back from a weak reference")
 	}
+}
+
+// Retention accounting is derived only in tests, without counters on the drawing path.
+type listCacheStats struct {
+	Stats
+	RetainedListBytes, RetainedListEntries int
+}
+
+func listStats(c *Cache) listCacheStats {
+	kept := c.retainedListKeys()
+	bytes := 0
+	for key := range kept {
+		bytes += c.art[key].size
+	}
+	return listCacheStats{c.Stats(), bytes, len(kept)}
 }

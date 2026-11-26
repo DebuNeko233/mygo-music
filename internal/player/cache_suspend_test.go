@@ -169,7 +169,7 @@ func TestSuspendCacheResume(t *testing.T) {
 		p := New(func(fn func()) { posts <- fn })
 		p.Cache = NewCache(t.TempDir(), 1<<20)
 		seedCache(t, p.Cache, 1, data)
-		p.Cue([]netease.Track{{ID: 1, Duration: 10000}})
+		Cue(p, []netease.Track{{ID: 1, Duration: 10000}})
 		p.loadSkipping(0, 0, playing, 250*time.Millisecond)
 		waitCachePlayer(t, p, posts)
 		resume := p.SuspendCache()
@@ -203,7 +203,7 @@ func TestSuspendCacheDefersControls(t *testing.T) {
 	p.Cache = NewCache(t.TempDir(), 1<<20)
 	seedCache(t, p.Cache, 1, data)
 	seedCache(t, p.Cache, 2, data)
-	p.Cue([]netease.Track{{ID: 1, Duration: 10000}, {ID: 2, Duration: 10000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 10000}, {ID: 2, Duration: 10000}})
 	p.loadSkipping(0, 0, true, 0)
 	waitCachePlayer(t, p, posts)
 	resume := p.SuspendCache()
@@ -227,7 +227,7 @@ func TestSuspendCacheDefersControls(t *testing.T) {
 func TestSuspendCacheSettlesMetadataWhileAwaiting(t *testing.T) {
 	posts := make(chan func(), 1)
 	p := New(func(fn func()) { posts <- fn })
-	p.Cue([]netease.Track{{ID: 1}})
+	Cue(p, []netease.Track{{ID: 1}})
 	p.FetchLyrics = func(int64) (string, string, string, error) {
 		return "[00:01]Old", "", "", nil
 	}
@@ -257,7 +257,7 @@ func TestSuspendCacheLetsGoOfWhatWasFetchedAhead(t *testing.T) {
 	posts := make(chan func(), 8)
 	p := New(func(fn func()) { posts <- fn })
 	p.Cache = NewCache(t.TempDir(), 1<<20)
-	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+	Cue(p, []netease.Track{{ID: 1}, {ID: 2}})
 	st := &netease.Stream{URL: srv.URL, Size: 100, Type: "mp3", Level: "exhigh"}
 	dl := p.Cache.download(2, "exhigh", st)
 	<-started

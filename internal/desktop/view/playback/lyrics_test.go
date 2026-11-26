@@ -15,6 +15,7 @@ import (
 
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/testutil"
 )
 
@@ -86,7 +87,7 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	if a.LyricScroll.MaxY <= 0 {
 		t.Fatal("wrapped lyrics did not become scrollable")
 	}
-	a.Player().Hold(lines[len(lines)-1].At)
+	player.Hold(a.Player(), lines[len(lines)-1].At)
 	testutil.Settle(tt)
 	last, ok := tt.Find(lines[len(lines)-1].Text)
 	if !ok || last.Y < -1 || last.Y > 300*0.3+2 {
@@ -95,9 +96,10 @@ func TestShortLyricsReflowAndReplacement(t *testing.T) {
 	tt.SetSize(800, 900)
 	tt.Advance(2 * time.Second)
 	checkShortLyricsCenter(t, tt, a, lines, 900)
-	// Metadata may replace lyrics while the track and current index stay the same.
-	a.Player().Hold(0)
-	a.Player().SetLyrics([]lyrics.Line{{Text: "替换后的单行歌词"}})
+	player.
+		// Metadata may replace lyrics while the track and current index stay the same.
+		Hold(a.Player(), 0)
+	player.SetLyrics(a.Player(), []lyrics.Line{{Text: "替换后的单行歌词"}})
 	tt.Frame()
 	tt.Advance(2 * time.Second)
 	replaced, _ := a.Player().Lyrics()
@@ -117,7 +119,7 @@ func TestNowPlayingEmptyLyricNotice(t *testing.T) {
 				{"暂无歌词\n[00:01]作曲：A", lyrics.UnavailableText, lyrics.InstrumentalText},
 				{"", lyrics.InstrumentalText, lyrics.UnavailableText},
 			} {
-				a.Player().RefreshLyrics(1, tc.source, "", "")
+				player.RefreshLyrics(a.Player(), 1, tc.source, "", "")
 				tt.Frame()
 				if !tt.HasText(tc.want) || tt.HasText(tc.other) {
 					t.Fatalf("lyrics source %q: expected %q alone, got %q", tc.source, tc.want, tt.Texts())
@@ -134,7 +136,7 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 			const w, h = 480, 360
 			a, tt := lyricPaneView(t, nil, w, h)
 			a.Config.LyricEdgeFade = immersive
-			a.Player().RefreshLyrics(1, "[00:00.00]作曲 : A\n[00:05.00]纯音乐，请欣赏\n[01:47.50]指挥 Conductor : C", "", "")
+			player.RefreshLyrics(a.Player(), 1, "[00:00.00]作曲 : A\n[00:05.00]纯音乐，请欣赏\n[01:47.50]指挥 Conductor : C", "", "")
 			tt.Frame()
 			first, ok := tt.Find(lyrics.InstrumentalText)
 			last, lastOK := tt.Find("指挥 Conductor : C")
@@ -151,7 +153,7 @@ func TestNowPlayingStaticLyricMetadata(t *testing.T) {
 			if scrolled.Y >= before.Y {
 				t.Fatalf("credits did not scroll: %v -> %v", before, scrolled)
 			}
-			a.Player().Hold(110 * time.Second)
+			player.Hold(a.Player(), 110*time.Second)
 			tt.Frame()
 			held, _ := tt.Find("指挥 Conductor : C")
 			if Abs32(held.Y-scrolled.Y) > 1 {
@@ -167,7 +169,7 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	const last = "マスタリング：最後の担当者"
 	a, tt := lyricPaneView(t, nil, w, h)
 	long := "Lead Guitar: " + strings.Repeat("Long Performer Name / ", 6)
-	a.Player().RefreshLyrics(1, "[00:00.00]和声编写：A\n[00:01.00]"+long+
+	player.RefreshLyrics(a.Player(), 1, "[00:00.00]和声编写：A\n[00:01.00]"+long+
 		"\n[00:02.00]作曲／編曲：C\n[01:30.00]"+last, "", "")
 	tt.Frame()
 	if title, ok := tt.Find(lyrics.InstrumentalText); !ok || title.Y < 16 || title.Y+title.H >= h {
@@ -182,8 +184,8 @@ func TestLongMultilingualCreditsCanScrollToEnd(t *testing.T) {
 	if !ok || end.Y < 0 || end.Y+end.H > h+1 {
 		t.Fatalf("last credit was clipped at the end of the scroll: %+v", end)
 	}
-	a.Player().Cue([]netease.Track{{ID: 2}})
-	a.Player().SetLyrics(nil)
+	player.Cue(a.Player(), []netease.Track{{ID: 2}})
+	player.SetLyrics(a.Player(), nil)
 	tt.Frame()
 	title, ok := tt.Find(lyrics.InstrumentalText)
 	if !ok || a.LyricScroll.Y != 0 || Abs32(title.Y+title.H/2-h/2) > 2 {
@@ -217,8 +219,8 @@ func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, la
 	const w, h = 300, 360
 	a := newTestView(t)
 	a.Config.LyricEdgeFade = immersive
-	a.Player().Cue([]netease.Track{{ID: 1}})
-	a.Player().SetLyrics(nil)
+	player.Cue(a.Player(), []netease.Track{{ID: 1}})
+	player.SetLyrics(a.Player(), nil)
 	var tt *ui.Tester
 	checkTop := func() {
 		t.Helper()
@@ -239,9 +241,8 @@ func checkLyricSwitchPaintsCentered(t *testing.T, lines []lyrics.Line, first, la
 		c.Root().Background(ui.RGB(0, 0, 0))
 		ui.Column(c).Fill().Children(func() { a.LyricsPane(c, a.Player().Current(), h, ui.Rect{}, 0) })
 	}, w, h)
-
-	a.Player().Cue([]netease.Track{{ID: 2}})
-	a.Player().SetLyrics(lines)
+	player.Cue(a.Player(), []netease.Track{{ID: 2}})
+	player.SetLyrics(a.Player(), lines)
 	tt.Frame()
 	checkTop()
 	top, topOK := tt.Find(first)
@@ -259,7 +260,7 @@ func TestImmersiveLyricsFollowAfterRefresh(t *testing.T) {
 	}
 	a, tt := lyricPaneView(t, lines, 240, 180)
 	a.Config.LyricEdgeFade = true
-	a.Player().Hold(8 * time.Second)
+	player.Hold(a.Player(), 8*time.Second)
 	tt.Frame()
 	tt.Scroll(160, 100, 0, 240)
 	if a.Reading.BrowseUntil.IsZero() {
@@ -268,7 +269,7 @@ func TestImmersiveLyricsFollowAfterRefresh(t *testing.T) {
 	for i := range lines {
 		lines[i].Text = fmt.Sprintf("After %02d", i)
 	}
-	a.Player().SetLyrics(lines)
+	player.SetLyrics(a.Player(), lines)
 	tt.Frame()
 	row, ok := tt.AccessByRole(ui.RoleButton, lines[8].Text)
 	if !ok || row.Offscreen || !a.Reading.BrowseUntil.IsZero() || a.Reading.At != 8 {

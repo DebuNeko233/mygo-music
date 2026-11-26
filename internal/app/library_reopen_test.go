@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Reopening a previously cached playlist must refresh its contents while
@@ -24,7 +25,7 @@ func TestReopenedPlaylistRefreshes(t *testing.T) {
 	posts := testPosts(a)
 	old := &netease.Playlist{ID: 7, Name: "Old", Tracks: []netease.Track{{ID: 1}}}
 	a.library.Playlists[7] = old
-	a.pl.Cue([]netease.Track{{ID: 9}})
+	player.Cue(a.pl, []netease.Track{{ID: 9}})
 	a.open(route{Page: pagePlaylist, ID: 7})
 	if a.library.Playlists[7] != old {
 		t.Fatal("blanked the page while refreshing")

@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
 )
 
@@ -23,8 +24,8 @@ func TestArtistNameOpensTheirPage(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	duet := netease.Track{ID: 1, Name: "广寒宫", Artists: []netease.Artist{{ID: 11, Name: "甲"}, {ID: 12, Name: "乙"}}, Duration: 200000}
-	a.pl.Cue([]netease.Track{duet})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{duet})
+	player.SetLyrics(a.pl, nil)
 	a.artists.Pages.Set(12, &artistvm.ArtistPage{Profile: &netease.ArtistProfile{
 		Artist: netease.Artist{ID: 12, Name: "乙"},
 		Songs:  []netease.Track{{ID: 2, Name: "起风了", Artists: []netease.Artist{{ID: 13, Name: "丙"}}, Duration: 200000}},

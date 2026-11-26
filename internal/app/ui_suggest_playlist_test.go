@@ -18,6 +18,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	searchvm "netease-music-mygo/internal/viewmodel/search"
 )
 
@@ -376,7 +377,7 @@ func TestPlaylistSuggestionRevalidatesSelection(t *testing.T) {
 			isolateUserData(t)
 			a := newTestApp()
 			a.pl.SuspendCache()
-			a.pl.Cue([]netease.Track{{ID: 99, Name: "before"}})
+			player.Cue(a.pl, []netease.Track{{ID: 99, Name: "before"}})
 			a.nav.Current = route{Page: pagePlaylist, ID: 7}
 			pl := &netease.Playlist{ID: 7, Tracks: []netease.Track{{ID: 1, Name: "match"}, {ID: 2, Name: "other"}}}
 			a.library.Playlists[7] = pl

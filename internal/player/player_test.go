@@ -91,7 +91,7 @@ func TestRestoredAudioBeginsItsSessionWhenPlayed(t *testing.T) {
 	p := New(func(fn func()) { posts <- fn })
 	p.Cache = NewCache(t.TempDir(), 1<<20)
 	seedCache(t, p.Cache, 1, data)
-	p.Cue([]netease.Track{{ID: 1, Duration: 10000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 10000}})
 	p.loadSkipping(0, 0, false, 250*time.Millisecond)
 	waitCachePlayer(t, p, posts)
 	defer p.out.Close()
@@ -137,7 +137,7 @@ func TestPlaybackListeningTimeExcludesPausesAndSeeks(t *testing.T) {
 // subsequent loading from listening time.
 func TestPlaybackRetryPreservesHeardTime(t *testing.T) {
 	p := &Player{at: -1, post: func(func()) {}}
-	p.Cue([]netease.Track{{ID: 1, Duration: 600000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 600000}})
 	p.SuspendCache()
 	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	p.now = func() time.Time { return clock }
@@ -162,7 +162,7 @@ func TestPlaybackStoppedLoadExcludesWallClock(t *testing.T) {
 	for _, stop := range []string{"pause", "failure"} {
 		t.Run(stop, func(t *testing.T) {
 			p := &Player{at: -1, post: func(func()) {}}
-			p.Cue([]netease.Track{{ID: 1, Duration: 600000}})
+			Cue(p, []netease.Track{{ID: 1, Duration: 600000}})
 			clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 			p.now = func() time.Time { return clock }
 			p.begin()
@@ -195,7 +195,7 @@ func TestCacheMigrationPreservesPlaybackSession(t *testing.T) {
 	p := New(func(fn func()) { posts <- fn })
 	p.Cache = NewCache(t.TempDir(), 1<<20)
 	seedCache(t, p.Cache, 1, data)
-	p.Cue([]netease.Track{{ID: 1, Duration: 10000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 10000}})
 	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	p.now = func() time.Time { return clock }
 	var events []PlaybackEvent
@@ -277,11 +277,11 @@ func (silence) Read(b []float32) (int, error) { clear(b); return len(b), nil }
 func posted() (chan func(), *Player) {
 	ch := make(chan func(), 16)
 	p := New(func(fn func()) { ch <- fn })
-	p.Cue([]netease.Track{{ID: 1, Name: "一", Duration: 600000}})
+	Cue(p, []netease.Track{{ID: 1, Name: "一", Duration: 600000}})
 	out := audio.NewPlayer(silence{})
 	out.SetVolume(0)
 	out.Play()
-	p.Attach(out)
+	Attach(p, out)
 	p.fade.attach(out, 1)
 	return ch, p
 }
@@ -378,7 +378,7 @@ func TestSeekTwicePlaysOn(t *testing.T) {
 // in it already.
 func TestRadioRefills(t *testing.T) {
 	p := &Player{at: -1}
-	p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
+	Cue(p, []netease.Track{{ID: 1}, {ID: 2}})
 	asked := 0
 	p.AttachRadio("fm:DEFAULT", func(got func([]netease.Track)) {
 		asked++
@@ -401,7 +401,7 @@ func TestRadioRefills(t *testing.T) {
 func TestEnqueueDeduplicatesInPlayOrder(t *testing.T) {
 	p := &Player{shuffle: true}
 	candidate := netease.Track{LocalID: 1}
-	p.Cue([]netease.Track{{ID: 1}, {LocalID: 2}, candidate, {ID: 3}})
+	Cue(p, []netease.Track{{ID: 1}, {LocalID: 2}, candidate, {ID: 3}})
 	p.order, p.at, p.track = []int{0, 1, 3, 2}, 1, &p.queue[1]
 	rev := p.QueueRevision()
 	p.Enqueue(candidate, false)
@@ -434,9 +434,9 @@ func TestEnqueueReusesPlayedLocalTrack(t *testing.T) {
 			p := &Player{shuffle: true}
 			p.SuspendCache()
 			track := netease.Track{LocalID: 1}
-			p.Cue([]netease.Track{track, {ID: 1}, {ID: 2}, {ID: 3}})
+			Cue(p, []netease.Track{track, {ID: 1}, {ID: 2}, {ID: 3}})
 			p.order, p.at, p.track = []int{2, 0, 1, 3}, 2, &p.queue[1]
-			p.Hold(13 * time.Second)
+			Hold(p, 13*time.Second)
 			p.Enqueue(track, tc.next)
 			p.Enqueue(track, tc.next)
 			if !slices.Equal(p.order, tc.order) || len(p.queue) != 4 || p.at != 1 || p.Current().ID != 1 ||
@@ -450,9 +450,9 @@ func TestEnqueueReusesPlayedLocalTrack(t *testing.T) {
 // Removing a duplicate from earlier in shuffle order keeps the other occurrence and current playback.
 func TestRemoveQueueEntryPreservesShuffleOrder(t *testing.T) {
 	p := &Player{shuffle: true}
-	p.Cue([]netease.Track{{LocalID: 1, Name: "next"}, {LocalID: 2}, {LocalID: 1, Name: "earlier"}, {LocalID: 3}})
+	Cue(p, []netease.Track{{LocalID: 1, Name: "next"}, {LocalID: 2}, {LocalID: 1, Name: "earlier"}, {LocalID: 3}})
 	p.order, p.at, p.track = []int{2, 1, 0, 3}, 1, &p.queue[1]
-	p.Hold(13 * time.Second)
+	Hold(p, 13*time.Second)
 	p.RemoveQueueEntry(2)
 	p.RemoveQueueEntry(1) // The current entry can't be removed.
 	if len(p.queue) != 3 || !slices.Equal(p.order, []int{1, 0, 2}) || p.at != 0 || p.queue[0].Name != "next" ||
@@ -466,7 +466,7 @@ func TestRemoveQueueEntryPreservesPendingRetry(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		posts := make(chan func(), 1)
 		p := &Player{post: func(fn func()) { posts <- fn }}
-		p.Cue([]netease.Track{{LocalID: 1}, {ID: 2}})
+		Cue(p, []netease.Track{{LocalID: 1}, {ID: 2}})
 		p.at, p.track = 1, &p.queue[1]
 		p.SuspendCache()
 		p.retry(0, 4*time.Second, netease.ErrRiskControl)
@@ -583,7 +583,7 @@ func TestCacheServedBelowAsked(t *testing.T) {
 // it queued after, and asks it for no more.
 func TestEndRadio(t *testing.T) {
 	p := &Player{at: -1}
-	p.Cue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}})
+	Cue(p, []netease.Track{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}})
 	p.at, p.track = 1, &p.queue[1]
 	asked := 0
 	p.AttachRadio("heart", func(got func([]netease.Track)) { asked++ })
@@ -630,13 +630,13 @@ func TestResumeUnknownDecoderLengthPreservesPosition(t *testing.T) {
 	for _, duration := range []int64{600000, 0} {
 		t.Run(fmt.Sprintf("track-duration=%d", duration), func(t *testing.T) {
 			p := New(func(func()) {})
-			p.Cue([]netease.Track{{ID: 1, Duration: duration}})
+			Cue(p, []netease.Track{{ID: 1, Duration: duration}})
 			out := audio.NewPlayer(unknownLengthSilence{})
 			out.Pause()
 			defer out.Close()
 			out.SetVolume(0)
 			out.Seek(30 * time.Second)
-			p.Attach(out)
+			Attach(p, out)
 			p.playing = false
 			if out.Duration() != 0 {
 				t.Fatal("fixture has known duration")

@@ -14,6 +14,7 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
 
@@ -27,17 +28,17 @@ func TestNowPlayingRestoreAfterMinimize(t *testing.T) {
 		t.Run(pane.name, func(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
-			a.pl.Cue([]netease.Track{{ID: 1, Name: "One", Duration: 200000}, {ID: 2, Name: "Two", Duration: 200000}})
+			player.Cue(a.pl, []netease.Track{{ID: 1, Name: "One", Duration: 200000}, {ID: 2, Name: "Two", Duration: 200000}})
 			lines := make([]lyrics.Line, 300)
 			for i := range lines {
 				lines[i] = lyrics.Line{At: time.Duration(i) * time.Second, Text: fmt.Sprintf("Lyric %03d", i)}
 			}
-			a.pl.SetLyrics(lines)
+			player.SetLyrics(a.pl, lines)
 			a.comments = commentsvm.Comments{Track: 1, Loaded: true, Total: 1, Latest: []netease.Comment{{ID: 1, Content: "Comment survives minimize"}}}
 			a.playbackState.Open, a.playbackState.Pane = true, pane.id
 			tt := ui.NewTester(a.view, 1200, 800)
 			if pane.id == playbackview.PaneLyrics {
-				a.pl.Hold(lines[150].At)
+				player.Hold(a.pl, lines[150].At)
 			}
 			// The minimized layout and restored hit targets are measured in DIPs.
 			tt.SetScale(0.25)

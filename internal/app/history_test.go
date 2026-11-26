@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // The side buttons of a mouse go back and forward between pages.
@@ -33,9 +34,10 @@ func TestBackAndForward(t *testing.T) {
 	if a.nav.Current != list {
 		t.Fatalf("forward went to %+v", a.nav.Current)
 	}
+	player.
 
-	// Back closes Now Playing before it leaves the page under it.
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "一张相片"}})
+		// Back closes Now Playing before it leaves the page under it.
+		Cue(a.pl, []netease.Track{{ID: 1, Name: "一张相片"}})
 	a.playbackState.Open = true
 	tt.Frame()
 	tt.Key(0, ui.KeyBack)

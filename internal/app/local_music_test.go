@@ -31,9 +31,9 @@ func TestLocalQueueMenuRemovesEntry(t *testing.T) {
 	local := netease.Track{LocalID: 1, Name: "本地待播歌曲"}
 	const path = "../player/testdata/seek.flac"
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: local, Path: path}}})
-	a.pl.Cue([]netease.Track{current})
-	a.pl.Hold(17 * time.Second)
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{current})
+	player.Hold(a.pl, 17*time.Second)
+	player.SetLyrics(a.pl, nil)
 	a.comments = commentsvm.Comments{Track: current.Key(), Loaded: true}
 	a.nav.Current = route{Page: pageLocal}
 	tt := ui.NewTester(a.view, 1200, 800)
@@ -70,7 +70,7 @@ func TestLocalLibraryQueueActions(t *testing.T) {
 	local := netease.Track{LocalID: 2, Name: "另一首本地歌曲"}
 	const path = "../player/testdata/seek.flac"
 	a.local.Replace(localcatalog.Catalog{Songs: []localcatalog.Song{{Track: current, Path: path}, {Track: local, Path: path}}})
-	a.pl.Cue([]netease.Track{current, {ID: 2, Name: "在线歌曲"}})
+	player.Cue(a.pl, []netease.Track{current, {ID: 2, Name: "在线歌曲"}})
 	a.nav.Current = route{Page: pageLocal}
 	tt := ui.NewTester(a.view, 1200, 800)
 	open := func(name string) {
@@ -139,7 +139,7 @@ func TestLocalLibraryRemovesPlayedQueueEntry(t *testing.T) {
 	a.pl.Restore(player.Session{
 		Queue: []netease.Track{current, next, played}, Order: []int{2, 0, 1}, At: 1, Shuffle: true,
 	})
-	a.pl.Hold(17 * time.Second)
+	player.Hold(a.pl, 17*time.Second)
 	tt := ui.NewTester(a.view, 1200, 800)
 	if err := tt.RightClick(played.Name); err != nil {
 		t.Fatal(err)
@@ -276,7 +276,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	}
 	t.Cleanup(func() { openLocalDialog = old })
 	a.nav.Current = route{Page: pageLocal}
-	a.pl.Cue([]netease.Track{{ID: 31, Name: "Cloud song"}})
+	player.Cue(a.pl, []netease.Track{{ID: 31, Name: "Cloud song"}})
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Frame()
 	manager := ui.NewTester(a.localFoldersView, 520, 350)
@@ -369,7 +369,7 @@ func TestLocalPageManagesFoldersAndRelinksSongs(t *testing.T) {
 	if cur := a.pl.Current(); cur == nil || cur.LocalID != id || len(a.pl.Queue()) != 1 {
 		t.Fatal("a single click did not select the local song in the shared list")
 	}
-	a.pl.Cue([]netease.Track{{ID: 31, Name: "Cloud song"}})
+	player.Cue(a.pl, []netease.Track{{ID: 31, Name: "Cloud song"}})
 	tt.Frame()
 	if err := tt.RightClick(a.local.Song(id).Track.Name); err != nil {
 		t.Fatal(err)

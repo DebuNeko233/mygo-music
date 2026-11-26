@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Space pauses right after a click opened Now Playing: the button clicked
@@ -19,11 +20,11 @@ func TestSpaceAfterOpeningNowPlaying(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
-	a.pl.Cue([]netease.Track{tr})
-	a.pl.SetLyrics(nil)
+	player.Cue(a.pl, []netease.Track{tr})
+	player.SetLyrics(a.pl, nil)
 	out := newSilentAudio()
 	out.Play()
-	a.pl.Attach(out)
+	player.Attach(a.pl, out)
 	defer out.Close()
 
 	tt := ui.NewTester(a.view, 1200, 800)

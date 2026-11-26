@@ -17,6 +17,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // The notch, turned off, shows itself as the first song plays, and only
@@ -26,13 +27,13 @@ func TestNotchGreetsOnce(t *testing.T) {
 	a.settings = defaultSettings()
 	n := &playbackview.Notch{A: &a.views.playback, W0: 200, H0: 32, WinW: playbackview.NotchOpenW + 60, WinH: 240}
 	a.notch = n
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
+	player.Cue(a.pl, []netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
 	a.syncWindows()
 	if n.Hello {
 		t.Fatal("greeted before the song played")
 	}
 	out := newSilentAudio()
-	a.pl.Attach(out)
+	player.Attach(a.pl, out)
 	defer out.Close()
 	a.syncWindows()
 	if !n.Hello || !a.settings.NotchGreeted {
@@ -51,8 +52,8 @@ func TestNotchGreetsOnce(t *testing.T) {
 
 	// Turned off again, it does not greet the next song.
 	a.settings.Notch = false
-	a.pl.Cue([]netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
-	a.pl.Attach(out)
+	player.Cue(a.pl, []netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
+	player.Attach(a.pl, out)
 	a.syncWindows()
 	if n.Hello {
 		t.Error("greeted twice")
@@ -67,7 +68,7 @@ func TestNotchGreetingKeptUnderPointer(t *testing.T) {
 	a.settings = defaultSettings()
 	n := &playbackview.Notch{A: &a.views.playback, Real: true, W0: 185, H0: 32, WinW: playbackview.NotchOpenW + 60, WinH: 240}
 	a.notch = n
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
+	player.Cue(a.pl, []netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
 	n.Greet()
 	if !n.Hello {
 		t.Fatal("did not greet")
@@ -111,7 +112,7 @@ func TestFirstUseFrames(t *testing.T) {
 	a.settings = defaultSettings()
 	n := &playbackview.Notch{A: &a.views.playback, Real: true, W0: 185, H0: 32, WinW: playbackview.NotchOpenW + 60, WinH: 240}
 	a.notch = n
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "NAINAINAI", Artists: []netease.Artist{{Name: "ATARASHII GAKKO!"}}, Duration: 193877}})
+	player.Cue(a.pl, []netease.Track{{ID: 7, Name: "NAINAINAI", Artists: []netease.Artist{{Name: "ATARASHII GAKKO!"}}, Duration: 193877}})
 	main := ui.NewTester(a.view, 1200, 800) // for the app's colors
 	main.Frame()
 	tt := ui.NewTester(n.View, int(n.WinW), int(n.WinH))

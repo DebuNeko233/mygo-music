@@ -18,6 +18,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
@@ -384,7 +385,7 @@ func TestPlayEpisode(t *testing.T) {
 	if cur == nil || cur.ID != 13 || cur.ProgramID != 3 || cur.PodcastID != 5 || len(a.pl.Queue()) != 2 {
 		t.Fatalf("playing %+v of %d", cur, len(a.pl.Queue()))
 	}
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	tt.Advance(time.Second)
 	tt.Frame()
 	if err := tt.Click("打开正在播放"); err != nil {
@@ -405,7 +406,7 @@ func TestEpisodeOpensPodcast(t *testing.T) {
 	a.open(route{Page: pagePodcast, ID: 5})
 	d := a.podcasts.Pages.Get(5)
 	a.playProgram(d, 0)
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneProgram
 	tt := ui.NewTester(a.view, 1200, 800)
 	tt.Advance(time.Second)

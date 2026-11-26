@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
@@ -20,7 +21,7 @@ func TestExitHeartMode(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.account.Profile = &netease.Profile{UserID: 1, Nickname: "听众"}
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "晚风"}, {ID: 2, Name: "推荐的歌"}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "晚风"}, {ID: 2, Name: "推荐的歌"}})
 	a.pl.AttachRadio(radiovm.HeartRadio, func(got func([]netease.Track)) {})
 	a.nav.Current = route{Page: pageFM}
 	tt := ui.NewTester(a.view, 1200, 800)

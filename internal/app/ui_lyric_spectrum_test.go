@@ -17,6 +17,7 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // The spectrum falls away smoothly during pause, seek, and track loading, and stops when hidden.
@@ -69,7 +70,7 @@ func TestLyricSpectrumStops(t *testing.T) {
 		t.Errorf("the spectrum did not ease out while seeking: %g → %g", peak, next)
 	}
 	peak = a.NPSpectrum.Peak
-	a.pl.Cue([]netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
+	player.Cue(a.pl, []netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
 	tt.Frame()
 	if a.NPSpectrum.Peak != peak {
 		t.Error("the spectrum jumped on the first frame of the next song")
@@ -133,8 +134,8 @@ func spectrumTestApp() *app {
 	a.settings = defaultSettings()
 	a.settings.LyricSpectrum = true
 	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "夜航", Artists: []netease.Artist{{Name: "测试音轨"}}, Duration: 200000}})
-	a.pl.SetLyrics(lyrics.Build("[00:00.00]夜色落在海面\n[00:04.00]星光照亮归途\n[00:08.00]远处的灯缓缓亮起\n[00:12.00]风从耳边经过\n[00:16.00]潮水轻轻退去\n[00:20.00]月亮停在天边\n", "", ""))
+	player.Cue(a.pl, []netease.Track{{ID: 7, Name: "夜航", Artists: []netease.Artist{{Name: "测试音轨"}}, Duration: 200000}})
+	player.SetLyrics(a.pl, lyrics.Build("[00:00.00]夜色落在海面\n[00:04.00]星光照亮归途\n[00:08.00]远处的灯缓缓亮起\n[00:12.00]风从耳边经过\n[00:16.00]潮水轻轻退去\n[00:20.00]月亮停在天边\n", "", ""))
 	a.pl.Seek(8 * time.Second)
 	return a
 }

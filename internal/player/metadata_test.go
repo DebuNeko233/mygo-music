@@ -52,7 +52,7 @@ func TestMetadataRevalidationWinsOverCache(t *testing.T) {
 	p.FetchLyrics = func(int64) (string, string, string, error) { return "[00:01]Cached", "", "", nil }
 	p.RetryMetadata()
 	complete := <-posts
-	p.RefreshLyrics(1, "[00:01]Fresh", "", "")
+	RefreshLyrics(p, 1, "[00:01]Fresh", "", "")
 	complete()
 	if p.lyrics[0].Text != "Fresh" {
 		t.Fatal("old cache overwrote fresh lyrics")
@@ -84,11 +84,11 @@ func TestMetadataPermanentFailureStopsRecovery(t *testing.T) {
 func TestLyricLanguageAfterRefresh(t *testing.T) {
 	p := New(func(func()) {})
 	p.track = &netease.Track{ID: 1}
-	p.RefreshLyrics(1, "[00:01]次のことば", "", "")
+	RefreshLyrics(p, 1, "[00:01]次のことば", "", "")
 	if p.LyricLanguage() != "ja" {
 		t.Fatal("Japanese lyrics did not select their font language")
 	}
-	p.RefreshLyrics(1, "[00:01]New lyric", "", "")
+	RefreshLyrics(p, 1, "[00:01]New lyric", "", "")
 	if p.LyricLanguage() != "" {
 		t.Fatal("metadata replacement retained the previous language")
 	}

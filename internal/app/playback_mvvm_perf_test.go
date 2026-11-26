@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
@@ -48,7 +49,7 @@ func TestPlaybackMVVMFrames(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a := catalogApp()
 		a.nav.Current = route{Page: pageFM}
-		a.pl.Cue([]netease.Track{{ID: 7, Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 180000}})
+		player.Cue(a.pl, []netease.Track{{ID: 7, Name: "春日影", Artists: []netease.Artist{{Name: "MyGO!!!!!"}}, Duration: 180000}})
 		a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(got func([]netease.Track)) { got(nil) })
 		tt := ui.NewTester(a.view, 1200, 800)
 		tt.SetDark(dark)

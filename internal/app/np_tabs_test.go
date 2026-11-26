@@ -14,6 +14,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // Empty count space must not push visible tabs off their axis near a window edge, as Linux fonts did in narrow windows.
@@ -69,12 +70,12 @@ func TestNowPlayingIdlePointerFollowsWindowLeave(t *testing.T) {
 			a := newTestApp()
 			a.settings = defaultSettings()
 			a.settings.Fog = false
-			a.pl.Cue([]netease.Track{{ID: 1, Name: "Song", Duration: 200000}})
-			a.pl.SetLyrics(nil)
+			player.Cue(a.pl, []netease.Track{{ID: 1, Name: "Song", Duration: 200000}})
+			player.SetLyrics(a.pl, nil)
 			out := newSilentAudio()
 			out.Play()
 			defer out.Close()
-			a.pl.Attach(out)
+			player.Attach(a.pl, out)
 			a.playbackState.Open, a.playbackState.Pane = true, tc.pane
 			tt := ui.NewTesterWith(a.view, 1120, 720, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 			const scale = 0.5

@@ -1,5 +1,5 @@
 /*
-在共享位图预算内保留最近歌曲列表的可见小封面，并统计占位与恢复情况。
+在共享位图预算内保留最近歌曲列表的可见小封面。
 */
 
 package artwork
@@ -43,11 +43,7 @@ func (c *Cache) RequestListCover(page navigation.Route, key string, box ui.Eleme
 	if visible && key != "" {
 		c.noteListCover(page, key)
 	}
-	a := c.getInView(key, false, box, load)
-	if visible && (a == nil || a.Bitmap == nil) {
-		c.metrics.listPlaceholders++
-	}
-	return a
+	return c.getInView(key, false, visible, load)
 }
 
 func (c *Cache) noteListCover(page navigation.Route, key string) {

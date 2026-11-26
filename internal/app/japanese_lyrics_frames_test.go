@@ -16,6 +16,7 @@ import (
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 )
 
 // With NM_FRAMES set, inspect Japanese glyphs beside Chinese translations in
@@ -28,7 +29,7 @@ func TestJapaneseLyricsFrames(t *testing.T) {
 	isolateUserData(t)
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "日本語の歌", Duration: 120000}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "日本語の歌", Duration: 120000}})
 	lines := []lyrics.Line{
 		{At: 0, End: 10 * time.Second, Text: "春日影", Translation: "春日的光影"},
 		{At: 10 * time.Second, End: 20 * time.Second, Text: "憧れていた世界へ", Translation: "走向憧憬的世界"},
@@ -37,8 +38,8 @@ func TestJapaneseLyricsFrames(t *testing.T) {
 	for i := range lines {
 		lines[i].Words = lyrics.SpreadWords(lines[i].Text, lines[i].At, lines[i].End)
 	}
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(12 * time.Second)
+	player.SetLyrics(a.pl, lines)
+	player.Hold(a.pl, 12*time.Second)
 	a.playbackState.Open = true
 	d := &playbackview.DeskLyrics{A: &a.views.playback}
 	a.lyrics = d

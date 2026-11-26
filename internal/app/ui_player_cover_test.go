@@ -47,8 +47,7 @@ func TestPlayerBarCoverFollowsLatestTrack(t *testing.T) {
 			a.art.Put(url(i), arts[i])
 		}
 	}
-
-	a.pl.Cue(q)
+	player.Cue(a.pl, q)
 	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
 	tt.Advance(2 * playbackview.CoverFadeDuration)
 	if a.BarCover.Current != arts[0] {
@@ -112,7 +111,7 @@ func TestPlayerBarCoverBlendKeepsBothPicturesVisible(t *testing.T) {
 		draw.Draw(img, img.Bounds(), image.NewUniform(c), image.Point{}, draw.Src)
 		a.art.Put(netease.Sized(q[i].Album.PicURL, barCoverPixels), &artcache.Image{Bitmap: ui.NewBitmap(img)})
 	}
-	a.pl.Cue(q)
+	player.Cue(a.pl, q)
 	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
 	tt.Advance(playbackview.CoverFadeDuration)
 	r, ok := tt.Find("打开正在播放")
@@ -156,8 +155,7 @@ func TestPlayerBarCoverFallsBackAfterFailure(t *testing.T) {
 		return nil, nil, 0, errors.New("invalid cover")
 	}})
 	a.art.Put(netease.Sized(q[0].Album.PicURL, barCoverPixels), oldArt)
-
-	a.pl.Cue(q)
+	player.Cue(a.pl, q)
 	tt := ui.NewTester(a.views.playback.PlayerBar, 1000, 96)
 	tt.Advance(2 * playbackview.CoverFadeDuration)
 	a.pl.Next()

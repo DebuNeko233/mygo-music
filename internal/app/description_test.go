@@ -13,6 +13,7 @@ import (
 
 	playbackview "netease-music-mygo/internal/desktop/view/playback"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/viewmodel"
 	albumvm "netease-music-mygo/internal/viewmodel/album"
 	artistvm "netease-music-mygo/internal/viewmodel/artist"
@@ -169,7 +170,7 @@ func TestDescriptionMoreInNowPlaying(t *testing.T) {
 	a.settings = defaultSettings()
 	desc := strings.Repeat("这是本期节目的详细介绍。\n\n", 30) + "最后一段。"
 	tr := netease.Track{ID: 1, ProgramID: 2, Name: "节目名称", Description: desc}
-	a.pl.Cue([]netease.Track{tr})
+	player.Cue(a.pl, []netease.Track{tr})
 	a.comments.Track = tr.ID
 	a.playbackState.Pane, a.playbackState.Open = playbackview.PaneProgram, true
 	view := ui.NewTester(a.view, 1180, 780)

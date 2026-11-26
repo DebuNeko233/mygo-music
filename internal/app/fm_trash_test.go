@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	radiovm "netease-music-mygo/internal/viewmodel/radio"
 )
 
@@ -26,7 +27,7 @@ func TestFMTrashFailureFeedback(t *testing.T) {
 			posts := testPosts(a)
 			a.account.Profile = &netease.Profile{UserID: 1}
 			a.settings = defaultSettings()
-			a.pl.Cue([]netease.Track{{ID: 42, Name: "FM song"}})
+			player.Cue(a.pl, []netease.Track{{ID: 42, Name: "FM song"}})
 			fed := 0
 			a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(func([]netease.Track)) { fed++ })
 			old := fmTrash
@@ -62,7 +63,7 @@ func TestFMTrashFailureFeedback(t *testing.T) {
 func TestFMTrashSuccess(t *testing.T) {
 	a := newTestApp()
 	posts := testPosts(a)
-	a.pl.Cue([]netease.Track{{ID: 42}})
+	player.Cue(a.pl, []netease.Track{{ID: 42}})
 	fed := 0
 	a.pl.AttachRadio(radiovm.FMRadio(netease.FMDefault), func(func([]netease.Track)) { fed++ })
 	old := fmTrash

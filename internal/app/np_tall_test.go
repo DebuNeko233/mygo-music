@@ -21,6 +21,7 @@ import (
 	"netease-music-mygo/internal/desktop/view/shell"
 	"netease-music-mygo/internal/lyrics"
 	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/player"
 	"netease-music-mygo/internal/testutil"
 	commentsvm "netease-music-mygo/internal/viewmodel/comments"
 )
@@ -31,14 +32,14 @@ func tallLyricsApp(t *testing.T) *app {
 	a := newTestApp()
 	a.settings = defaultSettings()
 	a.settings.LyricEdgeFade = false
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "高窗口布局", Duration: 150000}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "高窗口布局", Duration: 150000}})
 	var lines []lyrics.Line
 	for i := range 30 {
 		at := time.Duration(i) * 5 * time.Second
 		lines = append(lines, lyrics.Line{At: at, End: at + 5*time.Second, Text: fmt.Sprintf("第%02d句", i)})
 	}
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(77 * time.Second)
+	player.SetLyrics(a.pl, lines)
+	player.Hold(a.pl, 77*time.Second)
 	a.playbackState.Open, a.playbackState.Pane = true, playbackview.PaneLyrics
 	a.comments = commentsvm.Comments{Track: 1, Loaded: true}
 	return a
@@ -49,7 +50,7 @@ func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
 	a := tallLyricsApp(t)
 	a.settings.HotComments = false
 	const credit = "作曲：A"
-	a.pl.RefreshLyrics(1, "[00:01]"+credit, "", "")
+	player.RefreshLyrics(a.pl, 1, "[00:01]"+credit, "", "")
 	tt := ui.NewTesterWith(a.view, 960, 700, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	tt.SetScale(0.25)
 	bounds := func(text string) ui.Rect {
@@ -90,10 +91,10 @@ func TestNowPlayingLyricsUseResizedHeightOnFirstFrame(t *testing.T) {
 				}
 				if count > 0 {
 					row := lines[count/2]
-					a.pl.Hold(row.At)
+					player.Hold(a.pl, row.At)
 					text = row.Text
 				}
-				a.pl.SetLyrics(lines)
+				player.SetLyrics(a.pl, lines)
 
 				var tt *ui.Tester
 				findY := func() float32 {
@@ -156,8 +157,8 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 					}
 				}
 				last, middle := lines[count-1], lines[count/2]
-				a.pl.Cue([]netease.Track{{ID: 1, Duration: int64(count+2) * 1000}})
-				a.pl.SetLyrics(lines)
+				player.Cue(a.pl, []netease.Track{{ID: 1, Duration: int64(count+2) * 1000}})
+				player.SetLyrics(a.pl, lines)
 				// Exercise the animated remount that used to enter browsing
 				// mode in long immersive lyrics.
 				reduceMotion := !immersive || count < playbackview.TimedListThreshold
@@ -173,7 +174,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 					return row.Bounds.Y
 				}
 				openAtEnd := func() float32 {
-					a.pl.Hold(last.At + 2*time.Second)
+					player.Hold(a.pl, last.At+2*time.Second)
 					a.playbackState.Open = true
 					tt.Frame()
 					visibleY(last)
@@ -181,7 +182,7 @@ func TestNowPlayingOpensAtLastLyric(t *testing.T) {
 					return visibleY(last)
 				}
 				firstOpen := openAtEnd()
-				a.pl.Hold(middle.At)
+				player.Hold(a.pl, middle.At)
 				tt.Frame()
 				tt.Advance(time.Second)
 				want := visibleY(middle)
@@ -360,7 +361,7 @@ func TestLyricsWidthResizeSchedulesFollowUp(t *testing.T) {
 	for i := range lines {
 		lines[i].Text = fmt.Sprintf("%02d%s", i, strings.Repeat("lyrics ", 14))
 	}
-	a.pl.SetLyrics(lines)
+	player.SetLyrics(a.pl, lines)
 	tt := ui.NewTester(a.view, 1200, 800)
 	testutil.Settle(tt)
 	before, ok := tt.AccessByRole(ui.RoleButton, lines[15].Text)
@@ -382,8 +383,9 @@ func TestImmersiveLyricViewportTracksControls(t *testing.T) {
 	a := tallLyricsApp(t)
 	a.settings.LyricEdgeFade = true
 	a.settings.HotComments = false
-	// One line exercises the same viewport without paying for the blur in the test.
-	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
+	player.
+		// One line exercises the same viewport without paying for the blur in the test.
+		SetLyrics(a.pl, []lyrics.Line{{Text: "A short lyric"}})
 	var barHeight float32
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		barHeight = shell.TopBar(c)
@@ -418,7 +420,7 @@ func TestImmersiveLyricReleasesCanvas(t *testing.T) {
 	a := tallLyricsApp(t)
 	a.settings.LyricEdgeFade = true
 	a.settings.HotComments = false
-	a.pl.SetLyrics([]lyrics.Line{{Text: "A short lyric"}})
+	player.SetLyrics(a.pl, []lyrics.Line{{Text: "A short lyric"}})
 	tt := ui.NewTesterWith(a.view, 880, 580, ui.TesterOptions{Preferences: ui.Preferences{ReduceMotion: true}})
 	a.LyricBlurPass = ui.NewCanvas(1, 1)
 	a.settings.LyricEdgeFade = false

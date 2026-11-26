@@ -197,8 +197,8 @@ func TestRiskControlPrefetchIsLimited(t *testing.T) {
 		var asks atomic.Int64
 		ch := make(chan func(), 64)
 		p := New(func(fn func()) { ch <- fn })
-		p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
-		p.Hold(time.Second)
+		Cue(p, []netease.Track{{ID: 1}, {ID: 2}})
+		Hold(p, time.Second)
 		ask := func(int64, string) (*netease.Stream, error) {
 			asks.Add(1)
 			return nil, netease.ErrRiskControl
@@ -232,8 +232,8 @@ func TestRiskControlPrefetchStopsWhenTheSongMovesOn(t *testing.T) {
 		var asks atomic.Int64
 		ch := make(chan func(), 64)
 		p := New(func(fn func()) { ch <- fn })
-		p.Cue([]netease.Track{{ID: 1}, {ID: 2}})
-		p.Hold(time.Second)
+		Cue(p, []netease.Track{{ID: 1}, {ID: 2}})
+		Hold(p, time.Second)
 		ask := func(int64, string) (*netease.Stream, error) {
 			asks.Add(1)
 			return nil, netease.ErrRiskControl
@@ -396,7 +396,7 @@ func TestCutOffRetries(t *testing.T) {
 
 	c := NewCache(t.TempDir(), 1<<30)
 	ch, p := newLoadPlayer(t, c)
-	p.Cue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
 	p.stream = cutStream(t, c, 1, cut.URL, len(b))
 
 	p.cutOff() // what plays ended, and the download is why
@@ -428,7 +428,7 @@ func TestCutOffStops(t *testing.T) {
 
 	c := NewCache(t.TempDir(), 1<<30)
 	ch, p := newLoadPlayer(t, c)
-	p.Cue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
 	// Broken off, asked for again, and broken off again: once for every try
 	// it gets, and then it is left where it stopped.
 	for i := int64(1); i <= loadTries+1; i++ {
@@ -459,7 +459,7 @@ func TestSongEndPlaysNext(t *testing.T) {
 	serveURL(t, srv, len(b))
 	c := NewCache(t.TempDir(), 1<<30)
 	ch, p := newLoadPlayer(t, c)
-	p.Cue([]netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
+	Cue(p, []netease.Track{{ID: 1, Duration: 5000}, {ID: 2, Duration: 5000}})
 	s, err := openStream(downloaded(b), 5000)
 	if err != nil {
 		t.Fatal(err)

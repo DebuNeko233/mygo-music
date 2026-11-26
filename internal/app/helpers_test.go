@@ -45,9 +45,9 @@ func shortLyricsApp(lines []lyrics.Line, w, h int) (*app, *ui.Tester) {
 	a.settings = defaultSettings()
 	a.settings.LyricEdgeFade = false
 	a.settings.HotComments = false
-	a.pl.Cue([]netease.Track{{ID: 1, Duration: 200000}})
-	a.pl.SetLyrics(lines)
-	a.pl.Hold(0)
+	player.Cue(a.pl, []netease.Track{{ID: 1, Duration: 200000}})
+	player.SetLyrics(a.pl, lines)
+	player.Hold(a.pl, 0)
 	tt := ui.NewTesterWith(func(c *ui.Context) {
 		_, height := c.Size()
 		ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), height, ui.Rect{}, 0) })
@@ -60,9 +60,9 @@ func coverApp(t *testing.T) (*app, *ui.Tester, ui.Rect) {
 	t.Helper()
 	a := newTestApp()
 	a.settings = defaultSettings()
-	a.pl.Cue([]netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
+	player.Cue(a.pl, []netease.Track{{ID: 1, Name: "一"}, {ID: 2, Name: "二"}, {ID: 3, Name: "三"}})
 	a.pl.Next()
-	a.pl.SetLyrics(nil)
+	player.SetLyrics(a.pl, nil)
 	a.playbackState.Open = true
 	tt := ui.NewTester(a.view, 860, 560)
 	// Without the tilt and the swing, which the CPU draws slowly in depth:
