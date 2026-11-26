@@ -24,7 +24,17 @@ Linux 上装在 ~/.local，不需要 root：
 curl -fsSL https://github.com/DebuNeko233/nyago-music/releases/latest/download/install.sh | sh
 ```
 
-macOS 上从 [最新版本页面](https://github.com/DebuNeko233/nyago-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
+macOS 也可以通过 [Nyago Music Homebrew tap](https://github.com/DebuNeko233/homebrew-nyago-music) 安装：
+
+```sh
+brew tap debuneko233/nyago-music
+brew trust --cask debuneko233/nyago-music/nyago-music
+brew install --cask debuneko233/nyago-music/nyago-music
+```
+
+Homebrew 7 需要信任第三方 cask；旧版 Homebrew 没有 `trust` 命令时跳过第二步。通过 Homebrew 更新时运行 `brew update`，再运行 `brew upgrade --cask --greedy nyago-music`。
+
+macOS 手动安装可从 [最新版本页面](https://github.com/DebuNeko233/nyago-music/releases/latest) 下载 DMG：Apple 芯片选择 `arm64`，Intel 芯片选择 `amd64`。打开 DMG，将应用拖入「应用程序」。应用未经过 Apple 公证；若系统阻止打开，请在「系统设置 → 隐私与安全性」中允许运行。
 
 ## 桌面体验与扩展功能
 

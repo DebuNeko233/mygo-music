@@ -103,3 +103,12 @@ gh release create sherpa-onnx-2.0.1 --repo DebuNeko233/nyago-music \
 ## 6. 发行后核对
 
 核对准确版本和提交、最新版本页、安装脚本下载目标、签名更新清单、字幕库下载及账号/配置保留情况。发行成功不能只看上传步骤绿色。记录未验证的平台与问题，后续修复从本仓库 main 开始。
+
+
+## 7. 同步 Homebrew tap
+
+应用正式发行公开并完成下载验证后，更新 [DebuNeko233/homebrew-nyago-music](https://github.com/DebuNeko233/homebrew-nyago-music) 的 `Casks/nyago-music.rb`：版本号与 ARM/Intel DMG 各自的 SHA-256 必须来自同一正式版本。下载两份 DMG 计算摘要，并与该发行的 `SHA256SUMS` 比对。
+
+检查应用实际名称、包文件名、最低系统版本与 cask 中的 `app`、`url`、`depends_on` 是否一致。完成 tap 的格式、在线审查、两个架构下载与 CI 安装验证后推送 main；具体命令见 [tap 维护说明](https://github.com/DebuNeko233/homebrew-nyago-music#维护与发版)。
+
+应用内更新与 Homebrew cask 版本分别维护。`brew livecheck` 仅发现应用的新正式版，不会自动提交 cask；不要把字幕库资源发行、草稿或预览版同步成稳定版，也不要为更新 cask 改写已发布的应用 tag。
