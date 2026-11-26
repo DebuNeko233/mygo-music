@@ -367,12 +367,22 @@ func CoverRequestSize(raw string) int {
 }
 
 // PublicCoverFamily identifies decoded variants that the UI can share while loading.
+// The public p1/p2 mirrors serve the same image path. Playlist refreshes can switch
+// between them; reuse ready pixels while still fetching the exact new URL. This
+// identity never replaces imageIdentity or the disk cache's request/size family.
 func PublicCoverFamily(raw string) string {
 	address, err := url.Parse(raw)
 	if err != nil || (httpClient.Jar != nil && len(httpClient.Jar.Cookies(address)) != 0) {
 		return ""
 	}
 	family, _, _ := imageFamily(&http.Request{URL: address})
+	if family != "" && address.Scheme == "https" && address.User == nil && address.Fragment == "" {
+		switch address.Host {
+		case "p1.music.126.net", "p2.music.126.net":
+			address.Host, address.RawQuery = "p1.music.126.net", ""
+			return address.String()
+		}
+	}
 	return family
 }
 

@@ -176,3 +176,73 @@ func TestListCoverNavigationFrames(t *testing.T) {
 		}
 	}
 }
+
+// Refreshing a displayed playlist with another CDN host must never clear a ready row cover.
+func TestListCoverPlaylistRefreshCDNHost(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		for _, size := range [][2]int{{640, 440}, {1180, 780}} {
+			t.Run(fmt.Sprintf("dark=%v/%dx%d", dark, size[0], size[1]), func(t *testing.T) {
+				isolateUserData(t)
+				a := newTestApp()
+				a.settings = defaultSettings()
+				posts := make(chan func(), 16)
+				requests := make(chan string, 16)
+				a.art = artcache.New(artcache.Options{Post: func(fn func()) { posts <- fn }, Load: func(url string) (*ui.Bitmap, image.Image, int, error) {
+					requests <- url
+					img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+					draw.Draw(img, img.Bounds(), image.NewUniform(color.RGBA{B: 255, A: 255}), image.Point{}, draw.Src)
+					return ui.NewBitmap(img), img, 0, nil
+				}})
+				t.Cleanup(a.art.Close)
+				old := netease.Track{ID: 1, Name: "刷新的歌曲", Album: netease.Album{PicURL: "https://p2.music.126.net/fixture/cover.jpg"}}
+				fresh := old
+				fresh.Album.PicURL = "https://p1.music.126.net/fixture/cover.jpg"
+				a.art.Put(netease.Sized(old.Album.PicURL, 96), &artcache.Image{Bitmap: listCoverBitmap()})
+				a.nav.Current = route{Page: pagePlaylist, ID: 1}
+				a.library.Playlists[1] = &netease.Playlist{ID: 1, Name: "缓存的歌单", Tracks: []netease.Track{old}}
+				// Check every build, including intermediate visibility/layout builds
+				// which Tester.Frame settles before returning its final pixels.
+				load := a.views.artwork.LoadList
+				builds, missing := 0, 0
+				a.views.artwork.LoadList = func(url string, box ui.Element) *ui.Bitmap {
+					bmp := load(url, box)
+					builds++
+					if bmp == nil {
+						missing++
+					}
+					return bmp
+				}
+				view := ui.NewTesterWith(a.view, size[0], size[1], ui.TesterOptions{Dark: dark})
+				assertRow := func(want color.RGBA) {
+					t.Helper()
+					row, ok := view.AccessByRole(ui.RoleButton, fresh.Name)
+					if !ok {
+						t.Fatal("refreshed row missing")
+					}
+					r := row.Bounds
+					pixel := view.Image().RGBAAt(int(r.X)+12+26+14+19, int(r.Y+r.H/2))
+					if pixel != want {
+						t.Fatalf("refresh flashed placeholder: %v", pixel)
+					}
+				}
+				assertRow(color.RGBA{R: 255, A: 255})
+				a.library.Playlists[1] = &netease.Playlist{ID: 1, Name: "刷新的歌单", Tracks: []netease.Track{fresh}}
+				for range 5 {
+					view.Frame()
+					assertRow(color.RGBA{R: 255, A: 255})
+				}
+				if got := wait(t, requests, "fresh CDN request"); got != netease.Sized(fresh.Album.PicURL, 96) {
+					t.Fatalf("request identity changed: %s", got)
+				}
+				wait(t, posts, "fresh CDN decode")()
+				for range 5 {
+					view.Frame()
+					assertRow(color.RGBA{B: 255, A: 255})
+				}
+				if builds == 0 || missing != 0 {
+					t.Fatalf("cover disappeared during %d of %d builds", missing, builds)
+				}
+			})
+		}
+	}
+}

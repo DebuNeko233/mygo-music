@@ -71,7 +71,9 @@ Wasm 引擎运行时涉及匿名内存权限。当前 [macos.entitlements.plist]
 
 列表封面位图就绪后直接显示，包括磁盘或本地内嵌封面恢复；其他封面的既有淡入策略保持不变。磁盘读取和解码仍在后台，未保留或首次访问的封面允许短暂占位。缓存 `Stats` 提供累计内存命中、加载启动、容量淘汰和可见列表占位次数，以及当前列表保留条目和字节数；这些计数按 UI 构建调用统计，不是独立屏幕帧数，不包含 URL 或账号信息。
 
-回归入口：[list_test.go](../../internal/desktop/artwork/list_test.go)、[list_cover_test.go](../../internal/app/list_cover_test.go)、[list_cover_io_test.go](../../internal/app/list_cover_io_test.go)。测试覆盖多页返回首帧、垃圾回收、容量及可见区边界、撤销失效与断网后的磁盘恢复；`NM_FRAMES` 可输出明暗及常规/最小窗口的软件渲染结果。
+歌单后台刷新可能在 `p1.music.126.net` 与 `p2.music.126.net` 之间切换同一封面的地址。公开 HTTPS 地址的路径一致、查询仅含规范尺寸参数且不携带 Cookie 时，显示层在新地址加载期间复用已有位图，避免已显示的歌曲封面退回占位图。新地址仍独立请求、解码及校验，磁盘缓存键不合并；其他域名、端口、用户信息、版本或签名查询不进入这项镜像复用。明确撤销的新地址仍显示缺失状态。
+
+回归入口：[list_test.go](../../internal/desktop/artwork/list_test.go)、[list_cover_test.go](../../internal/app/list_cover_test.go)、[list_cover_io_test.go](../../internal/app/list_cover_io_test.go)、[image_cache_test.go](../../internal/netease/image_cache_test.go)。测试覆盖多页返回首帧、后台刷新切换 CDN 时的中间构建与解码完成、垃圾回收、容量及可见区边界、撤销失效与断网后的磁盘恢复；`NM_FRAMES` 可输出明暗及常规/最小窗口的软件渲染结果。
 
 ## 目录迁移事务
 

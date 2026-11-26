@@ -14,7 +14,9 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -391,5 +393,55 @@ func TestImageIndexLogSurvivesStoreRestart(t *testing.T) {
 	}
 	if before != 2 || calls != before {
 		t.Fatal("restart reached the network or merged unrelated request parameters")
+	}
+}
+
+// Only public p1/p2 mirror URLs with a canonical size may share decoded display pixels.
+func TestPublicCoverFamilyCDNMirrors(t *testing.T) {
+	const old = "https://p2.music.126.net/token/cover.jpg?param=96y96"
+	const fresh = "https://p1.music.126.net/token/cover.jpg?param=96y96"
+	if PublicCoverFamily(old) == "" || PublicCoverFamily(old) != PublicCoverFamily(fresh) {
+		t.Fatal("playlist refresh changed the decoded identity of the same public cover")
+	}
+	for _, other := range []string{
+		"https://p1.music.126.net/token/another.jpg?param=96y96",
+		"https://other.music.126.net/token/cover.jpg?param=96y96",
+		"https://p1.music.126.net.evil.invalid/token/cover.jpg?param=96y96",
+		"https://p1.music.126.net:8443/token/cover.jpg?param=96y96",
+		"https://user@p1.music.126.net/token/cover.jpg?param=96y96",
+		"https://p1.music.126.net/token/cover.jpg?param=96y96&version=2",
+		"https://p1.music.126.net/token/cover.jpg?param=96y96&signature=secret",
+		"https://p1.music.126.net/token/cover.jpg?param=96y96#version",
+		"http://p1.music.126.net/token/cover.jpg?param=96y96",
+	} {
+		if PublicCoverFamily(other) == PublicCoverFamily(old) {
+			t.Fatalf("unrelated/private URL shared display pixels: %s", other)
+		}
+	}
+	a, _ := http.NewRequest(http.MethodGet, old, nil)
+	b, _ := http.NewRequest(http.MethodGet, fresh, nil)
+	if imageIdentity(a) == imageIdentity(b) {
+		t.Fatal("mirror display reuse collapsed HTTP request identity")
+	}
+	x, _, _ := imageFamily(a)
+	y, _, _ := imageFamily(b)
+	if x == y {
+		t.Fatal("mirror display reuse collapsed disk request family")
+	}
+}
+
+// Cookie-bearing mirror requests cannot borrow another identity's decoded image.
+func TestPublicCoverFamilyExcludesCookies(t *testing.T) {
+	before := httpClient
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpClient = &http.Client{Jar: jar}
+	t.Cleanup(func() { httpClient = before })
+	address, _ := url.Parse("https://p2.music.126.net/cover.jpg?param=96y96")
+	jar.SetCookies(address, []*http.Cookie{{Name: "session", Value: "fixture", Path: "/"}})
+	if PublicCoverFamily(address.String()) != "" {
+		t.Fatal("cookie-bearing request entered the public display family")
 	}
 }
