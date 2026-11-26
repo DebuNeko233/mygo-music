@@ -6,9 +6,7 @@
 
 ## 安装
 
-**前往 [最新 Release](https://github.com/DebuNeko233/nyago-music/releases/latest) 下载。**
-
-Release 说明提供「操作系统 × 处理器架构」下载表格、安装步骤和 Homebrew 指引，请按设备选择对应安装包。
+**前往 [最新 Release](https://github.com/DebuNeko233/nyago-music/releases/latest) 按照指引下载。**
 
 ## 数据与清理
 
