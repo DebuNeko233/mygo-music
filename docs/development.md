@@ -87,7 +87,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
 revision=$(git rev-parse --short HEAD)
 build_dir="build/test-$revision"
 go tool mygo build -platform darwin/arm64 -sign - -skip-notarize -o "$build_dir"
-app_path="$build_dir/darwin-arm64/MyGo 云音乐.app"
+app_path="$build_dir/darwin-arm64/Nyago Music.app"
 codesign --verify --deep --strict --verbose=2 "$app_path"
 hdiutil verify "$build_dir/darwin-arm64/"*.dmg
 ```

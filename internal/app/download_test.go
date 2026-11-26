@@ -331,7 +331,7 @@ func TestDownloadsUseDefaultOrChosenDirectory(t *testing.T) {
 		t.Run(map[bool]string{false: "default", true: "custom"}[custom], func(t *testing.T) {
 			a, posts := downloadTestApp(t)
 			a.settings.DownloadDirectory = ""
-			want := filepath.Join(home, "Music", "Mygo Music")
+			want := filepath.Join(home, "Music", "Nyago Music")
 			if custom {
 				want = t.TempDir()
 				a.settings.DownloadDirectory = want

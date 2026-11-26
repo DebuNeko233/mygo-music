@@ -27,7 +27,7 @@ func (a *app) downloadDirectory() string {
 		return a.settings.DownloadDirectory
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, "Music", "Mygo Music")
+		return filepath.Join(home, "Music", "Nyago Music")
 	}
 	return ""
 }

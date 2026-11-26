@@ -92,6 +92,22 @@ go func() {
 
 `preferences.SaveSoon` 先序列化快照，再把字节交给后台保存器。退出或事务提交使用已有 Flush/Wait 保证最新值写完。`userdata.Write` 使用同目录暂存、同步和替换；另一个 `WriteJSON` 接口要求调用方串行写入，不能假定所有辅助方法都提供同等并发或持久性保证。
 
+### 应用数据目录
+
+[mygo.json](../mygo.json) 的应用名为 `Nyago Music`，MyGo 的 `PathUserData`、`PathCache` 和 `PathLogs` 按应用名生成路径。开发构建追加 ` Dev`，与正式构建隔离；不另设第二套路径解析器。
+
+| 平台 | 数据 | 默认缓存 |
+| --- | --- | --- |
+| macOS | `~/Library/Application Support/Nyago Music` | `~/Library/Caches/Nyago Music` |
+| Windows | `%AppData%/Nyago Music` | `%LocalAppData%/Nyago Music` |
+| Linux | `${XDG_CONFIG_HOME:-~/.config}/Nyago Music` | `${XDG_CACHE_HOME:-~/.cache}/Nyago Music` |
+
+设置、播放会话、本地曲库索引、离线账号和字幕模型位于数据根目录；歌曲、页面、封面和字幕缓存默认位于缓存根目录。macOS 日志位于 `~/Library/Logs/Nyago Music`，其他桌面平台位于数据目录的 `logs`。下载歌曲默认在 `~/Music/Nyago Music`，属于用户文件，不是缓存。
+
+这次名称切换不执行迁移：不探测或读取 `MyGo 云音乐`、`MyGo 云音乐 Dev`、`Mygo Music` 等旧目录，不复制旧设置中的自选路径，不删除旧文件。新目录中已经保存的设置、曲库和自选缓存/下载路径仍正常恢复。系统凭据不属于目录迁移，当前应用标识未变，钥匙串登录可能沿用；不将其列入 Homebrew 清理规则。
+
+Homebrew 普通卸载只移除应用，显式 `--zap` 只清理正式版的三个 Nyago Music 专用数据、缓存、日志目录。禁止添加旧名称、共享 bundle identifier 对应的系统文件、开发目录、用户下载歌曲或任意自选目录的通配清理。现有 `v0.3.0` 包仍使用旧路径；tap 的新目录规则需搭配下一次正式应用发行。
+
 ## 7. 乐观编辑与快照
 
 喜欢、收藏、歌单编辑可以先反映到界面，再等待网络结果。回滚必须识别自己仍拥有的编辑，不覆盖后续操作。同一集合有重叠编辑时，只在全部相关编辑稳定后构造最终快照。

@@ -10,7 +10,7 @@ Nyago Music 的正式仓库是 `DebuNeko233/nyago-music`，开发主线是 `main
 - Actions Secret `MYGO_UPDATER_PRIVATE_KEY` 必须存在。不要使用原项目的公钥配新私钥。
 - 字幕清单引用的本仓库资源必须已发布；核对全部六个平台，不仅当前机器。
 - 旧原项目/旧预览版需要用户手动安装独立构建完成首次迁移；此后由新地址和公钥管理更新。
-- 应用标识与数据目录暂时保留以兼容安装。若要同时安装两个互不干扰的版本，另行设计标识及数据迁移。
+- main 的新构建使用 `Nyago Music` 名称生成独立数据和缓存目录，不迁移旧文件。应用标识及凭据服务暂时保留；发行说明必须区分文件数据隔离与钥匙串登录。
 - 旧历史版本记录保留，首次独立应用版本号应明确选择并高于待升级版本；不能把旧预览产物标成新主线版本。
 
 GitHub fork 网络脱离可能影响平台元数据。执行前核对已存在发行、标签、资源、仓库配置及密钥备份；发生脱离后再次验证 Secret 和资源可用性。
@@ -108,6 +108,8 @@ gh release create sherpa-onnx-2.0.1 --repo DebuNeko233/nyago-music \
 ## 7. 同步 Homebrew tap
 
 应用正式发行公开并完成下载验证后，更新 [DebuNeko233/homebrew-nyago-music](https://github.com/DebuNeko233/homebrew-nyago-music) 的 `Casks/nyago-music.rb`：版本号与 ARM/Intel DMG 各自的 SHA-256 必须来自同一正式版本。下载两份 DMG 计算摘要，并与该发行的 `SHA256SUMS` 比对。
+
+当前 tap 仍对应已发布的 `v0.3.0`。发布改名后的新版本时，将 cask 的 `app` 和 CI 中的包路径同步为 `Nyago Music.app`，不能只修改 cask 路径却继续引用旧 DMG。
 
 检查应用实际名称、包文件名、最低系统版本与 cask 中的 `app`、`url`、`depends_on` 是否一致。完成 tap 的格式、在线审查、两个架构下载与 CI 安装验证后推送 main；具体命令见 [tap 维护说明](https://github.com/DebuNeko233/homebrew-nyago-music#维护与发版)。
 
