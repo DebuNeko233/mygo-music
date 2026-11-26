@@ -12,17 +12,7 @@
 
 原项目安装的版本不会自动切换到本项目：首次迁移需手动安装本仓库版本，此后使用本仓库的更新源和签名。应用标识与系统凭据服务暂时保留，因此可能继续使用现有钥匙串登录；文件数据已按应用名称隔离，但不保证两个应用并行运行。
 
-Windows 上为当前用户安装，再次运行即升级，会先退出正在运行的版本：
-
-```powershell
-irm https://github.com/DebuNeko233/nyago-music/releases/latest/download/install.ps1 | iex
-```
-
-Linux 上装在 ~/.local，不需要 root：
-
-```sh
-curl -fsSL https://github.com/DebuNeko233/nyago-music/releases/latest/download/install.sh | sh
-```
+Windows 用户从[最新版本页面](https://github.com/DebuNeko233/nyago-music/releases/latest)下载对应架构的 `setup-*.exe` 安装包。Linux 用户选择对应架构的 `.deb`、`.rpm` 或 `.tar.gz` 包。
 
 macOS 也可以通过 [Nyago Music Homebrew tap](https://github.com/DebuNeko233/homebrew-nyago-music) 安装：
 

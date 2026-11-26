@@ -1,6 +1,6 @@
 # 独立发行
 
-Nyago Music 的正式仓库是 `DebuNeko233/nyago-music`，开发主线是 `main`。应用更新、安装脚本与字幕库资源由本仓库提供。普通贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目边界见[独立维护与依赖](docs/dependencies-and-upstream.md)。
+Nyago Music 的正式仓库是 `DebuNeko233/nyago-music`，开发主线是 `main`。应用安装包、签名更新与字幕库资源由本仓库提供。普通贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)，项目边界见[独立维护与依赖](docs/dependencies-and-upstream.md)。
 
 本指南用于已授权的发行操作；主线转正或普通推送不会自动创建应用版本标签。应用发行与字幕库资源发行分别管理。
 
@@ -60,6 +60,8 @@ git push origin v0.3.0
 
 [Release 工作流](.github/workflows/release.yml)由 `v*` 标签触发，检查配置、版本和变更说明，创建草稿并上传 macOS、Windows、Linux 的产物与签名更新。手动触发也必须选择匹配实际版本的标签，不能在 main 上绕过版本检查。
 
+项目仅提供安装包、应用内更新及 Homebrew 安装，不分发 `install.sh` 或 `install.ps1`。固定 MyGo CLI 仍会生成这些文件；普通 Build 在上传 artifacts 前删除脚本并过滤校验清单，Release 则在全部平台上传结束后执行 `finalize-release`，移除两个脚本资产并同步 `SHA256SUMS`。必须等待收尾任务成功，再公开草稿；本地使用 `-upload` 时也必须完成相同清理。不要删除更新归档、增量包或签名清单。
+
 macOS 当前采用 ad-hoc 签名并跳过公证；更新签名与 Apple Developer ID 是两件事。Windows 安装包使用 NSIS，普通 Build 工作流产物没有正式更新私钥签名，不能冒充已经验证的更新发行。
 
 本地发布需已配置 GitHub 身份及匹配的更新私钥，按 CLI 的环境变量机制提供，不在文档或 shell 历史写真实值。构建命令例：
@@ -68,7 +70,7 @@ macOS 当前采用 ad-hoc 签名并跳过公证；更新签名与 Apple Develope
 go tool mygo build -platform darwin/arm64,darwin/amd64 -sign - -skip-notarize
 ```
 
-`-upload` 会实际创建/修改远端发行，只有在本次发行授权内使用。先检查草稿中的安装包、SHA256SUMS、安装脚本、各平台 update manifest、签名与 changelog；测试安装和升级路径后再公开草稿并设为 latest。
+`-upload` 会实际创建/修改远端发行，只有在本次发行授权内使用。先检查草稿中的安装包、SHA256SUMS、各平台 update manifest、签名与 changelog；测试安装和升级路径后再公开草稿并设为 latest。
 
 ```sh
 gh release edit v0.3.0 --repo DebuNeko233/nyago-music --draft=false --latest
@@ -102,7 +104,7 @@ gh release create sherpa-onnx-2.0.1 --repo DebuNeko233/nyago-music \
 
 ## 6. 发行后核对
 
-核对准确版本和提交、最新版本页、安装脚本下载目标、签名更新清单、字幕库下载及账号/配置保留情况。发行成功不能只看上传步骤绿色。记录未验证的平台与问题，后续修复从本仓库 main 开始。
+核对准确版本和提交、最新版本页、安装包下载目标、签名更新清单、字幕库下载及账号/配置保留情况。发行成功不能只看上传步骤绿色。记录未验证的平台与问题，后续修复从本仓库 main 开始。
 
 
 ## 7. 同步 Homebrew tap

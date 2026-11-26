@@ -54,8 +54,11 @@ jobs:
           for arch in amd64 arm64; do
             out="build/$arch"
             go tool mygo build -platform "$TARGET_OS/$arch" -o "$out" "${args[@]}"
+            # MyGo generates install scripts; distribute packages only.
+            rm -f "$out/$TARGET_OS-$arch/install.sh" "$out/$TARGET_OS-$arch/install.ps1"
             if [[ -f "$out/SHA256SUMS" ]]; then
-              mv "$out/SHA256SUMS" "$out/$TARGET_OS-$arch/"
+              awk '$2 != "install.sh" && $2 != "install.ps1"' "$out/SHA256SUMS" > "$out/$TARGET_OS-$arch/SHA256SUMS"
+              rm "$out/SHA256SUMS"
             fi
           done
       - name: Upload amd64 packages

@@ -88,3 +88,27 @@ jobs:
             args=(-sign - -skip-notarize)
           fi
           go tool mygo build -platform "${{ matrix.platform }}" "${args[@]}" -upload
+
+  finalize-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # Wait for every platform so no uploader can restore scripts or hashes.
+      - name: Remove script installers and their checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/original" "$RUNNER_TEMP/packages"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern SHA256SUMS --dir "$RUNNER_TEMP/original"
+          awk '$2 != "install.sh" && $2 != "install.ps1"' "$RUNNER_TEMP/original/SHA256SUMS" > "$RUNNER_TEMP/packages/SHA256SUMS"
+          test -s "$RUNNER_TEMP/packages/SHA256SUMS"
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name' > "$RUNNER_TEMP/assets.txt"
+          for asset in install.sh install.ps1; do
+            if grep -Fxq "$asset" "$RUNNER_TEMP/assets.txt"; then
+              gh release delete-asset "$GITHUB_REF_NAME" "$asset" --repo "$GITHUB_REPOSITORY" --yes
+            fi
+          done
+          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/packages/SHA256SUMS" \
+            --repo "$GITHUB_REPOSITORY" --clobber
