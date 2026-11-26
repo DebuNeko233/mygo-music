@@ -28,8 +28,8 @@ func TestRadioContinuationDirection(t *testing.T) {
 	}
 }
 
-// Skipping a song that failed after Prev is an automatic forward move; a
-// reload of the same song must leave the last navigation direction alone.
+// An unavailable previous song continues backward; reloading the same song
+// preserves both the search direction and its published transition.
 func TestUnavailableSkipDirection(t *testing.T) {
 	p := New(func(func()) {})
 	p.SuspendCache()
@@ -40,7 +40,7 @@ func TestUnavailableSkipDirection(t *testing.T) {
 		t.Fatal("reloading the same song changed its navigation direction")
 	}
 	p.failed(p.at, 0, *p.Current(), 0, netease.ErrUnavailable)
-	if p.Current().ID != 3 || p.StepDirection() != 1 {
+	if p.Current().ID != 1 || p.StepDirection() != -1 {
 		t.Fatalf("skip reached %d with direction %d", p.Current().ID, p.StepDirection())
 	}
 }
@@ -95,6 +95,11 @@ func TestQueueReplacementDirection(t *testing.T) {
 			}
 			if p.StepDirection() != 0 {
 				t.Fatal("replacement inherited a direction from the old queue")
+			}
+			nextID := p.queue[p.order[(p.at+1)%len(p.order)]].ID
+			p.failed(p.at, 0, *p.Current(), 0, netease.ErrUnavailable)
+			if p.Current().ID != nextID || p.StepDirection() != 1 {
+				t.Fatal("replacement inherited a backward unavailable fallback")
 			}
 		})
 	}

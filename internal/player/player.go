@@ -113,6 +113,7 @@ type Player struct {
 	queueRevision     uint64 // changes when the queue or its order changes
 	at                int    // where in order the current track is, -1 for none
 	step              int    // the latest move in play order: 1 on, -1 back, 0 undirected
+	skipDirection     int    // unavailable-track search: -1 after Prev, forward for other selections
 	shuffle           bool
 	repeat            RepeatMode
 	volume            float64
@@ -492,10 +493,10 @@ func (p *Player) playQueue(tracks []netease.Track, start int, source PlaySource)
 	}
 	if p.shuffle {
 		p.shuffleOrder(start)
-		p.load(0)
+		p.load(0, 1)
 		return
 	}
-	p.load(max(start, 0))
+	p.load(max(start, 0), 1)
 }
 
 // PlayRadio plays tracks in their order, then goes on with those feed
@@ -530,6 +531,7 @@ func (p *Player) RadioFrom(name string, tracks []netease.Track, feed func(got fu
 		p.source.Source = "fm"
 	}
 	p.step = 0
+	p.skipDirection = 1
 	p.appendTracks(tracks)
 	if p.shuffle {
 		// The current track stays first; the radio's order must agree
@@ -604,7 +606,7 @@ func (p *Player) refill() {
 			p.step = 1
 			// The feed arrives after its seed; its tracks belong to this radio.
 			p.source = PlaySource{Source: "fm"}
-			p.load(p.at + 1)
+			p.load(p.at+1, 1)
 		default:
 			// The radio has nothing more: it stops at its end.
 			if p.hasTemporary() {
@@ -797,7 +799,7 @@ func (p *Player) Next() {
 		return
 	}
 	p.step = 1
-	p.load(at)
+	p.load(at, 1)
 }
 
 func (p *Player) nextIndex() int {
@@ -821,7 +823,7 @@ func (p *Player) Prev() {
 		return
 	}
 	p.step = -1
-	p.load(p.prevIndex())
+	p.load(p.prevIndex(), -1)
 }
 
 func (p *Player) prevIndex() int {
@@ -836,7 +838,7 @@ func (p *Player) Jump(i int) {
 	for k, v := range p.order {
 		if v == i {
 			p.step = cmp.Compare(k, p.at)
-			p.load(k)
+			p.load(k, 1)
 			return
 		}
 	}
@@ -1133,7 +1135,10 @@ func (p *Player) emit(event PlaybackEvent) {
 func (p *Player) Finish() { p.finish(Interrupted) }
 
 // load plays the track at order[at], skipping those that cannot play.
-func (p *Player) load(at int) {
+func (p *Player) load(at, direction int) {
+	// A direct selection can animate backward while its unavailable fallback
+	// still searches forward. Keep that policy separate from the visual step.
+	p.skipDirection = direction
 	p.finish(MovedOn)
 	if p.hasTemporary() && at != p.at {
 		p.removeTemporary()
@@ -1362,12 +1367,13 @@ func (p *Player) failed(at, skipped int, t netease.Track, from time.Duration, er
 	}
 	// Skip what cannot play, unless nothing in the queue can.
 	if skipped+1 < len(p.order) {
-		next := at + 1
-		if next >= len(p.order) {
-			next = 0
+		direction := 1
+		if p.skipDirection < 0 {
+			direction = -1
 		}
+		next := (at + direction + len(p.order)) % len(p.order)
 		p.tries = 0
-		p.step = 1
+		p.step = direction
 		p.loadSkipping(next, skipped+1, p.playing, 0)
 		return
 	}
@@ -1806,6 +1812,7 @@ func (p *Player) Restore(s Session) {
 	p.queueRevision++
 	p.step = 0
 	p.shuffle, p.repeat = s.Shuffle, s.Repeat%3
+	p.skipDirection = 1
 	p.tries = 0
 	p.restorePaused(s.At, time.Duration(s.Position)*time.Millisecond)
 }

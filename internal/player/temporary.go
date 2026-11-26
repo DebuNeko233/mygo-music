@@ -59,6 +59,7 @@ func (p *Player) PlayTemporary(track netease.Track, local *LocalAudio) {
 	}
 	p.queueRevision++
 	p.step, p.tries = 1, 0
+	p.skipDirection = 1
 	p.loadTrack(at, 0, true, 0, local, false)
 }
 

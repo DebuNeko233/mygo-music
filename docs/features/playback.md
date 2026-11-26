@@ -55,7 +55,9 @@
 
 版权或资源不可播放与暂时网络失败应分类处理，不能全部自动跳过。恢复网络后的重试也不能覆盖用户后续暂停、切歌或换队列的意图。离线优先使用格式、音质、完整性符合条件的缓存；“有文件”不代表可以播。
 
-回归：player 的 `buffering_test.go`、`playback_failure_test.go`、`offline_test.go`、`preload_test.go`，App 的 `buffering_time_test.go`、`offline_buffering_test.go`、`scrub_test.go`、`recovery_test.go`。
+手动上一曲遇到明确不可播歌曲时沿当前播放顺序向较早条目寻找，下一曲向较晚条目寻找；连续跳过和同曲重试保留本次方向，最多遍历一轮后停止。随机模式沿既有随机顺序遍历。直接点选、换队列、会话恢复及电台自动续播的不可播后备方向为下一曲方向，不继承之前的上一曲命令；界面切歌动画的方向与后备查找方向分别维护。
+
+回归：player 的 `buffering_test.go`、`playback_failure_test.go`、`unavailable_navigation_test.go`、`offline_test.go`、`preload_test.go`，App 的 `buffering_time_test.go`、`offline_buffering_test.go`、`scrub_test.go`、`recovery_test.go`。
 
 ## 会话恢复和播放记录
 

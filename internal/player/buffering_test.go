@@ -83,7 +83,7 @@ func TestUncachedLoadsReportBufferingBeforeURLReturns(t *testing.T) {
 					t.Fatal("prefetch did not request a URL")
 				}
 			}
-			p.load(0)
+			p.load(0, 1)
 			pump(t, posts, "network buffering", p.Buffering)
 			if !p.Loading() || p.Ready() {
 				t.Fatal("a pending remote load was treated as ready")
