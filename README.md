@@ -4,6 +4,8 @@
 
 本项目由 [DebuNeko233/nyago-music](https://github.com/DebuNeko233/nyago-music) 独立维护。业务音源限定为单一音源，另支持本地音乐。
 
+<img width="1289" height="928" alt="image" src="https://github.com/user-attachments/assets/a7a738a2-fa40-4eb5-8528-d168028d96c0" />
+
 ## 安装
 支持 Windows、Linux、macOS的x86和arm架构
 **前往 [最新 Release](https://github.com/DebuNeko233/nyago-music/releases/latest) 按照指引下载。**
