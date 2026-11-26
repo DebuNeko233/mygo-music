@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // Overlay windows can be visible while all ordinary windows are hidden.

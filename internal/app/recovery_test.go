@@ -13,10 +13,10 @@ import (
 
 	"github.com/egoist/mygo"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/netease"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
 )
 
 // Permanent page failures used to keep retrying on focus and network recovery.

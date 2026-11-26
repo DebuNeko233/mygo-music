@@ -7,7 +7,7 @@ package app
 import (
 	"testing"
 
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
 )
 
 // Bound page actions keep ordered playback, artist shuffle and an explicitly

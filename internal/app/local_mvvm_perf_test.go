@@ -14,10 +14,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	localvm "netease-music-mygo/internal/viewmodel/local"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	localvm "netease-music-mygo/internal/ui/viewmodel/local"
 )
 
 func localPerfApp(count int) *app {

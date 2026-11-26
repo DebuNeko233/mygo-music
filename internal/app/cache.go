@@ -10,11 +10,11 @@ import (
 
 	"github.com/egoist/mygo"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	cachemove "netease-music-mygo/internal/cache/move"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	cachemove "netease-music-mygo/internal/features/cache/move"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 // cacheDirectory is the shared root; only the managed subdirectories move.

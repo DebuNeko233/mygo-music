@@ -8,8 +8,8 @@ import (
 	"log"
 	"time"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 // playWorth is how long a song must be heard before NetEase's desktop count.

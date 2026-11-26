@@ -14,11 +14,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/desktop/view/components"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	"netease-music-mygo/internal/ui/view/components"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // When switching rapidly, a delayed cover must not clear the bar or replace

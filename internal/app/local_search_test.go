@@ -13,9 +13,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 func localSearchFixture(t *testing.T) (*app, []localcatalog.Song, *ui.Tester) {
@@ -79,7 +79,7 @@ func TestLocalSearchRevalidatesMissingFiles(t *testing.T) {
 	a, _, _ := localSearchFixture(t)
 	songs := make([]localcatalog.Song, 4)
 	for i := range songs {
-		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), Name: "匹配歌曲"}, Path: "../player/testdata/seek.flac"}
+		songs[i] = localcatalog.Song{Track: netease.Track{LocalID: int64(i + 1), Name: "匹配歌曲"}, Path: "../features/player/testdata/seek.flac"}
 	}
 	a.local.Replace(localcatalog.Catalog{Songs: songs})
 	player.Cue(a.pl, []netease.Track{{ID: 999, Name: "正在播放"}})

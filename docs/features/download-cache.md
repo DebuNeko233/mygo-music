@@ -8,13 +8,13 @@
 
 | 所有者 | 职责 |
 | --- | --- |
-| [download](../../internal/download) | 下载任务、元数据整理、临时产物、最终发布 |
-| [download/tagging](../../internal/download/tagging) | 音频标签和封面读写 |
-| [audioformat](../../internal/audioformat) | 实际格式与导出扩展名 |
-| [player/export.go](../../internal/player/export.go) | 复用完整音频缓存或共享下载能力 |
-| [viewmodel/downloads](../../internal/viewmodel/downloads) | 任务列表、进度、取消和重试的界面状态 |
+| [download](../../internal/features/download) | 下载任务、元数据整理、临时产物、最终发布 |
+| [download/tagging](../../internal/features/download/tagging) | 音频标签和封面读写 |
+| [audioformat](../../internal/util/audioformat) | 实际格式与导出扩展名 |
+| [player/export.go](../../internal/features/player/export.go) | 复用完整音频缓存或共享下载能力 |
+| [viewmodel/downloads](../../internal/ui/viewmodel/downloads) | 任务列表、进度、取消和重试的界面状态 |
 | [App download](../../internal/app/download.go) | 歌曲来源、用户设置与任务协调 |
-| [settings/download](../../internal/desktop/view/settings/download.go) | 下载选项展示和命令入口 |
+| [settings/download](../../internal/ui/view/settings/download.go) | 下载选项展示和命令入口 |
 
 任务入队时捕获目录、音质、命名和歌词选项；用户修改设置影响后续任务，不让正在运行的任务中途换目标。任务列表是当前进程的状态，不承诺重启自动续跑。
 
@@ -44,7 +44,7 @@
 4. 播放器统一路径验证导出文件、冷缓存与热缓存的读取和 Seek。
 5. 受平台运行时约束的签名产物另作原生验证。
 
-主要回归：[download_test.go](../../internal/download/download_test.go)、[metadata_test.go](../../internal/download/metadata_test.go)、[download/tagging](../../internal/download/tagging)、[export_test.go](../../internal/player/export_test.go)、[tagged_formats_test.go](../../internal/player/tagged_formats_test.go)、[App download_test.go](../../internal/app/download_test.go)。
+主要回归：[download_test.go](../../internal/features/download/download_test.go)、[metadata_test.go](../../internal/features/download/metadata_test.go)、[download/tagging](../../internal/features/download/tagging)、[export_test.go](../../internal/features/player/export_test.go)、[tagged_formats_test.go](../../internal/features/player/tagged_formats_test.go)、[App download_test.go](../../internal/app/download_test.go)。
 
 ## macOS 签名运行时
 
@@ -57,23 +57,23 @@ Wasm 引擎运行时涉及匿名内存权限。当前 [macos.entitlements.plist]
 | 类别 | 所有者 | 需要保留的边界 |
 | --- | --- | --- |
 | 音频 | player | 完整性、音质、并发读取、容量与活动文件 |
-| 通用磁盘条目 | [cache/disk](../../internal/cache/disk) | 键、序列化与落盘完整性 |
-| 页面数据 | [cache/page](../../internal/cache/page)及 App | 账号作用域、代次、后台快照 |
+| 通用磁盘条目 | [cache/disk](../../internal/features/cache/disk) | 键、序列化与落盘完整性 |
+| 页面数据 | [cache/page](../../internal/features/cache/page)及 App | 账号作用域、代次、后台快照 |
 | 歌词 | lyrics | 过期刷新、歌曲身份与显式发布 |
 | 图片 | desktop/artwork | 下载/解码预算、嵌入封面、图像释放 |
-| 布局迁移 | [cache/move](../../internal/cache/move) | 目录验证、事务、日志与恢复 |
+| 布局迁移 | [cache/move](../../internal/features/cache/move) | 目录验证、事务、日志与恢复 |
 
 缓存路径不能散落在视图里拼接。当前受管理布局包括 `songs`、`browse-v1`、`artwork-v2`；根目录可能含其他应用或用户文件，不能整根复制、删除或把未知文件视作垃圾。登录态、配置和用户曲库不因清缓存而全部删除。
 
 缓存数据可以先展示并后台更新，但成功的网络新结果不应被迟到磁盘读取覆盖。退出登录与同账号重新登录均切换代次。新账号不能看到旧账号的私有资料库缓存。
 
-歌曲列表的小封面由 [artwork/list.go](../../internal/desktop/artwork/list.go)记录可见区，在原有 64 MiB 位图预算内优先保留最近三个列表页的最后一屏，每页最多 30 张，合计最多 8 MiB。保留条目仍由同一个缓存持有和计费；滚动替换当前页的可见区，重复封面只计算一次保留成本。硬容量压力可先回收最旧页面的保留条目，不能为了返回页面而突破总预算。播放封面、页面大图和模糊背景不占用这项列表保留额度。
+歌曲列表的小封面由 [artwork/list.go](../../internal/ui/view/artwork/list.go)记录可见区，在原有 64 MiB 位图预算内优先保留最近三个列表页的最后一屏，每页最多 30 张，合计最多 8 MiB。保留条目仍由同一个缓存持有和计费；滚动替换当前页的可见区，重复封面只计算一次保留成本。硬容量压力可先回收最旧页面的保留条目，不能为了返回页面而突破总预算。播放封面、页面大图和模糊背景不占用这项列表保留额度。
 
 列表封面位图就绪后直接显示，包括磁盘或本地内嵌封面恢复；其他封面的既有淡入策略保持不变。磁盘读取和解码仍在后台，未保留或首次访问的封面允许短暂占位。
 
 歌单后台刷新可能在 `p1.music.126.net` 与 `p2.music.126.net` 之间切换同一封面的地址。公开 HTTPS 地址的路径一致、查询仅含规范尺寸参数且不携带 Cookie 时，显示层在新地址加载期间复用已有位图，避免已显示的歌曲封面退回占位图。新地址仍独立请求、解码及校验，磁盘缓存键不合并；其他域名、端口、用户信息、版本或签名查询不进入这项镜像复用。明确撤销的新地址仍显示缺失状态。
 
-回归入口：[list_test.go](../../internal/desktop/artwork/list_test.go)、[list_cover_test.go](../../internal/app/list_cover_test.go)、[list_cover_io_test.go](../../internal/app/list_cover_io_test.go)、[image_cache_test.go](../../internal/netease/image_cache_test.go)。测试覆盖多页返回首帧、后台刷新切换 CDN 时的中间构建与解码完成、垃圾回收、容量及可见区边界、撤销失效与断网后的磁盘恢复；`NM_FRAMES` 可输出明暗及常规/最小窗口的软件渲染结果。
+回归入口：[list_test.go](../../internal/ui/view/artwork/list_test.go)、[list_cover_test.go](../../internal/app/list_cover_test.go)、[list_cover_io_test.go](../../internal/app/list_cover_io_test.go)、[image_cache_test.go](../../internal/features/netease/image_cache_test.go)。测试覆盖多页返回首帧、后台刷新切换 CDN 时的中间构建与解码完成、垃圾回收、容量及可见区边界、撤销失效与断网后的磁盘恢复；`NM_FRAMES` 可输出明暗及常规/最小窗口的软件渲染结果。
 
 ## 目录迁移事务
 
@@ -83,4 +83,4 @@ Wasm 引擎运行时涉及匿名内存权限。当前 [macos.entitlements.plist]
 
 正确顺序是冻结受影响写入，准备并验证目标，提交配置并重绑读取者，随后回收旧文件。复制或配置提交失败应保留旧目录的可用数据。旧 reader 不能在提交后继续向待删除目录写入；恢复日志必须与实际提交阶段一致。
 
-测试覆盖 [cache/move](../../internal/cache/move)、[cache_directory_test.go](../../internal/app/cache_directory_test.go)、[cache_layout_test.go](../../internal/app/cache_layout_test.go)、[cache_review_test.go](../../internal/app/cache_review_test.go)。不能以“成功复制几个文件”的测试替代事务失败验证。
+测试覆盖 [cache/move](../../internal/features/cache/move)、[cache_directory_test.go](../../internal/app/cache_directory_test.go)、[cache_layout_test.go](../../internal/app/cache_layout_test.go)、[cache_review_test.go](../../internal/app/cache_review_test.go)。不能以“成功复制几个文件”的测试替代事务失败验证。

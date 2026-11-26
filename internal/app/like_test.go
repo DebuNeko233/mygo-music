@@ -19,13 +19,13 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/library"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/library"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // Clicking the player heart immediately changes the like and sends it to NetEase.

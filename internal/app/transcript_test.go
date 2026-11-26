@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/speech"
+	"netease-music-mygo/internal/features/speech"
 )
 
 // The transcript kept is the one written last: the writes share a temporary

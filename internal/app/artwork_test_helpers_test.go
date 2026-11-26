@@ -10,8 +10,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
 )
 
 func fetchImage(url string) (image.Image, error) {

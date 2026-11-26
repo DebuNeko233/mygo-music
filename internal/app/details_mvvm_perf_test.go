@@ -11,8 +11,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	"netease-music-mygo/internal/features/netease"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
 )
 
 func detailPerfApp(scene string) *app {

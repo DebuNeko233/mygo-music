@@ -10,9 +10,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	radiovm "netease-music-mygo/internal/viewmodel/radio"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	radiovm "netease-music-mygo/internal/ui/viewmodel/radio"
 )
 
 // Heart mode playing, its card and Now Playing offer to leave it, which

@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/desktop/view/components"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	"netease-music-mygo/internal/ui/view/components"
 )
 
 // accentChosen is the accent the listener chose, empty for the one its

@@ -7,14 +7,14 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
-	desktopview "netease-music-mygo/internal/desktop/view"
-	artistview "netease-music-mygo/internal/desktop/view/artist"
-	"netease-music-mygo/internal/desktop/view/components"
-	localview "netease-music-mygo/internal/desktop/view/local"
-	searchview "netease-music-mygo/internal/desktop/view/search"
-	"netease-music-mygo/internal/desktop/view/tracklist"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	desktopview "netease-music-mygo/internal/ui/view"
+	artistview "netease-music-mygo/internal/ui/view/artist"
+	"netease-music-mygo/internal/ui/view/components"
+	localview "netease-music-mygo/internal/ui/view/local"
+	searchview "netease-music-mygo/internal/ui/view/search"
+	"netease-music-mygo/internal/ui/view/tracklist"
 )
 
 func (a *app) bindBrowseViews() {

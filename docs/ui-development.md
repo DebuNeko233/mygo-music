@@ -25,7 +25,7 @@ go list -m -f '{{.Dir}}' github.com/egoist/mygo
 
 ## 身份、列表和焦点
 
-会增删、重排或条件出现的控件必须使用稳定 `c.Key(...)`。键表达逻辑身份，不使用当前可变索引代替歌曲身份；重复歌曲需要 occurrence 等稳定区分，参考 [tracklist/keys.go](../internal/desktop/view/tracklist/keys.go)。
+会增删、重排或条件出现的控件必须使用稳定 `c.Key(...)`。键表达逻辑身份，不使用当前可变索引代替歌曲身份；重复歌曲需要 occurrence 等稳定区分，参考 [tracklist/keys.go](../internal/ui/view/tracklist/keys.go)。
 
 容器 Key 在构建子元素前设置；List 配置在 Rows 前设置。虚拟列表使用已有 ItemKey/行机制，不能为了定位某条记录构建全部前置行。
 
@@ -37,7 +37,7 @@ go list -m -f '{{.Dir}}' github.com/egoist/mygo
 
 绑定值在输入处理阶段变化，Changed/Submitted 通知会在随后构建中观察。持久字段可以直接绑定；每帧重新计算的局部值应在 OnClick/OnChange 等适合该控件的动作中写回，具体时序以固定版本 API 为准。
 
-[侧栏开关](../internal/desktop/view/settings/sidebar.go)保存“隐藏”，界面展示“显示”，因此用局部反值，再在 OnClick 中写回：
+[侧栏开关](../internal/ui/view/settings/sidebar.go)保存“隐藏”，界面展示“显示”，因此用局部反值，再在 OnClick 中写回：
 
 ```go
 visible := !*hidden
@@ -77,7 +77,7 @@ ui.Switch(c.Key(key), &visible).Label(label).OnClick(func() {
 
 ## 视觉与可访问性
 
-复用 [components](../internal/desktop/view/components) 的按钮、图标、主题、封面和格式化。匹配已有尺寸、圆角、间距、悬停与按压反馈，不为局部功能创建另一套设计常量。
+复用 [components](../internal/ui/view/components) 的按钮、图标、主题、封面和格式化。匹配已有尺寸、圆角、间距、悬停与按压反馈，不为局部功能创建另一套设计常量。
 
 图标按钮必须有明确可访问性标签，文本按钮避免只靠颜色表达状态。操作不可用时提供可理解的禁用或错误反馈。长文本、中文/日文/英文混排、未知时长、缺少封面和空列表必须有可读表现。
 

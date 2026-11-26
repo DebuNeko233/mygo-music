@@ -9,13 +9,13 @@ import (
 
 	"github.com/egoist/mygo"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/mixvol"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	playbackvm "netease-music-mygo/internal/viewmodel/playback"
-	settingsvm "netease-music-mygo/internal/viewmodel/settings"
+	"netease-music-mygo/internal/features/mixvol"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	playbackvm "netease-music-mygo/internal/ui/viewmodel/playback"
+	settingsvm "netease-music-mygo/internal/ui/viewmodel/settings"
 )
 
 // Run owns the native application lifetime, including partial initialization.

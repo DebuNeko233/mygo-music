@@ -10,9 +10,9 @@ import (
 
 	"github.com/egoist/mygo"
 
-	cachemove "netease-music-mygo/internal/cache/move"
-	"netease-music-mygo/internal/player"
-	settingsvm "netease-music-mygo/internal/viewmodel/settings"
+	cachemove "netease-music-mygo/internal/features/cache/move"
+	"netease-music-mygo/internal/features/player"
+	settingsvm "netease-music-mygo/internal/ui/viewmodel/settings"
 )
 
 // openCacheDirectory asks for a folder, as the system's own picker does.

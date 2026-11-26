@@ -13,8 +13,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/shortcuts"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	"netease-music-mygo/internal/ui/view/shortcuts"
 )
 
 // stepVolumeBy turns the volume up or down by d, as the shortcut keys do.

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 // Reopening a previously cached playlist must refresh its contents while

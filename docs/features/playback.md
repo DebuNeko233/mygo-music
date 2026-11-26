@@ -6,14 +6,14 @@
 
 | 所有者 | 职责 |
 | --- | --- |
-| [player](../../internal/player) | 队列、模式、播放状态、解码、流式读取、预取、音频缓存和临时播放 |
+| [player](../../internal/features/player) | 队列、模式、播放状态、解码、流式读取、预取、音频缓存和临时播放 |
 | [App 播放命令](../../internal/app/play_commands.go) | 页面播放意图、数据源身份、跨功能协调 |
-| [Playback ViewModel](../../internal/viewmodel/playback) | 播放相关的界面状态与操作语义 |
-| [播放视图](../../internal/desktop/view/playback) | 控件、手势、进度、封面、动画、正在播放及舞台布局 |
-| [tracklist](../../internal/desktop/view/tracklist) | 通用歌曲行、虚拟列表和当前歌曲定位 |
-| [player/session](../../internal/player/session) | 会话与进度快照的存储格式和串行写入 |
+| [Playback ViewModel](../../internal/ui/viewmodel/playback) | 播放相关的界面状态与操作语义 |
+| [播放视图](../../internal/ui/view/playback) | 控件、手势、进度、封面、动画、正在播放及舞台布局 |
+| [tracklist](../../internal/ui/view/tracklist) | 通用歌曲行、虚拟列表和当前歌曲定位 |
+| [player/session](../../internal/features/player/session) | 会话与进度快照的存储格式和串行写入 |
 | [App 上报](../../internal/app/play_report.go) | 捕获实际播放会话、账号隔离、网易云播放记录上报 |
-| [mixvol](../../internal/mixvol) | 平台应用音量能力 |
+| [mixvol](../../internal/features/mixvol) | 平台应用音量能力 |
 
 新增播放入口先复用已有命令。不能在视图复制一套队列、URL 获取或播放器状态机，也不能把 App 页面对象传进 player。
 
@@ -30,7 +30,7 @@
 
 队列身份不能只用歌曲 ID：重复歌曲是多个条目，本地文件可能没有远端 ID。删除、重排、文件重定位后必须保持当前项、历史和随机遍历关系一致。
 
-回归优先看 [play_commands_test.go](../../internal/app/play_commands_test.go)、[shuffle_backport_test.go](../../internal/player/shuffle_backport_test.go)、[queue_completion_test.go](../../internal/player/queue_completion_test.go)、[navigation_direction_test.go](../../internal/player/navigation_direction_test.go)。
+回归优先看 [play_commands_test.go](../../internal/app/play_commands_test.go)、[shuffle_backport_test.go](../../internal/features/player/shuffle_backport_test.go)、[queue_completion_test.go](../../internal/features/player/queue_completion_test.go)、[navigation_direction_test.go](../../internal/features/player/navigation_direction_test.go)。
 
 ## 解码和流式读取
 
@@ -61,13 +61,13 @@
 
 ## 会话恢复和播放记录
 
-[App session](../../internal/app/session.go)组装队列、模式、选中项与位置快照；[player/session](../../internal/player/session/store.go)维护 `session.json` 和轻量 `session-progress.json`。进度带会话身份，只有匹配的快照可合并，避免旧进度套到新队列。后台写入使用独立快照，不能持有仍会被 UI 修改的 slice。
+[App session](../../internal/app/session.go)组装队列、模式、选中项与位置快照；[player/session](../../internal/features/player/session/store.go)维护 `session.json` 和轻量 `session-progress.json`。进度带会话身份，只有匹配的快照可合并，避免旧进度套到新队列。后台写入使用独立快照，不能持有仍会被 UI 修改的 slice。
 
 恢复会话应恢复暂停状态下的可见进度和队列，不应因读取配置自行开始播放。旧格式兼容要用真实旧字段构造夹具，不靠修改默认值掩盖。
 
 播放上报依据音频实际开始、结束的会话。暂停和 Seek 不建立新的播放会话；单曲循环结束后再次开始属于新会话。听歌时长排除暂停和直接跳转的时间，不能用 UI 帧次数或歌曲时长替代。异步上报捕获当时的账号凭据，退出登录后不能拿新账号发送旧记录；串行工作与关闭等待应有边界。
 
-验证 [session_test.go](../../internal/app/session_test.go)、[store_test.go](../../internal/player/session/store_test.go)、[play_report_test.go](../../internal/app/play_report_test.go)。
+验证 [session_test.go](../../internal/app/session_test.go)、[store_test.go](../../internal/features/player/session/store_test.go)、[play_report_test.go](../../internal/app/play_report_test.go)。
 
 ## 当前歌曲定位
 
@@ -75,7 +75,7 @@
 
 显示条件：列表含当前项，且该行在实际列表视口之外。行已部分可见就不显示按钮；被播放栏等遮挡的区域不算可见。加载中、列表不含当前项或没有正在播放项时隐藏。用户切歌不会自动触发定位。
 
-实现入口为 [tracklist/locate.go](../../internal/desktop/view/tracklist/locate.go)和 [keys.go](../../internal/desktop/view/tracklist/keys.go)。稳定行键需要处理重复条目；标题、列表头高度或列表内容变化后应重新计算几何。比较需要保存旧值，不能保留指向已原地修改对象的指针。几何更新可请求必要的后续帧，稳定后不能形成空闲重绘循环。
+实现入口为 [tracklist/locate.go](../../internal/ui/view/tracklist/locate.go)和 [keys.go](../../internal/ui/view/tracklist/keys.go)。稳定行键需要处理重复条目；标题、列表头高度或列表内容变化后应重新计算几何。比较需要保存旧值，不能保留指向已原地修改对象的指针。几何更新可请求必要的后续帧，稳定后不能形成空闲重绘循环。
 
 网盘分页与本地搜索的定位需要 App 协调，但不能让迟到定位请求把用户拉回已离开的页面。鼠标与键盘激活应一致。回归见 [playlist_locate_test.go](../../internal/app/playlist_locate_test.go)、[local_locate_test.go](../../internal/app/local_locate_test.go)、[cloud_test.go](../../internal/app/cloud_test.go)和对应性能测试。
 

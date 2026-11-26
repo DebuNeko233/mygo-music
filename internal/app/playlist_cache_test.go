@@ -10,8 +10,8 @@ import (
 	"testing"
 	"testing/synctest"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	"netease-music-mygo/internal/netease"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
 )
 
 // Reopening an evicted playlist before its accepted write finishes must

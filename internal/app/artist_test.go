@@ -11,9 +11,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
 )
 
 // Each artist's name opens their page: from Now Playing, which closes, and

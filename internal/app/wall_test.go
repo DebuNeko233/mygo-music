@@ -15,11 +15,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/testutil"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	"netease-music-mygo/internal/ui/view/testutil"
 )
 
 // wallApp is an app showing the wall of a queue of n songs, the at-th

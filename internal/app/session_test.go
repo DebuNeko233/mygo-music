@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	sessionstore "netease-music-mygo/internal/player/session"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	sessionstore "netease-music-mygo/internal/features/player/session"
 )
 
 // The session is kept a while after playback changes and every while as

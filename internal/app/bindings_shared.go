@@ -9,11 +9,11 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	desktopview "netease-music-mygo/internal/desktop/view"
-	"netease-music-mygo/internal/desktop/view/components"
-	"netease-music-mygo/internal/desktop/view/page"
-	"netease-music-mygo/internal/desktop/view/tracklist"
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
+	desktopview "netease-music-mygo/internal/ui/view"
+	"netease-music-mygo/internal/ui/view/components"
+	"netease-music-mygo/internal/ui/view/page"
+	"netease-music-mygo/internal/ui/view/tracklist"
 )
 
 func (a *app) bindSharedViews() {

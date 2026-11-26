@@ -15,9 +15,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // With NM_FRAMES set, saves the offline account hint and both cache controls

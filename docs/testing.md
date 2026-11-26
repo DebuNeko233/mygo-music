@@ -20,21 +20,21 @@
 
 | 被验证对象 | 放置位置 | 典型入口 |
 | --- | --- | --- |
-| API 协议、响应与错误 | `internal/netease/*_test.go` | [auth_test.go](../internal/netease/auth_test.go) |
-| 模型命令、分页、代次 | `internal/viewmodel/<feature>/*_test.go` | [cloud/viewmodel_test.go](../internal/viewmodel/cloud/viewmodel_test.go) |
-| 独立控件和交互 | 所属 `desktop/view` 包旁 | [playback/lyric_edges_test.go](../internal/desktop/view/playback/lyric_edges_test.go) |
+| API 协议、响应与错误 | `internal/features/netease/*_test.go` | [auth_test.go](../internal/features/netease/auth_test.go) |
+| 模型命令、分页、代次 | `internal/ui/viewmodel/<feature>/*_test.go` | [cloud/viewmodel_test.go](../internal/ui/viewmodel/cloud/viewmodel_test.go) |
+| 独立控件和交互 | 所属 `ui/view` 包旁 | [playback/lyric_edges_test.go](../internal/ui/view/playback/lyric_edges_test.go) |
 | App 接线、跨窗口和跨功能 | `internal/app/*_test.go` | [sidebar_settings_test.go](../internal/app/sidebar_settings_test.go) |
-| 存储、音频、缓存、解码 | 所属服务包旁 | [player/streaming_boundaries_test.go](../internal/player/streaming_boundaries_test.go) |
+| 存储、音频、缓存、解码 | 所属服务包旁 | [player/streaming_boundaries_test.go](../internal/features/player/streaming_boundaries_test.go) |
 | 构建和打包工具 | 工具目录旁 | [scripts/sherpa/main_test.go](../scripts/sherpa/main_test.go) |
-| 层次依赖 | `internal/architecture` | [boundaries_test.go](../internal/architecture/boundaries_test.go) |
+| 层次依赖 | `internal/app/architecture` | [boundaries_test.go](../internal/app/architecture/boundaries_test.go) |
 
 每个新测试前写一句行为注释。混合文件迁移时逐函数判断，不把集成测试为了目录整齐拆成失去接线验证的单元测试。
 
-包内夹具留在该包 `helpers_test.go` 或有具体名字的测试文件；不要复制整个 App 作为“小夹具”。真正通用的界面操作在 [internal/testutil](../internal/testutil)，ViewModel 等待工具在 [viewmodel/internal/testutil](../internal/viewmodel/internal/testutil)。生产代码不得导入它们。样本放在所有者的 `testdata/`，说明生成方式和许可。
+包内夹具留在该包 `helpers_test.go` 或有具体名字的测试文件；不要复制整个 App 作为“小夹具”。真正通用的界面操作在 [internal/ui/view/testutil](../internal/ui/view/testutil)，ViewModel 等待工具在 [ui/viewmodel/internal/testutil](../internal/ui/viewmodel/internal/testutil)。生产代码不得导入它们。样本放在所有者的 `testdata/`，说明生成方式和许可。
 
 ## 3. UI 测试
 
-使用 `ui.NewTester` 或 `ui.NewTesterWith`。App 集成通过 [newTestApp](../internal/app/helpers_test.go)，独立播放视图通过 [playback helpers](../internal/desktop/view/playback/helpers_test.go)构建。先隔离用户数据，再操作界面。
+使用 `ui.NewTester` 或 `ui.NewTesterWith`。App 集成通过 [newTestApp](../internal/app/helpers_test.go)，独立播放视图通过 [playback helpers](../internal/ui/view/playback/helpers_test.go)构建。先隔离用户数据，再操作界面。
 
 1. 设置最小有效模型和必要回调，不启动真实账号请求。
 2. 按可访问性标签定位，执行 Click、RightClick、Press/Move/Release、Key 或 Scroll。
@@ -86,7 +86,7 @@ python3 -m unittest discover -s .github/scripts -p '*_test.py'
 共享状态、下载、音频、存储、异步结果与关闭流程变化时，执行相关包 race。示例：
 
 ```sh
-CGO_ENABLED=1 go test -race ./internal/player -count=1 -timeout 30m
+CGO_ENABLED=1 go test -race ./internal/features/player -count=1 -timeout 30m
 CGO_ENABLED=1 go test -race ./internal/app -run '^TestSidebarSettings' -count=1 -timeout 30m
 CGO_ENABLED=1 go test -race ./internal/app -timeout 30m
 ```
@@ -147,7 +147,7 @@ Test 与 Build 对所有分支的 push 和 PR 使用路径过滤；Full UI Race 
 | 某个 CI 工作流自身 | 该工作流，便于验证 CI 配置修改 |
 | README、`docs/`、贡献指南、AGENTS、CHANGELOG、代理技能等说明文件 | 不触发上述应用或工具 CI |
 
-`internal/netease/keyring_help.md` 等通过 `go:embed` 打包的文件属于应用资源，不能按 Markdown 扩展名一律排除。新增源码根目录、构建输入或测试工具时，同步对应工作流的 push 和 PR 路径清单。Build、Full UI Race 与 Release Notes 保留手动运行；Release 仍只通过版本标签或显式手动发行触发。
+`internal/features/netease/keyring_help.md` 等通过 `go:embed` 打包的文件属于应用资源，不能按 Markdown 扩展名一律排除。新增源码根目录、构建输入或测试工具时，同步对应工作流的 push 和 PR 路径清单。Build、Full UI Race 与 Release Notes 保留手动运行；Release 仍只通过版本标签或显式手动发行触发。
 
 使用 GitHub 原生路径过滤，规则见[官方工作流语法](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore)。如以后配置 PR 必需检查，应避免把会因路径过滤而整条跳过的工作流设为无条件必需，否则文档 PR 可能一直等待结果。
 

@@ -9,11 +9,11 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	homeview "netease-music-mygo/internal/desktop/view"
-	"netease-music-mygo/internal/desktop/view/components"
-	"netease-music-mygo/internal/desktop/view/shell"
-	"netease-music-mygo/internal/netease"
-	homevm "netease-music-mygo/internal/viewmodel/home"
+	"netease-music-mygo/internal/features/netease"
+	homeview "netease-music-mygo/internal/ui/view"
+	"netease-music-mygo/internal/ui/view/components"
+	"netease-music-mygo/internal/ui/view/shell"
+	homevm "netease-music-mygo/internal/ui/viewmodel/home"
 )
 
 var featuredPlaylists = func() ([]netease.Playlist, error) { return netease.FeaturedPlaylists(30) }

@@ -11,16 +11,16 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
-	albumvm "netease-music-mygo/internal/viewmodel/album"
-	artistvm "netease-music-mygo/internal/viewmodel/artist"
-	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
-	recentvm "netease-music-mygo/internal/viewmodel/recent"
-	searchvm "netease-music-mygo/internal/viewmodel/search"
-	uservm "netease-music-mygo/internal/viewmodel/user"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	"netease-music-mygo/internal/ui/viewmodel"
+	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
+	artistvm "netease-music-mygo/internal/ui/viewmodel/artist"
+	podcastvm "netease-music-mygo/internal/ui/viewmodel/podcast"
+	recentvm "netease-music-mygo/internal/ui/viewmodel/recent"
+	searchvm "netease-music-mygo/internal/ui/viewmodel/search"
+	uservm "netease-music-mygo/internal/ui/viewmodel/user"
 )
 
 // A long introduction on any detail page opens in a dialog that

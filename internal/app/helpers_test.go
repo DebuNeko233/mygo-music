@@ -11,10 +11,10 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	"netease-music-mygo/internal/lyrics"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/lyrics"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
 )
 
 // isolateUserData keeps settings, sessions and transcripts in the test directory.

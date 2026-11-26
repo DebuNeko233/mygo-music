@@ -12,10 +12,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/userdata"
-	albumvm "netease-music-mygo/internal/viewmodel/album"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	albumvm "netease-music-mygo/internal/ui/viewmodel/album"
+	"netease-music-mygo/internal/util/userdata"
 )
 
 func musicLinkApp(t *testing.T) *app {

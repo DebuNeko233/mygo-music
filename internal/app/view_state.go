@@ -5,13 +5,13 @@
 package app
 
 import (
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	desktopview "netease-music-mygo/internal/desktop/view"
-	"netease-music-mygo/internal/desktop/view/components"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	settingsview "netease-music-mygo/internal/desktop/view/settings"
-	"netease-music-mygo/internal/desktop/view/shell"
-	"netease-music-mygo/internal/desktop/view/tracklist"
+	desktopview "netease-music-mygo/internal/ui/view"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	"netease-music-mygo/internal/ui/view/components"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	settingsview "netease-music-mygo/internal/ui/view/settings"
+	"netease-music-mygo/internal/ui/view/shell"
+	"netease-music-mygo/internal/ui/view/tracklist"
 )
 
 // mainViewState belongs to the main window. It never owns playback or page data.

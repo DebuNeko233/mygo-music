@@ -5,8 +5,8 @@
 package app
 
 import (
-	"netease-music-mygo/internal/netease"
-	libraryvm "netease-music-mygo/internal/viewmodel/library"
+	"netease-music-mygo/internal/features/netease"
+	libraryvm "netease-music-mygo/internal/ui/viewmodel/library"
 )
 
 func (a *app) libraryServices() libraryvm.LibraryServices {

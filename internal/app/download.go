@@ -12,10 +12,10 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/download"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
+	"netease-music-mygo/internal/features/download"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	downloadsvm "netease-music-mygo/internal/ui/viewmodel/downloads"
 )
 
 var saveDownload = download.Save

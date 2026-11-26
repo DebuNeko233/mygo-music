@@ -56,7 +56,7 @@ go func() {
 
 取消 context 可以停止 I/O，但无法保证回调尚未入队，因此取消和结果有效性检查通常都需要。过期结果不应清除新请求的 Loading，不应覆盖新的 Error，不应触发播放或持久化。
 
-关键实例：[账号模型](../internal/viewmodel/account/account.go)、[全局快捷键](../internal/app/hotkeys.go)、[App 分发器](../internal/app/dispatch.go)。
+关键实例：[账号模型](../internal/ui/viewmodel/account/account.go)、[全局快捷键](../internal/app/hotkeys.go)、[App 分发器](../internal/app/dispatch.go)。
 
 ## 4. 缓存与网络的竞合
 
@@ -81,12 +81,12 @@ go func() {
 
 | 数据 | 当前入口 | 契约 |
 | --- | --- | --- |
-| 用户设置 `settings.json` | [preferences/settings.go](../internal/preferences/settings.go) | 加载先取默认值；无效 JSON 整体拒绝；Path 不从 JSON 接受 |
-| 播放快照 `session.json` 与进度旁文件 | [player/session/store.go](../internal/player/session/store.go) | token 匹配才用进度覆盖快照；旧格式保持可读 |
-| 本地曲库 `local-music.json` | [localcatalog](../internal/localcatalog) | 稳定本地身份；成功写入后再发布编辑 |
-| 账号凭据 | [netease/auth.go](../internal/netease/auth.go) | 系统凭据存储；错误分类和保存失败可见 |
-| 离线页面与歌词 | [cache/disk](../internal/cache/disk)、[lyrics/cache.go](../internal/lyrics/cache.go) | scope/epoch 隔离，旧写入不能复活已失效条目 |
-| 字幕与覆盖时间段 | [speech/transcript/transcript.go](../internal/speech/transcript/transcript.go) | 读取能看到最新已接受待写入内容；写盘只处理不可变数据 |
+| 用户设置 `settings.json` | [preferences/settings.go](../internal/features/preferences/settings.go) | 加载先取默认值；无效 JSON 整体拒绝；Path 不从 JSON 接受 |
+| 播放快照 `session.json` 与进度旁文件 | [player/session/store.go](../internal/features/player/session/store.go) | token 匹配才用进度覆盖快照；旧格式保持可读 |
+| 本地曲库 `local-music.json` | [localcatalog](../internal/features/localcatalog) | 稳定本地身份；成功写入后再发布编辑 |
+| 账号凭据 | [netease/auth.go](../internal/features/netease/auth.go) | 系统凭据存储；错误分类和保存失败可见 |
+| 离线页面与歌词 | [cache/disk](../internal/features/cache/disk)、[lyrics/cache.go](../internal/features/lyrics/cache.go) | scope/epoch 隔离，旧写入不能复活已失效条目 |
+| 字幕与覆盖时间段 | [speech/transcript/transcript.go](../internal/features/speech/transcript/transcript.go) | 读取能看到最新已接受待写入内容；写盘只处理不可变数据 |
 
 新增字段须说明缺失、未知值、非法值及旧版本文件的处理。未知字段的容忍不能演变为允许配置覆盖内部路径、执行命令或注入任意资源。
 
@@ -112,13 +112,13 @@ Homebrew 普通卸载只移除应用，显式 `--zap` 只清理正式版的三�
 
 喜欢、收藏、歌单编辑可以先反映到界面，再等待网络结果。回滚必须识别自己仍拥有的编辑，不覆盖后续操作。同一集合有重叠编辑时，只在全部相关编辑稳定后构造最终快照。
 
-[Library.TakeSnapshots](../internal/viewmodel/library/snapshots.go)复制待保存数据；[App playlist_cache](../internal/app/playlist_cache.go)负责账号、epoch、写入预约与读取等待。不可把纯快照构造变成访问 App 的异步任务，也不能在工作线程读取仍在编辑的集合。
+[Library.TakeSnapshots](../internal/ui/viewmodel/library/snapshots.go)复制待保存数据；[App playlist_cache](../internal/app/playlist_cache.go)负责账号、epoch、写入预约与读取等待。不可把纯快照构造变成访问 App 的异步任务，也不能在工作线程读取仍在编辑的集合。
 
 ## 8. 迁移与文件发布
 
 缓存迁移步骤由现有服务管理：校验路径 → 冻结相关写入 → 暂存复制 → 记录和校验发布 → 提交设置并重绑读取者 → 清理源。只读快照可以按现有事务约定保持打开。失败或取消走回滚，进程中断走日志恢复。
 
-只处理受管理的 `songs`、`browse-v1` 和 `artwork-v2` 等当前布局成员，不能递归移动或删除用户选择目录中的所有文件。解析符号链接和目录等价，拒绝相同、包含或冲突的路径。目录选择和是否迁移由界面决定，文件事务归 `cache/move`。
+只处理受管理的 `songs`、`browse-v1` 和 `artwork-v2` 等当前布局成员，不能递归移动或删除用户选择目录中的所有文件。解析符号链接和目录等价，拒绝相同、包含或冲突的路径。目录选择和是否迁移由界面决定，文件事务归 `features/cache/move`。
 
 歌曲导出先在独立暂存副本中写标签并验证，再无覆盖地发布。缓存不完整、质量不匹配或缺少有效元数据时不能充当已完成导出源。详见[下载与缓存](features/download-cache.md)。
 

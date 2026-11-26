@@ -14,8 +14,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	"netease-music-mygo/internal/netease"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
 )
 
 // Returning to a previously used default root must adopt its caches, including when selected explicitly.

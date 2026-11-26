@@ -7,11 +7,11 @@ package app
 import (
 	"time"
 
-	"netease-music-mygo/internal/desktop/view/components"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	playbackvm "netease-music-mygo/internal/viewmodel/playback"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	"netease-music-mygo/internal/ui/view/components"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
+	playbackvm "netease-music-mygo/internal/ui/viewmodel/playback"
 )
 
 // Signed in, the listener finds what they played last, on their phone or

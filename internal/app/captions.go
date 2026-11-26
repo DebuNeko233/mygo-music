@@ -11,8 +11,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/speech"
-	captionsvm "netease-music-mygo/internal/viewmodel/captions"
+	"netease-music-mygo/internal/features/speech"
+	captionsvm "netease-music-mygo/internal/ui/viewmodel/captions"
 )
 
 var (

@@ -10,10 +10,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	"netease-music-mygo/internal/viewmodel"
-	podcastvm "netease-music-mygo/internal/viewmodel/podcast"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	"netease-music-mygo/internal/ui/viewmodel"
+	podcastvm "netease-music-mygo/internal/ui/viewmodel/podcast"
 )
 
 // Unsubscribing in the detail immediately updates the already loaded personal page without a second subscription cache.

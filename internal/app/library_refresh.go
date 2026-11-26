@@ -7,10 +7,10 @@ package app
 import (
 	"fmt"
 
-	"netease-music-mygo/internal/desktop/view/tracklist"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	libraryvm "netease-music-mygo/internal/viewmodel/library"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	"netease-music-mygo/internal/ui/view/tracklist"
+	libraryvm "netease-music-mygo/internal/ui/viewmodel/library"
 )
 
 var (

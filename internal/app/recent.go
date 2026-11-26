@@ -5,9 +5,9 @@
 package app
 
 import (
-	diskcache "netease-music-mygo/internal/cache/disk"
-	"netease-music-mygo/internal/netease"
-	recentvm "netease-music-mygo/internal/viewmodel/recent"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
+	recentvm "netease-music-mygo/internal/ui/viewmodel/recent"
 )
 
 var (

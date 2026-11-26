@@ -4,13 +4,13 @@
 
 ## 设置链路
 
-[preferences](../../internal/preferences)定义配置、默认值、输入校正与批量保存；[settings 视图](../../internal/desktop/view/settings)负责控件与分组；[App settings](../../internal/app/settings.go)负责保存调度、平台副作用和窗口刷新。新增选项按[新增功能流程](../adding-features.md)完成整条链路。
+[preferences](../../internal/features/preferences)定义配置、默认值、输入校正与批量保存；[settings 视图](../../internal/ui/view/settings)负责控件与分组；[App settings](../../internal/app/settings.go)负责保存调度、平台副作用和窗口刷新。新增选项按[新增功能流程](../adding-features.md)完成整条链路。
 
 设置加载应容忍旧配置缺字段。新字段的零值、缺失值与用户明确关闭是否相同，必须在设计时说明。需要归一化的范围放配置层；视图不能假定手工编辑的 JSON 一定合法。
 
 调整设置后保存并刷新相关窗口，不能每帧写文件。独立设置窗口与主窗口访问同一配置所有者，但控件状态按窗口管理。搜索设置时，匹配结果必须保留可操作性和清晰分组；不能因过滤隐藏焦点目标后仍吞键盘操作。
 
-回归：[preferences/settings_test.go](../../internal/preferences/settings_test.go)、[settings_test.go](../../internal/app/settings_test.go)、[settings_design_test.go](../../internal/app/settings_design_test.go)、[settings_mvvm_perf_test.go](../../internal/app/settings_mvvm_perf_test.go)。测试真实交互与保存结果，不写重复整张表单文案的测试。
+回归：[preferences/settings_test.go](../../internal/features/preferences/settings_test.go)、[settings_test.go](../../internal/app/settings_test.go)、[settings_design_test.go](../../internal/app/settings_design_test.go)、[settings_mvvm_perf_test.go](../../internal/app/settings_mvvm_perf_test.go)。测试真实交互与保存结果，不写重复整张表单文案的测试。
 
 ## 侧边栏页面显示
 
@@ -22,7 +22,7 @@
 
 隐藏只影响导航入口，不禁用功能、不关闭当前页、不改变历史、队列、播放位置或登录状态。用户仍可恢复入口；当前页入口被隐藏时继续正常工作。恢复和重启后的持久化都要验证。
 
-实现入口：[sidebar.go](../../internal/desktop/view/settings/sidebar.go)、[shell](../../internal/desktop/view/shell)、[bindings_settings.go](../../internal/app/bindings_settings.go)。回归：[sidebar_settings_test.go](../../internal/app/sidebar_settings_test.go)、[sidebar_test.go](../../internal/app/sidebar_test.go)及 preferences 兼容测试。
+实现入口：[sidebar.go](../../internal/ui/view/settings/sidebar.go)、[shell](../../internal/ui/view/shell)、[bindings_settings.go](../../internal/app/bindings_settings.go)。回归：[sidebar_settings_test.go](../../internal/app/sidebar_settings_test.go)、[sidebar_test.go](../../internal/app/sidebar_test.go)及 preferences 兼容测试。
 
 ## 外观、背景和字体
 
@@ -32,11 +32,11 @@
 
 多窗口变化通过统一状态和重绘机制传递。不能在某个窗口临时修改全局主题后忘记其他窗口。动效需要保持减少动态效果和暂停场景的可用性，稳定界面不持续请求无意义帧。
 
-入口：[appearance.go](../../internal/app/appearance.go)、[backdrop.go](../../internal/desktop/view/playback/backdrop.go)。验证 [appearance_test.go](../../internal/app/appearance_test.go)、对应 backdrop/字体/封面测试与实际视觉输出。
+入口：[appearance.go](../../internal/app/appearance.go)、[backdrop.go](../../internal/ui/view/playback/backdrop.go)。验证 [appearance_test.go](../../internal/app/appearance_test.go)、对应 backdrop/字体/封面测试与实际视觉输出。
 
 ## 快捷键、菜单与窗口
 
-[desktop/shortcuts](../../internal/desktop/shortcuts)维护快捷键能力与绑定，[App hotkeys](../../internal/app/hotkeys.go)组装实际动作。新增快捷键先定义作用域：控件、当前页面、窗口还是系统全局。输入框、模态框、隐藏控件和失焦窗口都要避免误触。
+[desktop/shortcuts](../../internal/ui/view/shortcuts)维护快捷键能力与绑定，[App hotkeys](../../internal/app/hotkeys.go)组装实际动作。新增快捷键先定义作用域：控件、当前页面、窗口还是系统全局。输入框、模态框、隐藏控件和失焦窗口都要避免误触。
 
 空格播放、上一首/下一首、搜索焦点、后退/前进和系统媒体按钮应汇入同一命令。不要由菜单直接修改播放器内部字段。控件禁用状态与命令可执行性需一致。
 
@@ -50,7 +50,7 @@
 
 鼠标进入、离开、首次播放提示、菜单栏隐藏与恢复必须成对处理；多屏或无刘海设备不能出现无法关闭的覆盖层。播放视图状态与原生窗口状态分别由其所有者管理。
 
-入口：[notch.go](../../internal/desktop/view/playback/notch.go)、[notch_darwin.go](../../internal/desktop/view/playback/notch_darwin.go)，回归 [notch_test.go](../../internal/app/notch_test.go)。原生屏幕几何和系统菜单栏行为不能仅凭软件渲染测试宣称已验证。
+入口：[notch.go](../../internal/ui/view/playback/notch.go)、[notch_darwin.go](../../internal/ui/view/playback/notch_darwin.go)，回归 [notch_test.go](../../internal/app/notch_test.go)。原生屏幕几何和系统菜单栏行为不能仅凭软件渲染测试宣称已验证。
 
 ## 更新与发行边界
 

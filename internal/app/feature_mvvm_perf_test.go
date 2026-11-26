@@ -12,9 +12,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/download"
-	"netease-music-mygo/internal/netease"
-	downloadsvm "netease-music-mygo/internal/viewmodel/downloads"
+	"netease-music-mygo/internal/features/download"
+	"netease-music-mygo/internal/features/netease"
+	downloadsvm "netease-music-mygo/internal/ui/viewmodel/downloads"
 )
 
 // Both sides of the MVVM comparison use these same data and view entry points.

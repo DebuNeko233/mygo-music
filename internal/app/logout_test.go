@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"netease-music-mygo/internal/netease"
+	"netease-music-mygo/internal/features/netease"
 )
 
 // Failed credential deletion is reported immediately and survives a failed remote logout.

@@ -14,9 +14,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
-	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	cloudvm "netease-music-mygo/internal/ui/viewmodel/cloud"
 )
 
 // A row or sidebar match chosen during loading gets the remaining cloud songs without restarting playback.

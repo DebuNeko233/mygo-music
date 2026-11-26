@@ -16,10 +16,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	artcache "netease-music-mygo/internal/desktop/artwork"
-	playbackview "netease-music-mygo/internal/desktop/view/playback"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	playbackview "netease-music-mygo/internal/ui/view/playback"
 )
 
 // Prefetch warms the same 600px backdrop entry the next song uses, even

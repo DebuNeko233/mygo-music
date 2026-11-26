@@ -5,8 +5,8 @@
 package app
 
 import (
-	"netease-music-mygo/internal/netease"
-	radiovm "netease-music-mygo/internal/viewmodel/radio"
+	"netease-music-mygo/internal/features/netease"
+	radiovm "netease-music-mygo/internal/ui/viewmodel/radio"
 )
 
 var personalFM = netease.PersonalFM

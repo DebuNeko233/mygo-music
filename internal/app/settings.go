@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/desktop/shortcuts"
-	"netease-music-mygo/internal/preferences"
+	"netease-music-mygo/internal/features/preferences"
+	"netease-music-mygo/internal/ui/view/shortcuts"
 )
 
 // Settings retain UI-specific theme and key handling here; their schema and persistence live in preferences.

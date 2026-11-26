@@ -92,7 +92,7 @@ curl -fsSL https://github.com/DebuNeko233/nyago-music/releases/latest/download/S
 
 ## 5. 字幕原生库资源
 
-[生成器](scripts/sherpa/main.go)从 sherpa-onnx 的固定版本获取并校验依赖，打包六个平台库及 Silero VAD，生成 [natives.go](internal/speech/natives.go)。macOS 签名需要在 Mac 上完成；当前 ad-hoc 应用使用 `-sign -`。
+[生成器](scripts/sherpa/main.go)从 sherpa-onnx 的固定版本获取并校验依赖，打包六个平台库及 Silero VAD，生成 [natives.go](internal/features/speech/natives.go)。macOS 签名需要在 Mac 上完成；当前 ad-hoc 应用使用 `-sign -`。
 
 ```sh
 go run ./scripts/sherpa -sign - -out build/sherpa

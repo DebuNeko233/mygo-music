@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	"netease-music-mygo/internal/netease"
-	accountvm "netease-music-mygo/internal/viewmodel/account"
-	cloudvm "netease-music-mygo/internal/viewmodel/cloud"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
+	accountvm "netease-music-mygo/internal/ui/viewmodel/account"
+	cloudvm "netease-music-mygo/internal/ui/viewmodel/cloud"
 )
 
 func (a *app) accountServices() accountvm.AccountServices {

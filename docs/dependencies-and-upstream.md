@@ -10,7 +10,7 @@
 | 原项目 | `zhangnjsd/mygo-music`，保留来源致谢与历史 | README、Git 历史、许可证 |
 | 应用更新源 | `DebuNeko233/nyago-music` | [mygo.json](../mygo.json) |
 | 更新签名 | 本项目独立 Ed25519 公钥与对应 Actions Secret | mygo.json / `MYGO_UPDATER_PRIVATE_KEY` |
-| 字幕原生库资源 | 本仓库 `sherpa-onnx-2.0.1` 资源发行 | [生成器](../scripts/sherpa/main.go)、[生成清单](../internal/speech/natives.go) |
+| 字幕原生库资源 | 本仓库 `sherpa-onnx-2.0.1` 资源发行 | [生成器](../scripts/sherpa/main.go)、[生成清单](../internal/features/speech/natives.go) |
 | MyGo require | `github.com/egoist/mygo v0.10.0` | [go.mod](../go.mod) |
 | 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261126070733-ebc72eccad3b` | go.mod 的 replace |
 | Go 工具链 | `go 1.27.4` | go.mod |

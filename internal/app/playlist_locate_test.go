@@ -17,8 +17,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 func locateFixture(t *testing.T, current int, playing bool) (*app, *netease.Playlist, *ui.Tester) {

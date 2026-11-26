@@ -27,7 +27,7 @@ package library
 
 - 构建标签保留在最前面，标签组后空行，再写简介；不能吞进块注释。
 - 保留版权、许可证和 `Code generated ... DO NOT EDIT.` 标记。
-- 生成文件的简介同步到生成器，不只改生成结果。例如 [scripts/sherpa/main.go](../scripts/sherpa/main.go)与 [natives.go](../internal/speech/natives.go)。
+- 生成文件的简介同步到生成器，不只改生成结果。例如 [scripts/sherpa/main.go](../scripts/sherpa/main.go)与 [natives.go](../internal/features/speech/natives.go)。
 - Python/Shell 保留 shebang 和编码声明位置。若帮助脚本按行提取注释，修改文件头时必须检查帮助输出。
 - 原有包说明、导出 API 注释和必要的内存布局解释继续保留。文件简介不替代函数契约。
 - 新测试前用一句注释写可观察行为；回归测试说明原先错误发生的条件。

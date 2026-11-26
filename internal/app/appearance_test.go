@@ -16,8 +16,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/view/components"
-	"netease-music-mygo/internal/preferences"
+	"netease-music-mygo/internal/features/preferences"
+	"netease-music-mygo/internal/ui/view/components"
 )
 
 // Choosing an accent in the settings colours the app with it, in the

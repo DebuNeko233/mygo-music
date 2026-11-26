@@ -14,14 +14,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/player"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/features/player"
 )
 
 // Switching to cached audio must keep the remaining time visible through its short asynchronous open.
 func TestCachedTrackTimeDoesNotFlashBuffering(t *testing.T) {
 	a := newTestApp()
-	data, err := os.ReadFile("../player/testdata/seek.mp3")
+	data, err := os.ReadFile("../features/player/testdata/seek.mp3")
 	if err != nil {
 		t.Fatal(err)
 	}

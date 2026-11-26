@@ -7,9 +7,9 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
-	"netease-music-mygo/internal/desktop/view/shell"
-	"netease-music-mygo/internal/netease"
-	"netease-music-mygo/internal/viewmodel"
+	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/ui/view/shell"
+	"netease-music-mygo/internal/ui/viewmodel"
 )
 
 // Shared geometry remains available to feature views during their gradual migration.

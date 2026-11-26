@@ -4,14 +4,14 @@
 
 | 功能 | 手册 | 主要代码 |
 | --- | --- | --- |
-| 扫码登录、凭据、离线身份、退出 | [浏览与资料库](browsing-library.md) | `netease/auth`、`viewmodel/account`、App account |
-| 首页、每日推荐、排行榜 | [浏览与资料库](browsing-library.md) | `viewmodel/home`、view home/daily/cards |
-| 搜索、联想、历史、分享链接 | [浏览与资料库](browsing-library.md) | `viewmodel/search`、`viewmodel/links`、App search/music_links |
-| 歌单、喜欢、专辑收藏、侧栏集合 | [浏览与资料库](browsing-library.md) | `library`、`viewmodel/library`、view library |
+| 扫码登录、凭据、离线身份、退出 | [浏览与资料库](browsing-library.md) | `features/netease/auth`、`ui/viewmodel/account`、App account |
+| 首页、每日推荐、排行榜 | [浏览与资料库](browsing-library.md) | `ui/viewmodel/home`、view home/daily/cards |
+| 搜索、联想、历史、分享链接 | [浏览与资料库](browsing-library.md) | `ui/viewmodel/search`、`ui/viewmodel/links`、App search/music_links |
+| 歌单、喜欢、专辑收藏、侧栏集合 | [浏览与资料库](browsing-library.md) | `features/library`、`ui/viewmodel/library`、view library |
 | 歌手、专辑、用户详情 | [浏览与资料库](browsing-library.md) | 对应 ViewModel、App details、功能视图 |
 | 音乐网盘、最近播放、续播 | [浏览与资料库](browsing-library.md) | cloud/recent/playback 模型与 App 适配 |
 | 播客、节目、私人 FM、心动、评论 | [浏览与资料库](browsing-library.md) | podcast/radio/comments 模型与 netease |
-| 队列、模式、音质、预取、跳转 | [播放与音频](playback.md) | `player`、App play_commands |
+| 队列、模式、音质、预取、跳转 | [播放与音频](playback.md) | `features/player`、App play_commands |
 | 响度均衡、音量、频谱、播放记录、恢复 | [播放与音频](playback.md) | player、mixvol、player/session、App play_report/session |
 | 当前歌曲定位、虚拟列表 | [播放与音频](playback.md) | view tracklist、App cloud/local 协调 |
 | 歌词来源、翻译、署名、逐字与舞台 | [歌词与字幕](lyrics-captions.md) | lyrics、view playback |

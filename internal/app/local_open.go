@@ -7,9 +7,9 @@ package app
 import (
 	"github.com/egoist/mygo"
 
-	"netease-music-mygo/internal/localcatalog"
-	"netease-music-mygo/internal/player"
-	localvm "netease-music-mygo/internal/viewmodel/local"
+	"netease-music-mygo/internal/features/localcatalog"
+	"netease-music-mygo/internal/features/player"
+	localvm "netease-music-mygo/internal/ui/viewmodel/local"
 )
 
 func (a *app) chooseTemporaryAudio() {

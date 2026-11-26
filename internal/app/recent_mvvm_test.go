@@ -12,9 +12,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	diskcache "netease-music-mygo/internal/cache/disk"
-	"netease-music-mygo/internal/netease"
-	recentvm "netease-music-mygo/internal/viewmodel/recent"
+	diskcache "netease-music-mygo/internal/features/cache/disk"
+	"netease-music-mygo/internal/features/netease"
+	recentvm "netease-music-mygo/internal/ui/viewmodel/recent"
 )
 
 // Switching away from a stalled tab keeps ready songs usable, and its retry action refreshes only the failed record.

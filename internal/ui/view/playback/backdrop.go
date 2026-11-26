@@ -1,0 +1,423 @@
+/*
+根据封面颜色绘制正在播放背景，管理渐变、雾效及随音乐变化的动画。
+*/
+
+package playback
+
+import (
+	"math"
+	"sync"
+	"time"
+
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/shader"
+
+	"netease-music-mygo/internal/features/player"
+	artcache "netease-music-mygo/internal/ui/view/artwork"
+	"netease-music-mygo/internal/ui/view/components"
+)
+
+// The backdrop of Now Playing paints the cover's colors behind it, as
+// NetEase's own player does: a deep gradient of its main color, lighter at
+// the top, with the cover itself, blurred, faintly through it. It stays
+// still. On the GPU a small 16-bit palette is sampled and dithered at each
+// screen pixel, without a window-sized background texture. Software
+// rendering keeps a canvas, to avoid interpreting the shader every frame.
+//
+// The experimental fog (settings.Fog) makes it alive, as NetEase's mobile
+// player's is: fog of the cover's color, billowing as it rises slowly
+// through a deep shade of it, with specks of dust glinting in it, brighter
+// and thicker with the bass. A shader paints it into a canvas, half the
+// window across on the GPU, thirty times a second while the music plays;
+// the CPU paints it still. Paused, the fog glides to a stop, and the
+// canvas stays as it is.
+//
+// Another song's backdrop fades in over the last one's. The static GPU
+// path keeps only the two small palette states during that transition;
+// fog and software rendering use the previous canvas until it is gone.
+
+// fogSource paints the fog: noise of five octaves, warped by noise of
+// its own so that it billows rather than slides, rising with Time, Fog
+// over Deep where it is thick; thickest a little above the middle, and
+// thinning toward the top and the controls at the foot.
+const fogSource = `package main
+
+var Time float
+var Bass float
+var Deep vec4
+var Fog vec4
+
+func hash(p vec2) float {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453)
+}
+
+func noise(p vec2) float {
+	i := floor(p)
+	f := fract(p)
+	u := f * f * (3.0 - 2.0*f)
+	a := hash(i)
+	b := hash(i + vec2(1, 0))
+	c := hash(i + vec2(0, 1))
+	d := hash(i + vec2(1, 1))
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y)
+}
+
+func fbm(p vec2) float {
+	v := 0.0
+	amp := 0.5
+	for i := 0; i < 5; i++ {
+		v += amp * noise(p)
+		p = p*2.03 + vec2(1.7, 9.2)
+		amp *= 0.5
+	}
+	return v
+}
+
+func Fragment(dst vec4, pos vec2) vec4 {
+	size := rectSize()
+	uv := pos / size
+	p := pos / size.y * 2.4
+	t := Time
+	rise := vec2(0, t*0.1)
+	q := vec2(fbm(p+rise+vec2(0, t*0.04)), fbm(p+rise+vec2(5.2, 1.3)-vec2(t*0.05, 0)))
+	f := fbm(p + rise + 0.9*q)
+	// Broad banks of it, and the puffs within them.
+	bank := fbm(p*0.45 + rise*0.6 + vec2(3.7, 0))
+	cloud := smoothstep(0.3-0.06*Bass, 0.78, f) * (0.45 + 0.75*smoothstep(0.3, 0.65, bank))
+	// Thickest a little above the middle.
+	m := smoothstep(-0.1, 0.4, uv.y) * (1.0 - 0.5*smoothstep(0.65, 1.0, uv.y))
+	c := mix(Deep.rgb, Fog.rgb, min(cloud*m*(0.85+0.35*Bass), 1.0))
+	// A broad glow behind it all, darker at the corners.
+	g := length((uv - vec2(0.5, 0.42)) * vec2(1.0, 1.25))
+	c *= 1.08 - 0.45*smoothstep(0.2, 0.85, g)
+	// Specks of dust, rising with the fog, each glinting in its own time.
+	cell := size.y / 22
+	sp := (pos + vec2(0, t*cell*0.9)) / cell
+	id := floor(sp)
+	h := hash(id + vec2(3.1, 7.7))
+	if h > 0.93 {
+		at := vec2(hash(id+vec2(1.3, 2.9)), hash(id+vec2(8.1, 4.3)))*0.8 + 0.1
+		d := length((fract(sp)-at)*cell) / max(cell*0.05, 0.7)
+		glint := 0.5 + 0.5*sin(t*(1.5+2.0*h)+h*40.0)
+		c += vec3(0.75, 0.82, 1.0) * exp(-d*d) * glint * (0.25 + 0.3*m)
+	}
+	return vec4(c, 1)
+}
+`
+
+var fogShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(fogSource) })
+
+// backdropSource keeps the gradient, cover wash and shading in floating
+// point until their final color is dithered into the canvas. The noise is
+// fixed to physical pixels, so it neither grows on Retina displays nor
+// shimmers while the song is paused.
+const backdropSource = `package main
+
+var Top vec3
+var Foot vec3
+var Cover vec4
+var HasCover float
+
+func srgb(v float) float {
+	if v <= 0.0031308 {
+		return 12.92 * v
+	}
+	return 1.055 * pow(max(v, 0), 1.0/2.4) - 0.055
+}
+
+func Fragment(dst vec4, pos vec2) vec4 {
+	uv := pos / rectSize()
+	lab := mix(Top, Foot, clamp(uv.y, 0, 1))
+	l := lab.x + 0.3963377774*lab.y + 0.2158037573*lab.z
+	m := lab.x - 0.1055613458*lab.y - 0.0638541728*lab.z
+	s := lab.x - 0.0894841775*lab.y - 1.2914855480*lab.z
+	l, m, s = l*l*l, m*m*m, s*s*s
+	c := vec3(
+		srgb(4.0767416621*l - 3.3077115913*m + 0.2309699292*s),
+		srgb(-1.2684380046*l + 2.6097574011*m - 0.3413193965*s),
+		srgb(-0.0041960863*l - 0.7034186147*m + 1.7076147010*s),
+	)
+	if HasCover > 0 {
+		wash := image0Sample((pos - Cover.xy) / Cover.zw * image0Size())
+		c = wash.rgb*0.1 + c*(1.0-wash.a*0.1)
+	}
+	c *= 1.0 - 0.18*clamp((uv.y-0.55)/0.45, 0, 1)
+	noise := fract(52.9829189 * fract(dot(floor(dst.xy), vec2(0.06711056, 0.00583715)))) - 0.5
+	return vec4(clamp(c + vec3(noise/255.0), vec3(0), vec3(1)), 1)
+}
+`
+
+var backdropShader = sync.OnceValue(func() *shader.Shader { return shader.MustCompile(backdropSource) })
+
+// BackdropFrame is how often the fog is painted while it moves.
+const BackdropFrame = time.Second / 30
+
+// BackdropFade is how long another song's backdrop takes to fade in.
+const BackdropFade = 700 * time.Millisecond
+
+// BackdropCache is the backdrop as last painted, and where the fog's
+// drift and its pulse are.
+type BackdropCache struct {
+	Still         *stillBackdrop
+	PreviousStill *stillBackdrop
+	StillAt       time.Time
+	stillValues   *shader.Values
+	Canvas        *ui.Canvas
+	Before        *ui.Canvas // the song before's, fading out over it
+	fadeAt        time.Time  // when it began to
+	art           components.Image
+	tint          ui.Color
+	fog           bool
+	At            time.Time // when it was painted
+	Drift         float64   // the clouds' time, in seconds, which stops on pause
+	Speed         float64   // how fast drift goes: 1 playing, 0 paused
+	Level         components.BarState
+	Last          time.Time
+}
+
+// Backdrop paints the backdrop behind Now Playing, still or fog: the
+// picture the listener chose for it, if they chose one.
+func (a *View) Backdrop(c *ui.Context, art components.Image, tint ui.Color) {
+	pl := a.Player()
+	fog, still := a.Config.Fog, c.Preferences().ReduceMotion
+	// In place of the cover's own colors, the listener's picture, as deep
+	// as they asked: the page's colour shows through it.
+	if pic := a.Picture(); pic != nil {
+		// Nothing of the cover's backdrop paints behind it, for the wall's
+		// edges to fade into.
+		a.BackdropCache.Canvas, a.BackdropCache.Before = nil, nil
+		a.BackdropCache.Still, a.BackdropCache.PreviousStill = nil, nil
+		a.BackdropCache.Speed, a.BackdropCache.Level, a.BackdropCache.Last = 0, components.BarState{}, time.Time{}
+		ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
+			DrawPicture(p, r, pic, float32(a.Config.BackdropPlayingOpacity))
+			// Darker toward the foot, under the controls.
+			p.FillGradient(r, ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
+				{Color: ui.RGBA(0, 0, 0, 0), At: 0.55}, {Color: ui.RGBA(0, 0, 0, 0.18), At: 1},
+			}}, 0)
+		})
+		return
+	}
+	bd := &a.BackdropCache
+	if !fog {
+		bd.PrepareStill(art, tint, c.Now())
+		// Static mode must not ease the old fog's speed or spectrum down:
+		// that scheduled about two seconds of full-size static repaints.
+		bd.Speed, bd.Level, bd.Last = 0, components.BarState{}, time.Time{}
+	} else {
+		bd.Still, bd.PreviousStill = nil, nil
+	}
+	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
+		previous := bd.StillWeight(p.Now())
+		if !fog && p.Accelerated() {
+			// Render at the destination's physical pixels. Keeping a tiny
+			// dithered canvas and stretching it would enlarge its grain and
+			// recreate bands; caching a full-size one costs a resize allocation.
+			bd.Canvas, bd.Before = nil, nil
+			bd.DrawStill(p, r, r, previous, 1)
+			if previous > 0 {
+				p.AnimationFrame()
+			}
+			return
+		}
+		// The CPU, drawing the fog for want of a GPU, paints far fewer
+		// pixels, and those once a song: the fog stays still.
+		gpu := p.Accelerated()
+		div := float32(8)
+		if fog && gpu {
+			div = 2
+		}
+		cw, ch := int(r.W/div)+1, int(r.H/div)+1
+		if !fog {
+			// Dither at the final pixel size: scaling a noisy thumbnail
+			// would turn its grains and rounded colors into visible blocks.
+			cw = max(1, int(math.Ceil(float64(r.W*p.Scale()))))
+			ch = max(1, int(math.Ceil(float64(r.H*p.Scale()))))
+		}
+		if bd.Canvas != nil {
+			if w, h := bd.Canvas.Size(); w != cw || h != ch {
+				bd.Canvas, bd.Before = nil, nil
+			}
+		}
+		now := p.Now()
+		if bd.Canvas != nil && (bd.art != art || bd.tint != tint) {
+			// Another song: the last one's stays as it was, fading out.
+			bd.Canvas, bd.Before, bd.fadeAt = bd.Before, bd.Canvas, now
+		}
+		moving := fog && gpu && !still
+		var moved bool
+		if fog {
+			var lv [player.Bands]float32
+			var live bool
+			if moving {
+				lv, live = pl.Levels()
+			}
+			moved = bd.Step(now, pl.Playing() && moving, lv, live && moving)
+		}
+		due := now.Sub(bd.At) >= BackdropFrame-2*time.Millisecond
+		if bd.Canvas == nil || bd.art != art || bd.tint != tint || bd.fog != fog || moved && due {
+			if bd.Canvas == nil {
+				bd.Canvas = ui.NewCanvas(cw, ch)
+			}
+			bd.art, bd.tint, bd.fog, bd.At = art, tint, fog, now
+			bass := bd.Level.Group(0, 6)
+			bd.Canvas.Draw(p, func(cp *ui.Painter) {
+				box := ui.Rect{W: float32(cw), H: float32(ch)}
+				if fog {
+					DrawFog(cp, box, tint, float32(bd.Drift), bass)
+				} else {
+					drawBackdrop(cp, box, art, tint)
+				}
+			})
+		}
+		p.Image(bd.Canvas.Bitmap(), r, ui.FillBox)
+		if bd.Before != nil {
+			if k := float32(now.Sub(bd.fadeAt)) / float32(BackdropFade); k < 1 {
+				// Eased out, as it fades.
+				k = 1 - (1-k)*(1-k)*(1-k)
+				p.ImageRegion(bd.Before.Bitmap(), ui.Rect{}, r, ui.ImageOptions{Tint: White.Alpha(1 - k)})
+				p.AnimationFrame()
+			} else {
+				bd.Before = nil
+			}
+		}
+		if moved {
+			p.After(BackdropFrame)
+		}
+	})
+}
+
+// Step moves the drift and the pulse on to now, and reports whether
+// either still moves.
+func (bd *BackdropCache) Step(now time.Time, playing bool, lv [player.Bands]float32, live bool) bool {
+	dt := now.Sub(bd.Last).Seconds()
+	if bd.Last.IsZero() || dt > 0.2 {
+		dt = 1.0 / 30
+	}
+	bd.Last = now
+	to := 0.0
+	if playing {
+		to = 1
+	}
+	// The drift eases in as the music plays, and glides to a stop.
+	bd.Speed += (to - bd.Speed) * min(1, 2.5*dt)
+	if math.Abs(to-bd.Speed) < 0.005 {
+		bd.Speed = to
+	}
+	bd.Drift += bd.Speed * dt
+	bd.Level.Step(now, lv, live)
+	return bd.Speed > 0 || bd.Level.Group(0, 6) > 0.004
+}
+
+// drawBackdrop paints the still backdrop in r.
+func drawBackdrop(p *ui.Painter, r ui.Rect, art components.Image, tint ui.Color) {
+	top, foot := BackdropColors(tint)
+	cover := components.CoverRect(ui.Rect{W: r.W, H: r.H}, 48, 48)
+	var image *ui.Bitmap
+	var hasCover float32
+	if art != nil && art.ImageBackdrop() != nil {
+		image, hasCover = art.ImageBackdrop(), 1
+	}
+	backdropShader().Draw(p, r, shader.Options{
+		Uniforms: map[string]any{
+			"Top": backdropLab(top), "Foot": backdropLab(foot),
+			"Cover": [4]float32{cover.X, cover.Y, cover.W, cover.H}, "HasCover": hasCover,
+		},
+		Images: [4]*ui.Bitmap{image},
+	})
+}
+
+// backdropLab converts the two endpoints once, rather than per pixel.
+func backdropLab(c ui.Color) [3]float32 {
+	linear := func(v uint8) float64 {
+		x := float64(v) / 255
+		if x <= 0.04045 {
+			return x / 12.92
+		}
+		return math.Pow((x+0.055)/1.055, 2.4)
+	}
+	r, g, b := linear(c.R), linear(c.G), linear(c.B)
+	l := math.Cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b)
+	m := math.Cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b)
+	s := math.Cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b)
+	return [3]float32{
+		float32(0.2104542553*l + 0.7936177850*m - 0.0040720468*s),
+		float32(1.9779984951*l - 2.4285922050*m + 0.4505937099*s),
+		float32(0.0259040371*l + 0.7827717662*m - 0.8086757660*s),
+	}
+}
+
+// BackdropColors returns the top and the foot of the backdrop's gradient
+// for a cover of tint: its hue, deep and rich, at the same depth whatever
+// the cover, so that white reads over it, as NetEase's player paints it.
+// A gray cover stays gray.
+func BackdropColors(tint ui.Color) (top, foot ui.Color) {
+	h, s, _ := artcache.HSV(float64(tint.R)/255, float64(tint.G)/255, float64(tint.B)/255)
+	if s > 0.12 {
+		s = min(max(s*1.3, 0.45), 0.66)
+	}
+	return artcache.HSVColor(h, s, 0.35), artcache.HSVColor(h, min(s*1.05, 0.7), 0.24)
+}
+
+// DrawFog paints the fog of tint in r at drift seconds, lit by bass.
+func DrawFog(p *ui.Painter, r ui.Rect, tint ui.Color, drift, bass float32) {
+	deep, fog := fogColors(tint)
+	fogShader().Draw(p, r, shader.Options{Uniforms: map[string]any{
+		"Time": drift, "Bass": min(bass, 1), "Deep": deep, "Fog": fog,
+	}})
+}
+
+// fogColors returns the deep shade behind the fog and the fog's own for a
+// cover of tint: its hue, rich, at the same depths whatever the cover, so
+// that white reads over them. A gray cover stays gray.
+func fogColors(tint ui.Color) (deep, fog ui.Color) {
+	h, s, _ := artcache.HSV(float64(tint.R)/255, float64(tint.G)/255, float64(tint.B)/255)
+	if s > 0.12 {
+		s = min(max(s*1.3, 0.6), 0.85)
+	}
+	return artcache.HSVColor(h, s, 0.3), artcache.HSVColor(h, s*0.6, 0.72)
+}
+
+// backdropOver paints the backdrop again over band, a strip of win, the
+// box the backdrop fills, as opaque at each height in band as alpha says
+// for it, from 0 at its top to 1 at its foot: what moves under the strip
+// fades into the backdrop with no edge, the very pixels around it where
+// it is opaque.
+func (a *View) backdropOver(p *ui.Painter, win, band ui.Rect, alpha func(t float32) float32) {
+	bd := &a.BackdropCache
+	if !a.Config.Fog && p.Accelerated() && bd.Still != nil && band.H > 0 {
+		previous := bd.StillWeight(p.Now())
+		for y := float32(0); y < band.H; y += 2 {
+			o := alpha((y + 1) / band.H)
+			if o > 0.004 {
+				dst := ui.Rect{X: band.X, Y: band.Y + y, W: band.W, H: min(float32(2), band.H-y)}
+				bd.DrawStill(p, win, dst, previous, o)
+			}
+		}
+		return
+	}
+	if bd.Canvas == nil || win.W <= 0 || win.H <= 0 || band.H <= 0 {
+		return
+	}
+	cw, ch := bd.Canvas.Size()
+	sx, sy := float32(cw)/win.W, float32(ch)/win.H
+	// Its song's fading in over the song before's, as the backdrop.
+	before := float32(0)
+	if bd.Before != nil {
+		if k := float32(p.Now().Sub(bd.fadeAt)) / float32(BackdropFade); k < 1 {
+			before = (1 - k) * (1 - k) * (1 - k)
+		}
+	}
+	const strip = 2
+	for y := float32(0); y < band.H; y += strip {
+		o := alpha((y + strip/2) / band.H)
+		if o <= 0.004 {
+			continue
+		}
+		dst := ui.Rect{X: band.X, Y: band.Y + y, W: band.W, H: min(strip, band.H-y)}
+		src := ui.Rect{X: (dst.X - win.X) * sx, Y: (dst.Y - win.Y) * sy, W: dst.W * sx, H: dst.H * sy}
+		p.ImageRegion(bd.Canvas.Bitmap(), src, dst, ui.ImageOptions{Tint: White.Alpha(o)})
+		if before > 0 {
+			p.ImageRegion(bd.Before.Bitmap(), src, dst, ui.ImageOptions{Tint: White.Alpha(o * before)})
+		}
+	}
+}
