@@ -44,7 +44,7 @@ const pactlListed = `[
     },
     "properties": {
       "application.name": "netease-music-mygo",
-      "application.process.binary": "mygo-cloudmusic",
+      "application.process.binary": "nyago-music",
       "application.process.id": "4242",
       "media.name": "Some Track"
     },

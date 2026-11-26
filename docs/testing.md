@@ -129,7 +129,7 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 | --- | --- | --- |
 | [test.yml](../.github/workflows/test.yml) / Test | Linux 构建、Go/MyGo vet、非 App internal 测试、两片 App 测试、非 App race 与选定 App 并发测试 | 已完整运行所有 App race 或所有平台原生界面 |
 | [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main 的相关文件变更或手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
-| [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物 | 全部软件行为和签名运行已实测 |
+| [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物；Linux 额外执行 `scripts/check_linux_packages.sh` 核对真实 DEB 与 Arch 安装目录和桌面命令 | 全部软件行为和签名运行已实测 |
 | [release-notes.yml](../.github/workflows/release-notes.yml) / Release Notes | 发行说明生成器测试与当前版本说明校验 | 已运行应用构建或竞态检查 |
 | [release.yml](../.github/workflows/release.yml) / Release | 版本检查、更新签名、草稿发行和上传 | 普通开发可以直接触发发行 |
 
@@ -140,7 +140,7 @@ Test 与 Build 对所有分支的 push 和 PR 使用路径过滤；Full UI Race 
 | 根目录 Go 文件、`internal/` 生产代码与内嵌资源、`icon/`、`go.mod` / `go.sum` | Build、Test、main 上的 Full UI Race |
 | `*_test.go`、`testdata/`、共享测试辅助包 | Test、main 上的 Full UI Race；不打包安装产物 |
 | `mygo.json` | Build、Test、main 上的 Full UI Race、Release Notes |
-| `macos.entitlements.plist` | Build |
+| `macos.entitlements.plist`、`scripts/check_linux_packages.sh` | Build |
 | `scripts/sherpa/` | Test（包含工具编译与 vet；仍需本地运行该工具的测试） |
 | App 测试分片脚本 | Test、main 上的 Full UI Race |
 | 发行说明生成器、其测试、Release 工作流 | Release Notes |

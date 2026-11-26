@@ -15,6 +15,7 @@ on:
       - 'go.sum'
       - 'mygo.json'
       - 'macos.entitlements.plist'
+      - 'scripts/check_linux_packages.sh'
       - '!**_test.go'
       - '!**/testdata/**'
       - '!internal/testutil/**'
@@ -29,6 +30,7 @@ on:
       - 'go.sum'
       - 'mygo.json'
       - 'macos.entitlements.plist'
+      - 'scripts/check_linux_packages.sh'
       - '!**_test.go'
       - '!**/testdata/**'
       - '!internal/testutil/**'
@@ -80,6 +82,9 @@ jobs:
           for arch in amd64 arm64; do
             out="build/$arch"
             go tool mygo build -platform "$TARGET_OS/$arch" -o "$out" "${args[@]}"
+            if [[ "$TARGET_OS" == linux ]]; then
+              bash scripts/check_linux_packages.sh "$out/$TARGET_OS-$arch"
+            fi
             # MyGo generates install scripts; distribute packages only.
             rm -f "$out/$TARGET_OS-$arch/install.sh" "$out/$TARGET_OS-$arch/install.ps1"
             if [[ -f "$out/SHA256SUMS" ]]; then

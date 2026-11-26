@@ -344,7 +344,7 @@ func otherDeclarations(src []byte) []byte {
 // fetch returns the path of url's file in the user's cache, downloading it
 // there first, unless it is there already: what has sha256 as its digest.
 func fetch(cache, url, sum string) (_ string, err error) {
-	file := filepath.Join(cache, "mygo-cloudmusic", "sherpa-onnx", sum, path.Base(url))
+	file := filepath.Join(cache, "nyago-music", "sherpa-onnx", sum, path.Base(url))
 	if digest(file) == sum {
 		return file, nil
 	}

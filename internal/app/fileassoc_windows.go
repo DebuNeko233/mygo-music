@@ -53,7 +53,7 @@ func registerFileAssociations() error {
 	command := fmt.Sprintf(`"%s" "%%1"`, exe)
 	var errs []error
 	for _, file := range fileAssociations {
-		progID := "dev.egoist.cloudmusic." + file.ext
+		progID := "io.github.debuneko233.nyagomusic." + file.ext
 		class := `Software\Classes\` + progID
 		for _, entry := range []struct{ key, value string }{
 			{class, file.name},

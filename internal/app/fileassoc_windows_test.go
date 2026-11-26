@@ -18,7 +18,7 @@ import (
 // An app upgraded without the installer publishes every supported audio type
 // in the current user's open-with list.
 func TestRegisterFileAssociations(t *testing.T) {
-	const progID = "dev.egoist.cloudmusic."
+	const progID = "io.github.debuneko233.nyagomusic."
 	var keys []string
 	for _, ext := range []string{"mp3", "flac", "wav", "ogg", "m4a", "aac"} {
 		keys = append(keys, `Software\Classes\`+progID+ext)

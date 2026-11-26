@@ -28,7 +28,7 @@ func TestFetchArchiveCleansUpFailureAndCachesRetry(t *testing.T) {
 	for _, failure := range []string{"truncated response", "digest mismatch", "blocked publication"} {
 		t.Run(failure, func(t *testing.T) {
 			cache := t.TempDir()
-			dir := filepath.Join(cache, "mygo-cloudmusic", "sherpa-onnx", checksum)
+			dir := filepath.Join(cache, "nyago-music", "sherpa-onnx", checksum)
 			archive := filepath.Join(dir, "archive.tar.bz2")
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

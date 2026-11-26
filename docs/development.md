@@ -81,6 +81,21 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
 
 以上不能报告为 Linux/Windows 实机验证。Windows 安装程序需要 NSIS，macOS 打包需要 Mac，Wayland portal、Linux 钥匙串及系统音量需要对应桌面服务。
 
+### 安装路径与应用身份
+
+显示名为 `Nyago Music`，包名为 `nyago-music`，应用 ID 为 `io.github.debuneko233.nyagomusic`。Linux 的 `linux.installDirName` 明确设为 `Nyago Music`；目录名与包名分开配置，打包逻辑由 MyGo CLI 维护。
+
+| 平台/方式 | 新安装的默认目录 |
+| --- | --- |
+| macOS | `/Applications/Nyago Music.app`（无写入权限时脚本可回退到 `~/Applications`） |
+| Windows | `%LOCALAPPDATA%\Programs\Nyago Music`（同 ID 重装保留已登记路径） |
+| Linux DEB / RPM / PKGBUILD | `/opt/Nyago Music` |
+| Linux install.sh | `~/.local/Nyago Music` |
+
+Linux 可执行文件仍名为 `nyago-music`，桌面入口使用带引号的绝对路径。安装后的自更新使用实际安装目录。身份切换的旧包卸载、新包手动安装和重新登录要求见[依赖与兼容](dependencies-and-upstream.md#2-更新与用户数据兼容)。
+
+已经发布的 `v0.3.1` 资产与 Homebrew cask 仍对应旧包名和标识；下一次正式发行需在新资产可下载后同步 cask 的下载文件名和 `uninstall quit`。普通分支推送不修改既有发行资产。
+
 ## macOS 本地测试包
 
 没有个人证书时，可按 CI 使用临时签名：

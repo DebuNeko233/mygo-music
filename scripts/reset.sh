@@ -13,7 +13,7 @@
 set -euo pipefail
 
 name="Nyago Music"
-id="dev.egoist.cloudmusic"
+id="io.github.debuneko233.nyagomusic"
 release=0 keep_login=0 songs=0
 for arg in "$@"; do
 	case "$arg" in

@@ -12,7 +12,7 @@
 | 更新签名 | 本项目独立 Ed25519 公钥与对应 Actions Secret | mygo.json / `MYGO_UPDATER_PRIVATE_KEY` |
 | 字幕原生库资源 | 本仓库 `sherpa-onnx-2.0.1` 资源发行 | [生成器](../scripts/sherpa/main.go)、[生成清单](../internal/speech/natives.go) |
 | MyGo require | `github.com/egoist/mygo v0.10.0` | [go.mod](../go.mod) |
-| 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261120193717-667973527550` | go.mod 的 replace |
+| 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261126070733-ebc72eccad3b` | go.mod 的 replace |
 | Go 工具链 | `go 1.27.4` | go.mod |
 
 这些是当前仓库状态，不是“永远最新”的承诺。未来版本由本项目独立决定；原项目发布新版本不构成本项目必须同步的理由。历史功能分支保留记录，不作为新贡献默认基线。
@@ -23,7 +23,9 @@ GitHub 的 fork 标记与代码、资源、签名独立是不同事项。退出 
 
 未来构建只查询本仓库更新并信任本项目公钥。原项目客户端仍带原地址和公钥，不能通过本项目提交远程改变；首次迁移需要手动安装本项目的新构建。旧预览版也应核对其内置配置，不能假定自动迁移已经生效。
 
-暂时保留 `dev.egoist.cloudmusic` 应用标识、安装 slug 和现有数据布局，以沿用配置、钥匙串和文件关联；这属于兼容标识，不表示原项目仍控制更新。两个应用版本会共享部分数据及系统关联，不支持以此实现互不影响的并行安装。未来更名或改标识必须单独设计数据与凭据迁移。
+当前包名（slug）为 `nyago-music`，应用标识为 `io.github.debuneko233.nyagomusic`，显示名为 `Nyago Music`。数据、缓存和日志目录仍按显示名生成，已有 Nyago Music 数据继续读取；系统凭据按新应用标识隔离，不自动复制旧凭据，需要重新登录。文件关联和 Windows 卸载身份也使用新标识。
+
+从旧包名 `mygo-cloudmusic` / 标识 `dev.egoist.cloudmusic` 切换时，先退出并卸载旧应用，再手动安装新包；普通卸载保留用户数据，不执行 reset 或 Homebrew `--zap`。Linux 包管理器把新 slug 视作另一个包，Windows 把新 ID 视作另一个卸载身份，不能并排安装到同一个目录；旧客户端的自动更新不承担这次身份迁移。macOS 保留 `Nyago Music.app` 名称，可替换旧应用，但需要重新登录和重新选择文件默认打开方式。
 
 私钥只放受限本地备份或仓库 Actions Secret，不能提交到 Git。当前工作流在创建发行草稿前检查更新仓库是否匹配及密钥是否存在；构建工具进一步验证公私钥匹配。不得删除签名验证来让更新“先跑起来”。
 
@@ -38,7 +40,7 @@ go list -m -json github.com/egoist/mygo
 go list -m -f '{{.Dir}}' github.com/egoist/mygo
 ```
 
-当前 MyGo fork 保留歌词绘制层缓存能力（包括 `DrawCached`）和 macOS 帧就绪改动。项目独立不要求移除所有第三方来源或改写模块导入；禁止借此顺手删除已依赖的 fork 能力。
+当前固定提交仅在既有 fork 基线上增加 CLI 的 `linux.installDirName`，让 DEB、RPM、PKGBUILD 和安装脚本使用独立目录名；未调整界面运行时。MyGo fork 保留歌词绘制层缓存能力（包括 `DrawCached`）和 macOS 帧就绪改动。项目独立不要求移除所有第三方来源或改写模块导入；禁止借此顺手删除已依赖的 fork 能力。
 
 更新框架或回归官方需要证明 API 可用、缓存失效和资源释放正确、原生帧调度无可观察退化，并完成相关平台验证。性能对照固定硬件、场景和采样方法，不以测试总耗时证明 GPU 性能。具体界面生命周期见[UI 手册](ui-development.md)。
 
