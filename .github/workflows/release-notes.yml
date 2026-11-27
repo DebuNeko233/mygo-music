@@ -1,4 +1,4 @@
-# Validate release-note tooling independently from application builds and races.
+# Validate release notes and asset publishing independently from application builds.
 # Plain changelog and documentation edits do not start application CI.
 name: Release Notes
 
@@ -8,6 +8,8 @@ on:
     paths:
       - '.github/scripts/release_notes.py'
       - '.github/scripts/release_notes_test.py'
+      - '.github/scripts/release_assets.py'
+      - '.github/scripts/release_assets_test.py'
       - '.github/workflows/release-notes.yml'
       - '.github/workflows/release.yml'
       - 'mygo.json'
@@ -15,6 +17,8 @@ on:
     paths:
       - '.github/scripts/release_notes.py'
       - '.github/scripts/release_notes_test.py'
+      - '.github/scripts/release_assets.py'
+      - '.github/scripts/release_assets_test.py'
       - '.github/workflows/release-notes.yml'
       - '.github/workflows/release.yml'
       - 'mygo.json'
@@ -29,11 +33,11 @@ permissions:
 
 jobs:
   release-notes:
-    name: Release notes generator
+    name: Release tooling
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Test download links and changelog selection
+      - name: Test release notes, asset assembly and publishing
         run: python3 -m unittest discover -s .github/scripts -p '*_test.py'
       - name: Validate current release notes
         run: python3 .github/scripts/release_notes.py > "$RUNNER_TEMP/notes.md"

@@ -59,9 +59,13 @@ git push origin v0.3.0
 
 ## 4. 构建草稿与发布
 
-[Release 工作流](.github/workflows/release.yml)由 `v*` 标签触发，检查配置、版本和变更说明，使用[说明生成器](.github/scripts/release_notes.py)生成下载表格与当前版本更新内容，创建草稿并上传 macOS、Windows、Linux 的产物与签名更新。手动触发也必须选择匹配实际版本的标签，不能在 main 上绕过版本检查。
+[Release 工作流](.github/workflows/release.yml)由 `v*` 标签触发，检查配置、版本和变更说明，使用[说明生成器](.github/scripts/release_notes.py)生成下载表格与当前版本更新内容。macOS、Windows、Linux 三个平台并行构建，每个平台生成两种架构的安装包与签名更新，只上传到独立的 Actions artifact，不调用 MyGo 的 `-upload`。手动触发也必须选择匹配实际版本的标签，不能在 main 上绕过版本检查。
 
-项目仅提供安装包、应用内更新及 Homebrew 安装，不分发 `install.sh` 或 `install.ps1`。固定 MyGo CLI 仍会生成这些文件；普通 Build 在上传 artifacts 前删除脚本并过滤校验清单，Release 则在全部平台上传结束后执行 `finalize-release`，移除两个脚本资产并同步 `SHA256SUMS`。必须等待收尾任务成功，再公开草稿；本地使用 `-upload` 时也必须完成相同清理。不要删除更新归档、增量包或签名清单。
+全部构建成功后，唯一的 `publish` 任务下载三个 artifact，由[资产汇总脚本](.github/scripts/release_assets.py)检查平台、架构、安装包、更新清单引用和文件摘要，重新生成一份全局 `SHA256SUMS`。它先上传所有安装包、完整更新包、增量包和校验表，再上传六个平台的更新清单；仅此任务有 Release 写权限。同一标签的工作流运行串行执行，不取消正在上传的任务，避免跨次重跑产生竞争。
+
+项目仅提供安装包、应用内更新及 Homebrew 安装，不分发 `install.sh` 或 `install.ps1`。固定 MyGo CLI 仍会生成这些文件；普通 Build 在上传 artifacts 前删除脚本并过滤校验清单，Release 在收集平台产物时就排除脚本、松散可执行文件和本地应用目录。全局校验表沿用 MyGo 格式，覆盖安装包、完整更新包与增量包；签名更新清单保持原始字节，不重写。重跑时只允许更新草稿，并兼容删除旧流程残留的两个脚本资产；已公开版本拒绝覆盖，其他未知草稿资产会报错，不能静默删除。
+
+必须等待 `publish` 成功并核对全部资产，再公开草稿。本地使用 `-upload` 仍会直接写 Release，不可并行向同一版本上传；若使用它，仍须完整核对校验表并清理脚本。不要删除更新归档、增量包或签名清单。
 
 README 的安装入口固定指向 `releases/latest`。每次应用发行的说明以操作系统为列、架构为行，列出 DMG、Windows EXE、Linux DEB/RPM/TAR.GZ 的版本固定下载链接，并提供 Homebrew 指引；不会把旧版说明中的链接指向新版本。版本、文件名前缀和仓库从 mygo.json 读取，更新正文来自 CHANGELOG 对应章节。应用内更新清单仍使用原始 CHANGELOG 正文，不加入下载表格。
 
@@ -71,6 +75,8 @@ README 的安装入口固定指向 `releases/latest`。每次应用发行的说�
 python3 -m unittest discover -s .github/scripts -p '*_test.py'
 python3 .github/scripts/release_notes.py > /tmp/nyago-release-notes.md
 ```
+
+以上测试也覆盖三平台产物汇总、缺失/损坏输入、完整校验表、草稿重跑与上传顺序，使用临时文件和 GitHub CLI 替身，不创建真实发行。工作流语法应另用 `actionlint` 检查；真实签名构建与 Release 上传仍需在明确发行授权内执行。
 
 新增操作系统、架构或改变安装包命名时，必须同步生成器和测试，核对表中每个文件都出现在草稿资产中。更新现有 Release 说明时使用生成结果作为 `gh release edit --notes-file`，保留已经发布的包和签名文件。
 

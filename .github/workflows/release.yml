@@ -1,7 +1,5 @@
-# Pushing a tag such as v0.2.0 builds the apps of macOS, Windows and
-# Linux, signs their updates, and uploads the packages to a draft
-# release of the tag, which is published by hand: installed apps update
-# to it then.
+# Build and sign each platform in parallel; one writer publishes the draft.
+# Installed apps see the release only after a maintainer publishes it.
 name: Release
 
 on:
@@ -9,11 +7,16 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# A retry of the same tag must not race another publisher or interrupt uploads.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
-  contents: write # the draft release, and the uploads to it
+  contents: read
 
 jobs:
-  draft-release:
+  prepare:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,84 +29,81 @@ jobs:
             echo "Configure this repository's MYGO_UPDATER_PRIVATE_KEY before releasing." >&2
             exit 1
           fi
-      # mygo build uploads to the release of mygo.json's version, whichever
-      # tag started the workflow.
-      - name: Check the version
-        run: test "$GITHUB_REF_NAME" = "v$(jq -r .version mygo.json)"
-      # The release page adds a download matrix to the version's changelog.
-      # MyGo keeps the plain changelog in signed update manifests.
-      - name: Generate download table and release notes
+          test "$GITHUB_REF_TYPE" = tag
+          test "$GITHUB_REF_NAME" = "v$(jq -r .version mygo.json)"
+      - name: Validate release tooling and notes
         run: |
           python3 -m unittest discover -s .github/scripts -p '*_test.py'
           python3 .github/scripts/release_notes.py > "$RUNNER_TEMP/notes.md"
           test -s "$RUNNER_TEMP/notes.md"
-      - name: Create the draft release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --draft --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
-          else
-            args=()
-            if [ "$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true" ]; then
-              args=(--draft)
-            fi
-            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              "${args[@]}" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
-          fi
 
   build:
-    needs: draft-release
+    needs: prepare
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS, os: macos-latest, platform: "darwin/arm64,darwin/amd64" }
-          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
-          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+          - { name: macOS, os: macos-latest, goos: darwin, platform: "darwin/arm64,darwin/amd64" }
+          - { name: Windows, os: ubuntu-latest, goos: windows, platform: "windows/amd64,windows/arm64" }
+          - { name: Linux, os: ubuntu-latest, goos: linux, platform: "linux/amd64,linux/arm64" }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Install NSIS, for the Windows installers
-        if: matrix.name == 'Windows'
+        if: matrix.goos == 'windows'
         run: sudo apt-get update && sudo apt-get install -y nsis
-      - name: Build and upload
+      - name: Build signed packages
         env:
           GH_TOKEN: ${{ github.token }}
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+          TARGET_PLATFORM: ${{ matrix.platform }}
         run: |
           args=()
           if [ "$RUNNER_OS" = "macOS" ]; then
             # No Apple certificate or notary credentials are needed.
             args=(-sign - -skip-notarize)
           fi
-          go tool mygo build -platform "${{ matrix.platform }}" "${args[@]}" -upload
+          go tool mygo build -platform "$TARGET_PLATFORM" "${args[@]}"
+      - name: Collect this platform's release assets
+        env:
+          TARGET_OS: ${{ matrix.goos }}
+        run: |
+          python3 .github/scripts/release_assets.py stage --platform "$TARGET_OS" \
+            --source build --output "$RUNNER_TEMP/release-artifact"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.goos }}
+          path: ${{ runner.temp }}/release-artifact/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
-  finalize-release:
+  publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      # Wait for every platform so no uploader can restore scripts or hashes.
-      - name: Remove script installers and their checksums
+      - uses: actions/checkout@v7
+      # Keep each platform in its own directory; their local SHA256SUMS differ.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: ${{ runner.temp }}/release-inputs
+          merge-multiple: false
+      - name: Verify all platforms and generate global checksums
+        run: |
+          python3 .github/scripts/release_assets.py merge \
+            --source "$RUNNER_TEMP/release-inputs" --output "$RUNNER_TEMP/release-assets"
+          python3 .github/scripts/release_notes.py > "$RUNNER_TEMP/notes.md"
+      - name: Upload the complete draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "$RUNNER_TEMP/original" "$RUNNER_TEMP/packages"
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --pattern SHA256SUMS --dir "$RUNNER_TEMP/original"
-          awk '$2 != "install.sh" && $2 != "install.ps1"' "$RUNNER_TEMP/original/SHA256SUMS" > "$RUNNER_TEMP/packages/SHA256SUMS"
-          test -s "$RUNNER_TEMP/packages/SHA256SUMS"
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --json assets --jq '.assets[].name' > "$RUNNER_TEMP/assets.txt"
-          for asset in install.sh install.ps1; do
-            if grep -Fxq "$asset" "$RUNNER_TEMP/assets.txt"; then
-              gh release delete-asset "$GITHUB_REF_NAME" "$asset" --repo "$GITHUB_REPOSITORY" --yes
-            fi
-          done
-          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/packages/SHA256SUMS" \
-            --repo "$GITHUB_REPOSITORY" --clobber
+          python3 .github/scripts/release_assets.py publish \
+            --source "$RUNNER_TEMP/release-assets" --notes "$RUNNER_TEMP/notes.md" \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME"
