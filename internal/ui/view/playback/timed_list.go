@@ -127,7 +127,7 @@ func (a *View) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.L
 		return
 	}
 	m, s, g := &a.TimedList, &a.LyricScroll, &a.LyricGlide
-	resized := box.W != a.LyricViewportW || box.H != a.LyricViewportH
+	resized := st.reflowed || box.W != a.LyricViewportW || box.H != a.LyricViewportH
 	revision := a.Captions.Revision
 	replaced := m.revision != revision
 	if st.CenterShort {

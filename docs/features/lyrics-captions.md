@@ -2,7 +2,7 @@
 
 本章覆盖从歌词原始数据到显示行、逐字动画、桌面歌词，以及独立的播客转写链路。时间轴与文字分类属于业务逻辑，字体和动画属于视图，模型下载与识别属于服务。
 
-窗口尺寸或标题栏占用变化时，自动跟随中的当前句按新视口重新定位，取消旧视口的滚动位移；正常换句仍使用滚动动画，手动浏览保留阅读锚点。标题栏变化可能晚于全屏的最后一次缩放，需要补布局帧。几何记录仅归播放视图 State 所有，不写入播放会话或配置。回归见 [fullscreen_lyrics_test.go](../../internal/app/fullscreen_lyrics_test.go) 和 [lyric_effects_test.go](../../internal/ui/view/playback/lyric_effects_test.go)。
+窗口尺寸或标题栏占用变化时，自动跟随中的当前句按新视口重新定位，取消旧视口的滚动位移；正常换句仍使用滚动动画，手动浏览保留阅读锚点。标题栏变化可能晚于全屏的最后一次缩放，需要补布局帧。换行后内容变短，框架可能将旧滚动位置收回新范围；这种布局钳制不算手动浏览，也不能启动或延长 4 秒浏览期限。视图在这一帧校准动画偏移并重新跟随当前句，真实滚轮和滚动条操作仍按原有规则处理。几何记录仅归播放视图 State 所有，不写入播放会话或配置。回归见 [fullscreen_lyrics_test.go](../../internal/app/fullscreen_lyrics_test.go) 、[fullscreen_native_darwin_test.go](../../internal/app/fullscreen_native_darwin_test.go) 和 [lyric_effects_test.go](../../internal/ui/view/playback/lyric_effects_test.go)。
 
 ## 所有者与数据流
 

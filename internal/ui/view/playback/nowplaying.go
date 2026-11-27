@@ -737,6 +737,14 @@ func (a *View) LyricsPane(c *ui.Context, tr *netease.Track, height float32, clos
 		}
 		style.viewportHeight = min(h, height+npLyricOverscan, max(height, measured))
 	}
+	// Rewrapping can shrink the scroll extent below the old destination.
+	// TrackScroll then clamps it during layout, without any user gesture.
+	// Keep that correction out of manual-browse detection and follow the newly
+	// measured row even if the viewport dimensions have already stabilized.
+	style.reflowed = a.LyricGlide.clamped(&a.LyricScroll)
+	if style.reflowed {
+		a.LyricGlide.offset = a.LyricScroll.Y
+	}
 	style.introLine = display.FirstSung()
 	if style.Immersive {
 		// Keep the opening credits out of the card's entrance and exit.
@@ -837,6 +845,7 @@ type LinesStyle struct {
 	CloseBounds        ui.Rect
 	rightInset         float32 // lyrics reserve room for the scrollbar; captions use the default
 	viewportHeight     float32 // current lyric viewport height, before layout
+	reflowed           bool    // layout clamped the previous scroll destination
 }
 
 // timedLines lights cur at pos, centering short lyrics when requested.
@@ -948,7 +957,7 @@ func (a *View) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line,
 		maxY = max(0, textH+head+tail-box.H)
 		waitForLayout = Abs32(body.LayoutBounds().H-textH-head-tail) > 1
 	}
-	resized := box.W > 0 && box.H > 0 && (box.W != a.LyricViewportW || box.H != a.LyricViewportH)
+	resized := box.W > 0 && box.H > 0 && (st.reflowed || box.W != a.LyricViewportW || box.H != a.LyricViewportH)
 	// Window geometry already moves the reading position. Do not add a glide
 	// from coordinates of the previous viewport, even if a line was moving.
 	// Manual browsing retains its own row anchor instead.
@@ -1105,6 +1114,12 @@ type lyricGlide struct {
 
 // Keep the same critically damped spring, at half-pixel precision.
 var lyricScrollMotion = ui.Animation{Spring: ui.SpringOptions{Stiffness: 100, Damping: 20, Precision: 0.5}}
+
+// A changed offset alone is not evidence of input: layout clamps an offset
+// outside its new extent. In-range wheel and scrollbar movement still counts.
+func (g lyricGlide) clamped(s *ui.ScrollState) bool {
+	return g.posed && s.Y != g.offset && s.Y == min(max(0, g.offset), s.MaxY)
+}
 
 func (g *lyricGlide) to(c *ui.Context, offset, target float32) {
 	if offset == target {

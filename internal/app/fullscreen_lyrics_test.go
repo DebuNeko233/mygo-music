@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,5 +141,47 @@ func TestFullScreenLyricsFrames(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Reflow near the end can clamp the old offset. That is not a wheel or
+// scrollbar gesture, and must not suspend automatic following for four seconds.
+func TestFullScreenReflowDoesNotStartLyricBrowsing(t *testing.T) {
+	for _, count := range []int{24, 80} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			a := tallLyricsApp(t)
+			a.settings.LyricEdgeFade, a.settings.HotComments = true, false
+			lines := make([]lyrics.Line, count)
+			for i := range lines {
+				lines[i] = lyrics.Line{At: time.Duration(i) * 5 * time.Second,
+					Text:        fmt.Sprintf("Resize lyric %02d", i),
+					Translation: strings.Repeat("A long translation wraps differently in a wide full-screen viewport. ", 4)}
+			}
+			current := count - 2
+			player.SetLyrics(a.pl, lines)
+			player.Hold(a.pl, lines[current].At+time.Second)
+			tt := ui.NewTester(a.view, 880, 580)
+			tt.SetScale(0.15)
+			tt.SetTitleBar(ui.TitleBar{Height: 54, Left: 86, Bottom: 34})
+			tt.Advance(2 * time.Second)
+			for _, size := range [][2]int{{1728, 1117}, {880, 580}} {
+				tt.SetSize(size[0], size[1])
+				bar := ui.TitleBar{}
+				if size[0] == 880 {
+					bar = ui.TitleBar{Height: 54, Left: 86, Bottom: 34}
+				}
+				tt.SetTitleBar(bar)
+				tt.Advance(100 * time.Millisecond)
+				if !a.lyricReading.BrowseUntil.IsZero() {
+					t.Fatalf("reflow started manual browsing without input: until=%v, scroll=%+v", a.lyricReading.BrowseUntil, a.LyricScroll)
+				}
+				row, ok := tt.AccessByRole(ui.RoleButton, lines[current].Text)
+				pane, _ := tt.AccessByRole(ui.RoleScroll, "歌词")
+				want := pane.Bounds.Y + min(pane.Bounds.H*0.3, max(0, pane.Bounds.H-row.Bounds.H))
+				if !ok || row.Offscreen || math.Abs(float64(row.Bounds.Y-want)) > 1 {
+					t.Fatalf("current row did not follow reflow: row=%+v, viewport=%v, want y %.2f", row, pane.Bounds, want)
+				}
+			}
+		})
 	}
 }
