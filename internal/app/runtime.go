@@ -92,11 +92,13 @@ func (a *app) start() {
 	a.pl.Normalize = func() bool { return a.settings.Normalize }
 	a.pl.Cache = newSongCache(a.settings)
 	a.pl.Changed = func() {
+		a.syncDockMenu()
 		a.keepSession()
 		a.syncCaptions()
 		a.syncTrackArtwork()
 	}
 	a.pl.Playback = a.playback
+	a.installDockMenu()
 	a.playbackState.Volume = a.settings.Volume
 	// The system's mixer applies the volume too, where it keeps one for
 	// the app, which is from the first sound on.
