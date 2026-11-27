@@ -18,6 +18,7 @@ var creditFields = makeCreditFields([]string{
 	"制作|製作",
 	"制作协力|制作協力|製作協力|Production Assistant|Production Assistance",
 	"音乐制作|音楽制作|音樂製作|Music Production|Music Producer",
+	"音乐设计|音樂設計",
 	"监制|監制|監製|总监制|總監製|出品监制|出品監製",
 	"音乐监制|Music Supervisor|音乐监制 Music Supervisor|音樂監製",
 	"混音|混音师|混音工程师|混音工程|Mixing|Mixing Engineer|ミックス|混音 Mixing Engineer|混音师 Mixing Engineer|混音師|混音工程師|Mix|Mix Engineer|Mix Engineering|Mixed by",
