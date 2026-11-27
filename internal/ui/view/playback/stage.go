@@ -117,7 +117,8 @@ func spaceWords(shapes []wordShape, widths []float32, gap float32) {
 // Stage shows the lyrics of tr on the whole stage.
 func (a *View) Stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 	pl := a.Player()
-	lines, loaded := pl.Lyrics()
+	content := pl.PresentLyrics(a.Config.PureLyrics)
+	lines, loaded := content.Lines, content.Loaded
 	w, h := c.Size()
 	f := min(64, max(36, w*0.045))
 	box := ui.Box(c.Key("stage")).Grow(1)
@@ -135,8 +136,7 @@ func (a *View) Stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 					components.StageSkeleton(c, components.PlayerShimmer(c), f, w)
 					return
 				}
-				display, _ := pl.LyricsDisplay()
-				lyricStaticNotice(c, display.EmptyText(), pl.LyricLanguage()).TextAlign(ui.Center)
+				lyricStaticNotice(c, content.Display.EmptyText(), content.OriginalScript.Language()).TextAlign(ui.Center)
 				if tr.IsLocal() {
 					a.LocalLyricMatchButton(c)
 				}
@@ -162,7 +162,7 @@ func (a *View) Stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		}
 	}
 
-	original, translation := pl.LyricScripts()
+	original, translation := content.OriginalScript, content.TranslationScript
 	font := a.PlaybackTypeface(original, c.Locale())
 	translatedFont := a.PlaybackTypeface(translation, c.Locale())
 	if translatedFont.Lang == "" {

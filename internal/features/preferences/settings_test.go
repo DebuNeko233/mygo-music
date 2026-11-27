@@ -11,6 +11,28 @@ import (
 	"testing"
 )
 
+// Legacy files retain full lyrics; both explicit pure-lyrics choices survive a save and reload.
+func TestPureLyricsSettingsCompatibility(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"quality":"lossless"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, ok := Load(path)
+	if !ok || s.PureLyrics || s.Quality != "lossless" {
+		t.Fatal("legacy lyrics preference changed")
+	}
+	for _, enabled := range []bool{true, false} {
+		s.PureLyrics = enabled
+		if err := s.Save(); err != nil {
+			t.Fatal(err)
+		}
+		s, ok = Load(path)
+		if !ok || s.PureLyrics != enabled || s.Quality != "lossless" {
+			t.Fatal("saved lyrics choice or unrelated preference was lost")
+		}
+	}
+}
+
 // Settings input cannot redirect later writes through a JSON field resembling its storage path.
 func TestSettingsStoragePathIsNotJSON(t *testing.T) {
 	root := t.TempDir()

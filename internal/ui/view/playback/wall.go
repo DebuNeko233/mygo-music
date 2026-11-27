@@ -163,7 +163,8 @@ func (a *View) wallSong(c *ui.Context, tr *netease.Track, art components.Image, 
 				a.SongMenu(c.Key("more"), tr, 20, White.Alpha(0.7)).Margin(0, -8, 0, 0)
 			})
 			a.ArtistLinks(c, tr, White.Alpha(0.6), White, true).FontSize(14).SingleLine()
-			lines, _ := pl.Lyrics()
+			content := pl.PresentLyrics(a.Config.PureLyrics)
+			lines := content.Lines
 			if len(lines) == 0 {
 				return
 			}
@@ -177,7 +178,7 @@ func (a *View) wallSong(c *ui.Context, tr *netease.Track, art components.Image, 
 			if cur >= 0 {
 				sung = lines[cur].Text
 			}
-			original, _ := pl.LyricScripts()
+			original := content.OriginalScript
 			font := a.PlaybackTypeface(original, c.Locale())
 			font.apply(ui.Text(c, sung)).FontSize(17).FontWeight(700).TextColor(White.Alpha(0.85)).MaxLines(2).Margin(14, 0, 0, 0)
 			if cur+1 < len(lines) {

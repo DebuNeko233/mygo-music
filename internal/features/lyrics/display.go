@@ -22,6 +22,7 @@ const (
 const (
 	InstrumentalText = "纯音乐，请欣赏"
 	UnavailableText  = "暂无歌词"
+	NoSingingText    = "暂无可显示歌词"
 )
 
 // Display keeps the reading order and the playback timeline separate.
@@ -29,6 +30,7 @@ type Display struct {
 	Lines       []Line
 	sung        []int
 	unavailable bool
+	noSinging   bool // a pure presentation has no confirmed singing or instrumental notice
 }
 
 func (d Display) HasSinging() bool { return len(d.sung) > 0 }
@@ -55,6 +57,9 @@ func (d Display) SungLines() []Line {
 func (d Display) EmptyText() string {
 	if d.unavailable {
 		return UnavailableText
+	}
+	if d.noSinging {
+		return NoSingingText
 	}
 	return InstrumentalText
 }

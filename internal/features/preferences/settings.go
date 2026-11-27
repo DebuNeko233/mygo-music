@@ -45,6 +45,9 @@ type Settings struct {
 	HiddenSidebarPages SidebarPages `json:"hiddenSidebarPages"`
 	// PlaybackLyricFont is the preferred face for in-app lyrics and translations.
 	PlaybackLyricFont string `json:"playbackLyricFont,omitempty"`
+	// PureLyrics hides confirmed metadata and performer labels in lyric views.
+	// Missing fields retain the full presentation used by existing installations.
+	PureLyrics bool `json:"pureLyrics"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
 	// for a few percent of a core: the listener turns it on.
 	Smoke bool `json:"smoke"`

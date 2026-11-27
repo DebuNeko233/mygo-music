@@ -26,6 +26,16 @@
 
 回归：[display_test.go](../../internal/features/lyrics/display_test.go)、[reconcile_test.go](../../internal/features/lyrics/reconcile_test.go)、[language_test.go](../../internal/features/lyrics/language_test.go)、[cache_test.go](../../internal/features/lyrics/cache_test.go)。
 
+## 纯净歌词偏好
+
+设置 → 播放中的“纯净歌词”默认关闭，旧配置继续显示完整歌词。开启后普通/沉浸歌词、舞台、律动页单行歌词和桌面歌词共同采用纯净展示：隐藏已确认的制作署名，以及借助当前歌曲资料确认的歌名/歌手标题；移除已知演唱者或标准分声部标记的前缀，保留其后的歌词正文与翻译。重复的歌名句、普通冒号句和不能可靠对齐的逐字前缀继续保留，避免误删实际演唱。
+
+转换规则归 [pure.go](../../internal/features/lyrics/pure.go)，不改变解析来源、磁盘缓存、下载导出的歌词或播放器原始时间轴。Player 只保留当前歌曲的一份纯净派生结果；歌词替换和当前本地歌曲资料更新时重建，切歌时清空。不保留历史歌曲的纯净副本，也不在每帧做分类或复制。切换偏好只选择已准备的结果，立即刷新各歌词窗口并持久化，不请求歌词、不定位音频；阅读视图切换后跟随当前播放句。
+
+纯净展示没有正文时显示“暂无可显示歌词”；明确的“暂无歌词”和“纯音乐，请欣赏”提示仍保留其原有含义，不用缺少正文推断纯音乐。匹配本地歌词的入口按当前展示判断是否缺少正文。
+
+回归：[pure_test.go](../../internal/features/lyrics/pure_test.go)、[lyric_presentation_test.go](../../internal/features/player/lyric_presentation_test.go)、[设置接线测试](../../internal/app/pure_lyrics_test.go)、[阅读与定位测试](../../internal/ui/view/playback/pure_lyrics_test.go)。
+
 ## 制作署名分类规则
 
 角色词典集中在 [credit_roles.go](../../internal/features/lyrics/credit_roles.go)，判定集中在 [credits.go](../../internal/features/lyrics/credits.go)。添加规则必须同时给出应该识别和不应识别的例子。
