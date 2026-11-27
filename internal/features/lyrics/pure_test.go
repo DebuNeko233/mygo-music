@@ -82,6 +82,16 @@ func TestPureLyricsProtectsTitleRefrains(t *testing.T) {
 	if got := plain.Pure(SongInfo{Title: "夜航"}); len(got.Lines) != 1 || &got.Lines[0] != &plain.Lines[0] {
 		t.Fatal("a bare lyric was treated as metadata or unnecessarily copied")
 	}
+	// A short song can sing its title just before closing credits. Real word
+	// timing remains stronger evidence than the adjacent metadata block.
+	timed := NewDisplay([]Line{
+		{At: 20 * time.Second, Text: "夜航", Timed: true, Words: []Word{{Text: "夜航", Start: 20 * time.Second, End: 21 * time.Second}}},
+		{At: 22 * time.Second, Text: "作词：甲"},
+		{At: 23 * time.Second, Text: "作曲：乙"},
+	})
+	if got := timed.Pure(SongInfo{Title: "夜航"}); len(got.Lines) != 1 || !reflect.DeepEqual(got.Lines[0], timed.Lines[0]) {
+		t.Fatal("a word-timed title verse before closing credits was removed")
+	}
 }
 
 // Only an explicit instrumental notice keeps that status; hiding credits or

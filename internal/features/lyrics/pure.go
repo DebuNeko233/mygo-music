@@ -131,7 +131,7 @@ func pureTitle(line Line, index int, title string, people map[string]bool, sourc
 			return true
 		}
 	}
-	if titleCount != 1 || compactField(unquoteTitle(text)) != title {
+	if line.Timed || titleCount != 1 || compactField(unquoteTitle(text)) != title {
 		return false
 	}
 	before, after := 0, 0
@@ -153,7 +153,7 @@ func pureTitle(line Line, index int, title string, people map[string]bool, sourc
 	// Repeated titles and bare titles in a verse are never removed. A unique
 	// title before two credits, or a decorated title bounding a credit block,
 	// has independent metadata evidence beyond the words of the title itself.
-	return after >= 2 || !line.Timed && unquoteTitle(text) != text && before >= 2 && (next < 0 || next-line.At >= 4*time.Second)
+	return after >= 2 || unquoteTitle(text) != text && before >= 2 && (next < 0 || next-line.At >= 4*time.Second)
 }
 
 func speakerBody(text string, people map[string]bool) (body, prefix string, ok bool) {
