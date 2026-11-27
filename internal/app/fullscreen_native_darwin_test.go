@@ -181,7 +181,85 @@ func nativeLyricRects(t *testing.T, window int, label string) (row, viewport ui.
 		}
 	}
 	if row.H <= 0 || viewport.H <= 0 {
-		t.Fatalf("missing committed geometry: row %v, viewport %v", row, viewport)
+		t.Fatalf("missing committed geometry for %q: row %v, viewport %v", label, row, viewport)
 	}
 	return
+}
+
+// Full-page hidden cleanup must not prevent the overlay from restoring its
+// cover and lyric viewport after either native full-screen transition.
+func TestNativeNowPlayingFullScreenRestoresContent(t *testing.T) {
+	if os.Getenv("MYGO_E2E") != "1" {
+		t.Skip("requires a desktop session")
+	}
+	a := tallLyricsApp(t)
+	a.settings.HotComments = false
+	a.settings.LyricEdgeFade = true
+	type frame struct {
+		phase  int32
+		hidden bool
+	}
+	painted := make(chan frame, 512)
+	ready := make(chan struct{}, 1)
+	focused := make(chan struct{}, 1)
+	modes := make(chan int32, 2)
+	var phase atomic.Int32
+	var w *mygo.Window
+	mygo.RunOnMain(func() {
+		w = mygo.NewWindow(mygo.WindowOptions{Width: 880, Height: 580, TitleBarStyle: mygo.TitleBarHidden,
+			TrafficLightPosition: &mygo.Point{X: 20, Y: 20}, Content: ui.View(func(c *ui.Context) {
+				hidden := c.WindowHidden()
+				a.view(c)
+				c.Root().DrawOver(func(_ *ui.Painter, _ ui.Rect) {
+					select {
+					case painted <- frame{phase.Load(), hidden}:
+					default:
+					}
+				})
+			})})
+		a.win = w
+		w.OnReadyToShow(func() { ready <- struct{}{} })
+		w.OnFocus(func() {
+			select {
+			case focused <- struct{}{}:
+			default:
+			}
+		})
+		w.OnEnterFullScreen(func() { phase.Store(1); modes <- 1 })
+		w.OnLeaveFullScreen(func() { phase.Store(2); modes <- 2 })
+	})
+	t.Cleanup(func() {
+		if w.IsFullScreen() {
+			w.SetFullScreen(false)
+			for nativeLyricWait(t, modes, "exit before cleanup") != 2 {
+			}
+		}
+		w.Destroy()
+	})
+	nativeLyricWait(t, ready, "first frame")
+	// Match showMain: the full application view has a native window owner,
+	// and its application is shown and activated before asking for focus.
+	mygo.App.Show()
+	mygo.App.Focus()
+	w.Show()
+	w.Focus()
+	if !w.IsFocused() {
+		nativeLyricWait(t, focused, "window focus")
+	}
+	for _, step := range []int32{1, 2} {
+		w.SetFullScreen(step == 1)
+		nativeLyricWait(t, modes, "full-screen mode callback")
+		for {
+			f := nativeLyricWait(t, painted, "visible frame after transition")
+			if f.phase == step && !f.hidden {
+				break
+			}
+		}
+		// The cover and lyric viewport belong to the overlay, not the
+		// underlying browse page. They must be present on its visible frame.
+		cover, viewport := nativeLyricRects(t, w.ID(), "专辑封面")
+		if cover.W <= 0 || cover.H <= 0 || viewport.W <= 0 {
+			t.Fatalf("restored page missing content: cover %v viewport %v", cover, viewport)
+		}
+	}
 }
