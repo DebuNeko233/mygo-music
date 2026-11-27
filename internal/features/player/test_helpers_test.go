@@ -5,6 +5,7 @@
 package player
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -45,7 +46,7 @@ func songServer(t *testing.T, b []byte) (*httptest.Server, func(id int64) int) {
 func serveURL(t *testing.T, srv *httptest.Server, size int) {
 	t.Helper()
 	old := songURL
-	songURL = func(id int64, level string) (*netease.Stream, error) {
+	songURL = func(_ context.Context, id int64, level string) (*netease.Stream, error) {
 		return &netease.Stream{URL: fmt.Sprintf("%s/%d", srv.URL, id), Size: int64(size), Level: level, Type: "mp3"}, nil
 	}
 	t.Cleanup(func() { songURL = old })

@@ -5,6 +5,7 @@
 package player
 
 import (
+	"context"
 	"netease-music-mygo/internal/features/netease"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestConnectionStatusPlaybackRetryPreservesPosition(t *testing.T) {
 	ask := songURL
 	t.Cleanup(func() { songURL = ask })
 	called := make(chan int64, 1)
-	songURL = func(id int64, _ string) (*netease.Stream, error) {
+	songURL = func(_ context.Context, id int64, _ string) (*netease.Stream, error) {
 		called <- id
 		return nil, netease.ErrNotLoggedIn
 	}

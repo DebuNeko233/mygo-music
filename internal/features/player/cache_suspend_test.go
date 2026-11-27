@@ -5,6 +5,7 @@
 package player
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -133,7 +134,7 @@ func TestCacheQuiesceSharedReader(t *testing.T) {
 func noSongSources(t *testing.T) func() {
 	t.Helper()
 	old := songURL
-	songURL = func(int64, string) (*netease.Stream, error) {
+	songURL = func(context.Context, int64, string) (*netease.Stream, error) {
 		return nil, netease.ErrUnavailable
 	}
 	return func() { songURL = old }

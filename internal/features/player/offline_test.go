@@ -5,6 +5,7 @@
 package player
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +53,7 @@ func TestOfflineCompleteSongUsesCache(t *testing.T) {
 	t.Cleanup(func() { netease.SetOffline(false) })
 	p := New(func(func()) {})
 	p.Cache = cache
-	_, stream, err := p.open(netease.Track{ID: 1}, "exhigh", nil, func(int64, string) (*netease.Stream, error) {
+	_, stream, err := p.open(context.Background(), netease.Track{ID: 1}, "exhigh", nil, func(context.Context, int64, string) (*netease.Stream, error) {
 		t.Error("asked for cached audio URL")
 		return nil, netease.ErrOffline
 	}, cache, nil)
@@ -85,7 +86,7 @@ func TestOfflineUsesBestCacheWhenExactQualityIsMissing(t *testing.T) {
 		{"hires", "lossless"},
 	} {
 		t.Run(tc.level, func(t *testing.T) {
-			st, stream, err := p.open(netease.Track{ID: 1}, tc.level, nil, func(int64, string) (*netease.Stream, error) {
+			st, stream, err := p.open(context.Background(), netease.Track{ID: 1}, tc.level, nil, func(context.Context, int64, string) (*netease.Stream, error) {
 				t.Fatal("asked for an audio URL while offline")
 				return nil, netease.ErrOffline
 			}, cache, nil)

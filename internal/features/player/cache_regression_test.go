@@ -6,6 +6,7 @@ package player
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -150,7 +151,7 @@ func TestPausedRestoreDefersUncachedAudio(t *testing.T) {
 	defer server.Close()
 	old := songURL
 	var urls atomic.Int32
-	songURL = func(int64, string) (*netease.Stream, error) {
+	songURL = func(context.Context, int64, string) (*netease.Stream, error) {
 		urls.Add(1)
 		return &netease.Stream{URL: server.URL, Level: "exhigh", Type: "mp3", Size: int64(len(body))}, nil
 	}
