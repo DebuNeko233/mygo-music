@@ -5,6 +5,7 @@
 package player
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -59,7 +60,7 @@ func TestUncachedLoadsReportBufferingBeforeURLReturns(t *testing.T) {
 		t.Run(map[bool]string{false: "direct", true: "prefetched"}[prefetched], func(t *testing.T) {
 			asked, release := make(chan struct{}), make(chan struct{})
 			old := songURL
-			songURL = func(int64, string) (*netease.Stream, error) {
+			songURL = func(context.Context, int64, string) (*netease.Stream, error) {
 				close(asked)
 				<-release
 				return nil, netease.ErrUnavailable
@@ -101,7 +102,7 @@ func TestUncachedLoadsReportBufferingBeforeURLReturns(t *testing.T) {
 func TestOldRemoteLoadDoesNotMarkCachedReplacementBuffering(t *testing.T) {
 	asked, release := make(chan struct{}), make(chan struct{})
 	old := songURL
-	songURL = func(int64, string) (*netease.Stream, error) {
+	songURL = func(context.Context, int64, string) (*netease.Stream, error) {
 		close(asked)
 		<-release
 		return nil, netease.ErrUnavailable

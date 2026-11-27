@@ -653,6 +653,26 @@ func (d *download) Err() error {
 	return d.err
 }
 
+// waitComplete lets a retired prefetch stop waiting without cancelling the
+// current song's download, which may still be owned by foreground playback.
+func (d *download) waitComplete(ctx context.Context) error {
+	stop := context.AfterFunc(ctx, func() {
+		d.mu.Lock()
+		d.cond.Broadcast()
+		d.mu.Unlock()
+	})
+	defer stop()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for !d.done && ctx.Err() == nil {
+		d.cond.Wait()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return d.err
+}
+
 // waitFor waits for the prefix up to n, or for completion if n is MaxInt64.
 func (d *download) waitFor(n int64) int64 {
 	if n != math.MaxInt64 {

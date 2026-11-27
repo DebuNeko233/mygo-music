@@ -5,6 +5,7 @@
 package player
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"testing/synctest"
@@ -125,7 +126,7 @@ func TestUnavailableOppositeNavigationRejectsLateLoad(t *testing.T) {
 			callbacks := make(chan func(), 4)
 			oldID := int64(2 + direction)
 			old := songURL
-			songURL = func(id int64, _ string) (*netease.Stream, error) {
+			songURL = func(_ context.Context, id int64, _ string) (*netease.Stream, error) {
 				if id == oldID {
 					close(requested)
 					<-release
@@ -177,7 +178,7 @@ func TestPreviousUnavailableLoadsEarlierAudio(t *testing.T) {
 	data := song(t)
 	analysisHTTP(t, data)
 	old := songURL
-	songURL = func(id int64, level string) (*netease.Stream, error) {
+	songURL = func(_ context.Context, id int64, level string) (*netease.Stream, error) {
 		if id == 2 {
 			return nil, netease.ErrUnavailable
 		}

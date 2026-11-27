@@ -59,11 +59,7 @@ func (p *Player) SuspendCache() func() {
 	p.gen++
 	p.lyricBusy, p.coverBusy = false, false
 	p.dropAhead()
-	if p.stream != nil {
-		if dl, _ := p.stream.source(); dl != nil {
-			dl.Close()
-		}
-	}
+	p.cancelAudioLoad()
 	if p.out != nil {
 		p.out.Close()
 	}

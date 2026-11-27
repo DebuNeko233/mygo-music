@@ -45,7 +45,7 @@ func TestRestrictedSongsStillSkip(t *testing.T) {
 	analysisHTTP(t, nil)
 	old := songURL
 	var asked []int64
-	songURL = func(id int64, _ string) (*netease.Stream, error) {
+	songURL = func(_ context.Context, id int64, _ string) (*netease.Stream, error) {
 		// The queue loads these serially; each request posts its result before another starts.
 		asked = append(asked, id)
 		return nil, netease.ErrUnavailable
@@ -100,7 +100,7 @@ func TestCorruptFLACKeepsSelectedSong(t *testing.T) {
 	b[start] = 0
 	analysisHTTP(t, b)
 	old := songURL
-	songURL = func(id int64, _ string) (*netease.Stream, error) {
+	songURL = func(_ context.Context, id int64, _ string) (*netease.Stream, error) {
 		if id == 3 {
 			return nil, errors.New("stop the test on song 3")
 		}
@@ -231,7 +231,7 @@ func TestCorruptCachedSongIsDownloadedAgain(t *testing.T) {
 	var asked atomic.Int64
 	p := New(func(func()) {})
 	p.Cache = c
-	fresh, _, err := p.fetch(netease.Track{ID: 1}, "lossless", nil, func(int64, string) (*netease.Stream, error) { asked.Add(1); return st, nil }, c, nil)
+	fresh, _, err := p.fetch(context.Background(), netease.Track{ID: 1}, "lossless", nil, func(context.Context, int64, string) (*netease.Stream, error) { asked.Add(1); return st, nil }, c, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
