@@ -160,6 +160,7 @@ func TestImmersiveIntroCreditsClearTheQuietCard(t *testing.T) {
 	for _, extra := range []int{0, playbackview.TimedListThreshold} {
 		t.Run(fmt.Sprint(extra), func(t *testing.T) {
 			a, _, lines := quietApp(0)
+			a.settings.PureLyrics = false // Exercise the opening credit's transition.
 			a.settings.LyricEdgeFade = true
 			for i := range extra {
 				lines = append(lines, lyrics.Line{At: 31*time.Second + time.Duration(i)*400*time.Millisecond, Text: fmt.Sprint("Lyric ", i)})
@@ -197,6 +198,7 @@ func TestStaticLyricsQuietCard(t *testing.T) {
 	for _, text := range []string{lyrics.InstrumentalText, "作曲：周杰伦"} {
 		t.Run(text, func(t *testing.T) {
 			a, _, _ := quietApp(0)
+			a.settings.PureLyrics = false // Restore the complete static credit after the card.
 			player.SetLyrics(a.pl, []lyrics.Line{{At: 10 * time.Second, Text: text}})
 			tt := ui.NewTesterWith(func(c *ui.Context) {
 				a.views.playback.LyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0)

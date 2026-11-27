@@ -71,13 +71,13 @@ func (d Display) Pure(info SongInfo) Display {
 		}
 	}
 	if !changed {
-		result := d
-		result.noSinging = !d.HasSinging() && !instrumental
-		return result
+		return d
 	}
 	result := newDisplay(rows)
 	result.unavailable = d.unavailable
-	result.noSinging = !result.HasSinging() && !instrumental
+	// Only filtering a previously nonempty singing timeline creates a new
+	// empty notice. Already empty sources keep their original fallback.
+	result.noSinging = !result.HasSinging() && !instrumental && (d.HasSinging() || d.noSinging)
 	return result
 }
 

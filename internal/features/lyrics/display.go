@@ -30,7 +30,7 @@ type Display struct {
 	Lines       []Line
 	sung        []int
 	unavailable bool
-	noSinging   bool // a pure presentation has no confirmed singing or instrumental notice
+	noSinging   bool // pure filtering removed all previously displayed singing rows
 }
 
 func (d Display) HasSinging() bool { return len(d.sung) > 0 }

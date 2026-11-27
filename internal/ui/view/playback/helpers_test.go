@@ -24,6 +24,8 @@ func lyricPaneView(t *testing.T, lines []lyrics.Line, w, h int) (*View, *ui.Test
 	*a.Config = preferences.Default()
 	a.Config.LyricEdgeFade = false
 	a.Config.HotComments = false
+	// Existing pane tests exercise the complete presentation; pure-mode tests opt in.
+	a.Config.PureLyrics = false
 	player.Cue(a.Player(), []netease.Track{{ID: 1, Duration: 200000}})
 	player.SetLyrics(a.Player(), lines)
 	player.Hold(a.Player(), 0)

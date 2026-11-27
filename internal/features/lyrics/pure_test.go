@@ -94,16 +94,19 @@ func TestPureLyricsProtectsTitleRefrains(t *testing.T) {
 	}
 }
 
-// Only an explicit instrumental notice keeps that status; hiding credits or
-// receiving no lyrics does not invent an instrumental classification.
+// A display that already has no singing retains its original notice when
+// credits disappear; applying pure mode repeatedly must not change that notice.
 func TestPureLyricsEmptyStates(t *testing.T) {
 	for _, tc := range []struct {
 		name, lrc, want string
 	}{
-		{"credits only", "[00:00]作词：甲\n[00:01]作曲：乙", NoSingingText},
-		{"empty", "", NoSingingText},
+		{"credits only", "[00:00]作词：甲\n[00:01]作曲：乙", InstrumentalText},
+		{"empty", "", InstrumentalText},
+		{"blank rows", "[00:00]\n[00:01]  ", InstrumentalText},
+		{"plain instrumental", "纯音乐，请欣赏", InstrumentalText},
 		{"instrumental", "[00:00]纯音乐，请欣赏\n[00:01]作曲：甲", InstrumentalText},
 		{"unavailable", "暂无歌词", UnavailableText},
+		{"unavailable with credits", "暂无歌词\n[00:01]作曲：甲", UnavailableText},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, source := BuildDisplay(tc.lrc, "", "")
@@ -111,7 +114,31 @@ func TestPureLyricsEmptyStates(t *testing.T) {
 			if pure.HasSinging() || len(pure.Lines) != 0 || pure.EmptyText() != tc.want {
 				t.Fatalf("wrong pure empty state: %+v / %q", pure, pure.EmptyText())
 			}
+			if source.EmptyText() != tc.want || pure.Pure(SongInfo{}).EmptyText() != tc.want {
+				t.Fatal("pure mode changed the original or previously prepared notice")
+			}
 		})
+	}
+}
+
+// Hiding the last title/performer row can create a newly empty projection;
+// distinguish it from a source that was already empty or explicitly instrumental.
+func TestPureLyricsFilteredEmptyNotice(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		source := "[00:00]夜航 - Alice"
+		want := NoSingingText
+		if explicit {
+			source += "\n[00:01]纯音乐，请欣赏"
+			want = InstrumentalText
+		}
+		_, display := BuildDisplay(source, "", "")
+		if !display.HasSinging() {
+			t.Fatal("fixture must initially include the unclassified title")
+		}
+		pure := display.Pure(SongInfo{Title: "夜航", Artists: []string{"Alice"}})
+		if pure.HasSinging() || len(pure.Lines) != 0 || pure.EmptyText() != want || pure.Pure(SongInfo{}).EmptyText() != want {
+			t.Fatal("filter-created empty state lost its notice or explicit instrumental evidence")
+		}
 	}
 }
 

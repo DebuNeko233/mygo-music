@@ -14,6 +14,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"netease-music-mygo/internal/features/lyrics"
 	"netease-music-mygo/internal/features/netease"
 	"netease-music-mygo/internal/features/player"
 	playbackview "netease-music-mygo/internal/ui/view/playback"
@@ -39,7 +40,10 @@ func TestPureLyricsSettingsApplyAndReload(t *testing.T) {
 	desktop := &playbackview.DeskLyrics{A: &a.views.playback}
 	desktopUI := ui.NewTester(desktop.View, 780, 240)
 	seek, position := a.pl.SeekRevision(), a.pl.Position()
-	for _, pure := range []bool{true, false} {
+	if !lyricsUI.HasText("唱出明天") || lyricsUI.HasText("作词：甲") {
+		t.Fatal("the default did not immediately use the pure presentation")
+	}
+	for _, pure := range []bool{false, true} {
 		clickSettingsSwitch(t, settingsUI, "纯净歌词")
 		lyricsUI.Frame()
 		desktopUI.Frame()
@@ -58,6 +62,46 @@ func TestPureLyricsSettingsApplyAndReload(t *testing.T) {
 		}
 		if a.pl.SeekRevision() != seek || a.pl.Position() != position || len(a.pl.Queue()) != 1 || len(a.pl.PresentLyrics(false).Display.Lines) != 3 {
 			t.Fatal("a display preference changed playback or source lyrics")
+		}
+	}
+}
+
+// Toggling the preference and refreshing sources preserve existing empty
+// notices in ordinary/immersive panes, stage and desktop lyrics.
+func TestPureLyricsEmptyNoticeAcrossViews(t *testing.T) {
+	isolateUserData(t)
+	a := newTestApp()
+	t.Cleanup(a.pl.Close)
+	a.settings = defaultSettings()
+	a.settings.HotComments = false
+	player.Cue(a.pl, []netease.Track{{ID: 7, Duration: 120000}})
+	player.Hold(a.pl, 20*time.Second)
+	for _, immersive := range []bool{false, true} {
+		a.settings.LyricEdgeFade = immersive
+		pane := ui.NewTester(func(c *ui.Context) {
+			ui.Column(c).Fill().Children(func() { a.views.playback.LyricsPane(c, a.pl.Current(), 360, ui.Rect{}, 0) })
+		}, 480, 360)
+		stage := ui.NewTester(func(c *ui.Context) {
+			ui.Column(c).Fill().Children(func() { a.views.playback.Stage(c, a.pl.Current(), ui.RGB(0, 0, 0)) })
+		}, 480, 360)
+		desktop := &playbackview.DeskLyrics{A: &a.views.playback}
+		desk := ui.NewTester(desktop.View, 780, 240)
+		for _, tc := range []struct{ source, want string }{
+			{"", lyrics.InstrumentalText},
+			{"[00:00]作曲：乙", lyrics.InstrumentalText},
+			{"[00:00]纯音乐，请欣赏", lyrics.InstrumentalText},
+			{"暂无歌词", lyrics.UnavailableText},
+		} {
+			player.RefreshLyrics(a.pl, 7, tc.source, "", "")
+			for _, pure := range []bool{false, true, false, true} {
+				a.settings.PureLyrics = pure
+				for _, view := range []*ui.Tester{pane, stage, desk} {
+					view.Frame()
+					if !view.HasText(tc.want) || view.HasText(lyrics.NoSingingText) {
+						t.Fatalf("pure=%v source=%q changed its empty notice: %v", pure, tc.source, view.Texts())
+					}
+				}
+			}
 		}
 	}
 }

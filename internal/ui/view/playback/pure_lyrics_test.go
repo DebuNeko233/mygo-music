@@ -40,10 +40,10 @@ func TestPureLyricsFollowAndSeek(t *testing.T) {
 			if a.Player().Position() != 20*time.Second {
 				t.Fatal("cleaned line sought to a different timestamp")
 			}
-			player.RefreshLyrics(a.Player(), 1, "[00:00]作曲：乙", "", "")
+			player.RefreshLyrics(a.Player(), 1, "[00:00]合：", "", "")
 			tt.Frame()
 			if !tt.HasText(lyrics.NoSingingText) || tt.HasText(lyrics.InstrumentalText) {
-				t.Fatal("metadata-only lyrics were mistaken for an instrumental")
+				t.Fatal("filter-created empty lyrics were mistaken for an instrumental")
 			}
 			stage := ui.NewTester(func(c *ui.Context) {
 				ui.Column(c).Fill().Children(func() { a.Stage(c, a.Player().Current(), ui.RGB(0, 0, 0)) })
