@@ -31,7 +31,7 @@ func (a *app) handlePlaybackAction(args []string) bool {
 		}
 		if !a.quitting {
 			if a.startup.waiting || !a.restored || a.pl == nil {
-				a.startup.queue(openingIntent{playbackAction: action})
+				a.startup.queue(openingIntent{playbackActions: []string{action}})
 			} else {
 				a.runPlaybackAction(action)
 			}

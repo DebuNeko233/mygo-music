@@ -123,7 +123,7 @@ func (a *app) start() {
 }
 
 // Startup keeps one opening intent across account and queue restoration.
-// A newer file, link or launcher command supersedes an older opening intent.
+// Files and links replace prior intents; consecutive playback controls retain order.
 type startupState struct {
 	waiting bool
 	show    bool
@@ -131,12 +131,20 @@ type startupState struct {
 }
 
 type openingIntent struct {
-	file           string
-	link           netease.MusicLink
-	playbackAction string
+	file            string
+	link            netease.MusicLink
+	playbackActions []string
 }
 
-func (s *startupState) queue(intent openingIntent) { s.pending = &intent }
+func (s *startupState) queue(intent openingIntent) {
+	// Toggle commands are relative actions: two clicks must remain two
+	// changes while restoration is pending. Files/links replace that batch.
+	if len(intent.playbackActions) > 0 && s.pending != nil && len(s.pending.playbackActions) > 0 {
+		s.pending.playbackActions = append(s.pending.playbackActions, intent.playbackActions...)
+		return
+	}
+	s.pending = &intent
+}
 
 func (s *startupState) take() *openingIntent {
 	s.waiting = false
@@ -153,8 +161,10 @@ func (a *app) finishStartup() {
 	if intent == nil {
 		return
 	}
-	if intent.playbackAction != "" {
-		a.runPlaybackAction(intent.playbackAction)
+	if len(intent.playbackActions) > 0 {
+		for _, action := range intent.playbackActions {
+			a.runPlaybackAction(action)
+		}
 	} else if intent.file != "" {
 		a.openTemporaryAudio(intent.file)
 	} else {

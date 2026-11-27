@@ -96,7 +96,7 @@ func TestLinuxLauncherActionsReachPlayback(t *testing.T) {
 		if !a.handlePlaybackAction(action.Args) {
 			t.Fatalf("packaged action %s does not reach a playback command", action.ID)
 		}
-		command := a.startup.take().playbackAction
+		command := a.startup.take().playbackActions[0]
 		if seen[command] {
 			t.Fatalf("packaged action repeats command %s", command)
 		}
@@ -105,6 +105,27 @@ func TestLinuxLauncherActionsReachPlayback(t *testing.T) {
 	}
 	if len(seen) != len(launcherPlaybackTasks) {
 		t.Fatal("Linux package is missing playback commands")
+	}
+}
+
+// Relative mode commands received during restoration retain every click,
+// rather than collapsing two shuffle toggles or three repeat cycles to one.
+func TestLauncherStartupRetainsEachToggle(t *testing.T) {
+	a := newTestApp()
+	defer a.release()
+	a.pl.SuspendCache()
+	a.startup.waiting = true
+	for _, action := range []string{"shuffle", "shuffle", "repeat", "repeat", "repeat"} {
+		a.handlePlaybackAction([]string{playbackActionFlag + action})
+	}
+	a.pl.Restore(player.Session{Queue: []netease.Track{{ID: 1}}, Order: []int{0}, At: 0})
+	a.restored = true
+	changes := 0
+	a.pl.Changed = func() { changes++ }
+	a.finishStartup()
+	a.finishStartup()
+	if changes != 5 || a.pl.Shuffle() || a.pl.Repeat() != player.RepeatOff || a.pl.Playing() {
+		t.Fatalf("startup lost or replayed clicks: changes=%d shuffle=%v repeat=%v", changes, a.pl.Shuffle(), a.pl.Repeat())
 	}
 }
 
