@@ -127,10 +127,30 @@ gh release create sherpa-onnx-2.0.1 --repo DebuNeko233/nyago-music \
 
 ## 7. 同步 Homebrew tap
 
-应用正式发行公开并完成下载验证后，更新 [DebuNeko233/homebrew-nyago-music](https://github.com/DebuNeko233/homebrew-nyago-music) 的 `Casks/nyago-music.rb`：版本号与 ARM/Intel DMG 各自的 SHA-256 必须来自同一正式版本。下载两份 DMG 计算摘要，并与该发行的 `SHA256SUMS` 比对。
+[Update Homebrew 工作流](.github/workflows/homebrew.yml)在正式 Release 的 `published` 事件后自动同步 [DebuNeko233/homebrew-nyago-music](https://github.com/DebuNeko233/homebrew-nyago-music)。构建完成但仍为草稿时不更新；字幕运行库、预览版和不再是 Latest 的旧版本跳过。Release 由维护者公开时产生该事件；若未来改用 `GITHUB_TOKEN` 自动公开，需显式调度此工作流，不能依赖该 token 产生的事件再次启动 Actions。
+
+[同步脚本](.github/scripts/homebrew_update.py)从发行标签读取 `mygo.json`，下载同版 ARM/Intel DMG 与 `SHA256SUMS`，核对实际摘要、大小及 GitHub 资产摘要后更新 cask 的版本、两个 SHA-256、下载模板、应用名称和标识，并更新 tap README 的当前版本。它保留其他 cask 行为及 `zap` 清理范围；同版本摘要变化会报错，较新的 tap 不会被降级。
+
+工作流在隔离的 macOS runner 执行 `brew style`、双架构在线审查与下载验证，提交前再次确认该版本仍为 Latest，仅快进推送 cask 和 README 到 tap `main`。重复运行没有内容变化时不提交。最低 macOS 版本等其他 cask 约束保留，平台要求变化时仍应按实际包手工适配；在线审查失败会阻止推送。tap 自身的 Cask CI 随推送执行安装、验签和卸载清理验证。
+
+### 部署凭据
+
+应用仓库的 `GITHUB_TOKEN` 只用于读取发行信息。跨仓库提交使用专用 SSH 部署密钥：公钥在 tap 的 Deploy keys 中启用写入权限，私钥存入应用仓库 Actions Secret `HOMEBREW_TAP_SSH_KEY`。该密钥只授权 tap；通过部署密钥推送也能正常触发 tap 的 push CI。不得把个人登录令牌或应用更新签名密钥复用为该凭据。
+
+首次配置或轮换时，在受限临时目录生成专用 Ed25519 密钥，通过 `gh repo deploy-key add 公钥文件 --allow-write --repo DebuNeko233/homebrew-nyago-music` 添加公钥，使用 `gh secret set HOMEBREW_TAP_SSH_KEY --repo DebuNeko233/nyago-music < 私钥文件` 保存私钥。核对 SSH 读写权限后删除本地临时私钥；轮换完成后撤销旧部署公钥。通过 gh 创建的部署密钥会关联创建时的 GitHub 授权，撤销该授权后需要重新配置。不要输出私钥或提交到 Git。
+
+### 重试与人工核对
+
+自动同步失败后可在 Actions 重跑，或选择当前最新正式标签手动调度：
+
+```sh
+gh workflow run homebrew.yml --repo DebuNeko233/nyago-music --ref main -f tag=v0.3.2
+```
+
+示例标签应替换为需要重试的当前 Latest。旧版本、草稿和预览版仍不能绕过同步校验；SSH 推送遇到并发提交时直接失败，重新运行会读取最新 tap，不强推覆盖。
 
 `v0.3.1` 起 cask 的 `app` 和 CI 中的包路径为 `Nyago Music.app`。必须与对应版本的 DMG 内容一致，不能只修改 cask 路径却继续引用旧包。
 
-检查应用实际名称、包文件名、最低系统版本与 cask 中的 `app`、`url`、`depends_on` 是否一致。完成 tap 的格式、在线审查、两个架构下载与 CI 安装验证后推送 main；具体命令见 [tap 维护说明](https://github.com/DebuNeko233/homebrew-nyago-music#维护与发版)。
+人工维护时，检查应用实际名称、包文件名、最低系统版本与 cask 中的 `app`、`url`、`depends_on` 是否一致。核对两个 DMG 的摘要和同版校验表，完成 tap 的格式、在线审查、两个架构下载与 CI 安装验证；具体命令见 [tap 维护说明](https://github.com/DebuNeko233/homebrew-nyago-music#维护与发版)。
 
 应用内更新与 Homebrew cask 版本分别维护。`brew livecheck` 仅发现应用的新正式版，不会自动提交 cask；不要把字幕库资源发行、草稿或预览版同步成稳定版，也不要为更新 cask 改写已发布的应用 tag。

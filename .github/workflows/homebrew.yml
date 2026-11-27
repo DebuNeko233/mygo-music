@@ -1,0 +1,95 @@
+# Update the tap only after the latest stable application release is public.
+name: Update Homebrew
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable tag to retry, such as v0.3.2
+        required: true
+        type: string
+
+concurrency:
+  group: homebrew-tap-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    if: >-
+      github.repository == 'DebuNeko233/nyago-music' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (!github.event.release.draft && !github.event.release.prerelease &&
+        startsWith(github.event.release.tag_name, 'v')))
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Use the current automation, and read release metadata from its tag.
+          ref: ${{ github.event.repository.default_branch }}
+          path: app
+          persist-credentials: false
+      - name: Check tap credentials
+        env:
+          TAP_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
+        run: |
+          if [ -z "$TAP_KEY" ]; then
+            echo "Configure HOMEBREW_TAP_SSH_KEY with the tap's dedicated write deploy key." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        with:
+          repository: DebuNeko233/homebrew-nyago-music
+          ref: main
+          path: tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
+      - name: Prepare and verify the cask update
+        id: prepare
+        run: |
+          python3 app/.github/scripts/homebrew_update.py prepare \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" \
+            --tap tap --downloads "$RUNNER_TEMP/homebrew-downloads" --output "$GITHUB_OUTPUT"
+      - name: Audit the updated cask and both downloads
+        if: steps.prepare.outputs.changed == 'true'
+        run: |
+          tap_path="$(brew --repository)/Library/Taps/debuneko233/homebrew-nyago-music"
+          mkdir -p "$(dirname "$tap_path")"
+          ln -s "$GITHUB_WORKSPACE/tap" "$tap_path"
+          if brew help trust >/dev/null 2>&1; then
+            brew trust --cask debuneko233/nyago-music/nyago-music
+          fi
+          brew style tap/Casks/nyago-music.rb
+          brew audit --cask --online --arch=all debuneko233/nyago-music/nyago-music
+          brew fetch --cask --arch=arm debuneko233/nyago-music/nyago-music
+          brew fetch --cask --arch=intel debuneko233/nyago-music/nyago-music
+      - name: Recheck the latest release before pushing
+        if: steps.prepare.outputs.changed == 'true'
+        id: latest
+        run: |
+          python3 app/.github/scripts/homebrew_update.py guard \
+            --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --output "$GITHUB_OUTPUT"
+      - name: Commit and push the verified update
+        if: steps.latest.outputs.current == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
+        working-directory: tap
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- Casks/nyago-music.rb README.md
+          if git diff --cached --quiet; then
+            echo "Tap already matches this release."
+            exit 0
+          fi
+          git commit -m "chore: update Nyago Music to $RELEASE_VERSION"
+          git push origin HEAD:main

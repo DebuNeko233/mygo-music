@@ -73,7 +73,7 @@ CGO_ENABLED=0 go test ./...
 
 `go tool mygo vet .` 在当前固定框架中先执行 Go vet，再检查 UI 生命周期等规则；CI 也使用此入口。`go test ./...` 包含 internal 和工具测试，满足内部包回归要求。只要动过生产 Go 逻辑，不能以单个定向测试替代全量回归。
 
-发行说明和资产汇总/发布工具由 Release Notes 工作流单独验证；改动这些工具或 Release 工作流时本地执行：
+发行说明、资产汇总/发布及 Homebrew 同步工具由 Release Notes 工作流单独验证；改动这些工具或对应工作流时本地执行：
 
 ```sh
 python3 -m unittest discover -s .github/scripts -p '*_test.py'
@@ -130,8 +130,9 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 | [test.yml](../.github/workflows/test.yml) / Test | Linux 构建、Go/MyGo vet、非 App internal 测试、两片 App 测试、非 App race 与选定 App 并发测试 | 已完整运行所有 App race 或所有平台原生界面 |
 | [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main 的相关文件变更或手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
 | [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物；Linux 额外执行 `scripts/check_linux_packages.sh` 核对真实 DEB 与 Arch 安装目录和桌面命令 | 全部软件行为和签名运行已实测 |
-| [release-notes.yml](../.github/workflows/release-notes.yml) / Release Notes | 发行说明、资产汇总/上传工具测试与当前版本说明校验 | 已运行应用构建、竞态检查或真实 Release 上传 |
+| [release-notes.yml](../.github/workflows/release-notes.yml) / Release Notes | 发行说明、资产汇总/上传、Homebrew 同步工具测试与当前版本说明校验 | 已运行应用构建、竞态检查或真实跨仓库写入 |
 | [release.yml](../.github/workflows/release.yml) / Release | 版本检查、三平台并行签名构建、单任务汇总/上传草稿 | 普通开发可以直接触发发行 |
+| [homebrew.yml](../.github/workflows/homebrew.yml) / Update Homebrew | 正式发行后校验 DMG、更新 tap、在线审查及快进推送 | PR 检查会自动写 tap；已完成所有平台的实机播放验证 |
 
 Test 与 Build 对所有分支的 push 和 PR 使用路径过滤；Full UI Race 只自动检查 main 的相关改动，不再每日定时执行。自动触发范围如下：
 
@@ -143,7 +144,7 @@ Test 与 Build 对所有分支的 push 和 PR 使用路径过滤；Full UI Race 
 | `macos.entitlements.plist`、`scripts/check_linux_packages.sh` | Build |
 | `scripts/sherpa/` | Test（包含工具编译与 vet；仍需本地运行该工具的测试） |
 | App 测试分片脚本 | Test、main 上的 Full UI Race |
-| 发行说明/资产工具、其测试、Release 工作流 | Release Notes |
+| 发行说明/资产/Homebrew 工具、其测试、Release 和 Update Homebrew 工作流 | Release Notes |
 | 某个 CI 工作流自身 | 该工作流，便于验证 CI 配置修改 |
 | README、`docs/`、贡献指南、AGENTS、CHANGELOG、代理技能等说明文件 | 不触发上述应用或工具 CI |
 
