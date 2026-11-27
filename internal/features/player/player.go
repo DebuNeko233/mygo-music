@@ -869,6 +869,9 @@ func (p *Player) Jump(i int) {
 // TogglePlay pauses, fading out, or plays, fading in.
 func (p *Player) TogglePlay() {
 	if p.cacheChanging {
+		if len(p.order) == 0 {
+			return
+		}
 		// What is wanted is kept, and heard once the folder has moved.
 		p.playing = !p.playing
 		p.sync()

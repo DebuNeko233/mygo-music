@@ -12,6 +12,26 @@ import (
 	"netease-music-mygo/internal/features/netease"
 )
 
+// Empty playback commands stay idle before and during a cache move, through
+// Player itself so launchers, hotkeys and media controls share the guarantee.
+func TestTogglePlayEmptyQueueDuringCacheMove(t *testing.T) {
+	p := New(func(func()) {})
+	defer p.Close()
+	changes := 0
+	p.Changed = func() { changes++ }
+	for _, moving := range []bool{false, true} {
+		if moving {
+			p.SuspendCache()
+		}
+		changes = 0
+		p.TogglePlay()
+		p.TogglePlay()
+		if p.Playing() || p.Loading() || p.Ready() || p.Current() != nil || changes != 0 {
+			t.Fatalf("moving=%v: empty queue published playback intent or activity", moving)
+		}
+	}
+}
+
 // Selecting an active shuffle mode must preserve traversal and the selected
 // duplicate queue entry; switching off restores its original queue position.
 func TestSetShufflePreservesSelectionAndNotifies(t *testing.T) {
