@@ -96,7 +96,7 @@ go test ./internal/app/architecture
 | `account.go`、`network.go`、`recovery.go` | 会话切换、系统网络通知、可见功能联合恢复 |
 | `cache.go`、`cache_directory.go`、`playlist_cache.go` | scope/epoch、缓存实例、迁移暂停恢复、写入预约 |
 | `settings.go`、`appearance.go` | 配置到系统外观和共享图片资源的适配 |
-| `menu.go`、`tray.go`、`hotkeys.go`、`updates.go`、`fileassoc*.go` | 菜单、托盘、原生注册、更新和文件关联 |
+| `menu.go`、`tray.go`、`dock_*.go`、`launcher_*.go`、`hotkeys.go`、`updates.go`、`fileassoc*.go` | 菜单、托盘、启动器命令、原生注册、更新和文件关联；Linux 桌面动作由打包配置生成 |
 | `play_commands.go`、`play_report.go`、`session.go`、`pickup.go` | 页面来源、登录与上报、保存恢复时机 |
 | `playback_artwork.go`、`track_artwork.go` | 当前封面来源、预热及过期发布；匹配算法在 artwork |
 | `home.go`、`search.go`、`details.go`、`cloud.go` 等 | 注入账号、API、缓存、导航和播放命令 |

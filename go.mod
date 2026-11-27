@@ -37,5 +37,5 @@ require (
 	golang.org/x/net v0.63.0 // indirect
 )
 
-// Retained lyric layers, macOS frame-ready fixes and Linux install folders, pinned to a tested commit.
-replace github.com/egoist/mygo => github.com/DebuNeko233/mygo v0.10.1-0.20261126070733-ebc72eccad3b
+// Retained lyric layers, macOS frame-ready fixes and Linux packaging, pinned to a tested commit.
+replace github.com/egoist/mygo => github.com/DebuNeko233/mygo v0.10.1-0.20261127052626-be6f27892a8f

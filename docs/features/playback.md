@@ -23,7 +23,17 @@ Dock 图标右键菜单提供重复播放（关闭、列表循环、单曲循环
 
 菜单直接读取 Player 的队列、播放意图和模式，通过 Changed 事件更新有变化的原生属性，不轮询或按进度重建菜单。加载中仍可暂停/恢复；空队列禁用播放和切歌。手动上一首/下一首沿用现有队列循环、电台续播和临时文件结束语义，包括单曲队列。仅菜单栏模式且无窗口时 Dock 图标按原设置隐藏。
 
-显式模式选择使用 `SetRepeat` / `SetShuffle`，重复选择当前模式不重排队列或重新开始播放；界面上的循环/随机按钮也通过这些命令通知状态变化。Windows/Linux 保留原有托盘行为。回归见 [Dock 接线测试](../../internal/app/dock_menu_test.go)和 [模式测试](../../internal/features/player/modes_test.go)。
+显式模式选择使用 `SetRepeat` / `SetShuffle`，重复选择当前模式不重排队列或重新开始播放；界面上的循环/随机按钮也通过这些命令通知状态变化。回归见 [Dock 接线测试](../../internal/app/dock_menu_test.go)和 [模式测试](../../internal/features/player/modes_test.go)。
+
+## Windows 任务栏与 Linux 启动器
+
+Windows 任务栏右键 Jump List 和支持 Desktop Actions 的 Linux 启动器提供固定任务：播放/暂停、上一首、下一首、切换随机播放、切换循环模式。随机模式单击切换开关，循环模式按关闭、列表循环、单曲循环轮换。两平台的任务没有动态勾选或子菜单，不把当前播放状态写入持久任务标签；原有托盘菜单继续可用。
+
+任务使用 `--playback-action=<action>` 启动本应用。已运行时通过单实例事件执行，控制播放不主动弹出主窗口；未运行时正常启动应用，等账号和播放会话恢复后执行一次。与文件/音乐链接共享启动意图的顺序，较新的意图替代旧意图；空队列的播放和切歌仍为空操作。任务只接受一个已知动作参数，不解释任意命令或参数组合。
+
+Windows 在启动时注册 Jump List，任务由系统保留到应用退出后。Linux 的动作由 `mygo.json` 的 `linux.actions` 在打包时生成，随桌面入口进入 DEB、RPM、PKGBUILD、归档安装和更新，使用实际安装目录里的可执行文件，保留 MIME 与 URL 关联；应用运行时不另建用户级启动器。具体动作展示取决于桌面环境。
+
+回归见 [启动器命令、恢复顺序与打包配置接线](../../internal/app/launcher_tasks_test.go)和 [Linux 安装包验证](../../scripts/check_linux_packages.sh)。Windows Explorer 和 Linux 各桌面环境的原生交互需分别实机验证，交叉编译不能替代。
 
 ## 页面播放语义
 

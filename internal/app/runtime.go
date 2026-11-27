@@ -5,6 +5,7 @@
 package app
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/egoist/mygo"
@@ -26,6 +27,7 @@ func Run() error {
 	a := newApp()
 	defer a.release()
 	a.startup.waiting = true
+	a.handlePlaybackAction(os.Args[1:])
 	a.bindApplication()
 	repairFileAssociations()
 	a.useUpdater()
@@ -57,7 +59,11 @@ func (a *app) bindApplication() {
 		}
 	}))
 	a.native.Listen(mygo.App.OnOpenFile(a.openTemporaryAudio))
-	a.native.Listen(mygo.App.OnSecondInstance(func([]string, string) { a.showMain() }))
+	a.native.Listen(mygo.App.OnSecondInstance(func(args []string, _ string) {
+		if !a.handlePlaybackAction(args) {
+			a.showMain()
+		}
+	}))
 	a.native.Listen(mygo.App.OnBeforeQuit(func(e *mygo.QuitEvent) {
 		if !a.requestQuit(e.SessionEnding) {
 			e.PreventDefault()
@@ -99,6 +105,7 @@ func (a *app) start() {
 	}
 	a.pl.Playback = a.playback
 	a.installDockMenu()
+	a.installLauncherTasks()
 	a.playbackState.Volume = a.settings.Volume
 	// The system's mixer applies the volume too, where it keeps one for
 	// the app, which is from the first sound on.
@@ -116,7 +123,7 @@ func (a *app) start() {
 }
 
 // Startup keeps one opening intent across account and queue restoration.
-// A newer file or link supersedes either kind of older request.
+// A newer file, link or launcher command supersedes an older opening intent.
 type startupState struct {
 	waiting bool
 	show    bool
@@ -124,8 +131,9 @@ type startupState struct {
 }
 
 type openingIntent struct {
-	file string
-	link netease.MusicLink
+	file           string
+	link           netease.MusicLink
+	playbackAction string
 }
 
 func (s *startupState) queue(intent openingIntent) { s.pending = &intent }
@@ -145,7 +153,9 @@ func (a *app) finishStartup() {
 	if intent == nil {
 		return
 	}
-	if intent.file != "" {
+	if intent.playbackAction != "" {
+		a.runPlaybackAction(intent.playbackAction)
+	} else if intent.file != "" {
 		a.openTemporaryAudio(intent.file)
 	} else {
 		a.openMusicLink(intent.link)

@@ -81,6 +81,8 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
 
 以上不能报告为 Linux/Windows 实机验证。Windows 安装程序需要 NSIS，macOS 打包需要 Mac，Wayland portal、Linux 钥匙串及系统音量需要对应桌面服务。
 
+Linux 安装包可运行 `bash scripts/check_linux_packages.sh build/linux-amd64` 验证目录、DEB/RPM/Arch/归档中的桌面播放动作和带空格的可执行路径。校验需要 `dpkg-deb`、`desktop-file-validate` 和 `bsdtar`；Ubuntu 的后两者来自 `desktop-file-utils`、`libarchive-tools`。构建工作流自动安装并执行这些检查。
+
 ### 安装路径与应用身份
 
 显示名为 `Nyago Music`，包名为 `nyago-music`，应用 ID 为 `io.github.debuneko233.nyagomusic`。Linux 的 `linux.installDirName` 明确设为 `Nyago Music`；目录名与包名分开配置，打包逻辑由 MyGo CLI 维护。
