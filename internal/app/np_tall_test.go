@@ -48,6 +48,7 @@ func tallLyricsApp(t *testing.T) *app {
 // Instrumental credits use the same reading area when immersive lyrics is toggled.
 func TestNowPlayingInstrumentalLayoutMatchesBothModes(t *testing.T) {
 	a := tallLyricsApp(t)
+	a.settings.PureLyrics = false // This layout includes the complete credit block.
 	a.settings.HotComments = false
 	const credit = "作曲：A"
 	player.RefreshLyrics(a.pl, 1, "[00:01]"+credit, "", "")

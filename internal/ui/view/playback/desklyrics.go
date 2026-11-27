@@ -506,7 +506,8 @@ func (d *DeskLyrics) View(c *ui.Context) {
 	if pl.Current() == nil {
 		return
 	}
-	lines, loaded := pl.Lyrics()
+	content := pl.PresentLyrics(s.PureLyrics)
+	lines, loaded := content.Lines, content.Loaded
 	pos := pl.Position()
 	cur := -1
 	if len(lines) > 0 {
@@ -520,7 +521,7 @@ func (d *DeskLyrics) View(c *ui.Context) {
 	family := LyricFamily(s.LyricFont)
 	transFamily := LyricFamily(s.LyricTransFont)
 	shown, start := LyricWindowLines(lines, cur, s.LyricLines)
-	lang := pl.LyricLanguage()
+	lang := content.OriginalScript.Language()
 
 	if over && !s.LyricLocked {
 		c.Root().Background(ui.RGBA(0, 0, 0, 0.2))
@@ -572,8 +573,7 @@ func (d *DeskLyrics) View(c *ui.Context) {
 		// Instrumental and unavailable notices use the current line's alignment,
 		// just as the first of two sung lines and the one shared line do.
 		ui.Column(c).Fill().AlignItems(lyricLineAlignment(s.LyricAlign)).Justify(ui.Center).Children(func() {
-			display, _ := pl.LyricsDisplay()
-			ui.Text(c, display.EmptyText()).FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
+			ui.Text(c, content.Display.EmptyText()).FontSize(size * 0.8).FontWeight(weight).TextColor(idle).PassThrough()
 		})
 	case len(shown) == 0:
 	default:

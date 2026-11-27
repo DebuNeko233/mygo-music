@@ -556,6 +556,11 @@ func (a *View) sections(c *ui.Context, p components.Palette) []settingsSection {
 				a.Changed()
 			}
 		})
+		row("纯净歌词", "隐藏制作署名和标题信息，只显示歌词正文与翻译", func() {
+			if ui.Switch(c.Key("pure-lyrics"), &s.PureLyrics).Label("纯净歌词").Changed() {
+				a.Changed()
+			}
+		})
 		row("音量均衡", "按网易云音乐测得的响度调整每首歌的音量，让歌曲听起来一样响", func() {
 			if ui.Switch(c.Key("normalize"), &s.Normalize).Label("音量均衡").Changed() {
 				a.NormalizeVolume()
