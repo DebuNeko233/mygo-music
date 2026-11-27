@@ -37,6 +37,7 @@ func (v Home) Home(c *ui.Context, state *shell.State) {
 		return
 	}
 	now := c.Now()
+	state.RestoreScroll(!loading)
 	top, bottom := shell.Insets(c)
 	ui.Scroll(c.Key("home")).TrackScroll(&state.PageScroll).Grow(1).Padding(top+shell.PageGap, shell.PagePad, bottom+48, shell.PagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		state.StartMark(c)
@@ -95,6 +96,7 @@ func (v Home) Charts(c *ui.Context, state *shell.State) {
 		shell.Centered(c, v.Palette, v.Offline, v.Model.Error, v.Retry)
 		return
 	}
+	state.RestoreScroll(!loading)
 	top, bottom := shell.Insets(c)
 	ui.Scroll(c.Key("charts")).TrackScroll(&state.PageScroll).Grow(1).Padding(top+shell.PageGap, shell.PagePad, bottom+48, shell.PagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		state.StartMark(c)

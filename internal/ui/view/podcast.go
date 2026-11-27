@@ -201,6 +201,7 @@ func (a *Podcast) Home(c *ui.Context) {
 		a.Centered(c, t.Error, a.LoadHome)
 		return
 	}
+	a.ScrollState.RestoreScroll(t.HotPage.Loaded)
 	top, bottom := a.Insets(c)
 	ui.Scroll(c.Key("podcasts")).TrackScroll(&a.ScrollState.PageScroll).Grow(1).Padding(top+shell.PageGap, shell.PagePad, bottom+48, shell.PagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
 		a.ScrollState.StartMark(c)

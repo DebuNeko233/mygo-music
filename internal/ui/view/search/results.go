@@ -59,7 +59,7 @@ func (a *View) Build(c *ui.Context) {
 		})
 		return
 	}
-	a.Scroll(c, func() {
+	a.ScrollReady(c, d.Page.Loaded, func() {
 		header(c)
 		res := &d.Res
 		switch r.Kind {

@@ -10,6 +10,7 @@ import (
 
 	diskcache "netease-music-mygo/internal/features/cache/disk"
 	"netease-music-mygo/internal/features/netease"
+	"netease-music-mygo/internal/ui/view/shell"
 	accountvm "netease-music-mygo/internal/ui/viewmodel/account"
 	cloudvm "netease-music-mygo/internal/ui/viewmodel/cloud"
 )
@@ -67,6 +68,8 @@ func (a *app) discardAccount() {
 }
 
 func (a *app) signedIn(prof *netease.Profile) {
+	a.shell.Pages = shell.PagePositions{}
+	a.resetScroll = true
 	a.downloads.CancelAll()
 	a.stopPlayReports()
 	if a.recovery.timer != nil {

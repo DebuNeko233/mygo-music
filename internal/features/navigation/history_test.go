@@ -6,6 +6,37 @@ package navigation
 
 import "testing"
 
+// The total retained visits stay bounded while Back and Forward move the
+// boundary; opening another route retires the old forward branch.
+func TestNavigationHistoryBound(t *testing.T) {
+	var nav Navigator
+	for i := range 3 * HistoryLimit {
+		nav.Open(Route{Page: Playlist, ID: int64(i + 1)})
+	}
+	count := 0
+	for {
+		r, ok := nav.Previous()
+		if !ok {
+			break
+		}
+		nav.Current = r
+		count++
+	}
+	if count != HistoryLimit-1 || nav.Current.ID != 2*HistoryLimit+1 {
+		t.Fatalf("wrong retained history boundary: %d visits, current %+v", count, nav.Current)
+	}
+	for {
+		r, ok := nav.Next()
+		if !ok {
+			break
+		}
+		nav.Current = r
+	}
+	if nav.Current.ID != 3*HistoryLimit {
+		t.Fatal("forward did not reach the latest page")
+	}
+}
+
 // Reopening the current page preserves forward history; a genuinely new page clears it.
 func TestNavigationBranch(t *testing.T) {
 	m := new(Navigator)

@@ -40,6 +40,16 @@ Linux 缺少 Secret Service 的情况提供[应用帮助资源](../../internal/f
 
 回归：`ui/viewmodel/search/search_test.go`、`features/netease/links_test.go`、`app/catalog_test.go`、`music_links_test.go`、`ui_suggest_playlist_test.go`、`local_search_test.go`。
 
+### 页面阅读位置
+
+切换页面、返回和前进会恢复该页面最近离开的位置。页面身份包含种类、资源 ID、搜索词和搜索分类；同一页面重复进入使用最近一次位置。新页面从顶部开始。普通滚动页恢复偏移，歌曲列表以歌曲身份和重复次数恢复阅读行，放到顶部内容区；表头仍在视野内时保留其滚动偏移。歌曲被删除或结果变短时回退到原索引附近的有效行，不保留旧数据来强行重现页面。
+
+[navigation.Navigator](../../internal/features/navigation/history.go)拥有路由历史，总共保留最近 100 次访问（含当前页和前进栈）；[shell.PagePositions](../../internal/ui/view/shell/positions.go)拥有主窗口内的轻量位置快照，只保存偏移、行号和歌曲身份。[App](../../internal/app/view.go)在切页后的构建入口采集已完成的旧页面，避免在旧列表构建中清空其状态；实际滚动和行恢复由视图执行。加载骨架或错误页不会覆盖待恢复位置，真实内容出现后只恢复一次，后续用户滚动不受干预。
+
+位置仅在本次运行的主窗口中有效，不写入设置、播放会话或磁盘缓存，不保存歌曲切片、完整 ListState 或控件句柄。退出登录、切换账号（含重新接受相同账号）清空位置，当前页面的控件在下次构建时重置；删除页面、打开新分支丢弃前进历史或历史超限时同步释放不再可达的位置。正在播放覆盖页保留底层页面的位置，关闭覆盖页不建立新历史。
+
+回归：`app/navigation_position_test.go`、`ui/view/shell/positions_test.go`、`features/navigation/history_test.go`；原有覆盖页回归见 `app/covered_test.go`。
+
 ## 4. 共享资料库与歌单编辑
 
 [library.State](../../internal/features/library/library.go)是喜欢歌曲、歌单和收藏专辑的共享事实；[Library ViewModel](../../internal/ui/viewmodel/library)管理账号作用域、加载、刷新和编辑。侧栏、详情页和播放器控件借用同一份已发布状态。

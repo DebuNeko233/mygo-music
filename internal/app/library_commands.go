@@ -97,6 +97,7 @@ func (a *app) leaveDeletedPlaylist(id int64) {
 	if r, changed := a.nav.Forget(gone); changed {
 		a.show(r)
 	}
+	a.shell.Pages.Retain(&a.nav)
 }
 
 func (a *app) savable(pl *netease.Playlist) bool {

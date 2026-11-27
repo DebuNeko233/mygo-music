@@ -108,6 +108,7 @@ func (a *app) open(r route) {
 		a.load(r)
 		return
 	}
+	a.shell.Pages.Retain(&a.nav)
 	a.displayPage()
 }
 
@@ -121,6 +122,7 @@ func (a *app) leavingPage(r route) {
 func (a *app) show(r route) {
 	a.leavingPage(r)
 	a.nav.Current = r
+	a.shell.Pages.Retain(&a.nav)
 	a.displayPage()
 }
 
@@ -204,11 +206,17 @@ func (a *app) sidebar(c *ui.Context) {
 }
 
 func (a *app) content(c *ui.Context) {
-	// A new page starts at its top. Not as it is opened: a control in a
-	// list, as a page's tabs in its header, opens it as the list builds.
-	if a.scrolled != a.nav.Current {
+	// Capture the completed old page before replacing its widgets. A control
+	// can navigate while its list builds, so restoration belongs to this build.
+	if a.resetScroll || a.scrolled != a.nav.Current {
+		if !a.resetScroll {
+			a.shell.Pages.Save(a.scrolled, a.shell.PageScroll, a.views.tracks.Position(c))
+		}
+		a.shell.Pages.Retain(&a.nav)
+		a.shell.Pages.Enter(a.nav.Current)
 		a.tracks.List, a.shell.PageScroll, a.scrolled = ui.ListState{}, ui.ScrollState{}, a.nav.Current
 		a.tracks.InvalidateRows()
+		a.resetScroll = false
 	}
 	// Pages mark where their content is, as they scroll.
 	a.shell.UnderTop, a.shell.UnderBottom = false, false

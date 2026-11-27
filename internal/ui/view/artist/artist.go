@@ -89,7 +89,7 @@ func (a *View) Build(c *ui.Context) {
 	header := func(c *ui.Context) { a.Header(c, d) }
 	switch a.Model.Tab {
 	case artistvm.ArtistAlbums:
-		a.Scroll(c, func() {
+		a.ScrollReady(c, d.AlbumsPage.Loaded, func() {
 			header(c)
 			a.AlbumGrid(c, d.Albums)
 			a.Foot(c, &d.AlbumsPage, func() { a.LoadAlbums(id) })
@@ -99,7 +99,7 @@ func (a *View) Build(c *ui.Context) {
 		})
 		return
 	case artistvm.ArtistEvents:
-		a.Scroll(c, func() {
+		a.ScrollReady(c, d.EventsPage.Loaded, func() {
 			header(c)
 			a.Events(c, d)
 		})

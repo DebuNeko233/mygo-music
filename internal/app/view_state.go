@@ -29,8 +29,9 @@ type mainViewState struct {
 	localView localViewState
 	trackArt  trackArtworkState
 
-	shell    shell.State
-	scrolled route // the page trackList and shell.PageScroll are of
+	shell       shell.State
+	scrolled    route // the page trackList and shell.PageScroll are of
+	resetScroll bool  // reset at the next build, never while a list builds
 
 	playbackview.State
 }

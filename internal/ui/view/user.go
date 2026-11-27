@@ -38,7 +38,7 @@ func (a *User) Build(c *ui.Context) {
 			a.Centered(c, d.Error, func() { a.Load(id) })
 			return
 		}
-		a.Scroll(c, func() {
+		a.ScrollReady(c, false, func() {
 			a.HeaderSkeleton(c)
 			a.CardsSkeleton(c, a.Columns(c, 168), 168, false)
 		})
@@ -46,7 +46,7 @@ func (a *User) Build(c *ui.Context) {
 	}
 	u := d.User
 	own := a.Account.Profile != nil && a.Account.Profile.UserID == id
-	a.Scroll(c, func() {
+	a.ScrollReady(c, d.Loading == 0, func() {
 		ui.Row(c).Gap(page.DetailHeaderGap).AlignItems(ui.End).Children(func() {
 			ui.Box(c).Size(page.ArtistPhotoSize, page.ArtistPhotoSize).Radius(page.ArtistPhotoSize/2).Shadow(0, 18, 40, -10, p.CardShade).Children(func() {
 				a.CoverFill(c, u.AvatarURL, 600, page.ArtistPhotoSize/2)

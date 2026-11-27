@@ -32,6 +32,7 @@ type Radio struct {
 // fmPage is the personal FM: what it plays, large, over its cover's
 // colors, with the FM's own controls, and heart mode below.
 func (a *Radio) Build(c *ui.Context) {
+	a.ScrollState.RestoreScroll(true)
 	p := *a.Palette
 	top, bottom := a.Insets(c)
 	ui.Scroll(c.Key("fm")).TrackScroll(&a.ScrollState.PageScroll).Grow(1).Padding(top+shell.PageGap, shell.PagePad, bottom+48, shell.PagePad).ScrollbarInsets(top, 0, bottom, 0).Children(func() {
