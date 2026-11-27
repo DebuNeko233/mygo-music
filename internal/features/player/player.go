@@ -102,7 +102,7 @@ type Player struct {
 	// Its refresh callback runs on the player thread.
 	FetchCachedLyrics func(int64, func([]lyrics.Line, lyrics.Display)) (string, string, string, error)
 	// Changed, if set, hears that what plays, where it is or whether it
-	// plays changed.
+	// plays or its playback mode changed.
 	Changed func()
 	// Playback, if set, hears when a song actually starts and why its play
 	// session ends. Pausing and seeking do not end that session.
@@ -655,24 +655,46 @@ func (p *Player) shuffleOrder(first int) {
 }
 
 func (p *Player) ToggleShuffle() {
-	p.shuffle = !p.shuffle
-	if len(p.order) == 0 {
+	p.SetShuffle(!p.shuffle)
+}
+
+// SetShuffle changes the mode without moving the current song. Selecting the
+// active mode leaves the existing traversal order and queue revision intact.
+func (p *Player) SetShuffle(enabled bool) {
+	if p.shuffle == enabled {
 		return
 	}
-	p.queueRevision++
-	cur := p.order[max(p.at, 0)]
-	if p.shuffle {
-		p.shuffleOrder(cur)
-		p.at = 0
-	} else {
-		for i := range p.order {
-			p.order[i] = i
+	p.shuffle = enabled
+	if len(p.order) > 0 {
+		p.queueRevision++
+		cur := p.order[max(p.at, 0)]
+		if p.shuffle {
+			p.shuffleOrder(cur)
+			p.at = 0
+		} else {
+			for i := range p.order {
+				p.order[i] = i
+			}
+			p.at = cur
 		}
-		p.at = cur
+	}
+	if p.Changed != nil {
+		p.Changed()
 	}
 }
 
-func (p *Player) CycleRepeat() { p.repeat = (p.repeat + 1) % 3 }
+func (p *Player) CycleRepeat() { p.SetRepeat((p.repeat + 1) % 3) }
+
+// SetRepeat selects a supported repeat mode without restarting playback.
+func (p *Player) SetRepeat(mode RepeatMode) {
+	if mode < RepeatOff || mode > RepeatOne || mode == p.repeat {
+		return
+	}
+	p.repeat = mode
+	if p.Changed != nil {
+		p.Changed()
+	}
+}
 
 // Current returns the track playing or loading, or nil.
 func (p *Player) Current() *netease.Track { return p.track }
@@ -847,6 +869,9 @@ func (p *Player) Jump(i int) {
 // TogglePlay pauses, fading out, or plays, fading in.
 func (p *Player) TogglePlay() {
 	if p.cacheChanging {
+		if len(p.order) == 0 {
+			return
+		}
 		// What is wanted is kept, and heard once the folder has moved.
 		p.playing = !p.playing
 		p.sync()
@@ -1194,11 +1219,15 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 	p.lyricFailure, p.coverFailure = nil, nil
 	p.pending = from
 	p.announce(&t, nil)
-	if p.cacheChanging {
-		// The folder moves: what is chosen is loaded once it has. What was
-		// fetched ahead for it is let go of rather than kept for a load that
-		// never comes: its fetch would run on into a folder being moved away,
-		// and its file would stay open through the move.
+	// Publish the selection and play intent before asynchronous audio opens,
+	// including when a cache relocation defers loading altogether.
+	if p.Changed != nil {
+		p.Changed()
+	}
+	if p.closed || gen != p.gen || p.cacheChanging {
+		// A notification may close the player or replace this selection.
+		// Retire resources still owned by this load before starting workers.
+		// Cache relocation similarly defers loading until the move completes.
 		if ahead != nil {
 			ahead.cancel()
 		}

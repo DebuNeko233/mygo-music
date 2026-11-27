@@ -66,6 +66,9 @@ jobs:
       - name: Install NSIS, for the Windows installers
         if: matrix.goos == 'windows'
         run: sudo apt-get update && sudo apt-get install -y nsis
+      - name: Install Linux package validators
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y desktop-file-utils libarchive-tools
       # mygo build warns and signs no update archives without the updater
       # key, which is a release secret: these are the installers of a
       # release, unsigned, and -upload would need a draft release.

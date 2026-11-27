@@ -53,6 +53,8 @@ func (a *app) stopNative() {
 		return
 	}
 	a.quitting = true
+	a.removeDockMenu()
+	a.removeLauncherTasks()
 	a.cancelWork()
 	if a.pl != nil {
 		a.flushPlayReports()
