@@ -77,13 +77,14 @@ type app struct {
 	recovery                               recoveryState
 	browseUsed, imagesUsed                 int64
 
-	win      *mygo.Window
-	notch    *playbackview.Notch
-	lyrics   *playbackview.DeskLyrics // the lyrics in their own window, once it is made
-	tray     *mygo.Tray               // the icon in the menu bar or notification area, while it shows
-	art      *artcache.Cache
-	pl       *player.Player
-	dockMenu *mygo.Menu // owned separately from the tray and application menus
+	win          *mygo.Window
+	notch        *playbackview.Notch
+	lyrics       *playbackview.DeskLyrics // the lyrics in their own window, once it is made
+	tray         *mygo.Tray               // the icon in the menu bar or notification area, while it shows
+	art          *artcache.Cache
+	pl           *player.Player
+	dockMenu     *mygo.Menu        // owned separately from the tray and application menus
+	launcherMenu *launcherTaskMenu // last attempted task labels, not playback state
 
 	nav navigation.Navigator
 

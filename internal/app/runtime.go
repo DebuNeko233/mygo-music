@@ -99,6 +99,7 @@ func (a *app) start() {
 	a.pl.Cache = newSongCache(a.settings)
 	a.pl.Changed = func() {
 		a.syncDockMenu()
+		a.syncLauncherTasks()
 		a.keepSession()
 		a.syncCaptions()
 		a.syncTrackArtwork()

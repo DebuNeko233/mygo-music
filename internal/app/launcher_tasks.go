@@ -8,8 +8,8 @@ import "strings"
 
 const playbackActionFlag = "--playback-action="
 
-// Launchers keep static tasks after exit. Their labels describe commands,
-// rather than a snapshot of whether the current player is playing or paused.
+// Launchers retain these commands after exit. Windows replaces only the mode
+// labels while running; Linux keeps the packaged labels unchanged.
 var launcherPlaybackTasks = []struct{ title, action string }{
 	{"播放/暂停", "play-pause"},
 	{"上一首", "previous"},
