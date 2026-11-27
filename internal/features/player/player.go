@@ -1221,11 +1221,10 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 	if p.Changed != nil {
 		p.Changed()
 	}
-	if p.cacheChanging {
-		// The folder moves: what is chosen is loaded once it has. What was
-		// fetched ahead for it is let go of rather than kept for a load that
-		// never comes: its fetch would run on into a folder being moved away,
-		// and its file would stay open through the move.
+	if p.closed || gen != p.gen || p.cacheChanging {
+		// A notification may close the player or replace this selection.
+		// Retire resources still owned by this load before starting workers.
+		// Cache relocation similarly defers loading until the move completes.
 		if ahead != nil {
 			ahead.cancel()
 		}

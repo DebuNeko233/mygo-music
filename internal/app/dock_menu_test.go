@@ -5,6 +5,7 @@
 package app
 
 import (
+	"slices"
 	"testing"
 
 	"netease-music-mygo/internal/features/netease"
@@ -20,6 +21,74 @@ func dockTestApp(t *testing.T) *app {
 	a.syncDockMenu()
 	t.Cleanup(func() { a.pl.Close(); a.art.Close() })
 	return a
+}
+
+// Choosing a specific mode repeatedly must not act as a toggle, reshuffle
+// traversal or restart the selected song, including duplicate queue entries.
+func TestDockModeSelectionIsExplicitAndIdempotent(t *testing.T) {
+	a := dockTestApp(t)
+	a.pl.PlayQueue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 1}}, 2)
+	for _, option := range []struct {
+		id   string
+		mode player.RepeatMode
+	}{{"repeat-one", player.RepeatOne}, {"repeat-all", player.RepeatAll}, {"repeat-off", player.RepeatOff}} {
+		revision := a.pl.QueueRevision()
+		chooseDock(t, a, option.id)
+		chooseDock(t, a, option.id)
+		if a.pl.Repeat() != option.mode || !a.dockMenu.ItemByID(option.id).IsChecked() || a.pl.QueueRevision() != revision {
+			t.Fatalf("repeat selection toggled or replaced the queue: %s", option.id)
+		}
+	}
+	chooseDock(t, a, "shuffle-on")
+	order, at := a.pl.PlayOrder()
+	order = slices.Clone(order)
+	revision := a.pl.QueueRevision()
+	chooseDock(t, a, "shuffle-on")
+	again, againAt := a.pl.PlayOrder()
+	if !a.pl.Shuffle() || !slices.Equal(again, order) || againAt != at || a.pl.QueueRevision() != revision {
+		t.Fatal("reselecting shuffle-on changed traversal")
+	}
+	chooseDock(t, a, "shuffle-off")
+	chooseDock(t, a, "shuffle-off")
+	_, at = a.pl.PlayOrder()
+	if a.pl.Shuffle() || at != 2 || a.pl.Current().ID != 1 || !a.pl.Playing() || !a.dockMenu.ItemByID("shuffle-off").IsChecked() {
+		t.Fatal("shuffle-off did not preserve the selected duplicate")
+	}
+}
+
+// Finishing a sole temporary file clears the queue and disables all Dock
+// transport actions immediately, rather than retaining the old play state.
+func TestDockTemporaryQueueBecomesEmpty(t *testing.T) {
+	a := dockTestApp(t)
+	a.pl.PlayTemporary(netease.Track{LocalID: 7}, nil)
+	chooseDock(t, a, "next")
+	if a.pl.Current() != nil || len(a.pl.Queue()) != 0 || a.pl.Playing() || a.dockMenu.ItemByID("play").Label != "播放" {
+		t.Fatal("temporary playback did not clear its Dock state")
+	}
+	for _, id := range []string{"play", "next", "previous"} {
+		if a.dockMenu.ItemByID(id).IsEnabled() {
+			t.Fatalf("empty temporary queue left %s enabled", id)
+		}
+	}
+}
+
+// A Dock next command may wait for the FM feed. Returning to a prior song
+// while it waits must not let the delayed feed replace the manual selection.
+func TestDockFMFeedRespectsManualSelection(t *testing.T) {
+	a := dockTestApp(t)
+	var refill func([]netease.Track)
+	a.pl.PlayRadio("test", []netease.Track{{ID: 1}, {ID: 2}}, func(got func([]netease.Track)) { refill = got })
+	chooseDock(t, a, "next")
+	chooseDock(t, a, "next")
+	if !a.pl.Loading() || refill == nil || !a.dockMenu.ItemByID("previous").IsEnabled() {
+		t.Fatal("FM did not retain controls while awaiting its feed")
+	}
+	chooseDock(t, a, "previous")
+	selected := a.pl.Current().ID
+	refill([]netease.Track{{ID: 3}})
+	if a.pl.Current().ID != selected || a.pl.StepDirection() != -1 || len(a.pl.Queue()) != 3 {
+		t.Fatal("a delayed FM feed displaced the Dock previous selection")
+	}
 }
 
 func chooseDock(t *testing.T, a *app, id string) {

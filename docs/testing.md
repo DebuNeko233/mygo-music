@@ -129,7 +129,7 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 | --- | --- | --- |
 | [test.yml](../.github/workflows/test.yml) / Test | Linux 构建、Go/MyGo vet、非 App internal 测试、两片 App 测试、非 App race 与选定 App 并发测试 | 已完整运行所有 App race 或所有平台原生界面 |
 | [race.yml](../.github/workflows/race.yml) / Full UI Race | 六片完整 App race；main 的相关文件变更或手动触发；可指定完整 SHA | 任意分支 push 都会自动运行 |
-| [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物；Linux 额外执行 `scripts/check_linux_packages.sh` 核对真实 DEB 与 Arch 安装目录和桌面命令 | 全部软件行为和签名运行已实测 |
+| [go.yml](../.github/workflows/go.yml) / Build | macOS/Windows/Linux 的 amd64 与 arm64 安装产物；Linux 额外执行 `scripts/check_linux_packages.sh` 核对真实 DEB/RPM/Arch/归档的桌面动作、安装目录与命令，并运行 desktop-file-validate | 全部软件行为和签名运行已实测 |
 | [release-notes.yml](../.github/workflows/release-notes.yml) / Release Notes | 发行说明、资产汇总/上传、Homebrew 同步工具测试与当前版本说明校验 | 已运行应用构建、竞态检查或真实跨仓库写入 |
 | [release.yml](../.github/workflows/release.yml) / Release | 版本检查、三平台并行签名构建、单任务汇总/上传草稿 | 普通开发可以直接触发发行 |
 | [homebrew.yml](../.github/workflows/homebrew.yml) / Update Homebrew | 正式发行后校验 DMG、更新 tap、在线审查及快进推送 | PR 检查会自动写 tap；已完成所有平台的实机播放验证 |

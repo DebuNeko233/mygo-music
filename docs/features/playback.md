@@ -54,6 +54,8 @@ Windows 在启动时注册 Jump List，任务由系统保留到应用退出后�
 
 网络、本地文件、内存缓存和磁盘缓存共用格式与解码策略。按实际字节识别格式，不能相信 URL 后缀或文件扩展名；同一格式在四种来源下都要能正确读、跳转和结束。
 
+选曲状态在异步打开音频前通知所有者。通知回调若关闭播放器或替换选择，旧加载须立即释放其预备解码器和预取资源，不能继续启动后台打开；相关生命周期回归见 [player/lifecycle_test.go](../../internal/features/player/lifecycle_test.go)。
+
 当前格式路径包括 MP3、FLAC、WAV、Ogg Vorbis、AAC 与 MP4 家族；HE-AAC 使用相应后备解码路径。修改格式识别、标签或容器支持时，联合检查 `formats.go`、`aac.go`、`mp4.go`、`flac.go`，不能只修一个入口。
 
 流式读取的约束：

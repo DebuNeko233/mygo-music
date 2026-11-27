@@ -47,7 +47,9 @@ func (a *app) runPlaybackAction(action string) {
 	}
 	switch action {
 	case "play-pause":
-		a.pl.TogglePlay()
+		if len(a.pl.Queue()) != 0 {
+			a.pl.TogglePlay()
+		}
 	case "previous":
 		a.pl.Prev()
 	case "next":

@@ -19,7 +19,13 @@ entry = configparser.ConfigParser(interpolation=None)
 entry.optionxform = str
 entry.read(sys.argv[1], encoding="utf-8")
 registered = entry["Desktop Entry"]["Actions"].split(";")
-for action in json.loads(Path(sys.argv[3]).read_text())["linux"]["actions"]:
+config = json.loads(Path(sys.argv[3]).read_text())
+mime_types = set(entry["Desktop Entry"]["MimeType"].split(";"))
+for association in config["fileAssociations"]:
+    assert association["mimeType"] in mime_types, association["mimeType"]
+for scheme in config["urlSchemes"]:
+    assert "x-scheme-handler/" + scheme in mime_types, scheme
+for action in config["linux"]["actions"]:
     assert action["id"] in registered, action["id"]
     command = entry["Desktop Action " + action["id"]]["Exec"]
     expected = sys.argv[2] + " " + " ".join(action["args"])

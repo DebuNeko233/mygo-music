@@ -7,6 +7,7 @@ package player
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"netease-music-mygo/internal/features/netease"
 )
@@ -18,6 +19,7 @@ func TestSetShufflePreservesSelectionAndNotifies(t *testing.T) {
 	p.SuspendCache()
 	defer p.Close()
 	p.PlayQueue([]netease.Track{{ID: 1}, {ID: 2}, {ID: 1}, {ID: 3}}, 2)
+	p.Seek(1400 * time.Millisecond)
 	changes := 0
 	p.Changed = func() { changes++ }
 	p.SetShuffle(true)
@@ -32,6 +34,33 @@ func TestSetShufflePreservesSelectionAndNotifies(t *testing.T) {
 	p.ToggleShuffle()
 	if p.Shuffle() || p.at != 2 || !slices.Equal(p.order, []int{0, 1, 2, 3}) || changes != 2 {
 		t.Fatal("toggle did not restore queue order and notify")
+	}
+	p.SetShuffle(false)
+	if changes != 2 || p.Position() != 1400*time.Millisecond || !p.Playing() {
+		t.Fatal("reselecting shuffle-off notified or changed playback progress")
+	}
+}
+
+// Explicit repeat choices and their repeated selection preserve the current
+// song, progress, traversal and playing intent while notifying only changes.
+func TestSetRepeatPreservesPlayback(t *testing.T) {
+	p := New(func(func()) {})
+	defer p.Close()
+	p.SuspendCache()
+	p.PlayQueue([]netease.Track{{ID: 1}, {ID: 2}}, 1)
+	p.Seek(1700 * time.Millisecond)
+	order, at := slices.Clone(p.order), p.at
+	revision, seeks := p.QueueRevision(), p.SeekRevision()
+	changes := 0
+	p.Changed = func() { changes++ }
+	for i, mode := range []RepeatMode{RepeatOne, RepeatAll, RepeatOff} {
+		p.SetRepeat(mode)
+		p.SetRepeat(mode)
+		if p.Repeat() != mode || changes != i+1 || p.Current().ID != 2 || !p.Playing() ||
+			p.Position() != 1700*time.Millisecond || p.at != at || !slices.Equal(p.order, order) ||
+			p.QueueRevision() != revision || p.SeekRevision() != seeks {
+			t.Fatalf("repeat selection changed playback or published twice: %v", mode)
+		}
 	}
 }
 
