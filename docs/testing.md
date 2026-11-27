@@ -103,6 +103,12 @@ NM_FRAMES="$frames_dir" CGO_ENABLED=0 go test ./internal/app -run '^TestSidebarS
 
 生成后必须实际查看图片。布局检查至少包括明暗外观、常规与最小窗口；字体检查中日英及回退；交互检查焦点、鼠标、键盘、滚动、覆盖与恢复。主题切换有动画时用测试时钟等待稳定后截图。
 
+macOS 歌词及整页全屏恢复原生回归通过仅测试程序导入的 MyGo 自动化插件读取已绘制的窗口，不给可见窗口补帧；测试使用合成歌词和临时用户目录。`MYGO_E2E` 让 App 测试主程序运行原生事件循环，`MYGO_AUTOMATION` 指定独立本地 socket，两者均不进入正式应用：
+
+```sh
+MYGO_E2E=1 MYGO_AUTOMATION=/tmp/nyago-lyrics-test.sock CGO_ENABLED=0 go test ./internal/app -run '^TestNative(FullScreenLyricsFirstFrame|NowPlayingFullScreenRestoresContent)$' -count=5
+```
+
 软件渲染不证明 Metal、DPI、系统字体、透明窗口、Wayland 或原生全局快捷键正确。修改这些行为必须尽量实机检查；环境不足写明缺口，不能用交叉编译代替。
 
 性能测量固定源码 SHA、硬件、OS、窗口尺寸、缩放、刷新率、歌曲/数据、输入序列和采样区间。分别记录 CPU、GPU、分配、I/O、帧间隔或空闲唤醒的指标及样本数量。测试总耗时不能作为运行时 GPU 性能对照，显示器刷新率也不是实测帧率。
