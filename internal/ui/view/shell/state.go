@@ -12,6 +12,7 @@ import (
 
 // State belongs to one main window and survives pages being covered by Now Playing.
 type State struct {
+	Pages                                          PagePositions
 	PageScroll, NavScroll                          ui.ScrollState
 	SearchBox                                      ui.Handle
 	MineCollapsed, SavedCollapsed, AlbumsCollapsed bool

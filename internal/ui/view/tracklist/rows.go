@@ -18,6 +18,8 @@ import (
 	localvm "netease-music-mygo/internal/ui/viewmodel/local"
 )
 
+const rowHeight = 54
+
 type State struct {
 	List     ui.ListState
 	rows     trackRowsCache
@@ -67,10 +69,9 @@ func (a *View) RowsMeta(c *ui.Context, tracks []netease.Track, covers bool, meta
 	// scrolled away from its start or end has content under the bars.
 	a.ScrollState.UnderTop, a.ScrollState.UnderBottom = true, true
 	rows := len(tracks) + 1 + len(footer)
-	list := ui.List(c.Key(a.Nav.Current), &a.State.List, rows)
-	if pid != 0 || a.Nav.Current.Page == navigation.Cloud || a.Nav.Current.Page == navigation.Local {
-		list.ItemKey(a.RowKeys(tracks))
-	}
+	keys := a.RowKeys(tracks)
+	a.restorePosition(tracks)
+	list := ui.List(c.Key(a.Nav.Current), &a.State.List, rows).ItemKey(keys).TrackScroll(&a.ScrollState.PageScroll)
 	list.Rows(func(item ui.ListRow) {
 		i := item.Index
 		if i == 0 {
@@ -92,7 +93,7 @@ func (a *View) RowsMeta(c *ui.Context, tracks []netease.Track, covers bool, meta
 		missing := tr.IsLocal() && a.Local.Missing[tr.LocalID]
 		playable := tr.Playable()
 		playing := cur != nil && cur.Key() == tr.Key()
-		row := ui.ButtonBase(c.Key(tr.Key())).Height(54).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
+		row := ui.ButtonBase(c.Key(tr.Key())).Height(rowHeight).PaddingX(12).Gap(14).Radius(10).AlignItems(ui.Center).FocusRing(false).Label(tr.Name)
 		// Create the track-specific menu only when MyGo asks to build it.
 		// Passing a returned closure through a callback would allocate on every visible row.
 		localMenu := a.Nav.Current.Page == navigation.Local
@@ -193,8 +194,5 @@ func (a *View) RowsMeta(c *ui.Context, tracks []netease.Track, covers bool, meta
 			}
 		}
 	}).Grow(1).Padding(top+shell.PageGap, shell.PagePad-12, bottom+32, shell.PagePad-12).ScrollbarInsets(top, 0, bottom, 0)
-	if a.Nav.Current.Page == navigation.Playlist || a.Nav.Current.Page == navigation.Cloud || a.Nav.Current.Page == navigation.Local {
-		list.TrackScroll(&a.ScrollState.PageScroll)
-	}
 	return playingVisible
 }

@@ -13,11 +13,18 @@ type Navigator struct {
 	History, Forward []Route
 }
 
+// HistoryLimit bounds a window's back/current/forward visits together. Page
+// position metadata can therefore share the history lifetime without growing.
+const HistoryLimit = 100
+
 func (m *Navigator) Open(r Route) bool {
 	if r == m.Current {
 		return false
 	}
 	m.History = append(m.History, m.Current)
+	if len(m.History) >= HistoryLimit {
+		m.History = slices.Delete(m.History, 0, len(m.History)-HistoryLimit+1)
+	}
 	m.Forward = nil
 	m.Current = r
 	return true
@@ -28,6 +35,7 @@ func (m *Navigator) Previous() (Route, bool) {
 	}
 	m.Forward = append(m.Forward, m.Current)
 	r := m.History[len(m.History)-1]
+	m.History[len(m.History)-1] = Route{}
 	m.History = m.History[:len(m.History)-1]
 	return r, true
 }
@@ -37,6 +45,7 @@ func (m *Navigator) Next() (Route, bool) {
 	}
 	m.History = append(m.History, m.Current)
 	r := m.Forward[len(m.Forward)-1]
+	m.Forward[len(m.Forward)-1] = Route{}
 	m.Forward = m.Forward[:len(m.Forward)-1]
 	return r, true
 }
@@ -49,6 +58,7 @@ func (m *Navigator) Forget(gone func(Route) bool) (Route, bool) {
 	r := Route{Page: Home}
 	if n := len(m.History); n > 0 {
 		r = m.History[n-1]
+		m.History[n-1] = Route{}
 		m.History = m.History[:n-1]
 	}
 	return r, true
