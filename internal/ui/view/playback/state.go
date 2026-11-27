@@ -28,6 +28,7 @@ type State struct {
 	TimedList                      TimedListLayout
 	LyricViewportW, LyricViewportH float32 // last viewport followed; resize can reflow lines
 	LyricWindowW, LyricWindowH     float32 // window size whose reflow has been scheduled
+	LyricWindowTop                 float32 // title-bar inset can change after the final resize
 
 	QueueList ui.ListState
 	QueueAt   int // the row of the queue pane last scrolled to, -1 while it is hidden

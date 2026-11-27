@@ -228,12 +228,10 @@ func (a *View) longTimedLines(c *ui.Context, scroll ui.Element, lines []lyrics.L
 	if !st.browsing {
 		a.Reading.At = cur
 	}
-	heightChanged := st.CenterShort && box.H != a.LyricViewportH
 	a.LyricViewportW, a.LyricViewportH = box.W, box.H
 	// A distant seek jumps directly to its newly measured neighborhood.
-	settledResize := heightChanged && !changedLine && !m.manual && !g.pending && g.settleAt.IsZero()
-	snap := follow && (initialFollow || replaced || resized && (!st.Immersive || !g.posed) ||
-		settledResize || lyricShouldSnap(c, target, s.Y, box.H, false) || target > s.MaxY ||
+	snap := follow && (initialFollow || replaced || resized ||
+		lyricShouldSnap(c, target, s.Y, box.H, false) || target > s.MaxY ||
 		intro.Gap.Intro && Abs32(target-s.Y) > 0.5)
 	if snap {
 		s.Y, *g = target, lyricGlide{}

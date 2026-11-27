@@ -251,8 +251,8 @@ func TestLyricIntroExitReusesLayout(t *testing.T) {
 	}
 }
 
-// Resizing during an automatic glide retargets the motion without snapping to the new anchor.
-func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
+// Resizing cancels the old viewport glide and follows the new reading anchor.
+func TestImmersiveLyricResizeReanchorsDuringGlide(t *testing.T) {
 	for _, count := range []int{12, TimedListThreshold} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			lines := make([]lyrics.Line, count)
@@ -264,6 +264,8 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 			a.Config.LyricEdgeFade = true
 			player.Hold(a.Player(), lines[4].At)
 			tt.Frame()
+			active, _ := tt.AccessByRole(ui.RoleButton, lines[4].Text)
+			lineHeight := active.Bounds.H
 			tt.SetPreferences(ui.Preferences{})
 			player.Hold(a.Player(), lines[5].At)
 			tt.Frame()
@@ -276,15 +278,15 @@ func TestImmersiveLyricGlideContinuesAfterResize(t *testing.T) {
 				if !ok || got.Offscreen {
 					t.Fatalf("active line left the viewport: %+v", got)
 				}
-				return got.Bounds.Y
+				return got.Bounds.Y + (got.Bounds.H-lineHeight)/2
 			}
 			start := row()
 			tt.Advance(90 * time.Millisecond)
 			middle := row()
 			tt.Advance(1100 * time.Millisecond)
 			end := row()
-			if start-middle < 2 || middle-end < 2 || Abs32(end-target) > 2 {
-				t.Fatalf("resize interrupted the glide: %.1f → %.1f → %.1f (target %.1f)", start, middle, end, target)
+			if Abs32(start-target) > 1 || Abs32(middle-target) > 1 || Abs32(end-target) > 1 {
+				t.Fatalf("old viewport glide moved the resized anchor: %.1f → %.1f → %.1f (target %.1f)", start, middle, end, target)
 			}
 		})
 	}

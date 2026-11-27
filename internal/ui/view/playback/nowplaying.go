@@ -848,10 +848,11 @@ func (a *View) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line,
 	// Bounds below belong to the last layout. A width-only window resize
 	// may leave the cover and pane top unchanged: schedule a pass after the
 	// new text wrapping is laid out, even if this pass sees the old viewport.
+	// Full-screen title-bar changes can arrive after that final resize.
 	w, h := c.Size()
-	windowChanged := w != a.LyricWindowW || h != a.LyricWindowH
+	windowChanged := w != a.LyricWindowW || h != a.LyricWindowH || shell.TopBar(c) != a.LyricWindowTop
 	if windowChanged {
-		a.LyricWindowW, a.LyricWindowH = w, h
+		a.LyricWindowW, a.LyricWindowH, a.LyricWindowTop = w, h, shell.TopBar(c)
 		c.AnimationFrame()
 	}
 	if len(lines) >= TimedListThreshold {
@@ -947,12 +948,12 @@ func (a *View) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line,
 		maxY = max(0, textH+head+tail-box.H)
 		waitForLayout = Abs32(body.LayoutBounds().H-textH-head-tail) > 1
 	}
-	heightChanged := st.CenterShort && box.H != a.LyricViewportH && a.LyricViewportH > 0
-	// A settled line should move with the viewport. Leave active glides
-	// and manual scrolling alone while the text is remeasured.
-	snapResize := heightChanged && cur == a.Reading.At && !st.browsing &&
-		(!a.LyricGlide.posed || a.LyricScroll.Y == a.LyricGlide.offset) &&
-		!a.LyricGlide.pending && !moving.Transitioning()
+	resized := box.W > 0 && box.H > 0 && (box.W != a.LyricViewportW || box.H != a.LyricViewportH)
+	// Window geometry already moves the reading position. Do not add a glide
+	// from coordinates of the previous viewport, even if a line was moving.
+	// Manual browsing retains its own row anchor instead.
+	snapResize := st.CenterShort && resized && !st.browsing &&
+		(!a.LyricGlide.posed || a.LyricScroll.Y == a.LyricGlide.offset)
 	if st.Immersive {
 		gap := st.intro
 		if !slot.Valid() || textH <= box.H {
@@ -993,7 +994,6 @@ func (a *View) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line,
 	}
 	// Follow a new line, or a resized viewport whose width can reflow it.
 	// Unchanged geometry leaves a listener's manual scrolling alone.
-	resized := box.W > 0 && box.H > 0 && (box.W != a.LyricViewportW || box.H != a.LyricViewportH)
 	if st.shouldFollow(cur != a.Reading.At, resized, intro.Gap.Intro) {
 		target := float32(0)
 		followRow := active

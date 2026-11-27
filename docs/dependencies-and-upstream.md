@@ -12,7 +12,7 @@
 | 更新签名 | 本项目独立 Ed25519 公钥与对应 Actions Secret | mygo.json / `MYGO_UPDATER_PRIVATE_KEY` |
 | 字幕原生库资源 | 本仓库 `sherpa-onnx-2.0.1` 资源发行 | [生成器](../scripts/sherpa/main.go)、[生成清单](../internal/features/speech/natives.go) |
 | MyGo require | `github.com/egoist/mygo v0.10.0` | [go.mod](../go.mod) |
-| 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261127121457-02aa0ca631ae` | go.mod 的 replace |
+| 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261127125026-9a5baf1bbf45` | go.mod 的 replace |
 | Go 工具链 | `go 1.27.4` | go.mod |
 
 这些是当前仓库状态，不是“永远最新”的承诺。未来版本由本项目独立决定；原项目发布新版本不构成本项目必须同步的理由。历史功能分支保留记录，不作为新贡献默认基线。
@@ -42,7 +42,7 @@ go list -m -f '{{.Dir}}' github.com/egoist/mygo
 
 当前固定提交包含 CLI 的 `linux.installDirName` 和 `linux.actions`，让 DEB、RPM、PKGBUILD、安装与更新脚本使用独立目录名并携带桌面播放动作。`linux.actions` 的参数分别转义，动作中不附带文件占位符。
 
-macOS 窗口层记录进入及退出全屏的过渡状态：过渡期间由 AppKit 布局红绿灯，完成或失败后清除过渡状态，回到窗口模式时恢复 `TrafficLightPosition`。仅用全屏样式位判断会在退出动画尚未结束时误套用窗口坐标。相关真实窗口回归见框架的 [traffic_lights_fullscreen_darwin_test.go](https://github.com/DebuNeko233/mygo/blob/02aa0ca631ae320c5f323b07d7f291a4c971f6e0/internal/e2e/traffic_lights_fullscreen_darwin_test.go)，覆盖过渡中缩放、取消、普通/内嵌标题栏及原生 UI/WebView 的完整全屏往返。
+macOS 窗口层记录进入及退出全屏的过渡状态：过渡期间由 AppKit 布局红绿灯。退出时暂时隐藏自定义按钮，完成或失败后在下一主线程事件内恢复可见性、完成原生布局，再恢复 `TrafficLightPosition`，避免露出系统默认靠边位置；重新开始过渡时延后恢复，关闭后丢弃任务，并保留 `HideWindowButtons` 的选择。仅用全屏样式位判断会在退出动画尚未结束时误套用窗口坐标。相关真实窗口回归见框架的 [traffic_lights_fullscreen_darwin_test.go](https://github.com/DebuNeko233/mygo/blob/9a5baf1bbf45d1633acae6c9309a744eeafa34bb/internal/e2e/traffic_lights_fullscreen_darwin_test.go)，覆盖过渡中缩放与可见性、取消和重新进入、关闭及显式隐藏选项、普通/内嵌标题栏及原生 UI/WebView 的完整全屏往返。
 
 MyGo fork 保留歌词绘制层缓存能力（包括 `DrawCached`）和 macOS 帧就绪改动。项目独立不要求移除所有第三方来源或改写模块导入；禁止借此顺手删除已依赖的 fork 能力。
 
