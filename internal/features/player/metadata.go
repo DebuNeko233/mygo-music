@@ -126,6 +126,7 @@ func (p *Player) setLyrics(lines []lyrics.Line, display lyrics.Display) {
 	p.lyrics, p.lyricsLoaded, p.lyricScript = lines, true, lyrics.OriginalScript(display.Lines)
 	p.lyricTranslationScript = lyrics.TranslationScript(display.Lines)
 	p.lyricDisplay = display
+	p.preparePureLyrics()
 }
 
 func (p *Player) MetadataLoading() bool { return p.lyricBusy || p.coverBusy }

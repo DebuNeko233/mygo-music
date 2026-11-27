@@ -24,7 +24,8 @@ func (a *app) localLyricsServices() localvm.LocalLyricsServices {
 
 func (a *app) openLocalLyricMatch() {
 	track := a.pl.Current()
-	display, loaded := a.pl.LyricsDisplay()
+	content := a.pl.PresentLyrics(a.settings.PureLyrics)
+	display, loaded := content.Display, content.Loaded
 	if track == nil || !track.IsLocal() || !loaded || display.HasSinging() || a.pl.MetadataLoading() {
 		return
 	}

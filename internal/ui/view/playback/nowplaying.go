@@ -220,8 +220,8 @@ func (a *View) nowPlayingBody(c *ui.Context, tr *netease.Track, art components.I
 		gap := float32(72)
 		immersiveLyrics := false
 		if a.Playback.Pane == PaneLyrics {
-			display, loaded := pl.LyricsDisplay()
-			static := loaded && !display.HasSinging()
+			content := pl.PresentLyrics(a.Config.PureLyrics)
+			static := content.Loaded && !content.Display.HasSinging()
 			immersiveLyrics = a.Config.LyricEdgeFade && !static
 			if static {
 				gap = min(gap, max(24, w-2*padX-side-lyricInfoMinWidth))
@@ -621,7 +621,8 @@ func (a *View) paneTab(c *ui.Context, i int, label string) {
 
 func (a *View) LyricsPane(c *ui.Context, tr *netease.Track, height float32, closeBounds ui.Rect, coverInset float32) {
 	pl := a.Player()
-	display, loaded := pl.LyricsDisplay()
+	content := pl.PresentLyrics(a.Config.PureLyrics)
+	display, loaded := content.Display, content.Loaded
 	lines := display.Lines
 	var first *lyrics.Line
 	if len(lines) > 0 {
@@ -679,7 +680,7 @@ func (a *View) LyricsPane(c *ui.Context, tr *netease.Track, height float32, clos
 	}
 	scroll.Padding(0, gutter, 0, 0).ScrollbarInsets(0, right, 0, 0)
 	w, h := c.Size()
-	original, translation := pl.LyricScripts()
+	original, translation := content.OriginalScript, content.TranslationScript
 	font := a.PlaybackTypeface(original, c.Locale())
 	translatedFont := a.PlaybackTypeface(translation, c.Locale())
 	if !hasSinging {
@@ -697,7 +698,7 @@ func (a *View) LyricsPane(c *ui.Context, tr *netease.Track, height float32, clos
 		scroll.Children(func() {
 			ui.Column(c).MinHeight(height).Shrink(0).Center().Padding(16, 0).Children(func() {
 				ui.Column(c).WidthPercent(100).MaxWidth(480).MinWidth(0).Gap(TimedLineGap).Children(func() {
-					lang := pl.LyricLanguage()
+					lang := content.OriginalScript.Language()
 					notice := lyrics.Line{Text: display.EmptyText(), Kind: lyrics.Instrumental}
 					lyricInfoRow(c.Key("notice"), &notice, lang, translatedFont)
 					if tr.IsLocal() {

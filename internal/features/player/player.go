@@ -161,13 +161,15 @@ type Player struct {
 	// track, so that a song that keeps breaking off is left where it is.
 	tries int
 
-	lyrics                              []lyrics.Line
-	lyricsLoaded                        bool
-	lyricScript, lyricTranslationScript lyrics.Script
-	lyricRevision                       uint64
-	lyricDisplay                        lyrics.Display
-	lyricBusy, coverBusy, coverLoaded   bool
-	lyricFailure, coverFailure          error
+	lyrics                                      []lyrics.Line
+	lyricsLoaded                                bool
+	lyricScript, lyricTranslationScript         lyrics.Script
+	lyricRevision                               uint64
+	lyricDisplay                                lyrics.Display
+	pureLyricDisplay                            lyrics.Display
+	pureLyricScript, pureLyricTranslationScript lyrics.Script
+	lyricBusy, coverBusy, coverLoaded           bool
+	lyricFailure, coverFailure                  error
 
 	// pending holds a seek asked for while the track loads.
 	pending time.Duration
@@ -464,6 +466,9 @@ func (p *Player) UpdateLocalTracks(tracks []netease.Track) {
 	if p.track != nil && !p.track.Temporary {
 		if track, ok := updates[p.track.LocalID]; ok {
 			p.track = &track
+			if p.lyricsLoaded {
+				p.preparePureLyrics()
+			}
 		}
 	}
 	if changed {
@@ -1235,6 +1240,8 @@ func (p *Player) loadTrack(at, skipped int, play bool, from time.Duration, local
 	p.lyrics, p.lyricsLoaded, p.lyricScript = nil, false, lyrics.UnknownScript
 	p.lyricTranslationScript = lyrics.UnknownScript
 	p.lyricDisplay = lyrics.Display{}
+	p.pureLyricDisplay = lyrics.Display{}
+	p.pureLyricScript, p.pureLyricTranslationScript = lyrics.UnknownScript, lyrics.UnknownScript
 	p.lyricBusy, p.coverBusy, p.coverLoaded = false, false, false
 	p.lyricFailure, p.coverFailure = nil, nil
 	p.pending = from

@@ -45,6 +45,9 @@ type Settings struct {
 	HiddenSidebarPages SidebarPages `json:"hiddenSidebarPages"`
 	// PlaybackLyricFont is the preferred face for in-app lyrics and translations.
 	PlaybackLyricFont string `json:"playbackLyricFont,omitempty"`
+	// PureLyrics hides confirmed metadata and performer labels in lyric views.
+	// Missing fields use the default; an explicit false remains persisted.
+	PureLyrics bool `json:"pureLyrics"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
 	// for a few percent of a core: the listener turns it on.
 	Smoke bool `json:"smoke"`
@@ -177,6 +180,7 @@ func Default() Settings {
 		BackdropHomeOpacity: 0.4, BackdropPlayingOpacity: 0.4,
 		LyricSize: 26, LyricWeight: 700, LyricPlayed: "白色", LyricIdle: "银灰",
 		LyricTrans: true, LyricTransColor: "银灰", LyricLines: 2,
+		PureLyrics: true,
 		LyricAlign: 1, LyricNextAlign: 1, LyricLineGap: 8, LyricEdgeFade: true,
 		LyricOutlineWidth: 0, LyricOutlineColor: "墨黑",
 	}

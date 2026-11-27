@@ -25,6 +25,9 @@ type creditEvidence struct {
 }
 
 func foldCreditRune(r rune) rune {
+	if r == '\u2236' { // The ratio sign is also used as a field separator in LRC.
+		return ':'
+	}
 	if r >= '\uff01' && r <= '\uff5e' {
 		r -= 0xfee0
 	}
@@ -158,10 +161,38 @@ func classifyLines(lines []Line) {
 	}
 	classifyCreditEdge(lines, evidence, counts, 0, 1)
 	classifyCreditEdge(lines, evidence, counts, len(lines)-1, -1)
+	confirmCreditSeparatorVariants(lines, evidence)
+}
+
+// A second spelling with the ratio separator can repeat a confirmed credit
+// after a title. Require that corroboration; do not relax repeated-lyric or
+// word-timing safeguards merely because the role matches a dictionary entry.
+func confirmCreditSeparatorVariants(lines []Line, evidence []creditEvidence) {
+	var variants []int
+	for i, line := range lines {
+		at := strings.IndexAny(line.Text, ":：∶")
+		if line.Kind == Sung && !line.Timed && evidence[i].strength == creditStrong && at >= 0 && strings.HasPrefix(line.Text[at:], "∶") {
+			variants = append(variants, i)
+		}
+	}
+	if len(variants) == 0 {
+		return
+	}
+	confirmed := make(map[creditEvidence]bool)
+	for i, line := range lines {
+		if line.Kind == Credit && evidence[i].strength == creditStrong {
+			confirmed[evidence[i]] = true
+		}
+	}
+	for _, i := range variants {
+		if confirmed[evidence[i]] {
+			lines[i].Kind = Credit
+		}
+	}
 }
 
 // Require two distinct anchors at an edge. Weak roles normally need an
-// anchor on both sides and must have no word timing or repeated text.
+// anchor on both sides; vocal attributions can also bound a confirmed block.
 func classifyCreditEdge(lines []Line, evidence []creditEvidence, counts map[creditEvidence]int, start, step int) {
 	first, last := -1, -1
 	distinct := false
@@ -184,9 +215,18 @@ func classifyCreditEdge(lines []Line, evidence []creditEvidence, counts map[cred
 	if !distinct {
 		return
 	}
+	// Credits at the very beginning/end can name the singer or backing
+	// vocalists before the other roles. Do not extend this to Rap/Chorus,
+	// repeated cues or real word timings: those can introduce sung sections.
+	for edge := start; edge != first; edge += step {
+		e := evidence[edge]
+		if e.strength == creditWeak && vocalCreditRole(e.role) && !lines[edge].Timed && counts[e] == 1 {
+			lines[edge].Kind = Credit
+		}
+	}
 	// An opening vocal credit can also end the block when a clear pause
 	// separates it from the first lyric, as in ReDreaming Angel.
-	if step == 1 && i == last+2 && i < len(lines) && evidence[i-1].role == "演唱" &&
+	if step == 1 && i == last+2 && i < len(lines) && vocalCreditRole(evidence[i-1].role) &&
 		evidence[i].strength == creditNone && lines[i].Kind == Sung && lines[i].At-lines[i-1].At >= 4*time.Second {
 		last = i - 1
 	}
@@ -198,8 +238,16 @@ func classifyCreditEdge(lines []Line, evidence []creditEvidence, counts map[cred
 	}
 }
 
-// Some instrumental tracks mark a production credit as a complete YRC line.
-// Matching explicit roles and contributors in LRC confirms that it is metadata.
+func vocalCreditRole(role string) bool {
+	switch role {
+	case "演唱", "和声", "主人声", "人声", "原唱", "翻唱":
+		return true
+	}
+	return false
+}
+
+// Confirm word-timed metadata with already classified LRC roles and
+// contributors. Weak roles additionally require nearby matching cues.
 func confirmTimedCredits(original, words []Line) {
 	contributor := func(value string) string {
 		return strings.Map(func(r rune) rune {
@@ -210,6 +258,7 @@ func confirmTimedCredits(original, words []Line) {
 		}, value)
 	}
 	var confirmed map[creditEvidence]bool
+	var confirmedAt map[creditEvidence][]time.Duration
 	var openingRoles map[string]bool
 	var firstLyric time.Duration
 	for i := range words {
@@ -217,7 +266,7 @@ func confirmTimedCredits(original, words []Line) {
 			continue
 		}
 		e := detectCredit(words[i].Text)
-		if e.strength != creditStrong {
+		if e.strength == creditNone {
 			continue
 		}
 		if confirmed == nil {
@@ -231,18 +280,34 @@ func confirmTimedCredits(original, words []Line) {
 				if line.Kind == Credit {
 					lrc := detectCredit(line.Text)
 					lrc.value = contributor(lrc.value)
-					if lrc.strength == creditStrong && lrc.value != "" {
-						confirmed[lrc] = true
-						if beforeLyrics {
-							openingRoles[lrc.role] = true
+					if lrc.strength != creditNone && lrc.value != "" {
+						if lrc.strength == creditStrong {
+							confirmed[lrc] = true
+							if beforeLyrics {
+								openingRoles[lrc.role] = true
+							}
+						} else {
+							if confirmedAt == nil {
+								confirmedAt = make(map[creditEvidence][]time.Duration)
+							}
+							confirmedAt[lrc] = append(confirmedAt[lrc], line.At)
 						}
 					}
 				}
 			}
 		}
 		e.value = contributor(e.value)
-		if confirmed[e] {
+		if e.strength == creditStrong && confirmed[e] {
 			words[i].Kind = Credit
+		} else if e.strength == creditWeak {
+			// A weak role needs a nearby LRC row already confirmed as a
+			// credit. The same text later in a sung verse is not evidence.
+			for _, at := range confirmedAt[e] {
+				if distance(words[i].At, at) <= 10*time.Second {
+					words[i].Kind = Credit
+					break
+				}
+			}
 		}
 	}
 	if firstLyric > 0 && len(openingRoles) >= 2 {

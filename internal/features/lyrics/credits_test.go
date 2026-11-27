@@ -24,6 +24,7 @@ func TestCreditExpressions(t *testing.T) {
 		"录音现场指导 Scoring Sessions Director：甲",
 		"舞台监督 Orchestra Stage Manager：甲", "乐团经理 Orchestra Manager：甲",
 		"音乐监制 Music Supervisor：甲", "联合制作 Co-produced by：Studio A",
+		"音乐设计/监制：Studio A", "音樂設計／監製：Studio A",
 		"工程师 ProTools Operator：甲", "母带制作 Mastering Engineer：甲",
 		"Producers : Alice / Bob", "Guitars: Alice", "Keyboards: Alice",
 		"Tenor Saxophone: Alice", "Baritone Saxophone: Alice", "Linn Drum: Alice",
@@ -50,6 +51,7 @@ func TestCreditExpressions(t *testing.T) {
 		"Music at midnight", "Recorded at", "She was recorded at Studio A",
 		"作词//作曲：甲", "作词/：甲", "/作词：甲", "作词 & & 作曲：甲",
 		"作词/未知职务：甲", "作词 Something Else：甲", "蒸気火鸡：甲",
+		"音乐设计中的梦：属于你", "音乐设计/未知职责：Studio A", "音乐设计：　",
 		"心语心愿仿佛挥舞翅膀的（Re:dreaming Angel)",
 	} {
 		if IsCredit(text) {
