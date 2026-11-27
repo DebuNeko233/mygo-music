@@ -9,13 +9,14 @@ import "strings"
 const playbackActionFlag = "--playback-action="
 
 // Launchers retain these commands after exit. Windows replaces only the mode
-// labels while running; Linux keeps the packaged labels unchanged.
+// labels while running; Linux keeps the packaged labels unchanged. Their
+// relative order follows the macOS Dock menu.
 var launcherPlaybackTasks = []struct{ title, action string }{
-	{"播放/暂停", "play-pause"},
-	{"上一首", "previous"},
-	{"下一首", "next"},
-	{"切换随机播放", "shuffle"},
 	{"切换循环模式", "repeat"},
+	{"切换随机播放", "shuffle"},
+	{"播放/暂停", "play-pause"},
+	{"下一首", "next"},
+	{"上一首", "previous"},
 }
 
 // Consume only the exact invocation emitted by a launcher; files and music

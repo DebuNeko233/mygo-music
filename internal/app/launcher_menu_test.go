@@ -8,6 +8,7 @@ package app
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -56,6 +57,34 @@ func launcherMenuTestApp(t *testing.T) (*app, *recordedLauncherTasks) {
 	a.pl.Changed = a.syncLauncherTasks
 	a.syncLauncherTasks()
 	return a, r
+}
+
+// Windows submits commands in the same relative order as the existing Dock
+// menu; separators and native mode submenus do not change that ordering.
+func TestLauncherOrderMatchesDock(t *testing.T) {
+	a, r := launcherMenuTestApp(t)
+	var dockActions []string
+	for _, item := range a.newDockMenu().Items() {
+		if item.Type == mygo.MenuItemSeparator {
+			continue
+		}
+		action := item.ID
+		if len(item.Submenu) > 0 {
+			action, _, _ = strings.Cut(item.Submenu[0].ID, "-")
+		}
+		if action == "play" {
+			action = "play-pause"
+		}
+		dockActions = append(dockActions, playbackActionFlag+action)
+	}
+	if len(r.tasks) != len(dockActions) {
+		t.Fatal("taskbar and Dock expose different playback commands")
+	}
+	for i, task := range r.tasks {
+		if !slices.Equal(task.Args, []string{dockActions[i]}) {
+			t.Fatalf("taskbar command %d differs from Dock: %v, want %s", i, task.Args, dockActions[i])
+		}
+	}
 }
 
 // Labels describe the current mode after either launcher clicks or direct

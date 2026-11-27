@@ -18,8 +18,9 @@ from pathlib import Path
 entry = configparser.ConfigParser(interpolation=None)
 entry.optionxform = str
 entry.read(sys.argv[1], encoding="utf-8")
-registered = entry["Desktop Entry"]["Actions"].split(";")
+registered = [item for item in entry["Desktop Entry"]["Actions"].split(";") if item]
 config = json.loads(Path(sys.argv[3]).read_text())
+assert registered == [action["id"] for action in config["linux"]["actions"]], registered
 mime_types = set(entry["Desktop Entry"]["MimeType"].split(";"))
 for association in config["fileAssociations"]:
     assert association["mimeType"] in mime_types, association["mimeType"]

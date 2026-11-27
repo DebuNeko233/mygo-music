@@ -41,11 +41,11 @@
     "comment": "第三方某音乐桌面客户端",
     "categories": ["AudioVideo", "Audio", "Player"],
     "actions": [
-      {"id": "NyagoPlayPause", "name": "播放/暂停", "args": ["--playback-action=play-pause"], "icon": "media-playback-start"},
-      {"id": "NyagoPrevious", "name": "上一首", "args": ["--playback-action=previous"], "icon": "media-skip-backward"},
-      {"id": "NyagoNext", "name": "下一首", "args": ["--playback-action=next"], "icon": "media-skip-forward"},
+      {"id": "NyagoRepeat", "name": "切换循环模式", "args": ["--playback-action=repeat"], "icon": "media-playlist-repeat"},
       {"id": "NyagoShuffle", "name": "切换随机播放", "args": ["--playback-action=shuffle"], "icon": "media-playlist-shuffle"},
-      {"id": "NyagoRepeat", "name": "切换循环模式", "args": ["--playback-action=repeat"], "icon": "media-playlist-repeat"}
+      {"id": "NyagoPlayPause", "name": "播放/暂停", "args": ["--playback-action=play-pause"], "icon": "media-playback-start"},
+      {"id": "NyagoNext", "name": "下一首", "args": ["--playback-action=next"], "icon": "media-skip-forward"},
+      {"id": "NyagoPrevious", "name": "上一首", "args": ["--playback-action=previous"], "icon": "media-skip-backward"}
     ],
     "webview": false
   }

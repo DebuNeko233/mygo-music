@@ -178,7 +178,7 @@ func TestLauncherOpeningIntentIntegration(t *testing.T) {
 }
 
 // Every packaged Linux launcher action must reach a known single-instance
-// command, without duplicated actions or extra unhandled arguments.
+// command in taskbar order, without duplicates or extra unhandled arguments.
 func TestLinuxLauncherActionsReachPlayback(t *testing.T) {
 	b, err := os.ReadFile("../../mygo.json")
 	if err != nil {
@@ -199,11 +199,14 @@ func TestLinuxLauncherActionsReachPlayback(t *testing.T) {
 	defer a.release()
 	a.startup.waiting = true
 	seen := map[string]bool{}
-	for _, action := range config.Linux.Actions {
+	for i, action := range config.Linux.Actions {
 		if !a.handlePlaybackAction(action.Args) {
 			t.Fatalf("packaged action %s does not reach a playback command", action.ID)
 		}
 		command := a.startup.take().playbackActions[0]
+		if i >= len(launcherPlaybackTasks) || command != launcherPlaybackTasks[i].action {
+			t.Fatalf("packaged action %s differs from taskbar command order", action.ID)
+		}
 		if seen[command] {
 			t.Fatalf("packaged action repeats command %s", command)
 		}
