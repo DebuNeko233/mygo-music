@@ -34,9 +34,10 @@ type Image struct {
 }
 
 // Cache loads covers on goroutines and keeps them, up to artLimit
-// bytes: their pixels on the GPU while they show, and on the CPU only
-// their data, which takes a fraction of the pixels. Its methods run on
-// the main thread; post runs a function there.
+// bytes, including decoded pixels. Large covers with backdrops keep their
+// CPU pixels ready for their next entrance; small covers release rebuildable
+// pixels after loading. Its methods run on the main thread; post runs a
+// function there.
 type Cache struct {
 	art         map[string]*Image
 	variants    map[string]map[string]*Image
@@ -387,6 +388,13 @@ func (c *Cache) RequestCover(url string, backdrop, visible bool, load func(strin
 			if !c.add(key, a) {
 				return
 			}
+			// Prefetching decodes the next large cover, but does not upload
+			// its texture. Dropping those pixels here made its first entrance
+			// decode again on the renderer's thread. Keep them under the same
+			// byte budget (already charged above), until the entry is evicted.
+			if backdrop {
+				return
+			}
 			// Shown by the frame post draws, the cover drops its pixels,
 			// which its data decodes again if they are needed.
 			ref := weak.Make(bmp)
@@ -402,7 +410,7 @@ func (c *Cache) RequestCover(url string, backdrop, visible bool, load func(strin
 	return current
 }
 
-// artRelease is how long a cover keeps its pixels once loaded: past the
+// artRelease is how long a small cover keeps its pixels once loaded: past the
 // frame that first shows it, and the smaller copies it shows from there.
 const artRelease = 2 * time.Second
 
