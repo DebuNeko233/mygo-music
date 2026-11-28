@@ -38,4 +38,4 @@ require (
 )
 
 // Retained lyric layers, macOS frame-ready fixes and Linux packaging, pinned to a tested commit.
-replace github.com/egoist/mygo => github.com/DebuNeko233/mygo v0.10.1-0.20261128041207-f0871338f28e
+replace github.com/egoist/mygo => github.com/DebuNeko233/mygo v0.10.1-0.20261128053958-87f9e9bf55f3
