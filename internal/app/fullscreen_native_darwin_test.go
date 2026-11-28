@@ -67,7 +67,6 @@ func TestNativeFullScreenLyricsFirstFrame(t *testing.T) {
 				var stage atomic.Int32
 				painted := make(chan int32, 128)
 				ready := make(chan struct{}, 1)
-				focused := make(chan struct{}, 1)
 				modes := make(chan int32, 2)
 				var w *mygo.Window
 				mygo.RunOnMain(func() {
@@ -83,12 +82,6 @@ func TestNativeFullScreenLyricsFirstFrame(t *testing.T) {
 							})
 						})})
 					w.OnReadyToShow(func() { ready <- struct{}{} })
-					w.OnFocus(func() {
-						select {
-						case focused <- struct{}{}:
-						default:
-						}
-					})
 					w.OnEnterFullScreen(func() { stage.Store(1); modes <- 1 })
 					w.OnLeaveFullScreen(func() { stage.Store(2); modes <- 2 })
 				})
@@ -101,10 +94,7 @@ func TestNativeFullScreenLyricsFirstFrame(t *testing.T) {
 					w.Destroy()
 				})
 				nativeLyricWait(t, ready, "window first frame")
-				w.Focus()
-				if !w.IsFocused() {
-					nativeLyricWait(t, focused, "window focused")
-				}
+				nativeLyricShow(t, w)
 
 				for _, phase := range []int32{1, 2} {
 					w.SetFullScreen(phase == 1)
@@ -125,6 +115,37 @@ func TestNativeFullScreenLyricsFirstFrame(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// AppKit can ignore a full-screen request while application activation is
+// pending. Wait for that event before focusing the already painted window.
+func nativeLyricShow(t *testing.T, w *mygo.Window) {
+	t.Helper()
+	active, focused := make(chan struct{}, 1), make(chan struct{}, 1)
+	offActive := mygo.App.OnDidBecomeActive(func() {
+		select {
+		case active <- struct{}{}:
+		default:
+		}
+	})
+	defer offActive()
+	offFocus := w.OnFocus(func() {
+		select {
+		case focused <- struct{}{}:
+		default:
+		}
+	})
+	defer offFocus()
+	mygo.App.Show()
+	mygo.App.Focus()
+	for !mygo.App.IsActive() {
+		nativeLyricWait(t, active, "application active")
+	}
+	w.Show()
+	w.Focus()
+	for !w.IsFocused() {
+		nativeLyricWait(t, focused, "window focused")
 	}
 }
 
@@ -201,7 +222,6 @@ func TestNativeNowPlayingFullScreenRestoresContent(t *testing.T) {
 	}
 	painted := make(chan frame, 512)
 	ready := make(chan struct{}, 1)
-	focused := make(chan struct{}, 1)
 	modes := make(chan int32, 2)
 	var phase atomic.Int32
 	var w *mygo.Window
@@ -219,12 +239,6 @@ func TestNativeNowPlayingFullScreenRestoresContent(t *testing.T) {
 			})})
 		a.win = w
 		w.OnReadyToShow(func() { ready <- struct{}{} })
-		w.OnFocus(func() {
-			select {
-			case focused <- struct{}{}:
-			default:
-			}
-		})
 		w.OnEnterFullScreen(func() { phase.Store(1); modes <- 1 })
 		w.OnLeaveFullScreen(func() { phase.Store(2); modes <- 2 })
 	})
@@ -237,15 +251,7 @@ func TestNativeNowPlayingFullScreenRestoresContent(t *testing.T) {
 		w.Destroy()
 	})
 	nativeLyricWait(t, ready, "first frame")
-	// Match showMain: the full application view has a native window owner,
-	// and its application is shown and activated before asking for focus.
-	mygo.App.Show()
-	mygo.App.Focus()
-	w.Show()
-	w.Focus()
-	if !w.IsFocused() {
-		nativeLyricWait(t, focused, "window focus")
-	}
+	nativeLyricShow(t, w)
 	for _, step := range []int32{1, 2} {
 		w.SetFullScreen(step == 1)
 		nativeLyricWait(t, modes, "full-screen mode callback")
