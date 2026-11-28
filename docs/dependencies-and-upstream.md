@@ -12,7 +12,7 @@
 | 更新签名 | 本项目独立 Ed25519 公钥与对应 Actions Secret | mygo.json / `MYGO_UPDATER_PRIVATE_KEY` |
 | 字幕原生库资源 | 本仓库 `sherpa-onnx-2.0.1` 资源发行 | [生成器](../scripts/sherpa/main.go)、[生成清单](../internal/features/speech/natives.go) |
 | MyGo require | `github.com/egoist/mygo v0.10.0` | [go.mod](../go.mod) |
-| 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261127140750-0c8a96393478` | go.mod 的 replace |
+| 实际 MyGo 实现 | `github.com/DebuNeko233/mygo v0.10.1-0.20261128053958-87f9e9bf55f3` | go.mod 的 replace |
 | Go 工具链 | `go 1.27.4` | go.mod |
 
 这些是当前仓库状态，不是“永远最新”的承诺。未来版本由本项目独立决定；原项目发布新版本不构成本项目必须同步的理由。历史功能分支保留记录，不作为新贡献默认基线。
@@ -42,9 +42,13 @@ go list -m -f '{{.Dir}}' github.com/egoist/mygo
 
 当前固定提交包含 CLI 的 `linux.installDirName` 和 `linux.actions`，让 DEB、RPM、PKGBUILD、安装与更新脚本使用独立目录名并携带桌面播放动作。`linux.actions` 的参数分别转义，动作中不附带文件占位符。
 
-macOS 窗口层记录进入及退出全屏的过渡状态：过渡期间由 AppKit 布局红绿灯。退出时暂时隐藏自定义按钮，完成或失败后在下一主线程事件内恢复可见性、完成原生布局，再恢复 `TrafficLightPosition`，避免露出系统默认靠边位置；重新开始过渡时延后恢复，关闭后丢弃任务，并保留 `HideWindowButtons` 的选择。仅用全屏样式位判断会在退出动画尚未结束时误套用窗口坐标。相关真实窗口回归见框架的 [traffic_lights_fullscreen_darwin_test.go](https://github.com/DebuNeko233/mygo/blob/0c8a96393478646b10418a67385633da46e9ca17/internal/e2e/traffic_lights_fullscreen_darwin_test.go)，覆盖过渡中缩放与可见性、取消和重新进入、关闭及显式隐藏选项、普通/内嵌标题栏及原生 UI/WebView 的完整全屏往返。
+macOS 窗口层记录进入及退出全屏的过渡状态：过渡期间由 AppKit 布局红绿灯。退出时暂时隐藏自定义按钮，完成或失败后在下一主线程事件内恢复可见性、完成原生布局，再恢复 `TrafficLightPosition`，避免露出系统默认靠边位置；重新开始过渡时延后恢复，关闭后丢弃任务，并保留 `HideWindowButtons` 的选择。仅用全屏样式位判断会在退出动画尚未结束时误套用窗口坐标。相关真实窗口回归见框架的 [traffic_lights_fullscreen_darwin_test.go](https://github.com/DebuNeko233/mygo/blob/87f9e9bf55f35fabb608603184b2861d49a16e80/internal/e2e/traffic_lights_fullscreen_darwin_test.go)，覆盖过渡中缩放与可见性、取消和重新进入、关闭及显式隐藏选项、普通/内嵌标题栏及原生 UI/WebView 的完整全屏往返。
+
+框架的全屏检查先等待内容就绪、应用激活及窗口在当前 Space 真正呈现，再请求全屏；已获焦并不代表 Space 切换动画已经完成。测试专用观察器将原生成功和拒绝分别报告，并始终调用真实委托；跨应用 Space 场景使用临时辅助应用，结束时恢复委托并回收进程。这些检查能力仅存在于框架的 `_test.go`，不进入应用运行时。
 
 原生 UI 主机允许订阅 `WindowHidden` 的视图在不可见时完成资源清理，但不把该清理场景提交到表面或替换原生背景，保留最后可见画面供系统全屏动画使用；截图仍能读取清理后的最新场景，恢复可见时提交新内容。首次绘制不受此限制，未订阅可见性的视图仍保留输入驱动的绘制行为。
+
+macOS 字形位图上下文同时设置允许与启用字体平滑，避免只请求平滑时普通字形、各亮度档位和显式加粗全部相同。常规文本保留系统平滑偏好，显式 `Thicken` 强制平滑，`Flat` 与彩色字形保持各自路径；字形度量与终端网格不变。权限名称测试保留上游 `bf9b5cbfd53cece4c5a74d9e0ba4972c651d0644` 对 macOS 27 的命名适配。
 
 MyGo fork 保留歌词绘制层缓存能力（包括 `DrawCached`）和 macOS 帧就绪改动。项目独立不要求移除所有第三方来源或改写模块导入；禁止借此顺手删除已依赖的 fork 能力。
 
